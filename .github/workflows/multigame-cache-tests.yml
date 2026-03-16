@@ -44,3 +44,11 @@ jobs:
             dataset/multigame/tests/test_base_normalization.py \
             dataset/multigame/tests/test_cache_utils.py \
             -q --override-ini="testpaths="
+
+      - name: Run tile mapping / one-hot / render validation
+        run: |
+          python -m pytest \
+            dataset/multigame/tests/test_tile_utils.py \
+            -v --override-ini="testpaths=" \
+            -k "TestMappedShape or TestMappedMinMax or TestMappedRender or TestEndToEnd"
+

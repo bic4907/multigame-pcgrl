@@ -1,6 +1,6 @@
 # MultiGame Dataset (Minimal)
 
-[![multigame-cache-tests](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml/badge.svg)](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml)
+[![dataset validation](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml/badge.svg)](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml)
 
 This module helps you extract **(game, level, text)** tuples from `TheVGLC` and `dungeon_level_dataset`.
 

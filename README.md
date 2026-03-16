@@ -1,173 +1,105 @@
-# VIPCGRL: Human-Aligned Procedural Level Generation Reinforcement Learning via Text-Level-Sketch Shared Representation
+# MGPCGRL: Multi-Game Procedural Content Generation via Representation Learning
 
-## Overview
-Official codebase for VIPCGRL: Human-Aligned Procedural Level Generation Reinforcement Learning via Text-Level-Sketch Shared Representation
+[![dataset validation](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml/badge.svg)](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml)
 
-![Architecture](./instruct_rl/architecture.png)
+This repository provides a **multi-game dataset pipeline** for level-text representation learning and controllable level generation.
 
+![Teasure](docs/teasure.png)
 
-## Task & Reward functions
-We have defined five controllable tasks, and the descriptions and implementations of the reward functions for each task are as follows.
+- **Multiverse** enables one model to generate levels across multiple game domains by learning representations that align level and text features in a **shared embedding space**.
+- In this shared space, **text composition and embedding interpolation** can mix characteristics from different games, while instruction structure can control each domain's contribution.
+- This shared representation can also serve as a conditioning signal for RL generators such as **PCGRL**, extending to natural-language-driven control of level goals and style.
 
-Each reward function is converted into actual rewards through [reward calculation code](evaluator/reward.py) and used for training.
+---
 
-| Task Name       | Task Description                                                               | Reward Function |
-|-----------------|--------------------------------------------------------------------------------|-----------------|
-| Number of Regions          | Controls the number of independent regions in the level                        | [code](evaluator/rewards/region.py)|
-| Path Length     | Controls the target distance between any two reachable points within the level | [code](evaluator/rewards/path_length.py)|
-| Wall Distribution | Controls the target number of wall tiles in the level                          | [code](evaluator/rewards/amount.py)|
-| Moster Distribution  | Controls the target number of bat tiles placed in the level                    | [code](evaluator/rewards/amount.py)|
-| Moster Direction   | Controls the distribution of bat tiles across the four cardinal directions     | [code](evaluator/rewards/direction.py)|
+## What Is Included
 
+- Multi-game dataset loader: `dataset/multigame`
+- External datasets:
+  - `dataset/TheVGLC` (VGLC levels)
+  - `dataset/dungeon_level_dataset` (instruction-level pairs)
 
+---
 
-## Instruction Dataset
-The dataset of instructions used in the paper's experiments is as follows:
-
-| Instruction Task Type | Dataset csv                                                             |
-|-----------------------|-------------------------------------------------------------------------|
-| With AI-style         | [scn-1_se-whole.csv](instruct/sub_condition/humanai/scn-1_se-whole.csv) |
-| Without AI-style      | [scn-1_se-whole.csv](instruct/sub_condition/bert/scn-1_se-whole.csv)    |
-
-
-The dataset of input modalities used in the paper's experiments is as follows:
-
-| Input Modalities | Dataset csv                                    |
-|------------------|------------------------------------------------|
-| Level State      | [numpy](dataset/numpy) / [figure](dataset/png) |
-| Sketch data      | [sketch](dataset/sketch)                       |
-
-Figure of level state data can be translated into sketch data using the sketch translation code available at [sketch translation code](sketch_style_transfer/translater.ipynb).
-
-
-
-## Implementation Detail
-### Quadruple Train Loss Implementation
-The implementation of our **quadruple contrastive loss**, used to train the multimodal encoder, can be found in [`train_clip.py`](train_clip.py), inside the `train_step()` function  (from approximately **line 45 to 161**).
-
-
-### Similarity Reward Implementation
-The proposed **similarity reward**, used during policy training, is implemented in [`train.py`](train.py), inside the `_env_step()` function (from approximately **line 568 to 616**).
-
-This reward encourages the agent to generate game maps that resemble the **style of human-designed levels**, by comparing the agent's current state with the embedding of a reference map (`human_demo`) sampled from the human dataset.
-
-
-
-# How to Run
 ## Installation
-1. Create a Conda Environment with Python 3.11
-    ```bash
-    conda create -n vipcgrl python=3.11
-    conda activate vipcgrl
-    ```
-2. Install Required Dependencies
-    ```bash
-    pip install -r requirements.txt
-    ```
+
+```bash
+conda create -n mgpcgrl python=3.11
+conda activate mgpcgrl
+pip install -r requirements.txt
+```
+
+---
 
 ## Dataset Setup
-Run the following commands from the project root (`multigame-pcgrl`).
 
-1. Clone both external datasets (recursive):
-    ```bash
-    git clone --recursive https://github.com/TheVGLC/TheVGLC dataset/TheVGLC
-    git clone --recursive https://github.com/bic4907/dungeon-level-dataset dataset/dungeon_level_dataset
-    ```
+Run from repository root:
 
-2. If the folders already exist, update them instead of cloning again:
-    ```bash
-    git -C dataset/TheVGLC pull --ff-only
-    git -C dataset/dungeon_level_dataset pull --ff-only
-    ```
+```bash
+git clone --recursive https://github.com/TheVGLC/TheVGLC dataset/TheVGLC
+git clone --recursive https://github.com/bic4907/dungeon-level-dataset dataset/dungeon_level_dataset
+```
 
-3. Ensure nested submodules (if any) are initialized:
-    ```bash
-    git -C dataset/TheVGLC submodule update --init --recursive
-    git -C dataset/dungeon_level_dataset submodule update --init --recursive
-    ```
+If already cloned:
 
-4. (Optional) Quick check:
-    ```bash
-    ls dataset
-    git -C dataset/TheVGLC remote -v
-    git -C dataset/dungeon_level_dataset remote -v
-    ```
+```bash
+git -C dataset/TheVGLC pull --ff-only
+git -C dataset/dungeon_level_dataset pull --ff-only
+git -C dataset/TheVGLC submodule update --init --recursive
+git -C dataset/dungeon_level_dataset submodule update --init --recursive
+```
 
+Quick check:
 
-## Encoder Training
-- IPCGRL
-    ```bash
-    python train_encoder.py batch_size=128 
-    ```
+```bash
+ls dataset
+git -C dataset/TheVGLC remote -v
+git -C dataset/dungeon_level_dataset remote -v
+```
 
-- VIPCGRL
-    ```bash
-    python train_clip.py batch_size=128 img_data_path=./dataset
-    ```
+---
 
+## Multi-Game Dataset Quick Start
 
-## Train RL Policy
-#### Instruction Options
-- `scn-1_se-1`
-- `scn-1_se-2`
-- `scn-1_se-3`
-- `scn-1_se-4`
-- `scn-1_se-5`
-  
-    ➡️ **Choose one** instruction for each run.
+### 1) Load all available games
 
-#### Commands
-- CPCGRL
-    ```bash
-    python train.py overwrite=True instruct=<INSTRUCTION> n_envs=500 seed=0 vec_cont=True raw_obs=True 
-    ```
-    
-- IPCGRL
-    ```bash
-    python train.py overwrite=True instruct=<INSTRUCTION> n_envs=500 seed=0 encoder.model='mlp' encoder.ckpt_dir=./saves
-    ```
-    
-- VIPCGRL
-    ```bash
-    python train.py encoder.model=cnnclip overwrite=True n_envs=500 instruct=<INSTRUCTION> seed=0 SIM_COEF=30 encoder.ckpt_dir=./saves
-    ```
+```python
+from dataset.multigame import MultiGameDataset
 
+ds = MultiGameDataset(include_dungeon=True)
+print(len(ds))
+print(ds.available_games())
 
-## Evaluate RL Policy
-#### Instruction Options
-- `scn-1_se-1`
-- `scn-1_se-2`
-- `scn-1_se-3`
-- `scn-1_se-4`
-- `scn-1_se-5`
-  
-    ➡️ **Choose one** instruction for each run.
+sample = ds[0]
+print(sample.game, sample.array.shape, sample.instruction)
+```
 
-####  Evaluation Modalities (only for VIPCGRL)
-- `text`
-- `state`
-- `sketch`
-  
-    ➡️ **Choose one** eval_modality for each run.
+### 2) Dungeon-only (level-text pairs)
 
+```python
+from pathlib import Path
+from dataset.multigame import MultiGameDataset
 
-#### Commands
-- Random
-    ```bash
-    python eval.py overwrite=True instruct=scn-1_se-whole random_agent=True exp_name=rd seed=0
-    ```
+ds = MultiGameDataset(
+    vglc_games=[],
+    vglc_root=Path("__disable_vglc__"),
+    include_dungeon=True,
+)
 
-- CPCGRL
-    ```bash
-    python eval.py instruct=<INSTRUCTION> n_envs=100 seed=0 vec_cont=True raw_obs=True reevaluate=True 
-    ```
-    
-- IPCGRL
-    ```bash
-    python eval.py instruct=<INSTRUCTION> n_envs=100 seed=0 encoder.model='mlp' reevaluate=True encoder.ckpt_dir=./saves
-    ```
+pairs = [(s.game, s.array, s.instruction) for s in ds.with_instruction()]
+print(len(pairs))
+```
 
-- VIPCGRL
-    ```bash
-    python eval.py encoder.model=cnnclip n_envs=100 instruct=<INSTRUCTION> seed=0 SIM_COEF=30 encoder.ckpt_dir=./saves reevaluate=True eval_instruct=scn-1_se-whole eval_modality=<EVAL MODALTITY>
-    ```
+### 3) Filter by game
+
+```python
+from dataset.multigame import MultiGameDataset, GameTag
+
+ds = MultiGameDataset(include_dungeon=True)
+zelda_samples = ds.by_game(GameTag.ZELDA)
+dungeon_samples = ds.by_game(GameTag.DUNGEON)
+print(len(zelda_samples), len(dungeon_samples))
+```
+
+For more dataset details:
+- `dataset/multigame/README.md`

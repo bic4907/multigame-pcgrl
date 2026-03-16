@@ -45,6 +45,9 @@ def ds_vglc_only():
 
 
 class TestMultiGameDatasetBasic:
+    def test_len_non_negative(self, ds_zelda_dungeon):
+        assert len(ds_zelda_dungeon) >= 0
+
     def test_len_positive(self, ds_zelda_dungeon):
         assert len(ds_zelda_dungeon) > 0
 
@@ -68,6 +71,9 @@ class TestMultiGameDatasetBasic:
     def test_repr(self, ds_zelda_dungeon):
         r = repr(ds_zelda_dungeon)
         assert "MultiGameDataset" in r
+
+    def test_all_samples_are_16x16(self, ds_zelda_dungeon):
+        assert all(s.array.shape == (16, 16) for s in ds_zelda_dungeon)
 
 
 class TestMultiGameDatasetFilters:
@@ -182,4 +188,3 @@ class TestVglcOnlyDataset:
     def test_three_games_present(self, ds_vglc_only):
         games = set(ds_vglc_only.available_games())
         assert {GameTag.ZELDA, GameTag.MARIO, GameTag.LODE_RUNNER}.issubset(games)
-

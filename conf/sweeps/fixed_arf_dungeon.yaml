@@ -1,0 +1,34 @@
+NAME: fixed_arf_dungeon
+arf_size:
+- 8
+change_pct:
+- -1.0
+eval_hypers:
+  eval_map_width:
+  - 8
+  - 16
+  - 24
+  - 32
+  eval_randomize_map_shape:
+  - true
+  - false
+max_board_scans:
+- 5
+model:
+- seqnca
+n_envs:
+- 600
+problem:
+- dungeon
+seed:
+- 0
+- 1
+- 2
+total_timesteps:
+- 1000000000
+vrf_size:
+- 8
+- 12
+- 16
+- 23
+- -1

@@ -1,0 +1,27 @@
+NAME: arf_conv_binary
+arf_size:
+- 3
+- 5
+- 8
+- 16
+- -1
+change_pct:
+- -1.0
+eval_hypers:
+  eval_map_width:
+  - 8
+  - 16
+  - 24
+  - 32
+  eval_randomize_map_shape:
+  - true
+max_board_scans:
+- 4
+n_envs:
+- 600
+seed:
+- 3
+- 4
+- 5
+total_timesteps:
+- 200000000

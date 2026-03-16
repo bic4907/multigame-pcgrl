@@ -1,0 +1,40 @@
+NAME: diffshape_pinpoint_maze_emptystart
+change_pct:
+- -1.0
+empty_start:
+- true
+eval_hypers:
+  eval_map_width:
+  - 8
+  - 16
+  - 24
+  - 32
+  eval_randomize_map_shape:
+  - true
+  - false
+map_width:
+- 16
+max_board_scans:
+- 5
+model:
+- conv2
+n_envs:
+- 600
+obs_size:
+- 8
+- 16
+- 24
+- -1
+pinpoints:
+- true
+problem:
+- maze
+randomize_map_shape:
+- true
+- false
+seed:
+- 0
+- 1
+- 2
+total_timesteps:
+- 1000000000

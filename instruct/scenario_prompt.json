@@ -1,0 +1,635 @@
+{
+  "base_prompt": "{Bat} on the {direction} side, {amount_region} region(s), {amount_solution} solution(s), {amount_Bat} {Bat}, {amount_block} block(s).",
+  "scenarios": {
+    "1": {
+      "feature": "region",
+      "prompt": "{region}"
+    },
+    "2": {
+      "feature": "path_length",
+      "prompt": "{path_length}"
+    },
+    "3": {
+      "feature": "block",
+      "prompt": "{block}"
+    },
+    "4": {
+      "feature": "bat_amount",
+      "prompt": "{bat_amount}"
+    },
+    "5": {
+      "feature": "bat_direction",
+      "prompt": "{bat_direction}"
+    }
+  },
+  "region": {
+    "A small cluster of small regions": {
+      "value": 5,
+      "sub_condition": "small",
+      "similar": [
+        "A small cluster of small regions",
+        "A few small regions are present",
+        "Sparse small regions are scattered",
+        "The map contains a few small regions"
+      ]
+    },
+    "A small cluster of large regions": {
+      "value": 5,
+      "sub_condition": "large",
+      "similar": [
+        "A small cluster of large regions",
+        "A few large regions are present",
+        "Sparse large regions are scattered",
+        "The map contains a few large regions"
+      ]
+    },
+    "A small cluster of regions": {
+      "value": 5,
+      "sub_condition": "AI",
+      "similar": [
+        "AI-generated layout featuring a few regions",
+        "Sparse regions, arranged with artificial precision",
+        "The map shows minimal regions, like an AI-created draft",
+        "A small cluster of areas, following AI-driven design"
+      ]
+    },
+    "Some small areas are grouped together": {
+      "value": 15,
+      "sub_condition": "small",
+      "similar": [
+        "Some small regions are grouped together",
+        "A moderate amount of small regions exist",
+        "The map has some small regions",
+        "Small regions appear in small clusters"
+      ]
+    },
+    "Some large regions are grouped together": {
+      "value": 15,
+      "sub_condition": "large",
+      "similar": [
+        "Some large regions are grouped together",
+        "A moderate amount of large regions exist",
+        "The map has some large regions",
+        "Large regions appear in small clusters"
+      ]
+    },
+    "Some areas are grouped together": {
+      "value": 15,
+      "sub_condition": "AI",
+      "similar": [
+        "Some regions grouped together in an AI-structured manner",
+        "Moderately dense layout of regions, AI-style",
+        "Some regions appear intentionally grouped, as if by an AI model",
+        "An AI-generated pattern of some clustered areas"
+      ]
+    },
+    "Several small regions are scattered": {
+      "value": 25,
+      "sub_condition": "small",
+      "similar": [
+        "Several small regions are scattered",
+        "A multi-region cluster of small rooms is formed",
+        "Small regions show balanced distribution",
+        "The map contains multiple placed small regions"
+      ]
+    },
+    "Several large regions are scattered": {
+      "value": 25,
+      "sub_condition": "large",
+      "similar": [
+        "Several large regions are scattered",
+        "A multi-region cluster of large rooms is formed",
+        "Large regions show balanced distribution",
+        "The map contains multiple placed large regions"
+      ]
+    },
+    "Several regions are scattered": {
+      "value": 25,
+      "sub_condition": "AI",
+      "similar": [
+        "Several regions with AI-like arrangement",
+        "Scattered regions resembling AI-generated structure",
+        "Balanced region scattering in synthetic fashion",
+        "Distributed regions with artificial-like pattern"
+      ]
+    },
+    "Numerous small regions populate the map": {
+      "value": 35,
+      "sub_condition": "small",
+      "similar": [
+        "Numerous small regions populate the map",
+        "A large number of small regions exist",
+        "Many small regions dominate the map",
+        "Small regions appear everywhere across the map"
+      ]
+    },
+    "Numerous large regions populate the map": {
+      "value": 35,
+      "sub_condition": "large",
+      "similar": [
+        "Numerous large regions populate the map",
+        "A large number of large regions exist",
+        "Many large regions dominate the map",
+        "Large regions appear everywhere across the map"
+      ]
+    },
+    "Numerous regions populate the map": {
+      "value": 35,
+      "sub_condition": "AI",
+      "similar": [
+        "Densely packed regions in AI design",
+        "Numerous regions in machine-driven layout",
+        "Widespread regions arranged by algorithm",
+        "Map saturated with AI-driven regions"
+      ]
+    }
+  },
+  "path_length": {
+    "Micro path length using a narrow corridor": {
+      "value": 10,
+      "sub_condition": "narrow",
+      "similar": [
+        "Micro path length using a narrow corridor",
+        "Nano length and narrow path ideal for quick traversal",
+        "Minimal narrow path requiring almost no movement",
+        "The narrow path is extremely short and direct"
+      ]
+    },
+    "Micro path length using a wide corridor": {
+      "value": 10,
+      "sub_condition": "wide",
+      "similar": [
+        "Micro path length using a wide corridor",
+        "Nano and wide path ideal for quick traversal",
+        "Minimal wide path requiring almost no movement",
+        "The wide path is extremely short and direct"
+      ]
+    },
+    "Micro path length using a corridor": {
+      "value": 10,
+      "sub_condition": "AI",
+      "similar": [
+        "Micro path length with AI-like design",
+        "Nano-length path designed by AI logic",
+        "Minimal movement path with AI structure",
+        "AI-generated route, short and direct"
+      ]
+    },
+    "Short path length with a narrow design": {
+      "value": 20,
+      "sub_condition": "narrow",
+      "similar": [
+        "Short path length with a narrow design",
+        "Brief and compact narrow path layout",
+        "The narrow path remains concise and effective",
+        "A short, narrow path length appears"
+      ]
+    },
+    "Short path length with a wide design": {
+      "value": 20,
+      "sub_condition": "wide",
+      "similar": [
+        "Short path length with a wide design",
+        "Brief and compact wide path layout",
+        "The wide path remains concise and effective",
+        "A short, wide path length appears"
+      ]
+    },
+    "Short path length with a design": {
+      "value": 20,
+      "sub_condition": "AI",
+      "similar": [
+        "Short path length with AI design",
+        "Compact path layout in AI style",
+        "Concise path following AI-like pattern",
+        "Short path appears in AI-designed form"
+      ]
+    },
+    "Moderate path length along a narrow path": {
+      "value": 40,
+      "sub_condition": "narrow",
+      "similar": [
+        "Moderate path length along a narrow path",
+        "Reasonable narrow path offering balance",
+        "A medium-length narrow path appears on the map",
+        "A balanced path length with narrow characteristics is created"
+      ]
+    },
+    "Moderate path length along a wide path": {
+      "value": 40,
+      "sub_condition": "wide",
+      "similar": [
+        "Moderate path length along a wide path",
+        "Reasonable wide path offering balance",
+        "A medium-length wide path appears on the map",
+        "A balanced path length with wide characteristics is created"
+      ]
+    },
+    "Moderate path length along a path": {
+      "value": 40,
+      "sub_condition": "AI",
+      "similar": [
+        "Moderate path length with AI-like design",
+        "Reasonable path offering balance by AI logic",
+        "Medium-length path in AI-generated form",
+        "AI-designed route with balanced length"
+      ]
+    },
+    "Prolonged path length using a narrow layout": {
+      "value": 60,
+      "sub_condition": "narrow",
+      "similar": [
+        "Prolonged path length using a narrow layout",
+        "Extended narrow path requiring significant movement",
+        "The narrow path is long and challenging",
+        "Long and narrow path fills the map"
+      ]
+    },
+    "Prolonged path length using a wide layout": {
+      "value": 60,
+      "sub_condition": "wide",
+      "similar": [
+        "Prolonged path length using a wide layout",
+        "Extended wide path requiring significant movement",
+        "The wide path is long and challenging",
+        "Long and wide path fills the map"
+      ]
+    },
+    "Prolonged path length using a layout": {
+      "value": 60,
+      "sub_condition": "AI",
+      "similar": [
+        "Prolonged path with AI-like structure",
+        "Extended path designed by AI logic",
+        "Long and challenging AI-generated route",
+        "Map filled with AI-designed long path"
+      ]
+    }
+  },
+  "bat_amount": {
+    "A few scattered bats appear": {
+      "value": 10,
+      "sub_condition": "scattered",
+      "similar": [
+        "A few scattered bats appear",
+        "Small scattered bat group spotted",
+        "A cluster of five scattered bats forms",
+        "Few scattered bats are scattered"
+      ]
+    },
+    "A few clustered bats appear": {
+      "value": 10,
+      "sub_condition": "clustered",
+      "similar": [
+        "A few clustered bats appear",
+        "Small clustered bat group spotted",
+        "A cluster of five clustered bats forms",
+        "Few clustered bats are scattered"
+      ]
+    },
+    "A few bats appear": {
+      "value": 10,
+      "sub_condition": "AI",
+      "similar": [
+        "A few bats in AI-like pattern",
+        "Small bat group with AI structure",
+        "A few clustered bats form AI-style layout",
+        "Few bats follow AI-generated pattern"
+      ]
+    },
+    "Some scattered bats spawn throughout": {
+      "value": 40,
+      "sub_condition": "scattered",
+      "similar": [
+        "Some scattered bats spawn throughout",
+        "Scattered scattered bats roam the area",
+        "Scattered bats are spread",
+        "The map contains several scattered bats"
+      ]
+    },
+    "Some clustered bats spawn throughout": {
+      "value": 40,
+      "sub_condition": "clustered",
+      "similar": [
+        "Some clustered bats spawn throughout",
+        "Scattered clustered bats roam the area",
+        "Clustered bats are spread",
+        "The map contains several clustered bats"
+      ]
+    },
+    "Some bats spawn throughout": {
+      "value": 40,
+      "sub_condition": "AI",
+      "similar": [
+        "Some bats spawn in AI-like pattern",
+        "Bats roam area with AI-like logic",
+        "Some bats spread in AI formation",
+        "Map contains some bats in AI design"
+      ]
+    },
+    "Several scattered bats gather together": {
+      "value": 70,
+      "sub_condition": "scattered",
+      "similar": [
+        "Several scattered bats gather together",
+        "A dense group of scattered bats appears",
+        "A multi-bat scattered group is seen",
+        "Scattered bats form multiple clusters"
+      ]
+    },
+    "Several clustered bats gather together": {
+      "value": 70,
+      "sub_condition": "clustered",
+      "similar": [
+        "Several clustered bats gather together",
+        "A dense group of clustered bats appears",
+        "A multi-bat clustered group is seen",
+        "Clustered bats form multiple clusters"
+      ]
+    },
+    "Several bats gather together": {
+      "value": 70,
+      "sub_condition": "AI",
+      "similar": [
+        "Several bats spread in AI-like pattern",
+        "Several bat swarm emerges with AI-like design",
+        "Several bat groups dominates in AI-style layout",
+        "Several bats appear in AI formation"
+      ]
+    },
+    "Many scattered Bats flood the map": {
+      "value": 100,
+      "sub_condition": "scattered",
+      "similar": [
+        "Many scattered bats flood the map",
+        "A bat swarm of scattered units emerges",
+        "Large scattered bat group dominates the area",
+        "A number of scattered bats appear"
+      ]
+    },
+    "Many clustered Bats flood the map": {
+      "value": 100,
+      "sub_condition": "clustered",
+      "similar": [
+        "Many clustered bats flood the map",
+        "A bat swarm of clustered units emerges",
+        "Large clustered bat group dominates the area",
+        "A number of clustered bats appear"
+      ]
+    },
+    "Many Bats flood the map": {
+      "value": 100,
+      "sub_condition": "AI",
+      "similar": [
+        "Many bats flood map in AI pattern",
+        "Bat swarm emerges with AI-generated design",
+        "Large bat groups dominate in AI-style layout",
+        "Numerous bats appear in AI formation"
+      ]
+    }
+  },
+  "block": {
+    "Sparse and decentralized blocks occupy the map": {
+      "value": 40,
+      "sub_condition": "decentralized",
+      "similar": [
+        "Sparse and decentralized blocks occupy the map",
+        "Few decentralized blocks appear in a light layout",
+        "Minimal decentralized block placement is observed",
+        "The decentralized blocks are scattered"
+      ]
+    },
+    "Sparse and centralized blocks occupy the map": {
+      "value": 40,
+      "sub_condition": "centralized",
+      "similar": [
+        "Sparse and centralized blocks occupy the map",
+        "Few centralized blocks appear in a light layout",
+        "Minimal centralized block placement is observed",
+        "The centralized blocks are scattered"
+      ]
+    },
+    "Sparse blocks occupy the map": {
+      "value": 40,
+      "sub_condition": "AI",
+      "similar": [
+        "Sparse blocks in AI-style layout",
+        "Few blocks in AI-generated pattern",
+        "Minimal block placement with AI design",
+        "Sparse block layout follows AI logic"
+      ]
+    },
+    "Some decentralized blocks form a balanced pattern": {
+      "value": 80,
+      "sub_condition": "decentralized",
+      "similar": [
+        "Some decentralized blocks form a balanced pattern",
+        "decentralized blocks appear with moderate density",
+        "Blocks are placed decentralized with spacing",
+        "A number of decentralized blocks is spread out"
+      ]
+    },
+    "Some centralized blocks form a balanced pattern": {
+      "value": 80,
+      "sub_condition": "centralized",
+      "similar": [
+        "Some centralized blocks form a balanced pattern",
+        "Centralized blocks appear with moderate density",
+        "Blocks are placed centralized with spacing",
+        "A number of centralized blocks is spread out"
+      ]
+    },
+    "Some blocks form a balanced pattern": {
+      "value": 80,
+      "sub_condition": "AI",
+      "similar": [
+        "Some blocks in balanced AI pattern",
+        "Some blocks follow AI-style layout",
+        "Spaced some blocks placed in AI pattern",
+        "Some blocks spread out in AI layout"
+      ]
+    },
+    "Dense decentralized blocks fill the area": {
+      "value": 120,
+      "sub_condition": "decentralized",
+      "similar": [
+        "Dense decentralized blocks fill the area",
+        "Numerous decentralized blocks create complex obstacles",
+        "Substantial decentralized block usage observed",
+        "The decentralized blocks create dense barriers"
+      ]
+    },
+    "Dense centralized blocks fill the area": {
+      "value": 120,
+      "sub_condition": "centralized",
+      "similar": [
+        "Dense centralized blocks fill the area",
+        "Numerous centralized blocks create complex obstacles",
+        "Substantial centralized block usage observed",
+        "The centralized blocks create dense barriers"
+      ]
+    },
+    "Dense blocks fill the area": {
+      "value": 120,
+      "sub_condition": "AI",
+      "similar": [
+        "Dense blocks fill AI-style layout",
+        "Numerous blocks form AI obstacle pattern",
+        "Substantial block use in AI design",
+        "Dense barriers shaped by AI logic"
+      ]
+    },
+    "High-density decentralized blocks dominate the map": {
+      "value": 160,
+      "sub_condition": "decentralized",
+      "similar": [
+        "High-density decentralized blocks dominate the map",
+        "Packed decentralized blocks hinder movement",
+        "Block overcrowding is observed in the decentralized layout",
+        "Movement is restricted due to dense decentralized blocks"
+      ]
+    },
+    "High-density centralized blocks dominate the map": {
+      "value": 160,
+      "sub_condition": "centralized",
+      "similar": [
+        "High-density centralized blocks dominate the map",
+        "Packed centralized blocks hinder movement",
+        "Block overcrowding is observed in the centralized layout",
+        "Movement is restricted due to dense centralized blocks"
+      ]
+    },
+    "High-density blocks dominate the map": {
+      "value": 160,
+      "sub_condition": "AI",
+      "similar": [
+        "High-density blocks in AI-style layout",
+        "Packed blocks hinder movement via AI design",
+        "Block overcrowding in AI-generated pattern",
+        "Dense blocks restrict movement, AI-style"
+      ]
+    }
+  },
+  "bat_direction": {
+    "Bats cluster in the west in a radial pattern": {
+      "value": 0,
+      "sub_condition": "radial",
+      "similar": [
+        "Bats cluster in the west in a radial pattern",
+        "A radial formation of bats appears on the left",
+        "The left side hosts radial bat distribution",
+        "Radial bats occupy the western zone"
+      ]
+    },
+    "Bats cluster in the west in a linear pattern": {
+      "value": 0,
+      "sub_condition": "linear",
+      "similar": [
+        "Bats cluster in the west in a linear pattern",
+        "A linear formation of bats appears on the left",
+        "The left side hosts linear bat distribution",
+        "Linear bats occupy the western zone"
+      ]
+    },
+    "Bats cluster in the west in a pattern": {
+      "value": 0,
+      "sub_condition": "AI",
+      "similar": [
+        "Bats cluster west with AI intent",
+        "Bat formation on left, AI-style layout",
+        "Left side bat spread, AI-designed",
+        "Bats occupy west with AI logic"
+      ]
+    },
+    "Top-focused radial bat group appears": {
+      "value": 1,
+      "sub_condition": "radial",
+      "similar": [
+        "Top-focused radial bat group appears",
+        "Bats are grouped in the north in a radial layout",
+        "A radial bats pattern forms across the top",
+        "Radial bats dominate the upper section"
+      ]
+    },
+    "Top-focused linear bat group appears": {
+      "value": 1,
+      "sub_condition": "linear",
+      "similar": [
+        "Top-focused linear bat group appears",
+        "Bats are grouped in the north in a linear layout",
+        "A linear bats pattern forms across the top",
+        "Linear bats dominate the upper section"
+      ]
+    },
+    "Top-focused bat group appears": {
+      "value": 1,
+      "sub_condition": "AI",
+      "similar": [
+        "Top-focused bat group in AI layout",
+        "Bats grouped north with AI intent",
+        "Top bat pattern follows AI design",
+        "Upper section dominated by AI bats"
+      ]
+    },
+    "Right-side radial bats concentrate in the east": {
+      "value": 2,
+      "sub_condition": "radial",
+      "similar": [
+        "Right-side radial bats concentrate in the east",
+        "Eastern region holds radial bat presence",
+        "Radial bats formation appears on the right",
+        "bats in the east follow a radial distribution"
+      ]
+    },
+    "Right-side linear bats concentrate in the east": {
+      "value": 2,
+      "sub_condition": "linear",
+      "similar": [
+        "Right-side linear bats concentrate in the east",
+        "Eastern region holds linear bat presence",
+        "Linear bats formation appears on the right",
+        "Bats in the east follow a linear distribution"
+      ]
+    },
+    "Right-side bats concentrate in the east": {
+      "value": 2,
+      "sub_condition": "AI",
+      "similar": [
+        "Right-side bats in AI-style layout",
+        "Eastern region shows AI bat presence",
+        "Bat formation appears right, AI-guided",
+        "Eastern bats follow AI-like distribution"
+      ]
+    },
+    "Bottom-heavy radial bats are seen": {
+      "value": 3,
+      "sub_condition": "radial",
+      "similar": [
+        "Bottom-heavy radial bats are seen",
+        "Bats spread along the south in radial form",
+        "Radial bats fill the bottom edge",
+        "Southern radial cluster of bats present"
+      ]
+    },
+    "Bottom-heavy linear bats are seen": {
+      "value": 3,
+      "sub_condition": "linear",
+      "similar": [
+        "Bottom-heavy linear bats are seen",
+        "bats spread along the south in linear form",
+        "Linear bats fill the bottom edge",
+        "Southern linear cluster of bats present"
+      ]
+    },
+    "Bottom-heavy bats are seen": {
+      "value": 3,
+      "sub_condition": "AI",
+      "similar": [
+        "Bottom-heavy bats in AI-style layout",
+        "Southern bat spread follows AI intent",
+        "Bats fill bottom edge, AI-designed",
+        "Southern bat cluster in AI pattern"
+      ]
+    }
+  }
+}

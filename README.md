@@ -4,7 +4,7 @@
 
 This repository provides a **multi-game dataset pipeline** for level-text representation learning and controllable level generation.
 
-![Teasure](docs/teasure.png)
+![Teasure](docs/teaser.png)
 
 - **Multiverse** enables one model to generate levels across multiple game domains by learning representations that align level and text features in a **shared embedding space**.
 - In this shared space, **text composition and embedding interpolation** can mix characteristics from different games, while instruction structure can control each domain's contribution.

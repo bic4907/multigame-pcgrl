@@ -3,11 +3,11 @@ name: dataset validation
 "on":
   push:
     paths:
-      - "dataset/multigame/**"
+      - "dataset/**"
       - ".github/workflows/multigame-cache-tests.yml"
   pull_request:
     paths:
-      - "dataset/multigame/**"
+      - "dataset/**"
       - ".github/workflows/multigame-cache-tests.yml"
   workflow_dispatch:
 

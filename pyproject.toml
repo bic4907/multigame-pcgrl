@@ -154,3 +154,6 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/instructed_pcg"]
+
+[tool.pytest.ini_options]
+testpaths = ["dataset/multigame/tests"]

@@ -65,6 +65,33 @@ This reward encourages the agent to generate game maps that resemble the **style
     pip install -r requirements.txt
     ```
 
+## Dataset Setup
+Run the following commands from the project root (`multigame-pcgrl`).
+
+1. Clone both external datasets (recursive):
+    ```bash
+    git clone --recursive https://github.com/TheVGLC/TheVGLC dataset/TheVGLC
+    git clone --recursive https://github.com/bic4907/dungeon-level-dataset dataset/dungeon_level_dataset
+    ```
+
+2. If the folders already exist, update them instead of cloning again:
+    ```bash
+    git -C dataset/TheVGLC pull --ff-only
+    git -C dataset/dungeon_level_dataset pull --ff-only
+    ```
+
+3. Ensure nested submodules (if any) are initialized:
+    ```bash
+    git -C dataset/TheVGLC submodule update --init --recursive
+    git -C dataset/dungeon_level_dataset submodule update --init --recursive
+    ```
+
+4. (Optional) Quick check:
+    ```bash
+    ls dataset
+    git -C dataset/TheVGLC remote -v
+    git -C dataset/dungeon_level_dataset remote -v
+    ```
 
 
 ## Encoder Training
@@ -144,5 +171,3 @@ This reward encourages the agent to generate game maps that resemble the **style
     ```bash
     python eval.py encoder.model=cnnclip n_envs=100 instruct=<INSTRUCTION> seed=0 SIM_COEF=30 encoder.ckpt_dir=./saves reevaluate=True eval_instruct=scn-1_se-whole eval_modality=<EVAL MODALTITY>
     ```
-
-

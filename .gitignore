@@ -29,7 +29,6 @@ vision_level_gpt
 pcgrl_buffer
 
 .env
-dataset
 vision_level_gpt.zip
 human_dataset*
 

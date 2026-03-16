@@ -1,0 +1,46 @@
+name: dataset validation
+
+"on":
+  push:
+    paths:
+      - "dataset/multigame/**"
+      - ".github/workflows/multigame-cache-tests.yml"
+  pull_request:
+    paths:
+      - "dataset/multigame/**"
+      - ".github/workflows/multigame-cache-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy pillow pytest
+
+      - name: Restore multigame cache
+        uses: actions/cache@v4
+        with:
+          path: dataset/multigame/cache/artifacts
+          key: multigame-cache-${{ runner.os }}-${{ hashFiles('dataset/multigame/**/*.py') }}
+          restore-keys: |
+            multigame-cache-${{ runner.os }}-
+
+      - name: Run tests
+        run: |
+          python -m pytest \
+            dataset/multigame/tests/test_base_normalization.py \
+            dataset/multigame/tests/test_cache_utils.py \
+            -q --override-ini="testpaths="

@@ -40,6 +40,8 @@ umap_encoder_ckpts/
 umap_saves/
 episode_dataset
 cache/
+!dataset/multigame/cache/
+!dataset/multigame/cache/**
 human_trajectory_data/
 llm_trajectory_data/
 human_trajectory_cache/

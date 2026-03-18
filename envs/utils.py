@@ -222,3 +222,66 @@ def triangle_wave(x, x_peak=10.0, period=1.0):
 
     return tri
 
+
+# ── 타일 정보 유틸 ─────────────────────────────────────────────────────────────
+
+from typing import Any, Dict
+
+
+def get_tile_info(problem: str = "dungeon", representation: str = "narrow") -> Dict[str, Any]:
+    """환경을 make 해서 타일 관련 정보를 반환한다.
+
+    Returns
+    -------
+    dict with keys:
+        problem             : str
+        representation      : str
+        tile_enum           : IntEnum class
+        all_tiles           : list[str]  – tile_enum 전체 이름 목록
+        n_all_tiles         : int        – tile_enum 전체 수 (BORDER 포함)
+        unavailable_tiles   : list       – env 에서 제외된 타일 값 목록
+        editable_tiles      : list[str]  – 실제로 배치 가능한 타일 이름 목록
+        n_editable_tiles    : int        – 실제로 배치 가능한 타일 수
+                                          (= action 의 tile 차원 크기)
+    """
+    # 순환 임포트를 피하기 위해 지역 임포트
+    from envs.pcgrl_env import PCGRLEnv, PCGRLEnvParams, ProbEnum, RepEnum
+
+    prob_key = ProbEnum[problem.upper()]
+    rep_key  = RepEnum[representation.upper()]
+
+    env_params = PCGRLEnvParams(
+        problem=int(prob_key),
+        representation=int(rep_key),
+    )
+    env = PCGRLEnv(env_params)
+
+    tile_enum      = env.tile_enum
+    unavailable    = env.unavailable_tiles
+    editable_tiles = env.rep.editable_tile_enum
+    n_editable     = env.rep.n_editable_tiles
+
+    return {
+        "problem":           problem.lower(),
+        "representation":    representation.lower(),
+        "tile_enum":         tile_enum,
+        "all_tiles":         [t.name for t in tile_enum],
+        "n_all_tiles":       len(tile_enum),
+        "unavailable_tiles": list(unavailable),
+        "editable_tiles":    [t.name for t in editable_tiles],
+        "n_editable_tiles":  n_editable,
+    }
+
+
+def print_tile_info(problem: str = "dungeon", representation: str = "narrow") -> None:
+    """get_tile_info 결과를 보기 좋게 출력한다."""
+    info = get_tile_info(problem, representation)
+    print(f"\n{'='*52}")
+    print(f"  problem        : {info['problem']}")
+    print(f"  representation : {info['representation']}")
+    print(f"  all tiles      : {info['all_tiles']}")
+    print(f"  n_all_tiles    : {info['n_all_tiles']}")
+    print(f"  unavailable    : {info['unavailable_tiles']}")
+    print(f"  editable tiles : {info['editable_tiles']}")
+    print(f"  n_editable     : {info['n_editable_tiles']}  ← action의 tile 차원 크기")
+    print(f"{'='*52}")

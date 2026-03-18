@@ -574,8 +574,6 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
                     )
                 )
 
-                # change the instruct sample and level demo data
-                # TODO: refactor this part to be cleanerly separated from the rest of the code
                 if train_inst is not None:
                     instruct_sample = update_instruction(instruct_sample, train_inst, done, rng, config.n_envs)
 

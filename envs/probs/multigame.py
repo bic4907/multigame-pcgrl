@@ -40,6 +40,7 @@ import chex
 from flax import struct
 import jax.numpy as jnp
 import numpy as np
+from PIL import Image
 
 from envs.probs.problem import Placeholder, Problem, ProblemState
 
@@ -51,7 +52,53 @@ with _MAPPING_FILE.open("r", encoding="utf-8") as _f:
 _CATEGORIES: dict[int, str] = {
     int(k): v for k, v in _MAPPING_CONFIG["_categories"].items()
 }
+_CATEGORY_COLORS: dict[int, tuple] = {
+    int(k): tuple(v) for k, v in _MAPPING_CONFIG.get("_category_colors_rgb", {}).items()
+}
 NUM_CATEGORIES: int = len(_CATEGORIES)   # 7
+
+# ── tile 이미지 파일 매핑: JSON _category_tile_images 에서 로드 ─────────────────
+# key "border" → BORDER 타일 (index 0)
+# key "0".."N"  → category 인덱스 (MultigameTiles index = cat+1)
+_TILE_IMS_DIR = Path(__file__).parent / "tile_ims"
+
+_raw_tile_images: dict = _MAPPING_CONFIG.get("_category_tile_images", {})
+_BORDER_IMAGE: str       = _raw_tile_images.get("border", "solid.png")
+_CATEGORY_IMAGE_FILES: dict[int, str] = {
+    int(k): v
+    for k, v in _raw_tile_images.items()
+    if k not in ("_comment", "border")
+}
+
+_TILE_SIZE = 16
+
+
+def _make_color_tile(rgb: tuple, size: int = _TILE_SIZE) -> Image.Image:
+    """단색 RGBA 타일 이미지 생성."""
+    r, g, b = rgb
+    arr = np.full((size, size, 4), [r, g, b, 255], dtype=np.uint8)
+    return Image.fromarray(arr, mode="RGBA")
+
+
+def _load_tile_image(filename: str, size: int = _TILE_SIZE) -> Image.Image:
+    """envs/probs/tile_ims/<filename> 을 로드. 없으면 보라색 fallback."""
+    path = _TILE_IMS_DIR / filename
+    if path.exists():
+        return Image.open(path).convert("RGBA").resize((size, size))
+    import warnings
+    warnings.warn(f"[multigame] tile image not found: {path}", stacklevel=2)
+    return _make_color_tile((200, 0, 200), size)   # 보라색 = 누락 표시
+
+
+def _load_or_color_tile(cat_idx: int, size: int = _TILE_SIZE) -> Image.Image:
+    """category index → 타일 이미지.
+    _CATEGORY_IMAGE_FILES(JSON)에 파일이 지정되어 있으면 그 파일 사용,
+    없으면 _CATEGORY_COLORS 로 단색 타일 생성."""
+    fname = _CATEGORY_IMAGE_FILES.get(cat_idx)
+    if fname:
+        return _load_tile_image(fname, size)
+    color = _CATEGORY_COLORS.get(cat_idx, (128, 128, 128))
+    return _make_color_tile(color, size)
 
 
 # ── tile_mapping._categories → IntEnum ─────────────────────────────────────────
@@ -117,6 +164,7 @@ class MultigameProblem(Problem):
     stat_trgs     = jnp.zeros(1)   # jnp.array 여야 Problem.__init__ 에서 정상 작동
     ctrl_threshes = np.zeros(1)
 
+    tile_size = _TILE_SIZE
     unavailable_tiles: list = []
 
     def __init__(self, map_shape: Tuple[int, int], ctrl_metrics: Tuple, pinpoints: bool):
@@ -144,8 +192,56 @@ class MultigameProblem(Problem):
         return lvl_img
 
     def init_graphics(self):
-        """그래픽 초기화 불필요."""
-        pass
+        """tile_mapping.json 의 _category_tile_images 를 읽어 타일 이미지를 초기화한다.
+
+        MultigameTiles 인덱스:
+          BORDER = 0  → _category_tile_images["border"]
+          EMPTY  = 1  → _category_tile_images["0"]
+          WALL   = 2  → _category_tile_images["1"]
+          ...
+          HAZARD = 7  → _category_tile_images["6"]  (lava.png)
+        """
+        from envs.utils import idx_dict_to_arr
+
+        graphics: dict = {}
+
+        # BORDER (index 0): JSON "border" 키에서 로드
+        graphics[0] = _load_tile_image(_BORDER_IMAGE)
+
+        # category tiles: MultigameTiles index = cat_idx + 1
+        for cat_idx in _CATEGORIES:
+            graphics[cat_idx + 1] = _load_or_color_tile(cat_idx)
+
+        self.graphics = jnp.array(idx_dict_to_arr(graphics))
+        super().init_graphics()
+
+
+def render_multigame_map(env_map: np.ndarray, tile_size: int = _TILE_SIZE) -> Image.Image:
+    """tile_mapping._category_tile_images 에 따라 env_map (H×W int32) 을 PIL Image 로 렌더링한다.
+
+    Parameters
+    ----------
+    env_map  : (H, W) numpy array, 값은 MultigameTiles 정수
+    tile_size: 타일 픽셀 크기 (기본 16)
+
+    Returns
+    -------
+    PIL.Image.Image  (RGB)
+    """
+    H, W = env_map.shape
+    canvas = Image.new("RGBA", (W * tile_size, H * tile_size), (0, 0, 0, 255))
+
+    tile_imgs = {0: _load_tile_image(_BORDER_IMAGE, tile_size)}
+    for cat_idx in _CATEGORIES:
+        tile_imgs[cat_idx + 1] = _load_or_color_tile(cat_idx, tile_size)
+
+    for y in range(H):
+        for x in range(W):
+            t = int(env_map[y, x])
+            img = tile_imgs.get(t, _make_color_tile((200, 0, 200), tile_size))
+            canvas.paste(img, (x * tile_size, y * tile_size))
+
+    return canvas.convert("RGB")
 
 
 # ── 팩토리 함수 ─────────────────────────────────────────────────────────────────
@@ -177,10 +273,9 @@ def make_multigame_env(
     """
     from envs.pcgrl_env import PCGRLEnv, PCGRLEnvParams, ProbEnum, RepEnum, PROB_CLASSES
 
-    # MultigameProblem 을 PROB_CLASSES 에 동적 등록 (없을 경우에만)
+    # MultigameProblem 을 PROB_CLASSES 에 등록 (항상 최신 상태로 갱신)
     _MULTIGAME_KEY = max(ProbEnum) + 1
-    if _MULTIGAME_KEY not in PROB_CLASSES:
-        PROB_CLASSES[_MULTIGAME_KEY] = MultigameProblem
+    PROB_CLASSES[_MULTIGAME_KEY] = MultigameProblem
 
     # rf_shape 자동 계산
     if rf_shape is None:

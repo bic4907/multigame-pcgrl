@@ -90,3 +90,7 @@ jobs:
         run: |
           python -m pytest tests/test_multigame_rl.py -v
 
+      - name: Run multigame render tests
+        run: |
+          python -m pytest tests/test_multigame_render.py -v
+

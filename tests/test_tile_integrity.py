@@ -21,6 +21,11 @@
 4. 실제 데이터셋 tile 값 범위 검증 (캐시 있을 때만)
    - MultiGameDataset에서 샘플링한 array 값이
      각 게임의 tile_mapping mapping key 범위 안에 있을 것
+
+5. JSON _categories 변경 → env 타일 개수 연동 검증
+   - tile_mapping.json 의 _categories 개수가 바뀌면
+     make_multigame_env() 의 action_space.n / n_editable_tiles 도
+     동일하게 바뀌는지 임시 JSON 으로 검증
 """
 from __future__ import annotations
 
@@ -264,4 +269,138 @@ def test_dataset_games_all_present(tile_mapping, dataset_samples):
     dataset_games = {s.game for s in dataset_samples}
     missing = mapping_games - dataset_games
     assert not missing, f"tile_mapping에 있지만 dataset에 없는 게임: {missing}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. JSON _categories 변경 → env 타일 개수 연동 검증
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _make_env_from_json(tmp_json_path: Path):
+    """임시 tile_mapping.json 을 기반으로 multigame env 를 생성하고,
+    (env, n_categories) 를 반환한다. 테스트 후 원본 모듈 상태를 복원한다."""
+    import json
+    import importlib
+    from enum import IntEnum
+    import envs.probs.multigame as mg_module
+    from envs.pcgrl_env import PROB_CLASSES, ProbEnum
+
+    # ── 임시 JSON 읽기 ──────────────────────────────────────────────────────
+    with tmp_json_path.open("r", encoding="utf-8") as f:
+        tmp_config = json.load(f)
+
+    new_categories = {int(k): v for k, v in tmp_config["_categories"].items()}
+    n_new = len(new_categories)
+
+    # ── 모듈 레벨 속성 패치 (원본 백업) ────────────────────────────────────
+    orig_config     = mg_module._MAPPING_CONFIG
+    orig_categories = mg_module._CATEGORIES
+    orig_n          = mg_module.NUM_CATEGORIES
+    orig_tiles      = mg_module.MultigameTiles
+    orig_prob_cls   = PROB_CLASSES.get(max(ProbEnum) + 1)
+
+    try:
+        mg_module._MAPPING_CONFIG = tmp_config
+        mg_module._CATEGORIES     = new_categories
+        mg_module.NUM_CATEGORIES  = n_new
+
+        new_tiles = IntEnum(
+            "MultigameTiles",
+            {"BORDER": 0, **{name.upper(): idx + 1 for idx, name in new_categories.items()}},
+        )
+        mg_module.MultigameTiles = new_tiles
+
+        # MultigameProblem 클래스 속성 갱신
+        mg_module.MultigameProblem.tile_enum  = new_tiles
+        mg_module.MultigameProblem.tile_probs = tuple(
+            [0.0] + [1.0 / n_new] * n_new
+        )
+        mg_module.MultigameProblem.tile_nums = tuple([0] * len(new_tiles))
+
+        # PROB_CLASSES 강제 갱신 (캐시 무효화)
+        _MULTIGAME_KEY = max(ProbEnum) + 1
+        PROB_CLASSES[_MULTIGAME_KEY] = mg_module.MultigameProblem
+
+        env, _ = mg_module.make_multigame_env()
+        return env, n_new
+
+    finally:
+        # ── 원본 복원 ────────────────────────────────────────────────────────
+        mg_module._MAPPING_CONFIG    = orig_config
+        mg_module._CATEGORIES        = orig_categories
+        mg_module.NUM_CATEGORIES     = orig_n
+        mg_module.MultigameTiles     = orig_tiles
+        mg_module.MultigameProblem.tile_enum  = orig_tiles
+        mg_module.MultigameProblem.tile_probs = tuple(
+            [0.0] + [1.0 / orig_n] * orig_n
+        )
+        mg_module.MultigameProblem.tile_nums = tuple([0] * len(orig_tiles))
+        _MULTIGAME_KEY = max(ProbEnum) + 1
+        if orig_prob_cls is not None:
+            PROB_CLASSES[_MULTIGAME_KEY] = orig_prob_cls
+        elif _MULTIGAME_KEY in PROB_CLASSES:
+            del PROB_CLASSES[_MULTIGAME_KEY]
+
+
+def test_json_categories_change_updates_action_space(tmp_path, tile_mapping):
+    """_categories 개수를 줄인 임시 JSON 으로 env 를 만들면
+    action_space.n 과 n_editable_tiles 가 그 수와 일치해야 한다."""
+    import json
+
+    # 원본 categories 에서 마지막 1개 제거 (6개로 축소)
+    original_cats = tile_mapping["_categories"]
+    reduced_cats  = {str(k): v for k, v in list(original_cats.items())[:-1]}
+
+    modified = dict(tile_mapping)
+    modified["_categories"] = reduced_cats
+
+    tmp_json = tmp_path / "tile_mapping_reduced.json"
+    tmp_json.write_text(json.dumps(modified), encoding="utf-8")
+
+    env, n_cats = _make_env_from_json(tmp_json)
+    expected = len(reduced_cats)   # 6
+
+    assert n_cats == expected, (
+        f"NUM_CATEGORIES({n_cats}) != _categories 수({expected})"
+    )
+    assert env.rep.n_editable_tiles == expected, (
+        f"n_editable_tiles({env.rep.n_editable_tiles}) != "
+        f"_categories 수({expected})"
+    )
+    assert env.action_space(None).n == expected, (
+        f"action_space.n({env.action_space(None).n}) != "
+        f"_categories 수({expected})"
+    )
+
+
+def test_json_categories_increase_updates_action_space(tmp_path, tile_mapping):
+    """_categories 개수를 1개 늘린 임시 JSON 으로 env 를 만들면
+    action_space.n 과 n_editable_tiles 가 그 수와 일치해야 한다."""
+    import json
+
+    original_cats = dict(tile_mapping["_categories"])
+    new_idx = str(len(original_cats))
+    expanded_cats = {**original_cats, new_idx: "extra"}
+
+    modified = dict(tile_mapping)
+    modified["_categories"] = expanded_cats
+
+    tmp_json = tmp_path / "tile_mapping_expanded.json"
+    tmp_json.write_text(json.dumps(modified), encoding="utf-8")
+
+    env, n_cats = _make_env_from_json(tmp_json)
+    expected = len(expanded_cats)   # 8
+
+    assert n_cats == expected, (
+        f"NUM_CATEGORIES({n_cats}) != _categories 수({expected})"
+    )
+    assert env.rep.n_editable_tiles == expected, (
+        f"n_editable_tiles({env.rep.n_editable_tiles}) != "
+        f"_categories 수({expected})"
+    )
+    assert env.action_space(None).n == expected, (
+        f"action_space.n({env.action_space(None).n}) != "
+        f"_categories 수({expected})"
+    )
+
+
 

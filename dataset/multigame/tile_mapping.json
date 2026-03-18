@@ -18,6 +18,26 @@
     "5": [0,   200, 0  ],
     "6": [220, 100, 20 ]
   },
+  "_category_tile_images": {
+    "0": "empty.png",
+    "1": "solid.png",
+    "2": "empty.png",
+    "3": "bat.png",
+    "4": "key.png",
+    "5": "player.png",
+    "6": "lava.png"
+  },
+  "_category_tile_images": {
+    "_comment": "category index → filename in envs/probs/tile_ims/. Used by MultigameProblem.init_graphics().",
+    "border": "solid.png",
+    "0": "empty.png",
+    "1": "solid.png",
+    "2": "empty.png",
+    "3": "bat.png",
+    "4": "key.png",
+    "5": "player.png",
+    "6": "lava.png"
+  },
   "zelda": {
     "_tile_names": {
       "0": "EMPTY",

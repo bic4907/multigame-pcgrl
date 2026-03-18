@@ -45,3 +45,7 @@ cache/
 human_trajectory_data/
 llm_trajectory_data/
 human_trajectory_cache/
+
+# 렌더링 부산물
+tests/render_samples/
+

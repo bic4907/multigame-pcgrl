@@ -551,11 +551,6 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
                     rng_step, env_state, action, env_params
                 )
 
-                if config.human_demo:
-                    level_sample = update_level_sample(level_sample, human_level_db, instruct_sample,
-                                                       done, rng, config.human_augment)
-
-
                 if train_inst is not None:
                     cond_reward_batch = get_reward_batch(
                         instruct_sample.reward_i,
@@ -565,57 +560,7 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
                         map_size=config.map_width,
                     )
 
-                    if config.use_sim_reward:
-                        def _cosine_similarity(x: jnp.ndarray, y: jnp.ndarray, eps: float=1e-8) -> jnp.ndarray:
-                            dot = jnp.sum(x * y, axis=-1)
-                            norm = jnp.linalg.norm(x, axis=-1) * jnp.linalg.norm(y, axis=-1) + eps
-                            return dot / norm
-
-                        # Calculate S_{t+1} cosine similarity
-                        env_map = env_state.env_state.env_map
-                        env_map_array = map2onehot_batch(env_map)
-                        env_map_array = add_coord_channel_batch(env_map_array)
-                        tmp_obs = last_obs.replace(pixel_values=env_map_array)
-                        _, _, _, _, map_embed, _ = network.apply(train_state.params, tmp_obs, return_text_embed=False, return_state_embed=True, return_sketch_embed=False)
-
-                        # Calculate S_{t} cosine similarity
-                        prev_env_map = prev_env_state.env_state.env_map
-                        prev_env_map_array = map2onehot_batch(prev_env_map)
-                        prev_env_map_array = add_coord_channel_batch(prev_env_map_array)
-                        tmp_obs = last_obs.replace(pixel_values=prev_env_map_array)
-                        _, _, _, _, prev_map_embed, _ = network.apply(train_state.params, tmp_obs, return_text_embed=False, return_state_embed=True, return_sketch_embed=False)
-    
-                        
-                        if config.human_demo:
-                            human_map = level_sample
-                            human_map_array = map2onehot_batch(human_map)
-                            human_map_array = add_coord_channel_batch(human_map_array)
-                            tmp_obs = last_obs.replace(pixel_values=human_map_array)
-                            _, _, _, _, human_map_embed, _ = network.apply(train_state.params, tmp_obs, return_text_embed=False, return_state_embed=True, return_sketch_embed=False)
-
-                            cur_cos_sim = _cosine_similarity(human_map_embed, map_embed)
-                            prev_cos_sim = _cosine_similarity(human_map_embed, prev_map_embed)
-                        else:
-                            cur_cos_sim = _cosine_similarity(last_obs.nlp_obs, map_embed)
-                            prev_cos_sim = _cosine_similarity(last_obs.nlp_obs, prev_map_embed)
-
-                        sim_reward = cur_cos_sim - prev_cos_sim
-
-                        if config.only_sim_reward:
-                            reward_batch = config.SIM_COEF * sim_reward
-                        else:
-                            reward_batch = cond_reward_batch + config.SIM_COEF * sim_reward
-                            
-
-                        return_info = ReturnInfo(
-                            cond_return=return_info.cond_return*(1-return_info.prev_done) + cond_reward_batch*(1-done),
-                            sim_return=return_info.sim_return*(1-return_info.prev_done) + sim_reward*(1-done),
-                            coef_sim_return=return_info.coef_sim_return*(1-return_info.prev_done) + config.SIM_COEF * sim_reward*(1-done),
-                            total_return=return_info.total_return*(1-return_info.prev_done) + reward_batch*(1-done),
-                            prev_done = done
-                        )
-                    else:
-                        reward_batch = cond_reward_batch
+                    reward_batch = cond_reward_batch
                         
                 else:
                     reward_batch = reward_env
@@ -629,11 +574,8 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
                     )
                 )
 
-                # change the instruct sample and level demo data
-                instruct_sample = update_instruction(instruct_sample, train_inst, done, rng, config.n_envs)
-                if config.human_demo:
-                    level_sample = update_level_sample(level_sample, human_level_db, instruct_sample,
-                                                       done, rng, config.human_augment)
+                if train_inst is not None:
+                    instruct_sample = update_instruction(instruct_sample, train_inst, done, rng, config.n_envs)
 
                 info["returned_episode_returns"] = env_state.returned_episode_returns
 

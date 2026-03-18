@@ -156,4 +156,4 @@ allow-direct-references = true
 packages = ["src/instructed_pcg"]
 
 [tool.pytest.ini_options]
-testpaths = ["dataset/multigame/tests"]
+testpaths = ["dataset/multigame/tests", "tests"]

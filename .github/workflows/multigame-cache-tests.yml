@@ -4,15 +4,19 @@ name: dataset validation
   push:
     paths:
       - "dataset/**"
+      - "envs/**"
+      - "tests/**"
       - ".github/workflows/multigame-cache-tests.yml"
   pull_request:
     paths:
       - "dataset/**"
+      - "envs/**"
+      - "tests/**"
       - ".github/workflows/multigame-cache-tests.yml"
   workflow_dispatch:
 
 jobs:
-  test:
+  dataset-tests:
     runs-on: ubuntu-latest
 
     steps:
@@ -51,4 +55,42 @@ jobs:
             dataset/multigame/tests/test_tile_utils.py \
             -v --override-ini="testpaths=" \
             -k "TestMappedShape or TestMappedMinMax or TestMappedRender or TestEndToEnd"
+
+  env-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install JAX dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            "jax[cpu]==0.5.0" \
+            "jaxlib==0.5.0" \
+            flax \
+            "optax==0.2.4" \
+            "chex==0.1.87" \
+            "distrax==0.1.1" \
+            "gymnax==0.0.8" \
+            numpy pillow pytest
+
+      - name: Run env tile integrity tests
+        run: |
+          python -m pytest tests/test_tile_integrity.py -v
+
+      - name: Run multigame RL environment tests
+        run: |
+          python -m pytest tests/test_multigame_rl.py -v
+
+      - name: Run multigame render tests
+        run: |
+          python -m pytest tests/test_multigame_render.py -v
 

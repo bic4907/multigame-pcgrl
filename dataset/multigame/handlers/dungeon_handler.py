@@ -32,7 +32,7 @@ from ..base import (
 )
 
 _DEFAULT_DUNGEON_ROOT = (
-    Path(__file__).parent.parent.parent / "dungeon_level_dataset"
+    Path(__file__).parent.parent.parent / "dungeon-level-dataset"
 )
 
 # ── 타일 상수 ────────────────────────────────────────────────────────────────────

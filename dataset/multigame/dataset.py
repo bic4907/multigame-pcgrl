@@ -41,7 +41,10 @@ import numpy as np
 from .base import GameSample, GameTag
 from .handlers.vglc_handler import VGLCHandler, _DEFAULT_VGLC_ROOT
 from .handlers.dungeon_handler import DungeonHandler, _DEFAULT_DUNGEON_ROOT
+from .handlers.pokemon_handler import POKEMONHandler, _DEFAULT_POKEMON_ROOT
+from .handlers.fdm_game.augmentation import create_rotated_sample
 from .handlers.vglc_games import SUPPORTED_GAMES
+from .handlers.handler_config import HandlerConfig, get_default_config
 from . import tags as tag_utils
 from .cache_utils import (
     build_cache_key,
@@ -55,36 +58,48 @@ _HERE = Path(__file__).parent
 
 class MultiGameDataset:
     """
-    VGLC + Dungeon Level Dataset 통합 클래스.
+    VGLC + Dungeon Level Dataset + FDM 통합 클래스.
 
     Parameters
     ----------
     vglc_root        : TheVGLC 루트 경로 (기본: dataset/TheVGLC)
     dungeon_root     : dungeon_level_dataset 루트 경로
+    fdm_root         : Five-Dollar-Model 루트 경로
     vglc_games       : 로드할 VGLC 게임 태그 리스트 (None이면 전체)
     include_dungeon  : Dungeon 데이터셋 포함 여부
+    include_pokemon  : POKEMON 데이터셋 포함 여부
     vglc_split       : VGLC 하위 폴더 (기본 "Processed")
     use_tile_mapping : True(기본)면 array를 unified 7-category로 변환해서 반환.
                        False면 원본 tile_id 그대로 반환.
                        로드 이후에도 속성으로 언제든 토글 가능.
+    handler_config   : HandlerConfig 객체. None이면 기본값 사용.
+                       (게임별 전처리 설정 포함, augmentation 설정도 포함)
     """
 
     def __init__(
         self,
         vglc_root:        Path | str = _DEFAULT_VGLC_ROOT,
         dungeon_root:     Path | str = _DEFAULT_DUNGEON_ROOT,
+        pokemon_root:     Path | str = _DEFAULT_POKEMON_ROOT,
         vglc_games:       Optional[List[str]] = None,
         include_dungeon:  bool = True,
+        include_pokemon:  bool = True,
         vglc_split:       str = "Processed",
         use_cache:        bool = True,
         cache_dir:        Path | str | None = None,
         use_tile_mapping: bool = True,
+        handler_config:   Optional[HandlerConfig] = None,
     ) -> None:
         self.use_tile_mapping: bool = use_tile_mapping
+
+        if handler_config is None:
+            handler_config = get_default_config()
+        self._handler_config = handler_config
 
         self._samples: List[GameSample] = []
         self._vglc_handler: Optional[VGLCHandler] = None
         self._dungeon_handler: Optional[DungeonHandler] = None
+        self._pokemon_handler: Optional[POKEMONHandler] = None
 
         if cache_dir is None:
             cache_dir = _HERE / "cache" / "artifacts"
@@ -93,9 +108,12 @@ class MultiGameDataset:
         args_for_key = {
             "vglc_root": str(vglc_root),
             "dungeon_root": str(dungeon_root),
+            "pokemon_root": str(pokemon_root),
             "vglc_games": vglc_games,
             "include_dungeon": include_dungeon,
+            "include_pokemon": include_pokemon,
             "vglc_split": vglc_split,
+            "handler_config": handler_config.to_dict(),
         }
         cache_key = build_cache_key(args_for_key, code_root=_HERE)
 
@@ -112,10 +130,18 @@ class MultiGameDataset:
                     vglc_root=vglc_root,
                     selected_games=vglc_games,
                     split=vglc_split,
+                    handler_config=handler_config,
                 )
                 for i, sample in enumerate(self._vglc_handler):
                     sample.order = len(self._samples)
                     self._samples.append(sample)
+        
+        # Floor filtering 적용
+        if handler_config.doom_slicing.enabled:
+            self._samples = self._apply_floor_filtering(
+                self._samples,
+                floor_empty_max=handler_config.doom_slicing.floor_empty_max
+            )
 
         # ── Dungeon 로드 ────────────────────────────────────────────────────────
         if include_dungeon and Path(dungeon_root).exists():
@@ -124,10 +150,174 @@ class MultiGameDataset:
                 sample.order = len(self._samples)
                 self._samples.append(sample)
 
+        # ── POKEMON 로드 ────────────────────────────────────────────────────────────
+        if include_pokemon and Path(pokemon_root).exists():
+            try:
+                self._pokemon_handler = POKEMONHandler(root=pokemon_root)
+                # POKEMON은 로드 전에 필터링 적용 (패딩 전 10x10 기반)
+                valid_ids, filtered_count = self._pokemon_handler.list_entries_with_filtering(
+                    max_tile_ratio=self._handler_config.filtering.max_tile_ratio
+                )
+                for i, source_id in enumerate(valid_ids):
+                    sample = self._pokemon_handler.load_sample(source_id)
+                    sample.order = len(self._samples)
+                    self._samples.append(sample)
+                
+                if filtered_count > 0:
+                    total_pokemon = len(valid_ids) + filtered_count
+                    print(f"[MultiGameDataset] POKEMON: Filtered {total_pokemon} → {len(valid_ids)} samples "
+                          f"({filtered_count} removed, max_tile_ratio={self._handler_config.filtering.max_tile_ratio})")
+            except (FileNotFoundError, ValueError) as e:
+                print(f"Warning: Could not load FDM dataset: {e}")
+
+        # ── POKEMON 패딩 후 필터링 (타일셋 기준: 256개 중 250개 이상) ──────────────────
+        if self._handler_config.filtering.enabled:
+            self._apply_pokemon_tileset_filtering()
+
+        # ── instruction 단어 수 기반 필터링 (패딩 후) ────────────────────────
+        if self._handler_config.filtering.enabled:
+            self._apply_instruction_filtering()
+
+        # ── 데이터 증강: 시계방향 90도 회전 (게임별 설정) ────────────────────────
+        if self._handler_config.augmentation.enabled:
+            self._augment_with_rotations_per_game()
+
         if use_cache:
             save_samples_to_cache(cache_dir, cache_key, self._samples)
 
-    # ── tile mapping 헬퍼 ───────────────────────────────────────────────────────
+    def _apply_floor_filtering(self, samples: List[GameSample], floor_empty_max: int) -> List[GameSample]:
+        """
+        Floor + empty 개수가 floor_empty_max 이하인 샘플만 필터링
+        """
+        filtered = []
+        for sample in samples:
+            if sample.game == GameTag.DOOM:
+                floor_count = sample.meta.get('floor_count', 0)
+                empty_count = sample.meta.get('empty_count', 0)
+                if floor_count + empty_count <= floor_empty_max:
+                    filtered.append(sample)
+            else:
+                filtered.append(sample)
+        return filtered
+
+    def _is_valid_sample(self, sample: GameSample) -> bool:
+        """
+        [Deprecated] 이 메서드는 더 이상 사용되지 않습니다.
+        필터링은 각 게임별 로드 시점에 수행됩니다.
+        """
+        pass
+
+    def _apply_instruction_filtering(self) -> None:
+        """
+        instruction 단어 수 기반 필터링을 적용한다.
+        (타일 비율 필터링은 각 게임별 로드 시 수행됨)
+        
+        필터링 기준:
+        - instruction 단어 수 < min_instruction_words인 샘플 제외
+        """
+        original_count = len(self._samples)
+        
+        # instruction이 있는 샘플만 필터링 (instruction이 없는 샘플은 유지)
+        self._samples = [
+            s for s in self._samples 
+            if s.instruction is None or len(s.instruction.split()) >= self._handler_config.filtering.min_instruction_words
+        ]
+        
+        filtered_count = original_count - len(self._samples)
+        if filtered_count > 0:
+            print(f"[MultiGameDataset] Instruction filtering: {original_count} → {len(self._samples)} samples "
+                  f"({filtered_count} removed, min_words={self._handler_config.filtering.min_instruction_words})")
+
+    def _apply_pokemon_tileset_filtering(self) -> None:
+        """
+        POKEMON 샘플만 타일셋 기준으로 필터링.
+        (패딩 후 16x16 그리드에서 한 타일이 250개 이상이면 제외)
+        
+        필터링 기준:
+        - POKEMON 게임만 대상
+        - 한 타일 종류가 256개 중 250개 이상이면 제외 (모노톤한 맵)
+        """
+        pokemon_indices = [i for i, s in enumerate(self._samples) if s.game == "pokemon"]
+        
+        if not pokemon_indices:
+            return
+        
+        original_pokemon_count = len(pokemon_indices)
+        filtered_samples = []
+        
+        for i, sample in enumerate(self._samples):
+            if sample.game == "pokemon":
+                # POKEMON 샘플: 타일셋 기준 필터링
+                flat = sample.array.ravel()
+                tile_counts = np.bincount(flat.astype(int))
+                max_tile_count = int(np.max(tile_counts)) if len(tile_counts) > 0 else 0
+                
+                # 256개 타일 중 250개 이상이 같은 타일이 아니면 유지
+                if max_tile_count < 250:
+                    filtered_samples.append(sample)
+            else:
+                # 다른 게임: 그대로 유지
+                filtered_samples.append(sample)
+        
+        self._samples = filtered_samples
+        pokemon_filtered_count = original_pokemon_count - len([s for s in self._samples if s.game == "pokemon"])
+        if pokemon_filtered_count > 0:
+            print(f"[MultiGameDataset] POKEMON tileset filtering: {original_pokemon_count} → {len([s for s in self._samples if s.game == 'pokemon'])} samples "
+                  f"({pokemon_filtered_count} removed, max_tile_count_threshold=250)")
+
+    def _augment_with_rotations_per_game(self) -> None:
+        """
+        게임별 설정에 따라 각 게임의 샘플을 회전시켜 증강.
+        
+        각 게임의 config에 rotate_90 설정이 있으면 해당 게임만 회전 증강을 수행한다.
+        예: config.pokemon.rotate_90 = True면 POKEMON 게임만 회전 증강
+        """
+        original_count = len(self._samples)
+        rotated_samples = []
+        
+        for sample in self._samples:
+            # 게임별 config에서 rotate_90 설정 확인
+            should_augment = False
+            if sample.game == "pokemon" and self._handler_config.pokemon.rotate_90:
+                should_augment = True
+            elif sample.game == "dungeon" and self._handler_config.dungeon.rotate_90:
+                should_augment = True
+            
+            if should_augment:
+                rotated = create_rotated_sample(sample)
+                rotated_samples.append(rotated)
+        
+        # 원본 다음에 회전 샘플 추가
+        self._samples.extend(rotated_samples)
+        
+        # order 재지정
+        for i, sample in enumerate(self._samples):
+            sample.order = i
+        
+        if len(rotated_samples) > 0:
+            print(f"[MultiGameDataset] Data augmentation: {original_count} → {len(self._samples)} samples "
+                  f"(added {len(rotated_samples)} rotated versions)")
+
+    def apply_filtering(self, apply_filter: bool = True) -> None:
+        """
+        필터링 조건을 적용하여 _samples를 재필터링한다.
+        
+        Note: 이 메서드는 instruction 단어 수 필터링만 수행합니다.
+        타일 비율 필터링은 각 게임별 로드 시점에 적용됩니다.
+        
+        필터링 기준:
+        - instruction 단어 수 >= min_instruction_words
+        
+        Parameters
+        ----------
+        apply_filter : bool
+            True이면 필터링 적용, False이면 원본 유지
+        """
+        if not apply_filter or not self._handler_config.filtering.enabled:
+            return
+        
+        self._apply_instruction_filtering()
+
     def _apply_mapping(self, sample: GameSample) -> GameSample:
         """
         use_tile_mapping 설정에 따라 array를 변환한 새 GameSample을 반환.

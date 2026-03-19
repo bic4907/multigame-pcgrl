@@ -1,6 +1,0 @@
-# Core
-numpy>=1.24
-
-# Rendering (build_samples.py)
-opencv-python>=4.8
-

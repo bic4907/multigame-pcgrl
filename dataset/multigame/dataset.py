@@ -39,10 +39,8 @@ from typing import Any, Dict, Iterator, List, Optional
 import numpy as np
 
 from .base import GameSample, GameTag
-from .handlers.vglc_handler import VGLCHandler, _DEFAULT_VGLC_ROOT
 from .handlers.dungeon_handler import DungeonHandler, _DEFAULT_DUNGEON_ROOT
 from .handlers.boxoban_handler import BoxobanHandler, _DEFAULT_BOXOBAN_ROOT
-from .handlers.vglc_games import SUPPORTED_GAMES
 from . import tags as tag_utils
 from .cache_utils import (
     build_cache_key,
@@ -56,17 +54,14 @@ _HERE = Path(__file__).parent
 
 class MultiGameDataset:
     """
-    VGLC + Dungeon + Boxoban 통합 데이터셋 클래스.
+    Dungeon + Sokoban(Boxoban) 통합 데이터셋 클래스.
 
     Parameters
     ----------
-    vglc_root        : TheVGLC 루트 경로 (기본: dataset/TheVGLC)
     dungeon_root     : dungeon_level_dataset 루트 경로
-    boxoban_root     : boxoban_levels 루트 경로
-    vglc_games       : 로드할 VGLC 게임 태그 리스트 (None이면 전체)
+    sokoban_root     : boxoban_levels 루트 경로
     include_dungeon  : Dungeon 데이터셋 포함 여부
-    include_boxoban  : Boxoban 데이터셋 포함 여부
-    vglc_split       : VGLC 하위 폴더 (기본 "Processed")
+    include_sokoban  : Sokoban 데이터셋 포함 여부
     use_tile_mapping : True(기본)면 array를 unified 7-category로 변환해서 반환.
                        False면 원본 tile_id 그대로 반환.
                        로드 이후에도 속성으로 언제든 토글 가능.
@@ -74,36 +69,38 @@ class MultiGameDataset:
 
     def __init__(
         self,
-        vglc_root:        Path | str = _DEFAULT_VGLC_ROOT,
         dungeon_root:     Path | str = _DEFAULT_DUNGEON_ROOT,
-        boxoban_root:     Path | str = _DEFAULT_BOXOBAN_ROOT,
-        vglc_games:       Optional[List[str]] = None,
+        sokoban_root:     Path | str = _DEFAULT_BOXOBAN_ROOT,
         include_dungeon:  bool = True,
-        include_boxoban:  bool = True,
-        vglc_split:       str = "Processed",
+        include_sokoban:  bool = True,
         use_cache:        bool = True,
         cache_dir:        Path | str | None = None,
         use_tile_mapping: bool = True,
+        # 하위 호환: 구 파라미터명 지원
+        boxoban_root:     Path | str | None = None,
+        include_boxoban:  bool | None = None,
     ) -> None:
         self.use_tile_mapping: bool = use_tile_mapping
 
+        # 하위 호환 처리
+        if boxoban_root is not None:
+            sokoban_root = boxoban_root
+        if include_boxoban is not None:
+            include_sokoban = include_boxoban
+
         self._samples: List[GameSample] = []
-        self._vglc_handler: Optional[VGLCHandler] = None
         self._dungeon_handler: Optional[DungeonHandler] = None
-        self._boxoban_handler: Optional[BoxobanHandler] = None
+        self._sokoban_handler: Optional[BoxobanHandler] = None
 
         if cache_dir is None:
             cache_dir = _HERE / "cache" / "artifacts"
         cache_dir = Path(cache_dir)
 
         args_for_key = {
-            "vglc_root": str(vglc_root),
             "dungeon_root": str(dungeon_root),
-            "boxoban_root": str(boxoban_root),
-            "vglc_games": vglc_games,
+            "sokoban_root": str(sokoban_root),
             "include_dungeon": include_dungeon,
-            "include_boxoban": include_boxoban,
-            "vglc_split": vglc_split,
+            "include_sokoban": include_sokoban,
         }
         cache_key = build_cache_key(args_for_key, code_root=_HERE)
 
@@ -113,18 +110,6 @@ class MultiGameDataset:
                 self._samples = cached
                 return
 
-        # ── VGLC 로드 ───────────────────────────────────────────────────────────
-        if vglc_games is not None or Path(vglc_root).exists():
-            if Path(vglc_root).exists():
-                self._vglc_handler = VGLCHandler(
-                    vglc_root=vglc_root,
-                    selected_games=vglc_games,
-                    split=vglc_split,
-                )
-                for i, sample in enumerate(self._vglc_handler):
-                    sample.order = len(self._samples)
-                    self._samples.append(sample)
-
         # ── Dungeon 로드 ────────────────────────────────────────────────────────
         if include_dungeon and Path(dungeon_root).exists():
             self._dungeon_handler = DungeonHandler(root=dungeon_root)
@@ -132,10 +117,10 @@ class MultiGameDataset:
                 sample.order = len(self._samples)
                 self._samples.append(sample)
 
-        # ── Boxoban 로드 ────────────────────────────────────────────────────────
-        if include_boxoban and Path(boxoban_root).exists():
-            self._boxoban_handler = BoxobanHandler(root=boxoban_root)
-            for sample in self._boxoban_handler:
+        # ── Sokoban 로드 ────────────────────────────────────────────────────────
+        if include_sokoban and Path(sokoban_root).exists():
+            self._sokoban_handler = BoxobanHandler(root=sokoban_root)
+            for sample in self._sokoban_handler:
                 sample.order = len(self._samples)
                 self._samples.append(sample)
 
@@ -337,8 +322,8 @@ class MultiGameDataset:
         return [tag_utils.build_tags(s) for s in self._samples]
 
     def available_games(self) -> List[str]:
-        """등록된 게임 목록(현재: dungeon, boxoban) 반환."""
-        return [GameTag.DUNGEON, GameTag.BOXOBAN]
+        """등록된 게임 목록(현재: dungeon, sokoban) 반환."""
+        return [GameTag.DUNGEON, GameTag.SOKOBAN]
 
     def sample(
         self,

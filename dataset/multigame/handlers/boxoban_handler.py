@@ -303,7 +303,7 @@ class BoxobanHandler(BaseGameHandler):
         samples = handler.sample(500)
     """
 
-    game_tag = GameTag.BOXOBAN
+    game_tag = GameTag.SOKOBAN
 
     def __init__(
         self,
@@ -322,7 +322,7 @@ class BoxobanHandler(BaseGameHandler):
 
     @property
     def game_tag(self) -> str:
-        return GameTag.BOXOBAN
+        return GameTag.SOKOBAN
 
     # ── 파일 목록 수집 ────────────────────────────────────────────────────────────
 
@@ -386,7 +386,7 @@ class BoxobanHandler(BaseGameHandler):
         samples: List[GameSample] = []
         for order, idx in enumerate(chosen_idxs):
             samples.append(GameSample(
-                game=GameTag.BOXOBAN,
+                game=GameTag.SOKOBAN,
                 source_id=all_ids[idx],
                 array=all_arrays[idx],
                 legend=legend,

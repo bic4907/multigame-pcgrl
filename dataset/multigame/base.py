@@ -29,6 +29,7 @@ class GameTag:
     MEGA_MAN    = "mega_man"
     DUNGEON     = "dungeon"
     BOXOBAN     = "boxoban"
+    SOKOBAN     = "sokoban"
 
 
 # ── 공통 데이터 구조 ────────────────────────────────────────────────────────────

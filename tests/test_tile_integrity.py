@@ -215,30 +215,19 @@ def _dataset_dirs_exist() -> bool:
 
 @pytest.fixture(scope="function")
 def dataset_samples():
-    """MultiGameDataset 로드.
-
-    - 데이터 폴더가 존재하는 경우 (로컬): 샘플이 반드시 1개 이상이어야 함 → 0개면 FAIL
-    - 데이터 폴더가 없는 경우 (CI):      데이터 없음으로 간주 → SKIP
-    """
-    data_present = _dataset_dirs_exist()
-    try:
-        from dataset.multigame import MultiGameDataset
-        ds = MultiGameDataset(include_dungeon=True)
-        samples = ds._samples
-        if len(samples) == 0:
-            if data_present:
-                pytest.fail(
-                    "데이터 폴더는 존재하지만 샘플이 0개입니다. "
-                    "dungeon/sokoban 데이터를 확인하세요."
-                )
-            else:
-                pytest.skip("데이터셋 폴더 없음 (CI 환경) — 건너뜁니다.")
-        return samples
-    except Exception as e:
-        if data_present:
-            pytest.fail(f"데이터 폴더가 있는데 MultiGameDataset 로드 실패: {e}")
-        else:
-            pytest.skip(f"MultiGameDataset 로드 실패 (데이터 없음): {e}")
+    """MultiGameDataset 로드 — 데이터 폴더가 없으면 즉시 FAIL."""
+    assert _dataset_dirs_exist(), (
+        "dungeon 또는 sokoban 데이터 폴더가 존재하지 않습니다. "
+        "dataset/dungeon_level_dataset 또는 dataset/boxoban_levels 를 확인하세요."
+    )
+    from dataset.multigame import MultiGameDataset
+    ds = MultiGameDataset(include_dungeon=True)
+    samples = ds._samples
+    assert len(samples) > 0, (
+        "데이터 폴더는 존재하지만 샘플이 0개입니다. "
+        "dungeon/sokoban 데이터 파일을 확인하세요."
+    )
+    return samples
 
 
 def test_dataset_samples_loaded(dataset_samples):

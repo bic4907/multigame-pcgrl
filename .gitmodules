@@ -1,0 +1,3 @@
+[submodule "dataset/boxoban_levels"]
+	path = dataset/boxoban_levels
+	url = https://github.com/google-deepmind/boxoban-levels

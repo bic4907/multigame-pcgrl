@@ -4,3 +4,11 @@
 [submodule "dataset/dungeon_level_dataset"]
 	path = dataset/dungeon_level_dataset
 	url = https://github.com/bic4907/dungeon-level-dataset
+
+[submodule "dataset/doom_levels"]
+	path = dataset/doom_levels
+	url = https://github.com/user/doom_levels.git
+
+[submodule "dataset/boxoban_levels"]
+	path = dataset/boxoban_levels
+	url = https://github.com/user/boxoban_levels.git

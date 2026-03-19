@@ -153,8 +153,25 @@ class _ViewerHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def run_server(host: str = "127.0.0.1", port: int = 8765) -> None:
-    backend = DatasetViewerBackend()
+def run_server(
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    dungeon_root: str | None = None,
+    pokemon_root: str | None = None,
+    boxoban_root: str | None = None,
+    doom_root: str | None = None,
+) -> None:
+    kwargs = {}
+    if dungeon_root:
+        kwargs["dungeon_root"] = dungeon_root
+    if pokemon_root:
+        kwargs["pokemon_root"] = pokemon_root
+    if boxoban_root:
+        kwargs["boxoban_root"] = boxoban_root
+    if doom_root:
+        kwargs["doom_root"] = doom_root
+    
+    backend = DatasetViewerBackend(**kwargs) if kwargs else DatasetViewerBackend()
 
     class Handler(_ViewerHandler):
         pass

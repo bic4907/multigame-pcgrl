@@ -1,7 +1,7 @@
 """
 dataset/multigame/dataset.py
 ============================
-MultiGameDataset: VGLC + Dungeon 통합 데이터셋 클래스.
+MultiGameDataset: Dungeon + POKEMON + Sokoban + DOOM 통합 데이터셋 클래스.
 
 외부 의존: numpy (Pillow는 렌더링 시에만 필요).
 
@@ -10,7 +10,7 @@ Example
     from dataset.multigame import MultiGameDataset
 
     # use_tile_mapping=True (기본값): 모든 샘플 array가 unified 7-category로 변환되어 반환
-    ds = MultiGameDataset(vglc_games=["zelda", "mario"], include_dungeon=True)
+    ds = MultiGameDataset(include_dungeon=True, include_pokemon=True, include_doom=True)
     sample = ds[0]
     # sample.array 값 범위: [0, 6]  (unified category index)
 
@@ -24,12 +24,13 @@ Example
     ds.use_tile_mapping = True    # 다시 unified 반환
 
     # 필터
-    zelda_samples = ds.by_game("zelda")
-    bat_levels    = ds.by_instruction("bat swarm")
+    dungeon_samples = ds.by_game("dungeon")
+    pokemon_samples = ds.by_game("pokemon")
+    doom_samples = ds.by_game("doom")
 
     # 렌더링 (use_tile_mapping 설정 자동 반영)
     ds.render(sample, save_path="out.png")
-    ds.render_grid(zelda_samples[:8], save_path="grid.png")
+    ds.render_grid(dungeon_samples[:8], save_path="grid.png")
 """
 from __future__ import annotations
 
@@ -42,8 +43,8 @@ from .base import GameSample, GameTag
 from .handlers.dungeon_handler import DungeonHandler, _DEFAULT_DUNGEON_ROOT
 from .handlers.boxoban_handler import BoxobanHandler, _DEFAULT_BOXOBAN_ROOT
 from .handlers.pokemon_handler import POKEMONHandler, _DEFAULT_POKEMON_ROOT
+from .handlers.doom_handler import DoomHandler, _DEFAULT_DOOM_ROOT, _DEFAULT_DOOM2_ROOT
 from .handlers.fdm_game.augmentation import create_rotated_sample
-from .handlers.vglc_games import SUPPORTED_GAMES
 from .handlers.handler_config import HandlerConfig, get_default_config
 from . import tags as tag_utils
 from .cache_utils import (
@@ -58,18 +59,18 @@ _HERE = Path(__file__).parent
 
 class MultiGameDataset:
     """
-    Dungeon + Sokoban(Boxoban) + FDM 통합 데이터셋 클래스.
+    Dungeon + Sokoban(Boxoban) + POKEMON + DOOM 통합 데이터셋 클래스.
 
     Parameters
     ----------
     dungeon_root     : dungeon_level_dataset 루트 경로
-    fdm_root         : Five-Dollar-Model 루트 경로
-    vglc_games       : 로드할 VGLC 게임 태그 리스트 (None이면 전체)
+    pokemon_root     : Five-Dollar-Model 루트 경로
     sokoban_root     : boxoban_levels 루트 경로
+    doom_root        : doom_levels 루트 경로
     include_dungeon  : Dungeon 데이터셋 포함 여부
     include_pokemon  : POKEMON 데이터셋 포함 여부
-    vglc_split       : VGLC 하위 폴더 (기본 "Processed")
     include_sokoban  : Sokoban 데이터셋 포함 여부
+    include_doom     : DOOM 데이터셋 포함 여부
     use_tile_mapping : True(기본)면 array를 unified 7-category로 변환해서 반환.
                        False면 원본 tile_id 그대로 반환.
                        로드 이후에도 속성으로 언제든 토글 가능.
@@ -81,12 +82,14 @@ class MultiGameDataset:
         self,
         dungeon_root:     Path | str = _DEFAULT_DUNGEON_ROOT,
         pokemon_root:     Path | str = _DEFAULT_POKEMON_ROOT,
-        vglc_games:       Optional[List[str]] = None,
         sokoban_root:     Path | str = _DEFAULT_BOXOBAN_ROOT,
+        doom_root:        Path | str = _DEFAULT_DOOM_ROOT,
+        doom2_root:       Path | str = _DEFAULT_DOOM2_ROOT,
         include_dungeon:  bool = True,
         include_pokemon:  bool = True,
-        vglc_split:       str = "Processed",
         include_sokoban:  bool = True,
+        include_doom:     bool = True,
+        include_doom2:    bool = True,
         use_cache:        bool = True,
         cache_dir:        Path | str | None = None,
         use_tile_mapping: bool = True,
@@ -111,6 +114,7 @@ class MultiGameDataset:
         self._dungeon_handler: Optional[DungeonHandler] = None
         self._pokemon_handler: Optional[POKEMONHandler] = None
         self._sokoban_handler: Optional[BoxobanHandler] = None
+        self._doom_handler: Optional[DoomHandler] = None
 
         if cache_dir is None:
             cache_dir = _HERE / "cache" / "artifacts"
@@ -119,13 +123,15 @@ class MultiGameDataset:
         args_for_key = {
             "dungeon_root": str(dungeon_root),
             "pokemon_root": str(pokemon_root),
-            "vglc_games": vglc_games,
             "sokoban_root": str(sokoban_root),
+            "doom_root": str(doom_root),
+            "doom2_root": str(doom2_root),
             "include_dungeon": include_dungeon,
             "include_pokemon": include_pokemon,
-            "vglc_split": vglc_split,
             "handler_config": handler_config.to_dict(),
             "include_sokoban": include_sokoban,
+            "include_doom": include_doom,
+            "include_doom2": include_doom2,
         }
         cache_key = build_cache_key(args_for_key, code_root=_HERE)
 
@@ -134,26 +140,6 @@ class MultiGameDataset:
             if cached is not None:
                 self._samples = cached
                 return
-
-        # ── VGLC 로드 ───────────────────────────────────────────────────────────
-        if vglc_games is not None or Path(vglc_root).exists():
-            if Path(vglc_root).exists():
-                self._vglc_handler = VGLCHandler(
-                    vglc_root=vglc_root,
-                    selected_games=vglc_games,
-                    split=vglc_split,
-                    handler_config=handler_config,
-                )
-                for i, sample in enumerate(self._vglc_handler):
-                    sample.order = len(self._samples)
-                    self._samples.append(sample)
-
-        # Floor filtering 적용
-        if handler_config.doom_slicing.enabled:
-            self._samples = self._apply_floor_filtering(
-                self._samples,
-                floor_empty_max=handler_config.doom_slicing.floor_empty_max
-            )
 
         # ── Dungeon 로드 ────────────────────────────────────────────────────────
         if include_dungeon and Path(dungeon_root).exists():
@@ -189,9 +175,47 @@ class MultiGameDataset:
             except (FileNotFoundError, ValueError) as e:
                 print(f"Warning: Could not load FDM dataset: {e}")
 
+        # ── DOOM 로드 ────────────────────────────────────────────────────────
+        if include_doom:
+            if Path(doom_root).exists():
+                try:
+                    self._doom_handler = DoomHandler(root=doom_root, handler_config=self._handler_config)
+                    for sample in self._doom_handler:
+                        sample.order = len(self._samples)
+                        self._samples.append(sample)
+                    
+                    n_doom = len([s for s in self._samples if s.game == GameTag.DOOM])
+                    if n_doom > 0:
+                        print(f"[MultiGameDataset] DOOM: Loaded {n_doom} samples")
+                except (FileNotFoundError, ValueError) as e:
+                    print(f"Warning: Could not load DOOM dataset: {e}")
+            else:
+                print(f"[MultiGameDataset] DOOM dataset directory not found: {doom_root}")
+
+        # ── DOOM2 로드 ────────────────────────────────────────────────────────
+        if include_doom2:
+            if Path(doom2_root).exists():
+                try:
+                    doom2_handler = DoomHandler(root=doom2_root, handler_config=self._handler_config)
+                    for sample in doom2_handler:
+                        sample.order = len(self._samples)
+                        self._samples.append(sample)
+                    
+                    n_doom2 = len([s for s in self._samples if s.game == GameTag.DOOM and s.meta.get("file", "").startswith("MAP")])
+                    if n_doom2 > 0:
+                        print(f"[MultiGameDataset] DOOM 2: Loaded {n_doom2} samples")
+                except (FileNotFoundError, ValueError) as e:
+                    print(f"Warning: Could not load DOOM 2 dataset: {e}")
+            else:
+                print(f"[MultiGameDataset] DOOM 2 dataset directory not found: {doom2_root}")
+
+
         # ── POKEMON 패딩 후 필터링 (타일셋 기준: 256개 중 250개 이상) ──────────────────
         if self._handler_config.filtering.enabled:
             self._apply_pokemon_tileset_filtering()
+
+
+
 
         # ── instruction 단어 수 기반 필터링 (패딩 후) ────────────────────────
         if self._handler_config.filtering.enabled:
@@ -300,6 +324,8 @@ class MultiGameDataset:
             if sample.game == "pokemon" and self._handler_config.pokemon.rotate_90:
                 should_augment = True
             elif sample.game == "dungeon" and self._handler_config.dungeon.rotate_90:
+                should_augment = True
+            elif sample.game == GameTag.DOOM and self._handler_config.doom.rotate_90:
                 should_augment = True
 
             if should_augment:
@@ -532,7 +558,7 @@ class MultiGameDataset:
 
     def available_games(self) -> List[str]:
         """등록된 게임 목록(현재: dungeon, sokoban) 반환."""
-        return [GameTag.DUNGEON, GameTag.SOKOBAN]
+        return [GameTag.DUNGEON, GameTag.SOKOBAN, GameTag.DOOM, GameTag.POKEMON]
 
     def sample(
         self,

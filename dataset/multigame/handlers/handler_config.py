@@ -82,6 +82,12 @@ class POKEMONConfig:
 
 
 @dataclass
+class DoomConfig:
+    """DOOM 게임 설정"""
+    rotate_90: bool = False  # 시계방향 90도 회전 증강
+
+
+@dataclass
 class HandlerConfig:
     """모든 핸들러의 통합 설정"""
     doom_slicing: DoomSlicingConfig = field(default_factory=DoomSlicingConfig)
@@ -94,6 +100,7 @@ class HandlerConfig:
     mega_man: MegaManConfig = field(default_factory=MegaManConfig)
     dungeon: DungeonConfig = field(default_factory=DungeonConfig)
     pokemon: POKEMONConfig = field(default_factory=POKEMONConfig)
+    doom: DoomConfig = field(default_factory=DoomConfig)
     
     def to_dict(self) -> Dict[str, Any]:
         """설정을 딕셔너리로 변환"""
@@ -108,6 +115,7 @@ class HandlerConfig:
             'mega_man': asdict(self.mega_man),
             'dungeon': asdict(self.dungeon),
             'pokemon': asdict(self.pokemon),
+            'doom': asdict(self.doom),
         }
 
     def update_doom_slicing(

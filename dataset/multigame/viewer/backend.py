@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json as _json
-import importlib
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..base import GameTag
 from ..handlers.boxoban_handler import BOXOBAN_PALETTE, BoxobanHandler
 from ..handlers.dungeon_handler import DUNGEON_PALETTE, DungeonHandler, _DEFAULT_DUNGEON_ROOT
+from ..handlers.pokemon_handler import POKEMONHandler, _DEFAULT_POKEMON_ROOT
+from ..handlers.doom_handler import DoomHandler, DOOM_PALETTE_DICT, _DEFAULT_DOOM_ROOT
 from ..tile_utils import CATEGORY_COLORS, UNIFIED_CATEGORIES, to_unified
 
 # ── unified 카테고리 메타 ───────────────────────────────────────────────────────
@@ -59,10 +59,14 @@ class DatasetViewerBackend:
         *,
         dungeon_root: Path | str = _DEFAULT_DUNGEON_ROOT,
         boxoban_root: Path | str = _DEFAULT_BOXOBAN_ROOT,
+        pokemon_root: Path | str = _DEFAULT_POKEMON_ROOT,
+        doom_root: Path | str = _DEFAULT_DOOM_ROOT,
         boxoban_n_sample: int = 1000,
     ) -> None:
         self._dungeon_root = Path(dungeon_root)
         self._boxoban_root = Path(boxoban_root)
+        self._pokemon_root = Path(pokemon_root)
+        self._doom_root = Path(doom_root)
         self._boxoban_n_sample = int(boxoban_n_sample)
 
         self._games: List[str] = []
@@ -70,11 +74,12 @@ class DatasetViewerBackend:
 
         self._dungeon_handler: Optional[DungeonHandler] = None
         self._boxoban_handler: Optional[BoxobanHandler] = None
+        self._pokemon_handler: Optional[POKEMONHandler] = None
 
         self._init_sources()
 
     def _init_sources(self) -> None:
-        # Viewer policy: expose only dungeon + boxoban.
+        # Viewer policy: expose dungeon, boxoban, pokemon, and doom datasets.
         if self._dungeon_root.exists():
             self._dungeon_handler = DungeonHandler(root=self._dungeon_root)
             n = len(self._dungeon_handler)
@@ -93,6 +98,26 @@ class DatasetViewerBackend:
             if n > 0:
                 self._games.append(GameTag.BOXOBAN)
                 self._counts[GameTag.BOXOBAN] = n
+
+        if self._pokemon_root.exists():
+            try:
+                self._pokemon_handler = POKEMONHandler(root=self._pokemon_root)
+                n = len(self._pokemon_handler)
+                if n > 0:
+                    self._games.append(GameTag.POKEMON)
+                    self._counts[GameTag.POKEMON] = n
+            except (FileNotFoundError, ValueError):
+                pass  # Pokemon dataset not available
+
+        if self._doom_root.exists():
+            try:
+                self._doom_handler = DoomHandler(root=self._doom_root)
+                n = len(self._doom_handler)
+                if n > 0:
+                    self._games.append(GameTag.DOOM)
+                    self._counts[GameTag.DOOM] = n
+            except (FileNotFoundError, ValueError):
+                pass  # Doom dataset not available
 
     def games_with_counts(self) -> List[Dict[str, Any]]:
         return [
@@ -146,6 +171,18 @@ class DatasetViewerBackend:
             source_ids = self._boxoban_handler.list_entries()
             return self._boxoban_handler.load_sample(source_ids[index], order=index)
 
+        if game == GameTag.POKEMON:
+            if self._pokemon_handler is None:
+                raise RuntimeError("Pokemon handler is not initialized")
+            source_ids = self._pokemon_handler.list_entries()
+            return self._pokemon_handler.load_sample(source_ids[index], order=index)
+
+        if game == GameTag.DOOM:
+            if self._doom_handler is None:
+                raise RuntimeError("Doom handler is not initialized")
+            source_ids = self._doom_handler.list_entries()
+            return self._doom_handler.load_sample(source_ids[index], order=index)
+
         raise KeyError(f"unsupported game: {game}")
 
     def _palette_for_game(self, game: str) -> Dict[int, tuple[int, int, int]]:
@@ -153,6 +190,8 @@ class DatasetViewerBackend:
             return BOXOBAN_PALETTE
         if game == GameTag.DUNGEON:
             return DUNGEON_PALETTE
+        if game == GameTag.DOOM:
+            return DOOM_PALETTE_DICT
         return {}
 
     def reload(self) -> Dict[str, Any]:
@@ -176,6 +215,8 @@ class DatasetViewerBackend:
         self._counts = {}
         self._dungeon_handler = None
         self._boxoban_handler = None
+        self._pokemon_handler = None
+        self._doom_handler = None
 
         # 핸들러 재초기화
         self._init_sources()

@@ -4,7 +4,7 @@ Lightweight browser viewer for local dataset inspection.
 
 ## Features
 
-- Shows sample counts per game (including `boxoban` if available)
+- Shows sample counts per game (including `dungeon`, `pokemon`, `boxoban`, `doom`)
 - Select game in browser and browse by index
 - Keyboard navigation with left/right arrows (`←` / `→`)
 - **Three rendering modes:**
@@ -17,19 +17,34 @@ Lightweight browser viewer for local dataset inspection.
 
 ## Run
 
+### Method 1: Direct Module Execution (권장)
+
 ```bash
 python -m dataset.multigame.viewer.server --host 127.0.0.1 --port 8765
 ```
 
-Then open in your browser:
+### Method 2: Run Server Script
 
-- http://127.0.0.1:8765
+```bash
+cd dataset/multigame/viewer
+python server.py --host 127.0.0.1 --port 8765
+```
 
-On startup, the server prints per-game counts to terminal.
+### Custom Dataset Paths
+
+```bash
+python -m dataset.multigame.viewer.server \
+  --host 127.0.0.1 \
+  --port 8765 \
+  --dungeon-root /path/to/dungeon_level_dataset \
+  --pokemon-root /path/to/five-dollar-model \
+  --boxoban-root /path/to/boxoban_levels \
+  --doom-root /path/to/doom_levels
+```
 
 ## Usage
 
-1. **Select game** from dropdown (e.g., `zelda`, `boxoban`, `dungeon`)
+1. **Select game** from dropdown (e.g., `dungeon`, `pokemon`, `boxoban`)
 2. **Switch rendering mode** by clicking tabs:
    - `Raw` – See original palette colors
    - `Unified` – See 7-category abstraction (useful for cross-game comparison)
@@ -48,6 +63,8 @@ On startup, the server prints per-game counts to terminal.
 - Legend panel updates dynamically to show only tiles used in the current level
 - Symbol mode is most readable when tile size ≥ 12px (automatically scaled)
 - All rendering happens client-side after initial JSON fetch (fast mode switching)
+- Viewer automatically detects available datasets (dungeon, pokemon, boxoban)
+- Missing datasets are simply skipped without error
 
 ## Mapping Source
 

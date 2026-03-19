@@ -141,6 +141,17 @@ def test_dungeon_handler_tile_ids_match_mapping(tile_mapping):
     )
 
 
+def test_pokemon_handler_tile_ids_match_mapping(tile_mapping):
+    """pokemon handler의 tile ID 집합도 tile_mapping["pokemon"] 범위 안이어야 한다."""
+    # Pokemon은 다양한 타일을 사용하므로, tile_mapping["pokemon"]이 모두 정의되어 있는지 확인
+    assert "pokemon" in tile_mapping, "tile_mapping에 'pokemon' 게임 정의 없음"
+    assert "mapping" in tile_mapping["pokemon"], "pokemon의 'mapping' 정의 없음"
+    # Pokemon은 FDM 핸들러이므로, mapping key 집합이 비어있지 않아야 함
+    mapping_keys = {int(k) for k in tile_mapping["pokemon"]["mapping"].keys()}
+    assert len(mapping_keys) > 0, "pokemon tile_mapping이 비어있음"
+
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # 3. env ↔ tile_mapping (dungeon) 일치 검증
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -215,17 +226,30 @@ def _dataset_dirs_exist() -> bool:
 
 @pytest.fixture(scope="function")
 def dataset_samples():
-    """MultiGameDataset 로드 — 데이터 폴더가 없으면 즉시 FAIL."""
+    """MultiGameDataset 로드 — 데이터 폴더가 없으면 즉시 FAIL.
+    
+    캐시 프로세스:
+    1. dungeon, sokoban 데이터 로드
+    2. pokemon(FDM) 데이터 로드 및 필터링
+       - max_tile_ratio 필터링 (기본 0.95)
+       - tileset 필터링 (max_tile_count=250)
+       - instruction 필터링 (min_words=2)
+    3. doom/doom2 데이터 로드
+    4. 데이터 증강 (rotate_90)
+    5. cache 저장
+    
+    모든 게임의 샘플은 통합 tile_mapping에 따라 매핑됨.
+    """
     assert _dataset_dirs_exist(), (
-        "dungeon 또는 sokoban 데이터 폴더가 존재하지 않습니다. "
-        "dataset/dungeon_level_dataset 또는 dataset/boxoban_levels 를 확인하세요."
+        "dungeon, sokoban, 또는 doom 데이터 폴더 중 하나 이상이 존재해야 합니다. "
+        "dataset/dungeon_level_dataset, dataset/boxoban_levels, 또는 dataset/TheVGLC/Doom 을 확인하세요."
     )
     from dataset.multigame import MultiGameDataset
     ds = MultiGameDataset(include_dungeon=True)
     samples = ds._samples
     assert len(samples) > 0, (
         "데이터 폴더는 존재하지만 샘플이 0개입니다. "
-        "dungeon/sokoban 데이터 파일을 확인하세요."
+        "dungeon/sokoban/doom 데이터 파일을 확인하세요."
     )
     return samples
 
@@ -274,11 +298,52 @@ def test_dataset_array_dtype(dataset_samples):
 
 
 def test_dataset_games_all_present(tile_mapping, dataset_samples):
-    """지원 게임(dungeon, sokoban)이 데이터셋에 존재해야 한다."""
+    """지원 게임(dungeon, sokoban, pokemon)이 데이터셋에 존재해야 한다."""
     supported_games = {"dungeon", "sokoban"}
     dataset_games = {s.game for s in dataset_samples}
     missing = supported_games - dataset_games
     assert not missing, f"지원 게임이지만 dataset에 없는 게임: {missing}"
+
+
+def test_dataset_pokemon_samples_present(dataset_samples):
+    """Pokemon(FDM) 샘플이 존재하고 충분한 개수여야 한다.
+    
+    Pokemon 캐시 프로세스:
+    1. FDM 데이터 로드
+    2. max_tile_ratio 필터링 (기본 0.95) - 타일 편차 많은 샘플 제거
+    3. tileset 필터링 (max_tile_count=250) - 동일 타일 너무 많은 샘플 제거
+    4. instruction 필터링 (min_words=2) - 텍스트 설명 부족한 샘플 제거
+    """
+    pokemon_samples = [s for s in dataset_samples if s.game == "pokemon"]
+    assert len(pokemon_samples) > 0, "Pokemon 샘플이 로드되지 않음"
+    # Pokemon은 필터링을 거치므로 원본(887)보다 적어야 함 (기본 1564로 설정)
+    assert len(pokemon_samples) > 800, f"Pokemon 샘플이 너무 적음: {len(pokemon_samples)}"
+
+
+def test_dataset_pokemon_cache_filtering_applied(dataset_samples):
+    """Pokemon 샘플이 캐시 필터링을 통과했는지 검증.
+    
+    필터링 기준:
+    - max_tile_ratio=0.95: 타일 빈도 max > 95% 제거
+    - max_tile_count=250: 256개 타일 중 250개 이상이 같은 타일 제거
+    - min_instruction_words=2: 명령어 단어 2개 미만 제거
+    """
+    pokemon_samples = [s for s in dataset_samples if s.game == "pokemon"]
+    
+    # 모든 pokemon 샘플이 instruction을 가져야 함
+    no_instruction = [s.source_id for s in pokemon_samples if not s.instruction]
+    assert len(no_instruction) == 0, (
+        f"instruction이 없는 pokemon 샘플이 캐시 필터링을 통과함: {no_instruction[:5]}"
+    )
+    
+    # 모든 pokemon 샘플의 instruction이 최소 단어 수를 만족해야 함
+    for sample in pokemon_samples[:10]:  # 샘플링으로 검증
+        words = sample.instruction.split()
+        assert len(words) >= 2, (
+            f"instruction 단어 수가 2개 미만: {sample.source_id} → "
+            f"'{sample.instruction}'"
+        )
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

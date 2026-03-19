@@ -218,10 +218,24 @@ def test_multigame_env_all_tile_names(multigame_env_info):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _dataset_dirs_exist() -> bool:
-    """dungeon 또는 sokoban 데이터 폴더 중 하나라도 존재하면 True."""
+    """dungeon, sokoban, pokemon, 또는 doom 데이터 폴더 중 하나라도 존재하면 True.
+    
+    근본 원인 해결:
+    MultiGameDataset은 여러 게임을 지원하므로, 테스트도 모든 가능한 데이터셋을 확인해야 한다.
+    사용 가능한 데이터: dungeon, sokoban, pokemon(FDM), doom, doom2
+    """
     from dataset.multigame.handlers.dungeon_handler import _DEFAULT_DUNGEON_ROOT
     from dataset.multigame.handlers.boxoban_handler import _DEFAULT_BOXOBAN_ROOT
-    return Path(_DEFAULT_DUNGEON_ROOT).exists() or Path(_DEFAULT_BOXOBAN_ROOT).exists()
+    from dataset.multigame.handlers.pokemon_handler import _DEFAULT_POKEMON_ROOT
+    from dataset.multigame.handlers.doom_handler import _DEFAULT_DOOM_ROOT, _DEFAULT_DOOM2_ROOT
+    
+    return (
+        Path(_DEFAULT_DUNGEON_ROOT).exists()
+        or Path(_DEFAULT_BOXOBAN_ROOT).exists()
+        or Path(_DEFAULT_POKEMON_ROOT).exists()
+        or Path(_DEFAULT_DOOM_ROOT).exists()
+        or Path(_DEFAULT_DOOM2_ROOT).exists()
+    )
 
 
 @pytest.fixture(scope="function")
@@ -241,15 +255,20 @@ def dataset_samples():
     모든 게임의 샘플은 통합 tile_mapping에 따라 매핑됨.
     """
     assert _dataset_dirs_exist(), (
-        "dungeon, sokoban, 또는 doom 데이터 폴더 중 하나 이상이 존재해야 합니다. "
-        "dataset/dungeon_level_dataset, dataset/boxoban_levels, 또는 dataset/TheVGLC/Doom 을 확인하세요."
+        "다음 데이터 폴더 중 하나 이상이 필요합니다:\n"
+        "  ✓ dataset/dungeon_level_dataset (Dungeon)\n"
+        "  ✓ dataset/boxoban_levels (Sokoban)\n"
+        "  ✓ dataset/five-dollar-model (POKEMON/FDM)\n"
+        "  ✓ dataset/TheVGLC/Doom (DOOM 1)\n"
+        "  ✓ dataset/TheVGLC/Doom2 (DOOM 2)\n"
+        "\n현재 존재하는 데이터 폴더가 없어서 테스트가 실패했습니다."
     )
     from dataset.multigame import MultiGameDataset
     ds = MultiGameDataset(include_dungeon=True)
     samples = ds._samples
     assert len(samples) > 0, (
         "데이터 폴더는 존재하지만 샘플이 0개입니다. "
-        "dungeon/sokoban/doom 데이터 파일을 확인하세요."
+        "dungeon/sokoban/pokemon/doom 데이터 파일을 확인하세요."
     )
     return samples
 

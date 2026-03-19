@@ -10,169 +10,50 @@
     "6": "hazard"
   },
   "_category_colors_rgb": {
-    "0": [20,  20,  20 ],
-    "1": [80,  80,  80 ],
-    "2": [200, 180, 120],
-    "3": [220, 50,  50 ],
-    "4": [255, 215, 0  ],
-    "5": [0,   200, 0  ],
-    "6": [220, 100, 20 ]
+    "0": [
+      20,
+      20,
+      20
+    ],
+    "1": [
+      80,
+      80,
+      80
+    ],
+    "2": [
+      200,
+      180,
+      120
+    ],
+    "3": [
+      220,
+      50,
+      50
+    ],
+    "4": [
+      255,
+      215,
+      0
+    ],
+    "5": [
+      0,
+      200,
+      0
+    ],
+    "6": [
+      220,
+      100,
+      20
+    ]
   },
   "_category_tile_images": {
     "0": "empty.png",
     "1": "solid.png",
-    "2": "empty.png",
+    "2": "path_e.png",
     "3": "bat.png",
     "4": "key.png",
     "5": "player.png",
     "6": "lava.png"
-  },
-  "_category_tile_images": {
-    "_comment": "category index → filename in envs/probs/tile_ims/. Used by MultigameProblem.init_graphics().",
-    "border": "solid.png",
-    "0": "empty.png",
-    "1": "solid.png",
-    "2": "empty.png",
-    "3": "bat.png",
-    "4": "key.png",
-    "5": "player.png",
-    "6": "lava.png"
-  },
-  "zelda": {
-    "_tile_names": {
-      "0": "EMPTY",
-      "1": "WALL",
-      "2": "FLOOR",
-      "3": "DOOR",
-      "4": "BLOCK",
-      "5": "START",
-      "6": "MOB",
-      "7": "OBJECT",
-      "99": "UNKNOWN"
-    },
-    "mapping": {
-      "0":  0,
-      "1":  1,
-      "2":  2,
-      "3":  5,
-      "4":  1,
-      "5":  5,
-      "6":  3,
-      "7":  4,
-      "99": 0
-    }
-  },
-  "mario": {
-    "_tile_names": {
-      "0": "EMPTY",
-      "1": "GROUND",
-      "2": "BREAK",
-      "3": "QUESTION",
-      "4": "ENEMY",
-      "5": "PIPE",
-      "6": "COIN",
-      "7": "CANNON",
-      "8": "PLATFORM",
-      "99": "UNKNOWN"
-    },
-    "mapping": {
-      "0":  0,
-      "1":  1,
-      "2":  1,
-      "3":  4,
-      "4":  3,
-      "5":  1,
-      "6":  4,
-      "7":  6,
-      "8":  1,
-      "99": 0
-    }
-  },
-  "lode_runner": {
-    "_tile_names": {
-      "0": "EMPTY",
-      "1": "SOLID",
-      "2": "DIGGABLE",
-      "3": "ROPE",
-      "4": "LADDER",
-      "5": "GOLD",
-      "6": "ENEMY",
-      "7": "SPAWN",
-      "99": "UNKNOWN"
-    },
-    "mapping": {
-      "0":  0,
-      "1":  1,
-      "2":  1,
-      "3":  2,
-      "4":  2,
-      "5":  4,
-      "6":  3,
-      "7":  5,
-      "99": 0
-    }
-  },
-  "kid_icarus": {
-    "_tile_names": {
-      "0": "EMPTY",
-      "1": "SOLID",
-      "2": "DOOR",
-      "3": "HAZARD",
-      "4": "PLATFORM",
-      "99": "UNKNOWN"
-    },
-    "mapping": {
-      "0":  0,
-      "1":  1,
-      "2":  5,
-      "3":  6,
-      "4":  1,
-      "99": 0
-    }
-  },
-  "doom": {
-    "_tile_names": {
-      "0": "EMPTY",
-      "1": "WALL",
-      "2": "FLOOR",
-      "3": "HAZARD",
-      "4": "ENEMY",
-      "5": "OBJECT",
-      "99": "UNKNOWN"
-    },
-    "mapping": {
-      "0":  0,
-      "1":  1,
-      "2":  2,
-      "3":  6,
-      "4":  3,
-      "5":  4,
-      "99": 0
-    }
-  },
-  "mega_man": {
-    "_tile_names": {
-      "0": "NULL",
-      "1": "GROUND",
-      "2": "BREAK",
-      "3": "HAZARD",
-      "4": "LADDER",
-      "5": "PICKUP",
-      "6": "MOVING",
-      "7": "ENEMY",
-      "99": "UNKNOWN"
-    },
-    "mapping": {
-      "0":  0,
-      "1":  1,
-      "2":  1,
-      "3":  6,
-      "4":  2,
-      "5":  4,
-      "6":  1,
-      "7":  3,
-      "99": 0
-    }
   },
   "dungeon": {
     "_tile_names": {
@@ -181,12 +62,37 @@
       "2": "WALL",
       "3": "ENEMY"
     },
+    "_tile_images": {
+      "0": "empty.png",
+      "1": "path_e.png",
+      "2": "solid.png",
+      "3": "bat.png"
+    },
     "mapping": {
-      "0":  0,
-      "1":  2,
-      "2":  1,
-      "3":  3
+      "0": 0,
+      "1": 2,
+      "2": 1,
+      "3": 3
+    }
+  },
+  "sokoban": {
+    "_tile_names": {
+      "0": "EMPTY",
+      "1": "WALL",
+      "4": "BOX",
+      "5": "PLAYER"
+    },
+    "_tile_images": {
+      "0": "empty.png",
+      "1": "solid.png",
+      "4": "btreasure.png",
+      "5": "player.png"
+    },
+    "mapping": {
+      "0": 0,
+      "1": 1,
+      "4": 4,
+      "5": 5
     }
   }
 }
-

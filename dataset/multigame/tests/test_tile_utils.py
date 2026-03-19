@@ -19,6 +19,8 @@ from dataset.multigame.tile_utils import (
     available_games,
     category_distribution,
     category_name,
+    game_mapping_info,
+    game_mapping_rows,
     onehot_to_unified,
     render_unified_rgb,
     to_onehot,
@@ -546,3 +548,24 @@ class TestMappedRender:
             )
 
 
+# ── 매핑 정보 API: game_mapping_info, game_mapping_rows ───────────────────────────
+
+class TestMappingInfo:
+    def test_game_mapping_info_has_required_keys(self):
+        info = game_mapping_info("zelda")
+        assert set(info.keys()) == {
+            "game", "tile_names", "mapping", "unified_categories"
+        }
+
+    def test_game_mapping_rows_contains_named_rows(self):
+        rows = game_mapping_rows("dungeon")
+        assert len(rows) > 0
+        first = rows[0]
+        assert "raw_id" in first
+        assert "raw_name" in first
+        assert "unified_id" in first
+        assert "unified_name" in first
+
+    def test_game_mapping_info_unknown_game_raises(self):
+        with pytest.raises(KeyError):
+            game_mapping_info("not_a_game")

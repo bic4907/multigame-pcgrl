@@ -23,6 +23,8 @@ from .tile_utils import (
     category_name,
     category_distribution,
     render_unified_rgb,
+    game_mapping_info,
+    game_mapping_rows,
 )
 
 __all__ = [
@@ -50,5 +52,6 @@ __all__ = [
     "category_name",
     "category_distribution",
     "render_unified_rgb",
+    "game_mapping_info",
+    "game_mapping_rows",
 ]
-

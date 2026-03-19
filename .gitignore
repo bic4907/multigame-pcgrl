@@ -8,6 +8,7 @@ _saves*
 log
 venv
 .temp
+.DS_Store
 
 *.swp
 submitit_logs

@@ -331,6 +331,55 @@ def available_games() -> List[str]:
     return [k for k in _MAPPING_CONFIG if not k.startswith("_")]
 
 
+def game_mapping_info(game: str) -> Dict[str, Any]:
+    """
+    tile_mapping.json의 게임별 매핑 정보를 정규화해 반환한다.
+
+    Returns
+    -------
+    {
+      'game': 'zelda',
+      'tile_names': {0: 'EMPTY', ...},
+      'mapping': {0: 0, 1: 1, ...},
+      'unified_categories': {0: 'empty', ...}
+    }
+    """
+    if game not in _MAPPING_CONFIG or game.startswith("_"):
+        raise KeyError(f"[tile_utils] mapping info not found for game: {game!r}")
+
+    entry = _MAPPING_CONFIG[game]
+    raw_names = entry.get("_tile_names", {})
+    raw_mapping = entry.get("mapping", {})
+
+    tile_names = {int(k): str(v) for k, v in raw_names.items()}
+    mapping = {int(k): int(v) for k, v in raw_mapping.items()}
+
+    return {
+        "game": game,
+        "tile_names": tile_names,
+        "mapping": mapping,
+        "unified_categories": dict(UNIFIED_CATEGORIES),
+    }
+
+
+def game_mapping_rows(game: str) -> List[Dict[str, Any]]:
+    """원본 타일 -> unified 카테고리 매핑을 표 형태 row 리스트로 반환한다."""
+    info = game_mapping_info(game)
+    tile_names: Dict[int, str] = info["tile_names"]
+    mapping: Dict[int, int] = info["mapping"]
+
+    rows: List[Dict[str, Any]] = []
+    for raw_id in sorted(mapping.keys()):
+        uni_id = mapping[raw_id]
+        rows.append({
+            "raw_id": raw_id,
+            "raw_name": tile_names.get(raw_id, f"TILE_{raw_id}"),
+            "unified_id": uni_id,
+            "unified_name": UNIFIED_CATEGORIES.get(uni_id, f"unknown({uni_id})"),
+        })
+    return rows
+
+
 def render_unified_rgb(
     unified: np.ndarray,
     tile_size: int = 16,

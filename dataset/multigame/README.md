@@ -97,6 +97,34 @@ python example_multigame_dataset.py --game zelda --limit 3
 python example_multigame_dataset.py --with-text-only --limit 5
 ```
 
+## Browser Viewer
+
+Use the built-in viewer to check per-game counts and inspect levels with keyboard navigation.
+
+```bash
+python -m dataset.multigame.viewer.server --host 127.0.0.1 --port 8765
+```
+
+Open `http://127.0.0.1:8765` and use `Left` / `Right` arrows to move between samples.
+
+**Three rendering modes:**
+- **Raw** – Original game-specific tile colors
+- **Unified** – 7-category abstraction (empty/wall/floor/enemy/object/spawn/hazard)
+- **Symbol** – Tile name text overlay (e.g., "WAL", "ENE", "OBJ")
+
+Switch modes with tabs in the browser UI. Legend updates automatically to show only tiles present in the current level.
+
+## Before/After Mapping View
+
+You can render raw tile image and 7-category mapped image side-by-side.
+
+`render_before_after.py` currently supports only `dungeon` and `boxoban`.
+
+```bash
+python -m dataset.multigame.scripts.render_before_after --game dungeon --index 0 --out outputs/dungeon_before_after.png
+python -m dataset.multigame.scripts.render_before_after --game boxoban --index 0 --out outputs/boxoban_before_after.png
+```
+
 ## Notes
 
 - `dungeon_level_dataset` usually has instruction text.

@@ -48,7 +48,7 @@ from .cache_utils import (
     load_samples_from_cache,
     save_samples_to_cache,
 )
-from .tile_utils import to_unified
+from .tile_utils import to_unified, render_unified_rgb, game_mapping_rows
 
 _HERE = Path(__file__).parent
 
@@ -138,6 +138,13 @@ class MultiGameDataset:
         import dataclasses
         unified_array = to_unified(sample.array, sample.game, warn_unmapped=False)
         return dataclasses.replace(sample, array=unified_array)
+
+    def _find_raw_sample(self, sample: GameSample) -> GameSample:
+        """source_id/game 기준으로 내부 raw 샘플을 찾아 반환한다."""
+        for s in self._samples:
+            if s.game == sample.game and s.source_id == sample.source_id:
+                return s
+        return sample
 
     # ── Sequence protocol ───────────────────────────────────────────────────────
     def __len__(self) -> int:
@@ -263,6 +270,48 @@ class MultiGameDataset:
         canvas = _rg(mapped_samples, cols=cols, tile_size=tile_size)
         return Image.fromarray(canvas, mode="RGB")
 
+    def render_before_after(
+        self,
+        sample: GameSample,
+        tile_size: int = 16,
+        gap: int = 8,
+        save_path: Optional[Path | str] = None,
+    ):
+        """
+        원본(raw)과 7-category mapped 이미지를 좌우로 붙여 렌더링한다.
+
+        Left  : raw palette
+        Right : unified palette
+        """
+        from .render import render_sample
+        from PIL import Image
+
+        raw_sample = self._find_raw_sample(sample)
+        raw_rgb = render_sample(raw_sample, tile_size=tile_size)
+
+        unified = to_unified(raw_sample.array, raw_sample.game, warn_unmapped=False)
+        mapped_rgb = render_unified_rgb(unified, tile_size=tile_size)
+
+        h = max(raw_rgb.shape[0], mapped_rgb.shape[0])
+        w = raw_rgb.shape[1] + gap + mapped_rgb.shape[1]
+        canvas = np.zeros((h, w, 3), dtype=np.uint8)
+        canvas[:, :] = (30, 30, 30)
+        canvas[:raw_rgb.shape[0], :raw_rgb.shape[1]] = raw_rgb
+        x2 = raw_rgb.shape[1] + gap
+        canvas[:mapped_rgb.shape[0], x2:x2 + mapped_rgb.shape[1]] = mapped_rgb
+
+        img = Image.fromarray(canvas, mode="RGB")
+        if save_path:
+            out = Path(save_path)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            img.save(str(out))
+            return out
+        return img
+
+    def mapping_rows(self, game: str):
+        """tile_mapping.json 기준 원본 타일 -> unified 매핑 row 목록."""
+        return game_mapping_rows(game)
+
     # ── 유틸 ────────────────────────────────────────────────────────────────────
     def get_tags(self, idx: int) -> Dict[str, Any]:
         """인덱스 기준 태그 dict 반환."""
@@ -273,8 +322,8 @@ class MultiGameDataset:
         return [tag_utils.build_tags(s) for s in self._samples]
 
     def available_games(self) -> List[str]:
-        """로드된 게임 목록."""
-        return list(self.count_by_game().keys())
+        """등록된 게임 목록(현재: dungeon, boxoban) 반환."""
+        return [GameTag.DUNGEON, GameTag.BOXOBAN]
 
     def sample(
         self,

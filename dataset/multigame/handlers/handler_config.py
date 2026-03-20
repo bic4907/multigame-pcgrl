@@ -42,7 +42,7 @@ class VGLCGameConfig:
 @dataclass
 class ZeldaConfig(VGLCGameConfig):
     """Zelda 게임 설정"""
-    pass
+    rotate_90: bool = False  # 시계방향 90도 회전 증강
 
 
 @dataclass

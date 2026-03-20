@@ -177,9 +177,14 @@ def run_server(
         pass
 
     Handler.backend = backend
-    server = ThreadingHTTPServer((host, port), Handler)  # type: ignore[arg-type]
 
-    print(f"[viewer] Serving on http://{host}:{port}")
+    class ReusableServer(ThreadingHTTPServer):
+        allow_reuse_address = True
+
+    server = ReusableServer((host, port), Handler)  # type: ignore[arg-type]
+
+    actual_port = server.server_address[1]
+    print(f"[viewer] Serving on http://{host}:{actual_port}")
     print("[viewer] Available games and counts:")
     for row in backend.games_with_counts():
         print(f"  - {row['game']}: {row['count']}")

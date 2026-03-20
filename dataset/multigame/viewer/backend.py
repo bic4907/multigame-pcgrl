@@ -10,6 +10,7 @@ from ..handlers.dungeon_handler import DUNGEON_PALETTE, _DEFAULT_DUNGEON_ROOT
 from ..handlers.boxoban_handler import BOXOBAN_PALETTE, _DEFAULT_BOXOBAN_ROOT
 from ..handlers.pokemon_handler import POKEMON_PALETTE, _DEFAULT_POKEMON_ROOT
 from ..handlers.doom_handler import DOOM_PALETTE_DICT, _DEFAULT_DOOM_ROOT, _DEFAULT_DOOM2_ROOT
+from ..handlers.zelda_handler import ZELDA_PALETTE
 from .. import MultiGameDataset
 
 # ── unified 카테고리 메타 ───────────────────────────────────────────────────────
@@ -145,6 +146,8 @@ class DatasetViewerBackend:
             return DOOM_PALETTE_DICT
         if game == GameTag.POKEMON:
             return POKEMON_PALETTE
+        if game == GameTag.ZELDA:
+            return ZELDA_PALETTE
         return {}
 
     def reload(self) -> Dict[str, Any]:

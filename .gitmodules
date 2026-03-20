@@ -1,14 +1,15 @@
 [submodule "dataset/boxoban_levels"]
 	path = dataset/boxoban_levels
 	url = https://github.com/google-deepmind/boxoban-levels
+
 [submodule "dataset/dungeon_level_dataset"]
 	path = dataset/dungeon_level_dataset
 	url = https://github.com/bic4907/dungeon-level-dataset
 
-[submodule "dataset/doom_levels"]
-	path = dataset/doom_levels
-	url = https://github.com/user/doom_levels.git
+[submodule "dataset/five-dollar-model"]
+	path = dataset/five-dollar-model
+	url = https://github.com/jfuruness/five-dollar-model
 
-[submodule "dataset/boxoban_levels"]
-	path = dataset/boxoban_levels
-	url = https://github.com/user/boxoban_levels.git
+[submodule "dataset/TheVGLC"]
+	path = dataset/TheVGLC
+	url = https://github.com/TheVGLC/TheVGLC

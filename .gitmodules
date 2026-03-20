@@ -8,7 +8,7 @@
 
 [submodule "dataset/five-dollar-model"]
 	path = dataset/five-dollar-model
-	url = https://github.com/jfuruness/five-dollar-model
+	url = https://github.com/TimMerino1710/five-dollar-model
 
 [submodule "dataset/TheVGLC"]
 	path = dataset/TheVGLC

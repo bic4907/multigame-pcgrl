@@ -44,6 +44,7 @@ from .handlers.dungeon_handler import DungeonHandler, _DEFAULT_DUNGEON_ROOT
 from .handlers.boxoban_handler import BoxobanHandler, _DEFAULT_BOXOBAN_ROOT
 from .handlers.pokemon_handler import POKEMONHandler, _DEFAULT_POKEMON_ROOT
 from .handlers.doom_handler import DoomHandler, _DEFAULT_DOOM_ROOT, _DEFAULT_DOOM2_ROOT
+from .handlers.zelda_handler import ZeldaHandler, _DEFAULT_ZELDA_ROOT
 from .handlers.fdm_game.augmentation import create_rotated_sample
 from .handlers.handler_config import HandlerConfig, get_default_config
 from . import tags as tag_utils
@@ -59,7 +60,7 @@ _HERE = Path(__file__).parent
 
 class MultiGameDataset:
     """
-    Dungeon + Sokoban(Boxoban) + POKEMON + DOOM 통합 데이터셋 클래스.
+    Dungeon + Sokoban(Boxoban) + POKEMON + DOOM + Zelda 통합 데이터셋 클래스.
 
     Parameters
     ----------
@@ -67,10 +68,12 @@ class MultiGameDataset:
     pokemon_root     : Five-Dollar-Model 루트 경로
     sokoban_root     : boxoban_levels 루트 경로
     doom_root        : doom_levels 루트 경로
+    zelda_root       : TheVGLC/The Legend of Zelda 루트 경로
     include_dungeon  : Dungeon 데이터셋 포함 여부
     include_pokemon  : POKEMON 데이터셋 포함 여부
     include_sokoban  : Sokoban 데이터셋 포함 여부
     include_doom     : DOOM 데이터셋 포함 여부
+    include_zelda    : Zelda 데이터셋 포함 여부
     use_tile_mapping : True(기본)면 array를 unified 7-category로 변환해서 반환.
                        False면 원본 tile_id 그대로 반환.
                        로드 이후에도 속성으로 언제든 토글 가능.
@@ -85,11 +88,13 @@ class MultiGameDataset:
         sokoban_root:     Path | str = _DEFAULT_BOXOBAN_ROOT,
         doom_root:        Path | str = _DEFAULT_DOOM_ROOT,
         doom2_root:       Path | str = _DEFAULT_DOOM2_ROOT,
+        zelda_root:       Path | str = _DEFAULT_ZELDA_ROOT,
         include_dungeon:  bool = True,
         include_pokemon:  bool = True,
         include_sokoban:  bool = True,
         include_doom:     bool = True,
         include_doom2:    bool = True,
+        include_zelda:    bool = True,
         use_cache:        bool = True,
         cache_dir:        Path | str | None = None,
         use_tile_mapping: bool = True,
@@ -115,6 +120,7 @@ class MultiGameDataset:
         self._pokemon_handler: Optional[POKEMONHandler] = None
         self._sokoban_handler: Optional[BoxobanHandler] = None
         self._doom_handler: Optional[DoomHandler] = None
+        self._zelda_handler: Optional[ZeldaHandler] = None
 
         if cache_dir is None:
             cache_dir = _HERE / "cache" / "artifacts"
@@ -126,12 +132,14 @@ class MultiGameDataset:
             "sokoban_root": str(sokoban_root),
             "doom_root": str(doom_root),
             "doom2_root": str(doom2_root),
+            "zelda_root": str(zelda_root),
             "include_dungeon": include_dungeon,
             "include_pokemon": include_pokemon,
             "handler_config": handler_config.to_dict(),
             "include_sokoban": include_sokoban,
             "include_doom": include_doom,
             "include_doom2": include_doom2,
+            "include_zelda": include_zelda,
         }
         cache_key = build_cache_key(args_for_key, code_root=_HERE)
 
@@ -154,6 +162,19 @@ class MultiGameDataset:
             for sample in self._sokoban_handler:
                 sample.order = len(self._samples)
                 self._samples.append(sample)
+
+        # ── Zelda 로드 ─────────────────────────────────────────────────────────
+        if include_zelda and Path(zelda_root).exists():
+            try:
+                self._zelda_handler = ZeldaHandler(root=zelda_root)
+                for sample in self._zelda_handler:
+                    sample.order = len(self._samples)
+                    self._samples.append(sample)
+                n_zelda = len([s for s in self._samples if s.game == GameTag.ZELDA])
+                if n_zelda > 0:
+                    print(f"[MultiGameDataset] Zelda: Loaded {n_zelda} rooms")
+            except (FileNotFoundError, ValueError) as e:
+                print(f"Warning: Could not load Zelda dataset: {e}")
 
         # ── POKEMON 로드 ────────────────────────────────────────────────────────────
         if include_pokemon and Path(pokemon_root).exists():
@@ -328,6 +349,8 @@ class MultiGameDataset:
             elif sample.game == "dungeon" and self._handler_config.dungeon.rotate_90:
                 should_augment = True
             elif sample.game == GameTag.DOOM and self._handler_config.doom.rotate_90:
+                should_augment = True
+            elif sample.game == GameTag.ZELDA and self._handler_config.zelda.rotate_90:
                 should_augment = True
 
             if should_augment:
@@ -559,8 +582,8 @@ class MultiGameDataset:
         return [tag_utils.build_tags(s) for s in self._samples]
 
     def available_games(self) -> List[str]:
-        """등록된 게임 목록(현재: dungeon, sokoban) 반환."""
-        return [GameTag.DUNGEON, GameTag.SOKOBAN, GameTag.DOOM, GameTag.POKEMON]
+        """등록된 게임 목록 반환."""
+        return [GameTag.DUNGEON, GameTag.SOKOBAN, GameTag.DOOM, GameTag.POKEMON, GameTag.ZELDA]
 
     def sample(
         self,

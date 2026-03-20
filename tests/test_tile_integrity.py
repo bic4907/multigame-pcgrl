@@ -103,31 +103,16 @@ def test_mapping_values_within_category_range(tile_mapping):
 # 2. dataset handler ↔ tile_mapping 일치 검증
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# VGLC 게임별 Tile 클래스 임포트
-def _vglc_tile_ids(game: str) -> set[int]:
-    """game handler의 XxxTile 클래스에서 정수 tile ID 집합을 반환한다."""
-    from dataset.multigame.handlers.vglc_games import (
-        zelda, mario, lode_runner, kid_icarus, doom, mega_man
+
+def test_zelda_handler_tile_ids_match_mapping(tile_mapping):
+    """zelda handler의 ZeldaTile ID 집합 ⊆ tile_mapping["zelda"] mapping key 집합."""
+    from dataset.multigame.handlers.vglc_games.zelda import ZeldaTile
+    mapping_keys = {int(k) for k in tile_mapping["zelda"]["mapping"].keys()}
+    handler_ids  = {v for k, v in vars(ZeldaTile).items() if not k.startswith("_")}
+    missing = handler_ids - mapping_keys
+    assert not missing, (
+        f"[zelda] handler에는 있지만 tile_mapping에 없는 tile ID: {missing}"
     )
-    module_map = {
-        "zelda":       (zelda,       "ZeldaTile"),
-        "mario":       (mario,       "MarioTile"),
-        "lode_runner": (lode_runner, "LodeRunnerTile"),
-        "kid_icarus":  (kid_icarus,  "KidIcarusTile"),
-        "doom":        (doom,        "DoomTile"),
-        "mega_man":    (mega_man,    "MegaManTile"),
-    }
-    mod, cls_name = module_map[game]
-    tile_cls = getattr(mod, cls_name)
-    return {v for k, v in vars(tile_cls).items() if not k.startswith("_")}
-
-
-@pytest.mark.parametrize("game", [
-    "zelda", "mario", "lode_runner", "kid_icarus", "doom", "mega_man"
-])
-def test_vglc_handler_tile_ids_match_mapping(tile_mapping, game):
-    """VGLC 게임은 현재 지원하지 않으므로 skip."""
-    pytest.skip(f"VGLC 게임({game})은 현재 지원하지 않음 (dungeon/sokoban만 지원)")
 
 
 def test_dungeon_handler_tile_ids_match_mapping(tile_mapping):
@@ -138,6 +123,17 @@ def test_dungeon_handler_tile_ids_match_mapping(tile_mapping):
     missing = handler_ids - mapping_keys
     assert not missing, (
         f"[dungeon] handler에는 있지만 tile_mapping에 없는 tile ID: {missing}"
+    )
+
+
+def test_doom_handler_tile_ids_match_mapping(tile_mapping):
+    """doom handler의 DoomTile ID 집합 ⊆ tile_mapping["doom"] mapping key 집합."""
+    from dataset.multigame.handlers.vglc_games.doom import DoomTile
+    mapping_keys = {int(k) for k in tile_mapping["doom"]["mapping"].keys()}
+    handler_ids  = {v for k, v in vars(DoomTile).items() if not k.startswith("_")}
+    missing = handler_ids - mapping_keys
+    assert not missing, (
+        f"[doom] handler에는 있지만 tile_mapping에 없는 tile ID: {missing}"
     )
 
 
@@ -218,23 +214,25 @@ def test_multigame_env_all_tile_names(multigame_env_info):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _dataset_dirs_exist() -> bool:
-    """dungeon, sokoban, pokemon, 또는 doom 데이터 폴더 중 하나라도 존재하면 True.
-    
+    """dungeon, sokoban, zelda, pokemon, 또는 doom 데이터 폴더 중 하나라도 존재하면 True.
+
     근본 원인 해결:
     MultiGameDataset은 여러 게임을 지원하므로, 테스트도 모든 가능한 데이터셋을 확인해야 한다.
-    사용 가능한 데이터: dungeon, sokoban, pokemon(FDM), doom, doom2
+    사용 가능한 데이터: dungeon, sokoban, zelda, pokemon(FDM), doom, doom2
     """
     from dataset.multigame.handlers.dungeon_handler import _DEFAULT_DUNGEON_ROOT
     from dataset.multigame.handlers.boxoban_handler import _DEFAULT_BOXOBAN_ROOT
     from dataset.multigame.handlers.pokemon_handler import _DEFAULT_POKEMON_ROOT
     from dataset.multigame.handlers.doom_handler import _DEFAULT_DOOM_ROOT, _DEFAULT_DOOM2_ROOT
-    
+    from dataset.multigame.handlers.zelda_handler import _DEFAULT_ZELDA_ROOT
+
     return (
         Path(_DEFAULT_DUNGEON_ROOT).exists()
         or Path(_DEFAULT_BOXOBAN_ROOT).exists()
         or Path(_DEFAULT_POKEMON_ROOT).exists()
         or Path(_DEFAULT_DOOM_ROOT).exists()
         or Path(_DEFAULT_DOOM2_ROOT).exists()
+        or Path(_DEFAULT_ZELDA_ROOT).exists()
     )
 
 
@@ -258,6 +256,7 @@ def dataset_samples():
         "다음 데이터 폴더 중 하나 이상이 필요합니다:\n"
         "  ✓ dataset/dungeon_level_dataset (Dungeon)\n"
         "  ✓ dataset/boxoban_levels (Sokoban)\n"
+        "  ✓ dataset/TheVGLC/The Legend of Zelda (Zelda)\n"
         "  ✓ dataset/five-dollar-model (POKEMON/FDM)\n"
         "  ✓ dataset/TheVGLC/Doom (DOOM 1)\n"
         "  ✓ dataset/TheVGLC/Doom2 (DOOM 2)\n"
@@ -317,8 +316,8 @@ def test_dataset_array_dtype(dataset_samples):
 
 
 def test_dataset_games_all_present(tile_mapping, dataset_samples):
-    """지원 게임(dungeon, sokoban, pokemon)이 데이터셋에 존재해야 한다."""
-    supported_games = {"dungeon", "sokoban"}
+    """지원 게임(dungeon, sokoban, zelda)이 데이터셋에 존재해야 한다."""
+    supported_games = {"dungeon", "sokoban", "zelda"}
     dataset_games = {s.game for s in dataset_samples}
     missing = supported_games - dataset_games
     assert not missing, f"지원 게임이지만 dataset에 없는 게임: {missing}"

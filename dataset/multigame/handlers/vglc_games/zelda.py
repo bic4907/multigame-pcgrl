@@ -12,7 +12,7 @@ The Legend of Zelda (TheVGLC) 전처리 핸들러.
 4  : block  (B)
 5  : start  (S)
 6  : mob    (M)
-7  : object (o)
+7  : object (O, I, P, o)
 99 : unknown
 """
 from __future__ import annotations
@@ -45,6 +45,9 @@ _CHAR_MAP: dict[str, int] = {
     "B": ZeldaTile.BLOCK,
     "S": ZeldaTile.START,
     "M": ZeldaTile.MOB,
+    "O": ZeldaTile.OBJECT,   # ELEMENT + FLOOR (LAVA/BLOCK, WATER/BLOCK)
+    "I": ZeldaTile.OBJECT,   # ELEMENT + BLOCK
+    "P": ZeldaTile.OBJECT,   # ELEMENT (LAVA, WATER)
     "o": ZeldaTile.OBJECT,
     "t": ZeldaTile.OBJECT,   # triforce
     "k": ZeldaTile.OBJECT,   # key

@@ -5,10 +5,12 @@ from .vglc_handler import VGLCHandler, VGLCGameHandler
 from .dungeon_handler import DungeonHandler, DUNGEON_PALETTE
 from .boxoban_handler import BoxobanHandler, BoxobanTile, BOXOBAN_PALETTE
 from .pokemon_handler import POKEMONHandler, POKEMON_PALETTE
+from .zelda_handler import ZeldaHandler, ZELDA_PALETTE
 
 __all__ = [
     "VGLCHandler", "VGLCGameHandler",
     "DungeonHandler", "DUNGEON_PALETTE",
     "BoxobanHandler", "BoxobanTile", "BOXOBAN_PALETTE",
     "POKEMONHandler", "POKEMON_PALETTE",
+    "ZeldaHandler", "ZELDA_PALETTE",
 ]

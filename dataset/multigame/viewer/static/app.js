@@ -33,6 +33,7 @@ let viewMode = 'album';   // 'single' | 'album'
 let albumPageSize = 30;
 let albumAutoSize = true;
 let albumStart = 0;
+let isInitialized = false; // init() 완료 여부
 const sampleCache = {};    // `${game}:${idx}` -> sample payload
 const tileImageCache = new Map(); // url -> HTMLImageElement | null(failed)
 
@@ -292,8 +293,6 @@ function drawLevelToCanvasElement(sample, mode, targetCanvas, mappingInfo) {
   targetCanvas.height = h * tile;
 
   function doDraw() {
-    targetCanvas.width = w * tile;
-    targetCanvas.height = h * tile;
     tctx.fillStyle = '#0f172a';
     tctx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
 
@@ -693,13 +692,24 @@ async function init() {
       gameSelect.appendChild(opt);
     });
 
-    if (albumSizeSelect) albumPageSize = Math.max(1, Number(albumSizeSelect.value || '30'));
+    // albumAutoSize일 때는 일단 기본값으로, renderAlbum에서 다시 계산됨
+    if (!albumAutoSize && albumSizeSelect) {
+      albumPageSize = Math.max(1, Number(albumSizeSelect.value || '30'));
+    }
 
     const g = getPrimaryGame();
     if (g) {
       currentGame = g;
+      // 초기 로드 전: albumAutoSize일 때 올바른 크기 계산
+      if (albumAutoSize) {
+        albumPageSize = computeAutoAlbumPageSize();
+      }
+      // 초기 로드: album 모드로 빠르게 시작
+      viewMode = 'album';
+      if (viewModeSelect) viewModeSelect.value = 'album';
       await loadAndRender(g, 0);
     }
+    isInitialized = true;
   } catch (err) {
     setError(String(err.message || err));
   }

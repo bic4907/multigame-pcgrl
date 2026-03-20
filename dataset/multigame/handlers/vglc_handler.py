@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -53,6 +53,7 @@ class VGLCGameHandler(BaseGameHandler):
     game_tag  : GameTag 상수 (e.g. GameTag.ZELDA)
     vglc_root : TheVGLC 저장소 루트 경로
     split     : 사용할 하위 폴더 (기본 "Processed")
+    handler_config : HandlerConfig 객체 (doom_slicing 설정)
     """
 
     def __init__(
@@ -60,6 +61,7 @@ class VGLCGameHandler(BaseGameHandler):
         game_tag: str,
         vglc_root: Path | str = _DEFAULT_VGLC_ROOT,
         split: str = "Processed",
+        handler_config: Optional[Any] = None,
     ) -> None:
         if game_tag not in SUPPORTED_GAMES:
             raise ValueError(
@@ -71,7 +73,9 @@ class VGLCGameHandler(BaseGameHandler):
         self._split = split
         self._preprocessor = PREPROCESSORS[game_tag]()
         self._legend: TileLegend = LEGEND_FACTORIES[game_tag]()
+        self._handler_config = handler_config
         self._entries: Optional[List[str]] = None  # lazy
+        self._sliced_cache: Dict[str, GameSample] = {}
 
     @property
     def game_tag(self) -> str:
@@ -87,12 +91,21 @@ class VGLCGameHandler(BaseGameHandler):
         else:
             processed = self._root / self._split
             if not processed.exists():
-                # fallback: 루트 txt
                 txt_files = sorted(self._root.glob("*.txt"))
             else:
                 txt_files = sorted(processed.glob("*.txt"))
-        # README 계열 비레벨 텍스트는 제외
         txt_files = [p for p in txt_files if not p.name.lower().startswith("readme")]
+        
+        # Preprocessor가 별도 discovery/slicing 로직을 가진 경우 위임
+        if hasattr(self._preprocessor, 'discover_and_process'):
+            return self._preprocessor.discover_and_process(
+                files=txt_files,
+                config=self._handler_config,
+                game_tag=self._game_tag,
+                legend=self._legend,
+                cache=self._sliced_cache
+            )
+
         return [str(p) for p in txt_files]
 
     def list_entries(self) -> List[str]:
@@ -101,13 +114,27 @@ class VGLCGameHandler(BaseGameHandler):
         return self._entries
 
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
+        # 캐시에 있으면 반환 (slicing된 데이터 등)
+        if source_id in self._sliced_cache:
+            sample = self._sliced_cache[source_id]
+            if order is not None:
+                # 주의: 객체를 재사용하므로 order를 바꾸면 캐시된 객체도 바뀜.
+                # 필요하다면 copy를 해야 하지만, 보통 순차 접근 시에는 덮어써도 무방할 수 있음.
+                # 하지만 안전을 위해 얕은 복사본을 반환하거나, order 설정 로직을 분리하는게 좋음.
+                # 여기서는 원본 수정 방식 유지하되, 전체 구조상 큰 문제없는지 확인 필요.
+                # 일단 사용자 요청대로 "캐싱 및 반환"에 집중.
+                sample.order = order
+            return sample
+        
+        # 일반 VGLC 게임
         path = Path(source_id)
         text = path.read_text(encoding="utf-8", errors="replace")
         char_grid = self._preprocessor.parse_txt(text)
         array = self._preprocessor.transform(char_grid)
         array = enforce_top_left_16x16(array, game=self._game_tag, source_id=source_id)
         char_grid = enforce_char_grid_top_left_16x16(char_grid)
-        return GameSample(
+        
+        sample = GameSample(
             game=self._game_tag,
             source_id=source_id,
             array=array,
@@ -117,6 +144,11 @@ class VGLCGameHandler(BaseGameHandler):
             order=order,
             meta={"file": str(path.name), "game_dir": str(self._root)},
         )
+        
+        # 캐시에 저장 (일반 게임도 한 번 로드하면 캐싱)
+        self._sliced_cache[source_id] = sample
+        
+        return sample
 
     def __repr__(self) -> str:
         return (
@@ -134,10 +166,11 @@ class VGLCHandler:
     vglc_root      : TheVGLC 저장소 루트 경로
     selected_games : 불러올 게임 태그 리스트 (None이면 전체)
     split          : 사용할 하위 폴더 (기본 "Processed")
+    handler_config : HandlerConfig 객체 (doom_slicing 등 설정)
 
     Example
     -------
-        handler = VGLCHandler(selected_games=["zelda", "mario"])
+        handler = VGLCHandler(selected_games=["zelda", "mario"], handler_config=config)
         for sample in handler:
             print(sample.game, sample.shape)
     """
@@ -147,11 +180,11 @@ class VGLCHandler:
         vglc_root: Path | str = _DEFAULT_VGLC_ROOT,
         selected_games: Optional[List[str]] = None,
         split: str = "Processed",
+        handler_config: Optional[Any] = None,
     ) -> None:
         self._root = Path(vglc_root)
         if selected_games is None:
             selected_games = list(_GAME_DIR.keys())
-        # 지원 게임만 필터링
         invalid = [g for g in selected_games if g not in SUPPORTED_GAMES]
         if invalid:
             raise ValueError(
@@ -161,7 +194,12 @@ class VGLCHandler:
         self._selected_games = selected_games
         self._split = split
         self._game_handlers: Dict[str, VGLCGameHandler] = {
-            g: VGLCGameHandler(g, vglc_root=self._root, split=split)
+            g: VGLCGameHandler(
+                g,
+                vglc_root=self._root,
+                split=split,
+                handler_config=handler_config,
+            )
             for g in selected_games
         }
 

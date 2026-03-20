@@ -82,7 +82,7 @@ def hash_code_files(code_root: Path) -> str:
     """Hash relevant source files under dataset/multigame."""
     py_files = sorted(
         p for p in code_root.rglob("*.py")
-        if "tests" not in p.parts and "__pycache__" not in p.parts and "cache" not in p.parts
+        if "tests" not in p.parts and "__pycache__" not in p.parts and "cache" not in p.parts and "viewer" not in p.parts
     )
     h = hashlib.sha256()
     for p in py_files:

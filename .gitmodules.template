@@ -1,0 +1,25 @@
+# Git Submodules Configuration Template
+#
+# 이 파일을 .gitmodules로 이름을 바꾸고 레포지토리 URL을 업데이트한 후 사용합니다:
+#
+# git submodule add <url> <path>
+#
+# 예시:
+#
+
+[submodule "dataset/dungeon-level-dataset"]
+	path = dataset/dungeon-level-dataset
+	url = https://github.com/user/dungeon-level-dataset.git
+
+[submodule "dataset/five-dollar-model"]
+	path = dataset/five-dollar-model
+	url = https://github.com/user/five-dollar-model.git
+
+[submodule "dataset/doom_levels"]
+	path = dataset/doom_levels
+	url = https://github.com/user/doom_levels.git
+
+[submodule "dataset/boxoban_levels"]
+	path = dataset/boxoban_levels
+	url = https://github.com/user/boxoban_levels.git
+

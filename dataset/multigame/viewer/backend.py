@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import json as _json
-import importlib
-import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from ..base import GameTag
-from ..handlers.boxoban_handler import BOXOBAN_PALETTE, BoxobanHandler
-from ..handlers.dungeon_handler import DUNGEON_PALETTE, DungeonHandler, _DEFAULT_DUNGEON_ROOT
+from ..base import GameTag, GameSample
 from ..tile_utils import CATEGORY_COLORS, UNIFIED_CATEGORIES, to_unified
+from ..handlers.dungeon_handler import DUNGEON_PALETTE, _DEFAULT_DUNGEON_ROOT
+from ..handlers.boxoban_handler import BOXOBAN_PALETTE, _DEFAULT_BOXOBAN_ROOT
+from ..handlers.pokemon_handler import POKEMON_PALETTE, _DEFAULT_POKEMON_ROOT
+from ..handlers.doom_handler import DOOM_PALETTE_DICT, _DEFAULT_DOOM_ROOT, _DEFAULT_DOOM2_ROOT
+from .. import MultiGameDataset
 
 # ── unified 카테고리 메타 ───────────────────────────────────────────────────────
 _UNIFIED_PALETTE: Dict[str, Any] = {
@@ -48,9 +49,6 @@ def _unified_tile_images(mapping: Dict[str, Any] | None = None) -> Dict[str, str
     return {str(k): str(v) for k, v in images.items() if str(k).lstrip("-").isdigit()}
 
 
-_DEFAULT_BOXOBAN_ROOT = Path(__file__).parent.parent.parent / "boxoban_levels"
-
-
 class DatasetViewerBackend:
     """Provides counts and random-access samples for browser viewer."""
 
@@ -59,46 +57,42 @@ class DatasetViewerBackend:
         *,
         dungeon_root: Path | str = _DEFAULT_DUNGEON_ROOT,
         boxoban_root: Path | str = _DEFAULT_BOXOBAN_ROOT,
-        boxoban_n_sample: int = 1000,
+        pokemon_root: Path | str = _DEFAULT_POKEMON_ROOT,
+        doom_root: Path | str = _DEFAULT_DOOM_ROOT,
+        doom2_root: Path | str = _DEFAULT_DOOM2_ROOT,
     ) -> None:
-        self._dungeon_root = Path(dungeon_root)
-        self._boxoban_root = Path(boxoban_root)
-        self._boxoban_n_sample = int(boxoban_n_sample)
-
+        print("[DatasetViewerBackend] 초기화 중...", flush=True)
+        
         self._games: List[str] = []
         self._counts: Dict[str, int] = {}
-
-        self._dungeon_handler: Optional[DungeonHandler] = None
-        self._boxoban_handler: Optional[BoxobanHandler] = None
-
-        self._init_sources()
-
-    def _init_sources(self) -> None:
-        # Viewer policy: expose only dungeon + boxoban.
-        if self._dungeon_root.exists():
-            self._dungeon_handler = DungeonHandler(root=self._dungeon_root)
-            n = len(self._dungeon_handler)
-            if n > 0:
-                self._games.append(GameTag.DUNGEON)
-                self._counts[GameTag.DUNGEON] = n
-
-        if self._boxoban_root.exists():
-            # Use handler final dataset (diversity sampled) — hard only.
-            self._boxoban_handler = BoxobanHandler(
-                root=self._boxoban_root,
-                difficulty="hard",
-                n_sample=self._boxoban_n_sample,
-            )
-            n = len(self._boxoban_handler)
-            if n > 0:
-                self._games.append(GameTag.BOXOBAN)
-                self._counts[GameTag.BOXOBAN] = n
+        self._samples_by_game: Dict[str, List[GameSample]] = {}  # 게임별 샘플 캐시
+        
+        # MultiGameDataset 로드 (기본값 사용 - 캐시 자동 활용)
+        try:
+            self._dataset = MultiGameDataset(use_cache=True)
+            print(f"[DatasetViewerBackend] ✅ 로드 완료", flush=True)
+        except Exception as e:
+            print(f"[DatasetViewerBackend] ❌ 로드 실패: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            self._dataset = None
+            return
+        
+        self._games: List[str] = self._dataset.available_games()
+        self._counts: Dict[str, int] = self._dataset.count_by_game()
+        
+        # 게임별 샘플을 미리 필터링해서 캐시 (초기화 시점에 한 번만)
+        for game in self._games:
+            self._samples_by_game[game] = self._dataset.by_game(game)
+        
+        print(f"[DatasetViewerBackend] 게임: {self._games}", flush=True)
+        print(f"[DatasetViewerBackend] 샘플: {self._counts}", flush=True)
 
     def games_with_counts(self) -> List[Dict[str, Any]]:
         return [
             {
                 "game": game,
-                "count": self._counts[game],
+                "count": self._counts.get(game, 0),
                 "has_palette": bool(self._palette_for_game(game)),
             }
             for game in self._games
@@ -129,64 +123,46 @@ class DatasetViewerBackend:
             "meta": sample.meta,
         }
 
-    def _load_sample(self, game: str, index: int):
-        n = self.count(game)
+    def _load_sample(self, game: str, index: int) -> GameSample:
+        if game not in self._samples_by_game:
+            raise KeyError(f"Game {game} not found")
+        
+        samples = self._samples_by_game[game]
+        n = len(samples)
+        
         if index < 0 or index >= n:
-            raise IndexError(f"index out of range for {game}: {index} (size={n})")
+            index = index % n
+        
+        return samples[index]
 
-        if game == GameTag.DUNGEON:
-            if self._dungeon_handler is None:
-                raise RuntimeError("Dungeon handler is not initialized")
-            source_ids = self._dungeon_handler.list_entries()
-            return self._dungeon_handler.load_sample(source_ids[index], order=index)
-
-        if game == GameTag.BOXOBAN:
-            if self._boxoban_handler is None:
-                raise RuntimeError("Boxoban handler is not initialized")
-            source_ids = self._boxoban_handler.list_entries()
-            return self._boxoban_handler.load_sample(source_ids[index], order=index)
-
-        raise KeyError(f"unsupported game: {game}")
 
     def _palette_for_game(self, game: str) -> Dict[int, tuple[int, int, int]]:
-        if game == GameTag.BOXOBAN:
+        if game == GameTag.BOXOBAN or game == GameTag.SOKOBAN:
             return BOXOBAN_PALETTE
         if game == GameTag.DUNGEON:
             return DUNGEON_PALETTE
+        if game == GameTag.DOOM:
+            return DOOM_PALETTE_DICT
+        if game == GameTag.POKEMON:
+            return POKEMON_PALETTE
         return {}
 
     def reload(self) -> Dict[str, Any]:
-        """
-        데이터셋과 tile_mapping.json을 프로세스 재시작 없이 다시 로드한다.
-        - 핸들러 모듈 내 캐시(lazy _samples)를 초기화
-        - tile_mapping.json 파일을 다시 파싱
-        - 핸들러를 새로 생성
-        반환값: 리로드 후의 games_with_counts()
-        """
+        """tile_mapping.json을 프로세스 재시작 없이 다시 로드한다."""
         global _TILE_MAPPING_RAW
-
-        # tile_mapping.json 재파싱
+        
         try:
             _TILE_MAPPING_RAW = _load_tile_mapping()
         except Exception as exc:
             raise RuntimeError(f"tile_mapping.json 재파싱 실패: {exc}") from exc
-
-        # 핸들러·카운트 초기화
-        self._games = []
-        self._counts = {}
-        self._dungeon_handler = None
-        self._boxoban_handler = None
-
-        # 핸들러 재초기화
-        self._init_sources()
-
+        
         return {
             "status": "ok",
             "games": self.games_with_counts(),
         }
 
     def get_game_mapping(self, game: str) -> Dict[str, Any]:
-        if game not in self._counts:
+        if game not in self._games:
             raise KeyError(f"unknown game: {game}")
 
         # reload() 이후에도 최신 파일 내용을 반영

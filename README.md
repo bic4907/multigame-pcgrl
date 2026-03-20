@@ -33,29 +33,46 @@ pip install -r requirements.txt
 
 ## Dataset Setup
 
-Run from repository root:
+### Initialize Git Submodules
+
+**Option 1: Clone with all submodules**
 
 ```bash
+# Clone each submodule
 git clone --recursive https://github.com/TheVGLC/TheVGLC dataset/TheVGLC
 git clone --recursive https://github.com/bic4907/dungeon-level-dataset dataset/dungeon_level_dataset
+git clone --recursive https://github.com/google-deepmind/boxoban-levels dataset/boxoban_levels
+git clone --recursive https://github.com/TimMerino1710/five-dollar-model dataset/five-dollar-model
 ```
 
-If already cloned:
+**Option 2: Initialize in existing repository**
+
+```bash
+git submodule update --init --recursive
+```
+
+**Option 3: Update submodules (if already cloned)**
 
 ```bash
 git -C dataset/TheVGLC pull --ff-only
 git -C dataset/dungeon_level_dataset pull --ff-only
-git -C dataset/TheVGLC submodule update --init --recursive
-git -C dataset/dungeon_level_dataset submodule update --init --recursive
+git -C dataset/boxoban_levels pull --ff-only
+git -C dataset/five-dollar-model pull --ff-only
+
+git submodule update --init --recursive
 ```
 
-Quick check:
+**Verify:**
 
 ```bash
-ls dataset
-git -C dataset/TheVGLC remote -v
-git -C dataset/dungeon_level_dataset remote -v
+git submodule status
 ```
+
+**Expected submodules** (from `.gitmodules`):
+- `dataset/TheVGLC` - VGLC games (Doom, Zelda etc.)
+- `dataset/dungeon_level_dataset` - Dungeon with text
+- `dataset/boxoban_levels` - Boxoban/Sokoban levels
+- `dataset/five-dollar-model` - Pokemon levels
 
 ---
 

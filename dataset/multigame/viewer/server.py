@@ -170,7 +170,7 @@ def run_server(
         kwargs["boxoban_root"] = boxoban_root
     if doom_root:
         kwargs["doom_root"] = doom_root
-    
+
     backend = DatasetViewerBackend(**kwargs) if kwargs else DatasetViewerBackend()
 
     class Handler(_ViewerHandler):
@@ -196,9 +196,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Dataset browser viewer")
     parser.add_argument("--host", default="127.0.0.1", help="Bind host")
     parser.add_argument("--port", type=int, default=8765, help="Bind port")
+    parser.add_argument("--dungeon-root", help="Dungeon dataset root path")
+    parser.add_argument("--pokemon-root", help="Pokemon dataset root path")
+    parser.add_argument("--boxoban-root", help="Boxoban dataset root path")
+    parser.add_argument("--doom-root", help="DOOM dataset root path")
     args = parser.parse_args()
 
-    run_server(host=args.host, port=args.port)
+    run_server(
+        host=args.host,
+        port=args.port,
+        dungeon_root=args.dungeon_root,
+        pokemon_root=args.pokemon_root,
+        boxoban_root=args.boxoban_root,
+        doom_root=args.doom_root,
+    )
 
 
 if __name__ == "__main__":

@@ -17,6 +17,18 @@ from .fdm_game.pokemon import POKEMONPreprocessor, make_legend
 
 _DEFAULT_POKEMON_ROOT = Path(__file__).parent.parent.parent / "five-dollar-model"
 
+# ── POKEMON 팔레트 ─────────────────────────────────────────────────────────────
+POKEMON_PALETTE: Dict[int, tuple[int, int, int]] = {
+    0:  (20,  20,  20),   # empty   – 어두운 회색
+    1:  (80,  80,  80),   # wall    – 중간 회색
+    2:  (200, 180, 120),  # floor   – 밝은 베이지
+    3:  (220, 50,  50),   # enemy   – 빨강
+    4:  (255, 215, 0),    # object  – 금색
+    5:  (0,   200, 0),    # spawn   – 초록색
+    6:  (220, 100, 20),   # hazard  – 주황색
+    99: (255, 0,   255),  # unknown – 분홍색 (오류)
+}
+
 
 class POKEMONHandler(BaseGameHandler):
     """
@@ -96,41 +108,57 @@ class POKEMONHandler(BaseGameHandler):
 
         return sample
 
-    def list_entries_with_filtering(self, max_tile_ratio: float = 0.95) -> tuple[List[str], int]:
+    def list_entries_with_filtering(self, max_tile_ratio: float = 0.95, max_tile_count: int = 250) -> tuple[List[str], int, int]:
         """
         필터링을 적용하여 유효한 엔트리만 반환.
         
         Parameters
         ----------
         max_tile_ratio : float
-            한 타일이 차지할 수 있는 최대 비율
+            한 타일이 차지할 수 있는 최대 비율 (패딩 전 10x10)
+        max_tile_count : int
+            패딩 후 16x16에서 한 타일이 차지할 수 있는 최대 개수
         
         Returns
         -------
-        tuple[List[str], int]
-            (유효한 source_id 목록, 제외된 샘플 수)
+        tuple[List[str], int, int]
+            (유효한 source_id 목록, max_tile_ratio로 제거된 개수, max_tile_count로 제거된 개수)
         """
         valid_ids = []
-        filtered_count = 0
+        filtered_by_ratio = 0
+        filtered_by_count = 0
         
         # "house on the beach" 중복 제거: 마지막 7개 제외 (874-880 인덱스)
-        # 첫 번째 항목만 유지 (873: "a house on the beach")
-        excluded_duplicates = set(range(874, 881))  # indices 874-880
+        excluded_duplicates = set(range(874, 881))
         
         for i in range(len(self._images)):
-            # 중복 필터링 (heuristic)
             if i in excluded_duplicates:
-                filtered_count += 1
                 continue
             
             onehot_map = self._images[i]
-            # 패딩 전에 유효성 검사
-            if self._preprocessor.is_valid_pokemon_map(onehot_map, max_tile_ratio):
-                valid_ids.append(f"pokemon_{i:04d}")
-            else:
-                filtered_count += 1
+            
+            # 1단계: max_tile_ratio 필터링 (패딩 전 10x10 기반)
+            if not self._preprocessor.is_valid_pokemon_map(onehot_map, max_tile_ratio):
+                filtered_by_ratio += 1
+                continue
+            
+            # 2단계: 패딩 후 tileset 필터링 (16x16 기반)
+            map_10x10 = self._preprocessor.transform_pokemon_onehot(onehot_map)
+            padded_map = self._preprocessor.pad_to_16x16(map_10x10)
+            
+            # 패딩된 맵에서 타일 개수 확인
+            tile_counts = {}
+            for val in padded_map.flatten():
+                tile_counts[val] = tile_counts.get(val, 0) + 1
+            
+            max_count = max(tile_counts.values()) if tile_counts else 0
+            if max_count >= max_tile_count:
+                filtered_by_count += 1
+                continue
+            
+            valid_ids.append(f"pokemon_{i:04d}")
         
-        return valid_ids, filtered_count
+        return valid_ids, filtered_by_ratio, filtered_by_count
 
     def __iter__(self):
         """모든 샘플 반복."""

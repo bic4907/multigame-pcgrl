@@ -159,19 +159,21 @@ class MultiGameDataset:
         if include_pokemon and Path(pokemon_root).exists():
             try:
                 self._pokemon_handler = POKEMONHandler(root=pokemon_root)
-                # POKEMON은 로드 전에 필터링 적용 (패딩 전 10x10 기반)
-                valid_ids, filtered_count = self._pokemon_handler.list_entries_with_filtering(
-                    max_tile_ratio=self._handler_config.filtering.max_tile_ratio
+                # POKEMON은 로드 전에 필터링 적용 (패딩 전 10x10 기반 + 패딩 후 tileset 필터링)
+                valid_ids, filtered_ratio, filtered_count = self._pokemon_handler.list_entries_with_filtering(
+                    max_tile_ratio=self._handler_config.filtering.max_tile_ratio,
+                    max_tile_count=250
                 )
                 for i, source_id in enumerate(valid_ids):
                     sample = self._pokemon_handler.load_sample(source_id)
                     sample.order = len(self._samples)
                     self._samples.append(sample)
 
-                if filtered_count > 0:
-                    total_pokemon = len(valid_ids) + filtered_count
+                total_filtered = filtered_ratio + filtered_count
+                if total_filtered > 0:
+                    total_pokemon = len(valid_ids) + total_filtered
                     print(f"[MultiGameDataset] POKEMON: Filtered {total_pokemon} → {len(valid_ids)} samples "
-                          f"({filtered_count} removed, max_tile_ratio={self._handler_config.filtering.max_tile_ratio})")
+                          f"({total_filtered} removed, max_tile_ratio={self._handler_config.filtering.max_tile_ratio})")
             except (FileNotFoundError, ValueError) as e:
                 print(f"Warning: Could not load FDM dataset: {e}")
 

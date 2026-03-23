@@ -23,10 +23,11 @@ import jax.numpy as jnp
 from jax.experimental.array_serialization.serialization import logger
 import optax
 
+from dataset.multigame import MultiGameDataset
 from encoder.schedular import create_learning_rate_fn
 from instruct_rl.utils.logger import get_wandb_name
 from encoder.utils.path import (get_ckpt_dir, init_config)
-from encoder.data import CLIPDatasetBuilder, CLIPContrastiveBatch, create_clip_batch, CLIPContrastiveBatch, create_clip_embedding_table, CLIPEmbedData
+from encoder.data import CLIPDatasetBuilder, create_clip_batch, CLIPContrastiveBatch, CLIPEmbedData
 
 from conf.config import CLIPTrainConfig
 
@@ -151,22 +152,24 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
 def make_train(config: CLIPTrainConfig):
     def train(rng_key):
         rng_key, subkey = jax.random.split(rng_key)
-        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-        dataset_builder = CLIPDatasetBuilder(
-            config=config.encoder,
-            data_path=config.img_data_path,
-            instruct_csv=config.instruct_csv, 
-            processor=processor, 
-            rng_key=subkey,
-            max_len=config.encoder.token_max_len,
-            mutation_rate=config.map_mutation_rate,
-            aug_type=config.aug_type,
-            embed_type=config.embed_type,
-            train_ratio=config.train_ratio,
-            text_ratio= config.text_ratio,
-            state_ratio= config.state_ratio,
-            train_shuffle= config.train_shuffle,
-        )
+        # processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        # dataset_builder = CLIPDatasetBuilder(
+        #     config=config.encoder,
+        #     data_path=config.img_data_path,
+        #     instruct_csv=config.instruct_csv, 
+        #     processor=processor, 
+        #     rng_key=subkey,
+        #     max_len=config.encoder.token_max_len,
+        #     mutation_rate=config.map_mutation_rate,
+        #     aug_type=config.aug_type,
+        #     embed_type=config.embed_type,
+        #     train_ratio=config.train_ratio,
+        #     text_ratio= config.text_ratio,
+        #     state_ratio= config.state_ratio,
+        #     train_shuffle= config.train_shuffle,
+        # )
+
+        dataset_builder = MultiGameDataset()
         
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
         class_id2reward_cond = dataset_builder.get_class_id2reward_cond()

@@ -152,27 +152,18 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
 def make_train(config: CLIPTrainConfig):
     def train(rng_key):
         rng_key, subkey = jax.random.split(rng_key)
-        # processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-        # dataset_builder = CLIPDatasetBuilder(
-        #     config=config.encoder,
-        #     data_path=config.img_data_path,
-        #     instruct_csv=config.instruct_csv, 
-        #     processor=processor, 
-        #     rng_key=subkey,
-        #     max_len=config.encoder.token_max_len,
-        #     mutation_rate=config.map_mutation_rate,
-        #     aug_type=config.aug_type,
-        #     embed_type=config.embed_type,
-        #     train_ratio=config.train_ratio,
-        #     text_ratio= config.text_ratio,
-        #     state_ratio= config.state_ratio,
-        #     train_shuffle= config.train_shuffle,
-        # )
+        dataset = MultiGameDataset()
 
-        dataset_builder = MultiGameDataset()
-        
+        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        dataset_builder = CLIPDatasetBuilder(
+            processor=processor, 
+            paired_data=dataset,
+            rng_key=subkey,
+            max_len=config.encoder.token_max_len,
+            train_ratio=config.train_ratio,
+        )
+
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
-        class_id2reward_cond = dataset_builder.get_class_id2reward_cond()
         
         n_train = len(train_clip_dataset.class_ids)
         n_test = len(test_clip_dataset.class_ids)
@@ -220,7 +211,7 @@ def make_train(config: CLIPTrainConfig):
                 rng_key, subkey = jax.random.split(rng_key)
                 
                 # Training Loop
-                for clip_batch_data in create_clip_batch(train_clip_dataset, config.batch_size, rng_key=subkey, augment=True):
+                for clip_batch_data in create_clip_batch(train_clip_dataset, config.batch_size, rng_key=subkey):
                     class_ids = clip_batch_data.class_ids
                     clip_batch_data = jax.device_put(clip_batch_data)
                     
@@ -403,15 +394,9 @@ def save_checkpoint(config, state, step):
 
 @hydra.main(version_base=None, config_path='./conf', config_name='train_clip')
 def main(config: CLIPTrainConfig):
-    if config.instruct is None:
-        config.instruct = 'scn-1_se-whole'
-        logger.warning("instruct is None, using default value: scn-1_se-whole")
-
     if config.encoder.model is None:
         config.encoder.model = 'cnnclip'
         logger.warning("encoder.model is None, using default value: cnnclip")
-
-    logger.info(f"config.img_data_path: {abspath(config.img_data_path)}")
 
     config = init_config(config)
 

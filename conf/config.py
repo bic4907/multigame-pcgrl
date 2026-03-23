@@ -217,7 +217,7 @@ class TrainConfig(Config):
     human_augment: bool = False
 
     multimodal_condition: bool = False  # use multimodal condition
-    human_demo_path: str = './human_dataset'
+    human_demo_path: str = './ set'
 
 
 @dataclass

@@ -42,8 +42,6 @@ def get_wandb_name_eval(config: Config):
         wandb_eval_name += "-t"
     elif config.eval_modality == "state":
         wandb_eval_name += "-s"
-    elif config.eval_modality == "sketch":
-        wandb_eval_name += "-k"
 
     if config.eval_exp_name is not None:
         wandb_eval_name += f"-{config.eval_exp_name}"

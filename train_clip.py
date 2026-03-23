@@ -31,7 +31,7 @@ from encoder.data import CLIPDatasetBuilder, CLIPContrastiveBatch, create_clip_b
 from conf.config import CLIPTrainConfig
 
 from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder
-from encoder.utils.visualize import create_clip_embedding_figures_sketch
+from encoder.utils.visualize import create_clip_embedding_figures
 
 
 from transformers import CLIPProcessor, FlaxCLIPModel
@@ -42,7 +42,7 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 logging.getLogger('absl').setLevel(logging.ERROR)
 
 @partial(jit, static_argnums=(3,4))
-def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax.random.PRNGKey, is_train: bool=True, mode: str="text_state_sketch"):
+def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax.random.PRNGKey, is_train: bool=True, mode: str="text_state"):
     rng_key, dropout_rng = jax.random.split(rng_key)
 
     def pairwise_contrastive_loss_accuracy(a, b, temperature):
@@ -83,14 +83,12 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
         input_ids = batch.input_ids
         attention_mask = batch.attention_mask
         pixel_values = batch.pixel_values
-        sketch_values = batch.sketch_values
 
         outputs = train_state.apply_fn(
             params,
             input_ids,
             attention_mask,
             pixel_values,
-            sketch_values,
             mode=mode,
             training=is_train,
             rngs={"dropout": dropout_rng},
@@ -99,20 +97,12 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
         text_embed = outputs["text_embed"]
         
         text_state_temperature = outputs["text_state_temperature"]
-        state_sketch_temperature = outputs["state_sketch_temperature"]
-        text_sketch_temperature = outputs["text_sketch_temperature"]
-        
+
         state_embed = outputs.get("state_embed", jnp.zeros_like(text_embed))
         state_mask = jnp.any(state_embed != 0).astype(jnp.float32)    # 0.0 or 1.0
         
-        sketch_embed = outputs.get("sketch_embed", jnp.zeros_like(text_embed))
-        sketch_mask = jnp.any(sketch_embed != 0).astype(jnp.float32)  # 0.0 or 1.0
-                
-
         embed_pairs = {
             "state2text": (state_embed, text_embed, state_mask, text_state_temperature),
-            "state2sketch": (state_embed, sketch_embed, sketch_mask * state_mask, state_sketch_temperature),
-            "text2sketch": (text_embed, sketch_embed, sketch_mask, text_sketch_temperature),
         }
 
         total_loss = 0.0
@@ -120,10 +110,7 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
         metrics = {
             "state_embed": state_embed,
             "text_embed": text_embed,
-            "sketch_embed": sketch_embed,
             "text_state_temperature": text_state_temperature,
-            "state_sketch_temperature": state_sketch_temperature,
-            "text_sketch_temperature": text_sketch_temperature,
         }
 
         # compute losses and metrics for all directions
@@ -178,7 +165,6 @@ def make_train(config: CLIPTrainConfig):
             train_ratio=config.train_ratio,
             text_ratio= config.text_ratio,
             state_ratio= config.state_ratio,
-            sketch_ratio=config.sketch_ratio,
             train_shuffle= config.train_shuffle,
         )
         
@@ -198,8 +184,6 @@ def make_train(config: CLIPTrainConfig):
 
         if config.encoder.state:
             mode += "_state"
-        if config.encoder.sketch:
-            mode += "_sketch"
 
         config.encoder.mode = mode
 
@@ -216,27 +200,13 @@ def make_train(config: CLIPTrainConfig):
                 "total": jnp.zeros(()),
                 "state2text": jnp.zeros(()),
                 "text2state": jnp.zeros(()),
-                "sketch2text": jnp.zeros(()),
-                "text2sketch": jnp.zeros(()),
-                "sketch2state": jnp.zeros(()),
-                "state2sketch": jnp.zeros(())
             }
             train_metrics = {
                 "state2text_correct_pr": jnp.zeros(()),
                 "text2state_correct_pr": jnp.zeros(()),
                 "state2text_top1_accuracy": jnp.zeros(()),
                 "text2state_top1_accuracy": jnp.zeros(()),
-                "sketch2text_correct_pr": jnp.zeros(()),
-                "text2sketch_correct_pr": jnp.zeros(()),
-                "sketch2text_top1_accuracy": jnp.zeros(()),
-                "text2sketch_top1_accuracy": jnp.zeros(()),
-                "sketch2state_correct_pr": jnp.zeros(()),
-                "state2sketch_correct_pr": jnp.zeros(()),
-                "sketch2state_top1_accuracy": jnp.zeros(()),
-                "state2sketch_top1_accuracy": jnp.zeros(()),
                 "text_state_temperature": jnp.zeros(()),
-                "state_sketch_temperature": jnp.zeros(()),
-                "text_sketch_temperature": jnp.zeros(()),
             }
             val_losses = deepcopy(train_losses)
             val_metrics = deepcopy(train_metrics)
@@ -261,9 +231,8 @@ def make_train(config: CLIPTrainConfig):
                     
                     state_embed = metrics["state_embed"]
                     text_embed = metrics["text_embed"]
-                    sketch_embed = metrics["sketch_embed"]
 
-                    embeddings = [CLIPEmbedData(class_ids=c, state_embeddings=st, text_embeddings=t, sketch_embeddings=sk) for c, st, t, sk in zip(class_ids, state_embed, text_embed, sketch_embed)]
+                    embeddings = [CLIPEmbedData(class_ids=c, state_embeddings=st, text_embeddings=t) for c, st, t in zip(class_ids, state_embed, text_embed)]
                     train_embed_queue.extend(embeddings)
 
                     train_losses["total"] += loss
@@ -275,26 +244,8 @@ def make_train(config: CLIPTrainConfig):
                     train_metrics["state2text_top1_accuracy"] += metrics["state2text_top1_accuracy"]
                     train_metrics["text2state_top1_accuracy"] += metrics["text2state_top1_accuracy"]
 
-                    train_losses["state2sketch"] += metrics["state2sketch_loss"]
-                    train_losses["sketch2state"] += metrics["sketch2state_loss"]
-
-                    train_metrics["state2sketch_correct_pr"] += metrics["state2sketch_correct_pr"]
-                    train_metrics["sketch2state_correct_pr"] += metrics["sketch2state_correct_pr"]
-                    train_metrics["state2sketch_top1_accuracy"] += metrics["state2sketch_top1_accuracy"]
-                    train_metrics["sketch2state_top1_accuracy"] += metrics["sketch2state_top1_accuracy"]
-
-                    train_losses["text2sketch"] += metrics["text2sketch_loss"]
-                    train_losses["sketch2text"] += metrics["sketch2text_loss"]
-
-                    train_metrics["text2sketch_correct_pr"] += metrics["text2sketch_correct_pr"]
-                    train_metrics["sketch2text_correct_pr"] += metrics["sketch2text_correct_pr"]
-                    train_metrics["text2sketch_top1_accuracy"] += metrics["text2sketch_top1_accuracy"]
-                    train_metrics["sketch2text_top1_accuracy"] += metrics["sketch2text_top1_accuracy"]
-
                     train_metrics["text_state_temperature"] += metrics["text_state_temperature"]
-                    train_metrics["state_sketch_temperature"] += metrics["state_sketch_temperature"]
-                    train_metrics["text_sketch_temperature"] += metrics["text_sketch_temperature"]
-                    
+
                     pbar.update(1)  # update Progress bar
                     pbar.set_postfix({"Train Loss": train_losses['total'] / i, "Val Loss": val_losses['total']})
                     i += 1
@@ -319,9 +270,8 @@ def make_train(config: CLIPTrainConfig):
 
                     state_embed = metrics["state_embed"]
                     text_embed = metrics["text_embed"]
-                    sketch_embed = metrics["sketch_embed"]
 
-                    embeddings = [CLIPEmbedData(class_ids=c, state_embeddings=st, text_embeddings=t, sketch_embeddings=sk) for c, st, t, sk in zip(class_ids, state_embed, text_embed, sketch_embed)]
+                    embeddings = [CLIPEmbedData(class_ids=c, state_embeddings=st, text_embeddings=t) for c, st, t in zip(class_ids, state_embed, text_embed)]
                     val_embed_queue.extend(embeddings)
 
                     val_losses["total"] += loss
@@ -332,22 +282,6 @@ def make_train(config: CLIPTrainConfig):
                     val_metrics["text2state_correct_pr"] += metrics["text2state_correct_pr"]
                     val_metrics["state2text_top1_accuracy"] += metrics["state2text_top1_accuracy"]
                     val_metrics["text2state_top1_accuracy"] += metrics["text2state_top1_accuracy"]
-
-                    val_losses["state2sketch"] += metrics["state2sketch_loss"]
-                    val_losses["sketch2state"] += metrics["sketch2state_loss"]
-
-                    val_metrics["state2sketch_correct_pr"] += metrics["state2sketch_correct_pr"]
-                    val_metrics["sketch2state_correct_pr"] += metrics["sketch2state_correct_pr"]
-                    val_metrics["state2sketch_top1_accuracy"] += metrics["state2sketch_top1_accuracy"]
-                    val_metrics["sketch2state_top1_accuracy"] += metrics["sketch2state_top1_accuracy"]
-
-                    val_losses["text2sketch"] += metrics["text2sketch_loss"]
-                    val_losses["sketch2text"] += metrics["sketch2text_loss"]
-
-                    val_metrics["text2sketch_correct_pr"] += metrics["text2sketch_correct_pr"]
-                    val_metrics["sketch2text_correct_pr"] += metrics["sketch2text_correct_pr"]
-                    val_metrics["text2sketch_top1_accuracy"] += metrics["text2sketch_top1_accuracy"]
-                    val_metrics["sketch2text_top1_accuracy"] += metrics["sketch2text_top1_accuracy"]
 
                     pbar.update(1)  # update Progress bar
                     pbar.set_postfix({"Train Loss": train_losses['total'], "Val Loss": val_losses['total'] / i})
@@ -361,8 +295,8 @@ def make_train(config: CLIPTrainConfig):
  
             if (epoch + 1) % config.embed_visualize_freq == 0:
 
-                train_embed_human_ai_path, train_embed_modality_all_path, train_embed_modality_human_path, task_train_embed_paths  = create_clip_embedding_figures_sketch(train_embed_queue, class_id2reward_cond , epoch, config, config.encoder.mode, postfix='_train')
-                val_embed_human_ai_path, val_embed_modality_all_path, val_embed_modality_human_path, task_val_embed_paths = create_clip_embedding_figures_sketch(val_embed_queue, class_id2reward_cond, epoch, config, config.encoder.mode, postfix='_val')
+                train_embed_human_ai_path, train_embed_modality_all_path, train_embed_modality_human_path, task_train_embed_paths = create_clip_embedding_figures(train_embed_queue, class_id2reward_cond , epoch, config, postfix='_train')
+                val_embed_human_ai_path, val_embed_modality_all_path, val_embed_modality_human_path, task_val_embed_paths = create_clip_embedding_figures(val_embed_queue, class_id2reward_cond, epoch, config, postfix='_val')
 
                 
                 aux_dict = {
@@ -393,23 +327,7 @@ def make_train(config: CLIPTrainConfig):
                     "train(text-state)/state2text_top1_accuracy": train_metrics["state2text_top1_accuracy"],
                     "train(text-state)/text2state_top1_accuracy": train_metrics["text2state_top1_accuracy"],
                     
-                    "train(state-sketch)/state-sketch_temperature": train_metrics["state_sketch_temperature"],
-                    "train(state-sketch)/state2sketch_loss": train_losses["state2sketch"],
-                    "train(state-sketch)/sketch2state_loss": train_losses["sketch2state"],
-                    "train(state-sketch)/state2sketch_correct_pr": train_metrics["state2sketch_correct_pr"],
-                    "train(state-sketch)/sketch2state_correct_pr": train_metrics["sketch2state_correct_pr"],
-                    "train(state-sketch)/state2sketch_top1_accuracy": train_metrics["state2sketch_top1_accuracy"],
-                    "train(state-sketch)/sketch2state_top1_accuracy": train_metrics["sketch2state_top1_accuracy"],
-                    
-                    "train(text-sketch)/text-sketch_temperature": train_metrics["text_sketch_temperature"],
-                    "train(text-sketch)/text2sketch_loss": train_losses["text2sketch"],
-                    "train(text-sketch)/sketch2text_loss": train_losses["sketch2text"],
-                    "train(text-sketch)/text2sketch_correct_pr": train_metrics["text2sketch_correct_pr"],
-                    "train(text-sketch)/sketch2text_correct_pr": train_metrics["sketch2text_correct_pr"],
-                    "train(text-sketch)/text2sketch_top1_accuracy": train_metrics["text2sketch_top1_accuracy"],
-                    "train(text-sketch)/sketch2text_top1_accuracy": train_metrics["sketch2text_top1_accuracy"],
-
-                    "total/val_loss": val_losses["total"], 
+                    "total/val_loss": val_losses["total"],
                     
                     "val(text-state)/state2text_loss": val_losses["state2text"],
                     "val(text-state)/text2state_loss": val_losses["text2state"],
@@ -417,20 +335,6 @@ def make_train(config: CLIPTrainConfig):
                     "val(text-state)/text2state_correct_pr": val_metrics["text2state_correct_pr"],
                     "val(text-state)/state2text_top1_accuracy": val_metrics["state2text_top1_accuracy"],
                     "val(text-state)/text2state_top1_accuracy": val_metrics["text2state_top1_accuracy"],
-                    
-                    "val(state-sketch)/state2sketch_loss": val_losses["state2sketch"],
-                    "val(state-sketch)/sketch2state_loss": val_losses["sketch2state"],
-                    "val(state-sketch)/state2sketch_correct_pr": val_metrics["state2sketch_correct_pr"],
-                    "val(state-sketch)/sketch2state_correct_pr": val_metrics["sketch2state_correct_pr"],
-                    "val(state-sketch)/state2sketch_top1_accuracy": val_metrics["state2sketch_top1_accuracy"],
-                    "val(state-sketch)/sketch2state_top1_accuracy": val_metrics["sketch2state_top1_accuracy"],
-                    
-                    "val(text-sketch)/text2sketch_loss": val_losses["text2sketch"],
-                    "val(text-sketch)/sketch2text_loss": val_losses["sketch2text"],
-                    "val(text-sketch)/text2sketch_correct_pr": val_metrics["text2sketch_correct_pr"],
-                    "val(text-sketch)/sketch2text_correct_pr": val_metrics["sketch2text_correct_pr"],
-                    "val(text-sketch)/text2sketch_top1_accuracy": val_metrics["text2sketch_top1_accuracy"],
-                    "val(text-sketch)/sketch2text_top1_accuracy": val_metrics["sketch2text_top1_accuracy"],
                     
                     "total/epoch": epoch,
                     "total/lr": lr_schedular(train_state.step),
@@ -462,9 +366,7 @@ def get_train_state(config: CLIPTrainConfig, rng_key: jax.random.PRNGKey):
         else:
             raise NotImplementedError("Model not implemented")
 
-        sketch_img = jnp.ones((1, 224, 224, 3), dtype=jnp.float32)
-
-        params = encoder.init(init_rng, input_ids, attention_mask, pixel_values, sketch_img, mode=config.encoder.mode, training=False)
+        params = encoder.init(init_rng, input_ids, attention_mask, pixel_values, mode=config.encoder.mode, training=False)
 
         for key in pretrained_params:
             replace_params(params, key, pretrained_params[key])

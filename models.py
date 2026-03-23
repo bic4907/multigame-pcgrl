@@ -618,7 +618,7 @@ class ActorCriticPCGRL(nn.Module):
             pass
         pi = distrax.Categorical(logits=act)
 
-        return pi, val, z_embed, text_embed, state_embed, sketch_embed
+        return pi, val, z_embed, text_embed, state_embed
 
 class ActorCriticPlayPCGRL(nn.Module):
     """Transform the action output into a distribution."""

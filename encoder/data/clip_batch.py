@@ -19,7 +19,6 @@ import jax.numpy as jnp
 
 from instruct_rl.utils.level_processing_utils import mutate_level_fn, map2onehot, add_coord_channel, add_coord_channel_batch
 from instruct_rl.utils.img_preprocess import render_level_from_arr, clip_img_transition_preprocess
-from instruct_rl.utils.sketch_preprocess import clip_sketch_batch_preprocess
 from conf.config import EncoderConfig
 
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()  # Add the environment variable ;LOG_LEVEL=DEBUG
@@ -35,7 +34,6 @@ class CLIPDataset:
     input_ids: np.ndarray 
     attention_masks: np.ndarray
     pixel_values: np.ndarray
-    sketch_values: np.ndarray
     augmentable: np.ndarray
     is_train: np.ndarray
 
@@ -44,15 +42,13 @@ class CLIPEmbedData:
     class_ids: np.ndarray
     state_embeddings: np.ndarray   
     text_embeddings: np.ndarray
-    sketch_embeddings: np.ndarray
-    
+
 @dataclass
 class CLIPContrastiveBatch:
     class_ids: np.ndarray
     input_ids: np.ndarray
     attention_mask: np.ndarray
     pixel_values: np.ndarray
-    sketch_values: np.ndarray
     duplicate_matrix: np.ndarray  # (B, B) matrix indicating positive pairs
     
 
@@ -64,7 +60,6 @@ class CLIPDatasetBuilder:
                  rng_key:jax.random.PRNGKey,
                  text_ratio:float,
                  state_ratio:float,
-                 sketch_ratio:float,
                  train_shuffle:bool=False,
                  train_ratio:float=0.8,
                  max_len:int=77,
@@ -83,7 +78,6 @@ class CLIPDatasetBuilder:
         self.train_ratio = train_ratio
         self.text_ratio = text_ratio
         self.state_ratio = state_ratio
-        self.sketch_ratio = sketch_ratio
         self.train_shuffle = train_shuffle
         
         self.dataset = self._build_dataset(rng_key)
@@ -103,7 +97,6 @@ class CLIPDatasetBuilder:
                 "input_ids": [],
                 "attention_masks": [],
                 "pixel_values": [],
-                "sketch_values": [],
                 "augmentable": [],
                 "is_train": [],
             }
@@ -123,21 +116,6 @@ class CLIPDatasetBuilder:
                 logging.warning(f"No images found for instruction \"{instr_i}\".")
                 continue
 
-            sketch_dir = join(self.data_path, "sketch", folder_name_i)
-            
-            pairs = []
-            for np_path in np_paths_raw:
-                base = splitext(basename(np_path))[0]
-                sketch_path = join(sketch_dir, base + ".png")
-                if os.path.exists(sketch_path):
-                    pairs.append({"state": np_path, "sketch": sketch_path})
-                else:
-                    logging.warning(f"Sketch file {sketch_path} does not exist for instruction \"{instr_i}\".")
-            
-            if not pairs:
-                logging.warning(f"No matching state/sketch pairs for instruction \"{instr_i}\".")
-                continue
-
             # Split pairs into train and validation before any processing
             rng_key, sub_key = jax.random.split(rng_key)
             
@@ -155,17 +133,13 @@ class CLIPDatasetBuilder:
                     continue
                 
                 state_ratio_apply = self.state_ratio if is_train else 1.0
-                sketch_ratio_apply = self.sketch_ratio if is_train else 1.0
 
                 num_states_to_use = max(1, int(len(pair_group) * state_ratio_apply ))
-                num_sketches_to_use = max(1, int(len(pair_group) * sketch_ratio_apply))
 
                 state_paths_subset = [p["state"] for p in pair_group[:num_states_to_use]]
-                sketch_paths_subset = [p["sketch"] for p in pair_group[:num_sketches_to_use]]
 
                 # Cycle subsets to match the original group size
                 final_state_paths = [p for p, _ in zip(cycle(state_paths_subset), pair_group)]
-                final_sketch_paths = [p for p, _ in zip(cycle(sketch_paths_subset), pair_group)]
                 if is_train and self.train_shuffle:
                     # shuffle the final paths for training
                     random.shuffle(final_state_paths)
@@ -177,11 +151,6 @@ class CLIPDatasetBuilder:
                     initial_imgs, goal_imgs = self._load_imgs(final_state_paths, rng_key)
                     preprocess_imgs = clip_img_transition_preprocess(initial_imgs, goal_imgs)
                     preprocess_imgs = np.array(preprocess_imgs)
-
-                sketch_imgs = self._load_sketchs(final_sketch_paths, rng_key)
-                preprocess_sketch = clip_sketch_batch_preprocess(sketch_imgs)
-                preprocess_sketch = np.array(preprocess_sketch)
-                preprocess_sketch = add_coord_channel_batch(preprocess_sketch)
 
                 reward_cond_i = instr_df["reward_cond"].iloc[idx]
                 class_id_i = instr_df["class_id"].iloc[idx]
@@ -207,7 +176,6 @@ class CLIPDatasetBuilder:
                     "input_ids": instr_input_ids_repeat,
                     "attention_masks": instr_attention_masks_repeat,
                     "pixel_values": map_array if self.config.use_map_array else preprocess_imgs,
-                    "sketch_values": preprocess_sketch,
                     "augmentable": augmentable_repeat,
                     "is_train": is_train_repeat
                 }
@@ -225,7 +193,6 @@ class CLIPDatasetBuilder:
                     dataset_dict["pixel_values"].extend(map_array)
                 else:
                     dataset_dict["pixel_values"].extend(preprocess_imgs)
-                dataset_dict["sketch_values"].extend(preprocess_sketch)
                 dataset_dict["augmentable"].extend(augmentable_repeat)
                 dataset_dict["is_train"].extend(is_train_repeat)
 
@@ -239,7 +206,6 @@ class CLIPDatasetBuilder:
                 input_ids=np.array(dataset_dict["input_ids"]),
                 attention_masks=np.array(dataset_dict["attention_masks"]),
                 pixel_values=np.array(dataset_dict["pixel_values"]),
-                sketch_values=np.array(dataset_dict["sketch_values"]),
                 augmentable=np.array(dataset_dict["augmentable"]),
                 is_train=np.array(dataset_dict["is_train"])
             )
@@ -322,16 +288,6 @@ class CLIPDatasetBuilder:
 
         return jnp.array(initial_imgs), jnp.array(goal_images)
 
-    def _load_sketchs(self, sketch_paths: List[str], rng_key: jax.random.PRNGKey) -> List[jnp.ndarray]:
-        sketch_images = []
-        for sketch_path in sketch_paths:
-            try:
-                sketch_img = Image.open(sketch_path).convert("L")
-                sketch_array = np.array(sketch_img)
-                sketch_images.append(sketch_array)
-            except Exception as e:
-                print(f"Error loading image {sketch_path}: {e}")
-        return jnp.array(sketch_images)
 
     def _load_map_array(self, np_paths: List[str], rng_key:jax.random.PRNGKey) -> jnp.ndarray:
 
@@ -366,7 +322,6 @@ class CLIPDatasetBuilder:
             input_ids=self.dataset.input_ids[train_mask],
             attention_masks=self.dataset.attention_masks[train_mask],
             pixel_values=self.dataset.pixel_values[train_mask],
-            sketch_values=self.dataset.sketch_values[train_mask],
             augmentable=self.dataset.augmentable[train_mask],
             is_train=self.dataset.is_train[train_mask]
         )
@@ -376,7 +331,6 @@ class CLIPDatasetBuilder:
             input_ids=self.dataset.input_ids[test_mask],
             attention_masks=self.dataset.attention_masks[test_mask],
             pixel_values=self.dataset.pixel_values[test_mask],
-            sketch_values=self.dataset.sketch_values[test_mask],
             augmentable=self.dataset.augmentable[test_mask],
             is_train=self.dataset.is_train[test_mask]
         )
@@ -420,7 +374,6 @@ def create_clip_batch(dataset: CLIPDataset, batch_size: int, rng_key: jax.random
         input_ids = dataset.input_ids[batch_indices]           #(B,T) -> (B,77)
         attention_mask = dataset.attention_masks[batch_indices] #(B,T) -> (B,77)
         pixel_values = dataset.pixel_values[batch_indices]     #(B,H,W,C) -> (B,16,16,5)
-        sketch_values = dataset.sketch_values[batch_indices]   #(B,H,W,C) -> (B,224,224,3)
         duplicate_matrix = np.equal.outer(class_ids, class_ids).astype(np.float32) # (B, B)
         augmentable = dataset.augmentable[batch_indices]
 
@@ -429,22 +382,18 @@ def create_clip_batch(dataset: CLIPDataset, batch_size: int, rng_key: jax.random
             k = np.random.choice([0, 1, 2, 3])  # Number of 90-degree rotations
 
             pixel_values[augment_mask] = np.rot90(pixel_values[augment_mask], k=k, axes=(1, 2))
-            sketch_values[augment_mask] = np.rot90(sketch_values[augment_mask], k=k, axes=(1, 2))
 
             if np.random.rand() > 0.5:
                 pixel_values[augment_mask] = np.flip(pixel_values[augment_mask], axis=1)
-                sketch_values[augment_mask] = np.flip(sketch_values[augment_mask], axis=1)
 
             if np.random.rand() > 0.5:
                 pixel_values[augment_mask] = np.flip(pixel_values[augment_mask], axis=2)
-                sketch_values[augment_mask] = np.flip(sketch_values[augment_mask], axis=2)
 
         yield CLIPContrastiveBatch(
             class_ids=class_ids,
             input_ids=input_ids,
             attention_mask=attention_mask,
             pixel_values=pixel_values,
-            sketch_values=sketch_values,
             duplicate_matrix=duplicate_matrix
         )
 
@@ -471,7 +420,7 @@ if __name__ == "__main__":
     rng_key = jax.random.PRNGKey(0)
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
     config = EncoderConfig()
-    dataset_builder = CLIPDatasetBuilder(config, data_path, instruct_csv, processor, rng_key=rng_key, train_ratio=0.8, sketch_ratio=1.0, state_ratio=1.0, max_len=77, mutation_rate=0.1, embed_type="sub_condition", aug_type="bert")
+    dataset_builder = CLIPDatasetBuilder(config, data_path, instruct_csv, processor, rng_key=rng_key, train_ratio=0.8, state_ratio=1.0, max_len=77, mutation_rate=0.1, embed_type="sub_condition", aug_type="bert")
     
     train_dataset, test_dataset = dataset_builder.get_split_dataset()
     
@@ -484,7 +433,6 @@ if __name__ == "__main__":
         print("Input IDs shape:", batch.input_ids.shape)
         print("Attention Mask shape:", batch.attention_mask.shape)
         print("Pixel Values shape:", batch.pixel_values.shape)
-        print("Sketch Values shape:", batch.sketch_values.shape)
         print("Duplicate Matrix shape:", batch.duplicate_matrix.shape)
         rng_key, subkey = jax.random.split(rng_key)
         break
@@ -494,7 +442,6 @@ if __name__ == "__main__":
         print("Input IDs shape:", batch.input_ids.shape)
         print("Attention Mask shape:", batch.attention_mask.shape)
         print("Pixel Values shape:", batch.pixel_values.shape)
-        print("Sketch Values shape:", batch.sketch_values.shape)
         print("Duplicate Matrix shape:", batch.duplicate_matrix.shape)
         rng_key, subkey = jax.random.split(rng_key)
         break

@@ -98,12 +98,16 @@ def create_clip_embedding_figures(embed_queue, epoch, config, postfix=""):
     class_ids = np.concatenate([class_ids, class_ids], axis=0)
 
     # mapping
+    # ordered_games = {
+    #     1: "Dungeon",
+    #     2: "Sokoban",
+    #     3: "Pokemon",
+    #     4: "Zelda",
+    #     5: "Doom",
+    # }
     ordered_games = {
-        1: "Dungeon",
-        2: "Sokoban",
-        3: "Pokemon",
-        4: "City",
-        5: "Doom",
+        0: "Dungeon",
+        1: "Pokemon",
     }
 
     game_labels = [ordered_games.get(r, f"unknown-{r}") for r in class_ids]
@@ -112,7 +116,7 @@ def create_clip_embedding_figures(embed_queue, epoch, config, postfix=""):
         "Dungeon": "#e41a1c",
         "Sokoban": "#ff7f00",
         "Pokemon": "#377eb8",
-        "City": "#4daf4a",
+        "Zelda": "#4daf4a",
         "Doom": "#984ea3"
     }
 
@@ -122,7 +126,7 @@ def create_clip_embedding_figures(embed_queue, epoch, config, postfix=""):
         tsne = TSNE(n_components=2, random_state=42)
         tsne_embeds = tsne.fit_transform(embeddings)
         df = pd.DataFrame(tsne_embeds, columns=["tsne_x", "tsne_y"])
-        df["Game"] = pd.Categorical(game_labels, categories=ordered_games, ordered=True)
+        df["Game"] = pd.Categorical(game_labels, categories=list(ordered_games.values()), ordered=True)
         df["modality"] = modalities
         return df
 

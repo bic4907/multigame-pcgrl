@@ -26,10 +26,8 @@ def get_group_name(config):
 
 
 def get_wandb_name(config: Config):
-    exp_dir_path = config.exp_dir
-    # split by directory
+    exp_dir_path = config.exp_dir.replace('\\', '/')
     exp_dirs = exp_dir_path.split('/')
-
     return exp_dirs[-1]
 
 

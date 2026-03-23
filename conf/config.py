@@ -105,7 +105,7 @@ class Config:
     initialize: Optional[bool] = None
 
     # Wandb
-    wandb_key: Optional[str] = None
+    wandb_key: Optional[str] = "7abca172917546a3602b6ff1757ca40e10869186"
     
     wandb_project: Optional[str] = 'instruct_pcgrl'
     wandb_entity: Optional[str] = 'st4889ha-gwangju-institute-of-science-and-technology'
@@ -583,7 +583,7 @@ class CLIPTrainConfig(Config):
     wandb_resume: str = 'allow'
     seed: int = 0
     
-    overwrite: bool = False
+    overwrite: bool = True
     ckpt_freq: int = int(5)
 
     # Goal img path

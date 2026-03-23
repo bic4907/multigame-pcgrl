@@ -289,23 +289,13 @@ def make_train(config: CLIPTrainConfig):
  
             if (epoch + 1) % config.embed_visualize_freq == 0:
 
-                train_embed_human_ai_path, train_embed_modality_all_path, train_embed_modality_human_path, task_train_embed_paths = create_clip_embedding_figures(train_embed_queue, class_id2reward_cond , epoch, config, postfix='_train')
-                val_embed_human_ai_path, val_embed_modality_all_path, val_embed_modality_human_path, task_val_embed_paths = create_clip_embedding_figures(val_embed_queue, class_id2reward_cond, epoch, config, postfix='_val')
+                task_train_embed_paths = create_clip_embedding_figures(train_embed_queue, epoch, config, postfix='_train')
+                task_val_embed_paths = create_clip_embedding_figures(val_embed_queue, epoch, config, postfix='_val')
 
-                
                 aux_dict = {
-                    "total/train_embed_modality_all": wandb.Image(train_embed_modality_all_path),
-                    "total/val_embed_modality_all": wandb.Image(val_embed_modality_all_path),
-                    "total/train_embed_human_ai": wandb.Image(train_embed_human_ai_path),
-                    "total/val_embed_human_ai": wandb.Image(val_embed_human_ai_path),
-                    "total/train_embed_modality_human": wandb.Image(train_embed_modality_human_path),
-                    "total/val_embed_modality_human": wandb.Image(val_embed_modality_human_path)
+                    "train_tsne/embed_all": wandb.Image(task_train_embed_paths),
+                    "val_tsne/embed_all": wandb.Image(task_val_embed_paths),
                 }
-                for task, path in task_train_embed_paths.items():
-                    aux_dict[f"train_tsne/{task}_embed"] = wandb.Image(path)
-                for task, path in task_val_embed_paths.items():
-                    aux_dict[f"val_tsne/{task}_embed"] = wandb.Image(path)
-    
             else:
                 aux_dict = dict()
 

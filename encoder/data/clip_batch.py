@@ -29,6 +29,7 @@ logging.getLogger('absl').setLevel(logging.ERROR)
 @dataclass
 class CLIPDataset:
     class_ids: np.ndarray
+    reward_cond: np.ndarray
     input_ids: np.ndarray
     attention_masks: np.ndarray
     pixel_values: np.ndarray
@@ -75,6 +76,7 @@ class CLIPDatasetBuilder:
         logging.info(f"Finished loading dataset")
         return CLIPDataset(
                 class_ids=np.array(self.preprocessed_dataset_dict["class_ids"]),
+                reward_cond=np.array(self.preprocessed_dataset_dict["reward_cond"]),
                 input_ids=np.array(self.preprocessed_dataset_dict["input_ids"]),
                 attention_masks=np.array(self.preprocessed_dataset_dict["attention_masks"]),
                 pixel_values=np.array(self.preprocessed_dataset_dict["pixel_values"]),
@@ -97,6 +99,9 @@ class CLIPDatasetBuilder:
         level_arrays = add_coord_channel_batch(level_arrays)  # (N, 16, 16, C)
 
         language_inst_list = [s.instruction for s in samples]
+
+        # Extract reward_cond from meta field of each sample
+        reward_cond = np.array([s.meta.get("reward_cond", 0.0) for s in samples])
 
         # Language instruction tokenization
         tokenized_instrs = self.processor(
@@ -122,6 +127,7 @@ class CLIPDatasetBuilder:
         return {
             "game_type":            games_type,
             "class_ids":            game_ids,
+            "reward_cond":          reward_cond,
             "language_inst":        language_inst_list,
             "input_ids":            inst_input_ids,
             "attention_masks":      inst_attention_masks,

@@ -1,0 +1,6 @@
+game,is_placeholder,reward_enum,feature_name,sub_condition,condition_1,condition_2,condition_3,condition_4,condition_5
+doom,true,1,region,room,2.0,,,,
+doom,true,2,path_length,,,30.0,,,
+doom,true,3,block,wall,,,0.5,,
+doom,true,4,bat_amount,enemy,,,,5.0,
+doom,true,5,bat_direction,enemy,,,,,0.5

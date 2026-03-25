@@ -102,11 +102,11 @@ class DoomHandler(BaseGameHandler):
         text = path.read_text(encoding="utf-8", errors="replace")
         char_grid = self._preprocessor.parse_txt(text)
         # 슬라이싱 (설정이 있으면 적용, 없으면 전체)
-        if self._handler_config and hasattr(self._handler_config, "doom_slicing"):
+        if self._handler_config and hasattr(self._handler_config, "doom"):
             sliced_maps = self._preprocessor.slice_large_map(
                 char_grid,
-                empty_max=self._handler_config.doom_slicing.empty_max,
-                floor_empty_max=self._handler_config.doom_slicing.floor_empty_max,
+                empty_max=self._handler_config.doom.empty_max,
+                floor_empty_max=self._handler_config.doom.floor_empty_max,
             )
             if slice_idx >= len(sliced_maps):
                 raise IndexError(

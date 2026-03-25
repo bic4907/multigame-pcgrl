@@ -44,8 +44,10 @@ class POKEMONHandler(BaseGameHandler):
         self,
         root: Path | str = _DEFAULT_POKEMON_ROOT,
         npy_name: str = "datasets/maps_noaug.npy",
+        handler_config: Optional[Any] = None,
     ) -> None:
         self._root = Path(root)
+        self._handler_config = handler_config
         npy_path = self._root / npy_name
 
         if not npy_path.exists():
@@ -78,8 +80,11 @@ class POKEMONHandler(BaseGameHandler):
         return self._root
 
     def list_entries(self) -> List[str]:
-        """NPY 인덱스를 source_id로 반환."""
-        return [f"pokemon_{i:04d}" for i in range(len(self._images))]
+        """NPY 인덱스를 source_id로 반환. 최대 1000개만."""
+        max_samples = 1000
+        total = len(self._images)
+        limit = min(total, max_samples)
+        return [f"pokemon_{i:04d}" for i in range(limit)]
 
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
         """
@@ -127,11 +132,16 @@ class POKEMONHandler(BaseGameHandler):
         valid_ids = []
         filtered_by_ratio = 0
         filtered_by_count = 0
+        max_samples = 1000  # 최대 1000개 제한
         
         # "house on the beach" 중복 제거: 마지막 7개 제외 (874-880 인덱스)
         excluded_duplicates = set(range(874, 881))
         
         for i in range(len(self._images)):
+            # max_samples 도달 확인
+            if len(valid_ids) >= max_samples:
+                break
+            
             if i in excluded_duplicates:
                 continue
             
@@ -157,6 +167,10 @@ class POKEMONHandler(BaseGameHandler):
                 continue
             
             valid_ids.append(f"pokemon_{i:04d}")
+            
+            # max_samples 도달 확인
+            if len(valid_ids) >= max_samples:
+                break
         
         return valid_ids, filtered_by_ratio, filtered_by_count
 

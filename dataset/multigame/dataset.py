@@ -166,7 +166,7 @@ class MultiGameDataset:
         # ── Zelda 로드 ─────────────────────────────────────────────────────────
         if include_zelda and Path(zelda_root).exists():
             try:
-                self._zelda_handler = ZeldaHandler(root=zelda_root)
+                self._zelda_handler = ZeldaHandler(root=zelda_root, handler_config=self._handler_config)
                 for sample in self._zelda_handler:
                     sample.order = len(self._samples)
                     self._samples.append(sample)
@@ -179,7 +179,7 @@ class MultiGameDataset:
         # ── POKEMON 로드 ────────────────────────────────────────────────────────────
         if include_pokemon and Path(pokemon_root).exists():
             try:
-                self._pokemon_handler = POKEMONHandler(root=pokemon_root)
+                self._pokemon_handler = POKEMONHandler(root=pokemon_root, handler_config=self._handler_config)
                 # POKEMON은 로드 전에 필터링 적용 (패딩 전 10x10 기반 + 패딩 후 tileset 필터링)
                 valid_ids, filtered_ratio, filtered_count = self._pokemon_handler.list_entries_with_filtering(
                     max_tile_ratio=self._handler_config.filtering.max_tile_ratio,
@@ -367,6 +367,62 @@ class MultiGameDataset:
         if len(rotated_samples) > 0:
             print(f"[MultiGameDataset] Data augmentation: {original_count} → {len(self._samples)} samples "
                   f"(added {len(rotated_samples)} rotated versions)")
+        
+        # ── 증강 후 각 게임별 제한 (handler_config의 max_samples 참조) ────────────
+        game_sample_counts = {}
+        filtered_samples = []
+        
+        for sample in self._samples:
+            game = sample.game
+            if game not in game_sample_counts:
+                game_sample_counts[game] = 0
+            
+            # 각 게임의 handler_config에서 max_samples 가져오기
+            max_samples = None
+            if game == "pokemon":
+                max_samples = self._handler_config.pokemon.max_samples
+            elif game == "doom":
+                max_samples = self._handler_config.doom.max_samples
+            elif game == "zelda":
+                max_samples = self._handler_config.zelda.max_samples
+            elif game == "dungeon":
+                max_samples = self._handler_config.dungeon.max_samples
+            # sokoban은 handler_config에 설정이 없으므로 제한하지 않음
+            
+            # max_samples 제한 확인
+            if max_samples is None or game_sample_counts[game] < max_samples:
+                filtered_samples.append(sample)
+                game_sample_counts[game] += 1
+        
+        # 필터링된 샘플이 있으면 적용
+        if len(filtered_samples) < len(self._samples):
+            self._samples = filtered_samples
+            
+            # order 재지정
+            for i, sample in enumerate(self._samples):
+                sample.order = i
+            
+            print(f"[MultiGameDataset] Game-wise limit (per config): {original_count} → {len(self._samples)} samples")
+            for game, count in sorted(game_sample_counts.items()):
+                limited_count = count
+                max_samples = None
+                if game == "pokemon":
+                    max_samples = self._handler_config.pokemon.max_samples
+                elif game == "doom":
+                    max_samples = self._handler_config.doom.max_samples
+                elif game == "zelda":
+                    max_samples = self._handler_config.zelda.max_samples
+                elif game == "dungeon":
+                    max_samples = self._handler_config.dungeon.max_samples
+                
+                if max_samples is not None:
+                    limited_count = min(count, max_samples)
+                    if limited_count < count:
+                        print(f"  {game}: {count} → {limited_count} (max_samples={max_samples})")
+                    else:
+                        print(f"  {game}: {count} (max_samples={max_samples})")
+                else:
+                    print(f"  {game}: {count} (no limit)")
 
     def apply_filtering(self, apply_filter: bool = True) -> None:
         """

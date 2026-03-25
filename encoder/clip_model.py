@@ -135,46 +135,6 @@ class CNNResMapEncoder(nn.Module):
         return x
 
 
-class CNNResSketchEncoder(nn.Module):
-    projection_dim: int = None
-    drop_rate: float = 0.0
-
-    @nn.compact
-    def __call__(self, pixel_values, training: bool):
-        # Input: (224, 224, 3)
-        x = nn.Conv(32, (7, 7), strides=(2, 2), padding="SAME")(pixel_values)  # (224 → 112)
-        x = nn.gelu(x)
-        x = nn.LayerNorm()(x)
-
-        x = ResBlock(32, drop_rate=self.drop_rate, use_se=True)(x, training)
-
-        x = nn.Conv(64, (3, 3), strides=(2, 2), padding='SAME')(x)  # (112 → 56)
-        x = nn.gelu(x)
-        x = nn.LayerNorm()(x)
-        x = ResBlock(64, drop_rate=self.drop_rate, use_se=True)(x, training)
-
-        x = nn.Conv(128, (3, 3), strides=(2, 2), padding='SAME')(x)  # (56 → 28)
-        x = nn.gelu(x)
-        x = nn.LayerNorm()(x)
-        x = ResBlock(128, drop_rate=self.drop_rate, use_se=True)(x, training)
-
-        x = nn.Conv(256, (3, 3), strides=(2, 2), padding='SAME')(x)  # (28 → 14)
-        x = nn.gelu(x)
-        x = nn.LayerNorm()(x)
-        x = ResBlock(256, drop_rate=self.drop_rate, use_se=True)(x, training)
-
-        # Global Average Pooling: (B, 14, 14, 256) → (B, 256)
-        x = jnp.mean(x, axis=(1, 2))
-
-        # Projection Head
-        x = nn.Dense(256)(x)
-        x = nn.gelu(x)
-        x = nn.LayerNorm()(x)
-        x = nn.Dropout(self.drop_rate)(x, deterministic=not training)
-        x = nn.Dense(self.projection_dim, use_bias=False)(x)
-        return x
-
-
 class ContrastiveModule(nn.Module):
     encoders: Dict[str, nn.Module]
     dropout_rate: float = 0.0
@@ -182,12 +142,6 @@ class ContrastiveModule(nn.Module):
     def setup(self):
         self.text_state_temperature = self.param(
             "text_state_temperature", nn.initializers.constant(jnp.log(0.07)), ()
-        )
-        self.text_sketch_temperature = self.param(
-            "text_sketch_temperature", nn.initializers.constant(jnp.log(0.07)), ()
-        )
-        self.state_sketch_temperature = self.param(
-            "state_sketch_temperature", nn.initializers.constant(jnp.log(0.07)), ()
         )
 
     def encode_text(
@@ -205,19 +159,13 @@ class ContrastiveModule(nn.Module):
         x = x / (jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-6)
         return x
 
-    def encode_sketch(self, sketch_img: jnp.ndarray, training: bool) -> jnp.ndarray:
-        x = self.encoders["sketch"](sketch_img, training)
-        x = x / (jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-6)
-        return x
-
     @nn.compact
     def __call__(
             self,
             input_ids: jnp.ndarray = None,
             attention_mask: jnp.ndarray = None,
             pixel_values: jnp.ndarray = None,
-            sketch_values: jnp.ndarray = None,
-            mode: str = "text_state_sketch",
+            mode: str = "text_state",
             training: bool = False,
     ):
 
@@ -238,13 +186,8 @@ class ContrastiveModule(nn.Module):
             output_dict["text_embed"] = text_embed
             output_dict["text_state_temperature"] = self.text_state_temperature
 
-        if "sketch" in modes:
-            sketch_embed = self.encode_sketch(sketch_values, training)
-            output_dict["sketch_embed"] = sketch_embed
 
         output_dict['text_state_temperature'] = self.text_state_temperature
-        output_dict['text_sketch_temperature'] = self.text_sketch_temperature
-        output_dict['state_sketch_temperature'] = self.state_sketch_temperature
 
         return output_dict
 
@@ -258,7 +201,6 @@ def get_clip_encoder(config: EncoderConfig, RL_training: bool=True):
         clip_conf = CLIPConfig.from_pretrained("openai/clip-vit-base-patch32")
         text_model = FlaxCLIPTextTransformer(clip_conf.text_config)
         vision_model = FlaxCLIPVisionTransformer(clip_conf.vision_config)
-        sketch_model = FlaxCLIPVisionTransformer(clip_conf.vision_config)
     else:
         pretrained_params = {}
 
@@ -273,32 +215,14 @@ def get_clip_encoder(config: EncoderConfig, RL_training: bool=True):
         # Get vision model
         vision_model, vision_model_vars = clip.bind(clip_variables).vision_model.unbind()
 
-        # Get sketch model
-        sketch_model, sketch_model_vars = clip.bind(clip_variables).vision_model.unbind()
-
     text_encoder_def = PretrainedTextEncoder(text_model, projection_dim=config.output_dim,
                                              freeze_encoder=config.freeze_text_enc)
     state_encoder_def = PretrainedImageEncoder(vision_model, projection_dim=config.output_dim,
                                                freeze_encoder=config.freeze_state_enc)
-    sketch_encoder_def = PretrainedImageEncoder(sketch_model, projection_dim=config.output_dim,
-                                                 freeze_encoder=config.freeze_sketch_enc)
 
     mode = "text"
 
-    if config.sketch and config.state:
-        encoder_dict = dict(
-            state=state_encoder_def,
-            text=text_encoder_def,
-            sketch=sketch_encoder_def,
-        )
-        mode += "_state_sketch"
-    elif config.sketch:
-        encoder_dict = dict(
-            text=text_encoder_def,
-            sketch=sketch_encoder_def,
-        )
-        mode += "_sketch"
-    elif config.state:
+    if config.state:
         encoder_dict = dict(
             state=state_encoder_def,
             text=text_encoder_def,
@@ -325,8 +249,6 @@ def get_cnnclip_encoder(config: EncoderConfig, RL_training: bool = True):
     """
     state_encoder_def = CNNResMapEncoder(projection_dim=config.output_dim, drop_rate=config.dropout_rate)
 
-    sketch_encoder_def = CNNResSketchEncoder(projection_dim=config.output_dim, drop_rate=config.dropout_rate)
-
     pretrained_params = None
 
     if RL_training:
@@ -347,21 +269,10 @@ def get_cnnclip_encoder(config: EncoderConfig, RL_training: bool = True):
     text_encoder_def = PretrainedTextEncoder(text_model, projection_dim=config.output_dim,
                                              freeze_encoder=config.freeze_text_enc)
 
-    if config.sketch and config.state:
-        encoder_dict = dict(
-                state=state_encoder_def,
-                text=text_encoder_def,
-                sketch=sketch_encoder_def,
-            )
-    elif config.sketch:
+    if config.state:
         encoder_dict = dict(
             text=text_encoder_def,
-            sketch=sketch_encoder_def,
-        )
-    elif config.state:
-        encoder_dict = dict(
-            state=state_encoder_def,
-            text=text_encoder_def,
+            state=state_encoder_def
         )
     else:
         encoder_dict = dict(
@@ -398,7 +309,7 @@ if __name__ == "__main__":
             dropout_rate=config.dropout_rate
         )
     # Initialize and run model
-    variables = model_def.init(jax.random.PRNGKey(0), dummy_data, mode="text_state_sketch")
+    variables = model_def.init(jax.random.PRNGKey(0), dummy_data, mode="text_state")
     outputs = model_def.apply(variables, **dummy_data)
 
     print("Output shapes:")

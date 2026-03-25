@@ -115,7 +115,6 @@ class Config:
     #Ablation study options. default is 1.0
     text_ratio: float = 1.0
     state_ratio: float = 1.0
-    sketch_ratio: float = 1.0
 
     exp_group: Optional[str] = None
 
@@ -135,16 +134,14 @@ class Config:
 class CLIPConfig:
     freeze_text_enc: bool = True
     freeze_state_enc: bool = False
-    freeze_sketch_enc: bool = False
     use_map_array: bool = True
     token_max_len: int = 77
 
 @dataclass
 class EncoderConfig(CLIPConfig):
     model: Optional[str] = None  # mlp, sa (self-attention), mp(mean pool), mlp_vae
-    sketch: bool = True
     state: bool = True
-    mode: str = "text_state_sketch"
+    mode: str = "text_state"
 
     deterministic: bool = True
     num_layers: int = 2  # 1 ~ 3
@@ -320,7 +317,7 @@ class EvalConfig(TrainConfig):
     eval_instruct_csv: Optional[str] = None
     eval_dir: Optional[str] = None
     eval_map_types: int = 5
-    eval_modality: str = "text"  # 'text', 'image', 'sketch'
+    eval_modality: str = "text"  # 'text', 'image'
     eval_human_demo_path: str = './human_dataset'
 
     diversity: bool = True
@@ -619,7 +616,6 @@ class CLIPEvalConfig(EvalConfig):
     embed_type: str = 'clip'
     eval_embed_type: str = "clip"
     model: str = "cnnclipconv"
-    sketch: bool = True
     state: bool = True
 
     wandb_project: str = 'eval_clip_pcgrl'

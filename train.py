@@ -372,8 +372,8 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
                     )
                     _, _, _, embedding, _, _ = network.apply(runner_state.train_state.params, x=instr_x,
                                                              return_text_embed=True,
-                                                             return_state_embed=False,
-                                                             return_sketch_embed=False)
+                                                             return_state_embed=False
+                                                             )
                     logger.info(
                         f"Generated clip text embeddings for {input_ids.shape[0]} instructions. is_train: {is_train}"
                     )
@@ -390,20 +390,16 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
 
                     if config.multimodal_condition:
                         levels = dataset_mgr.get_levels(language_instr_list, n=10, to_jax=True, squeeze_n=False, coord_channel=True) # (5, 10, 16, 16, 5)
-                        sketches = dataset_mgr.get_sketches(language_instr_list, n=10, to_jax=True, squeeze_n=False, coord_channel=True) # (5, 10, 224, 224, 3)
 
                         n_inst, n_samples, H, W, C = levels.shape
-                        n_inst, n_samples, H_, W_, C_ = sketches.shape
 
                         levels = jnp.reshape(levels, (n_inst * n_samples, H, W, C))  # (50, 16, 16, 5)
-                        sketches = jnp.reshape(sketches, (n_inst * n_samples, H_, W_, C_))
 
                         input_ids = jnp.repeat(input_ids, n_samples, axis=0)
                         attention_mask = jnp.repeat(attention_mask, n_samples, axis=0)
 
                     else:
                         levels = jnp.zeros((input_ids.shape[0], 16, 16, 5), dtype=jnp.float32)
-                        sketches = jnp.zeros((input_ids.shape[0], 224, 224, 3), dtype=jnp.float32)
 
                     instr_x = PCGRLObs(
                         map_obs=jnp.repeat(init_x.map_obs, input_ids.shape[0], axis=0),
@@ -413,13 +409,12 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
                         input_ids=input_ids,
                         attention_mask=attention_mask,
                         pixel_values=levels,
-                        sketch_values=sketches,
                     )
 
                     _, _, _, embedding_t, embedding_s, embedding_k = network.apply(runner_state.train_state.params, x=instr_x,
                                                              return_text_embed=True,
-                                                             return_state_embed=True if config.multimodal_condition else False,
-                                                             return_sketch_embed=True if config.multimodal_condition else False)
+                                                             return_state_embed=True if config.multimodal_condition else False
+                                                                                   )
 
                     if config.multimodal_condition:
                         embedding = jnp.concatenate([embedding_t, embedding_s, embedding_k], axis=0)
@@ -533,7 +528,7 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
 
 
                 # Squash the gpu dimension (network only takes one batch dimension)
-                pi, value, _, _ , _, _ = network.apply(train_state.params, last_obs, rng=_rng, return_text_embed=False, return_state_embed=False, return_sketch_embed=False)
+                pi, value, _, _ , _, _ = network.apply(train_state.params, last_obs, rng=_rng, return_text_embed=False, return_state_embed=False)
 
                 rng, _rng = jax.random.split(rng)
                 action = pi.sample(seed=_rng)
@@ -601,7 +596,7 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
                 runner_state.rng,
             )
 
-            _, last_val, _, _, _, _ = network.apply(train_state.params, last_obs, return_text_embed=False, return_state_embed=False, return_sketch_embed=False)
+            _, last_val, _, _, _, _ = network.apply(train_state.params, last_obs, return_text_embed=False, return_state_embed=False)
 
             def _calculate_gae(traj_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
@@ -637,7 +632,7 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
                         # RERUN NETWORK
                         # obs = traj_batch.obs[None]
 
-                        pi, value, _, _, _, _ = network.apply(params, traj_batch.obs, return_text_embed=False, return_state_embed=False, return_sketch_embed=False)
+                        pi, value, _, _, _, _ = network.apply(params, traj_batch.obs, return_text_embed=False, return_state_embed=False)
                         # action = traj_batch.action.reshape(pi.logits.shape[:-1])
                         log_prob = pi.log_prob(traj_batch.action)
 
@@ -793,7 +788,7 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params):
                     rng, _rng = jax.random.split(rng)
                     # Squash the gpu dimension (network only takes one batch dimension)
 
-                    pi, value, _, _, _, _ = network.apply(train_state.params, last_obs, return_text_embed=False, return_state_embed=False, return_sketch_embed=False)
+                    pi, value, _, _, _, _ = network.apply(train_state.params, last_obs, return_text_embed=False, return_state_embed=False)
                     action = pi.sample(seed=_rng)
                     log_prob = pi.log_prob(action)
 

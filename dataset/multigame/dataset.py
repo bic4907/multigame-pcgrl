@@ -227,8 +227,8 @@ class MultiGameDataset:
                 self._pokemon_handler = POKEMONHandler(root=pokemon_root, handler_config=self._handler_config)
                 # POKEMON은 로드 전에 필터링 적용 (패딩 전 10x10 기반 + 패딩 후 tileset 필터링)
                 valid_ids, filtered_ratio, filtered_count = self._pokemon_handler.list_entries_with_filtering(
-                    max_tile_ratio=self._handler_config.filtering.max_tile_ratio,
-                    max_tile_count=250
+                    max_tile_ratio=self._handler_config.pokemon.max_tile_ratio,
+                    max_tile_count=self._handler_config.pokemon.max_tile_count
                 )
                 for i, source_id in enumerate(valid_ids):
                     sample = self._pokemon_handler.load_sample(source_id)
@@ -239,10 +239,9 @@ class MultiGameDataset:
                 if total_filtered > 0:
                     total_pokemon = len(valid_ids) + total_filtered
                     print(f"[MultiGameDataset] POKEMON: Filtered {total_pokemon} → {len(valid_ids)} samples "
-                          f"({total_filtered} removed, max_tile_ratio={self._handler_config.filtering.max_tile_ratio})")
+                          f"({total_filtered} removed, max_tile_ratio={self._handler_config.pokemon.max_tile_ratio})")
             except (FileNotFoundError, ValueError) as e:
                 print(f"Warning: Could not load FDM dataset: {e}")
-
         # ── DOOM 로드 ────────────────────────────────────────────────────────
         if include_doom:
             if Path(doom_root).exists():
@@ -279,14 +278,13 @@ class MultiGameDataset:
 
 
         # ── POKEMON 패딩 후 필터링 (타일셋 기준: 256개 중 250개 이상) ──────────────────
-        if self._handler_config.filtering.enabled:
+        if self._handler_config.pokemon.enabled:
             self._apply_pokemon_tileset_filtering()
 
 
 
-
-        # ── instruction 단어 수 기반 필터링 (패딩 후) ────────────────────────
-        if self._handler_config.filtering.enabled:
+        # ── instruction 단어 수 기반 필터링 (패딩 후) ────────────────────────────
+        if self._handler_config.pokemon.enabled:
             self._apply_instruction_filtering()
 
         # ── 데이터 증강: 시계방향 90도 회전 (게임별 설정) ────────────────────────
@@ -335,13 +333,13 @@ class MultiGameDataset:
         # instruction이 있는 샘플만 필터링 (instruction이 없는 샘플은 유지)
         self._samples = [
             s for s in self._samples
-            if s.instruction is None or len(s.instruction.split()) >= self._handler_config.filtering.min_instruction_words
+            if s.instruction is None or len(s.instruction.split()) >= self._handler_config.pokemon.min_instruction_words
         ]
 
         filtered_count = original_count - len(self._samples)
         if filtered_count > 0:
             print(f"[MultiGameDataset] Instruction filtering: {original_count} → {len(self._samples)} samples "
-                  f"({filtered_count} removed, min_words={self._handler_config.filtering.min_instruction_words})")
+                  f"({filtered_count} removed, min_words={self._handler_config.pokemon.min_instruction_words})")
 
     def _apply_pokemon_tileset_filtering(self) -> None:
         """
@@ -572,7 +570,7 @@ class MultiGameDataset:
         apply_filter : bool
             True이면 필터링 적용, False이면 원본 유지
         """
-        if not apply_filter or not self._handler_config.filtering.enabled:
+        if not apply_filter or not self._handler_config.pokemon.enabled:
             return
 
         self._apply_instruction_filtering()

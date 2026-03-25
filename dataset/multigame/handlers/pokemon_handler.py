@@ -25,9 +25,13 @@ POKEMON_PALETTE: Dict[int, tuple[int, int, int]] = {
     3:  (220, 50,  50),   # enemy   – 빨강
     4:  (255, 215, 0),    # object  – 금색
     5:  (0,   200, 0),    # spawn   – 초록색
-    6:  (220, 100, 20),   # hazard  – 주황색
+    6:  (100, 100, 255),   # hazard  – 주황색
+    7:  (150, 75,  0),    # fence   – 갈색
+    8:  (34,  139, 34),   # tree    – 숲 녹색
+    9:  (250, 175, 100),    # house   – 빨강 (집)
     99: (255, 0,   255),  # unknown – 분홍색 (오류)
 }
+
 
 
 class POKEMONHandler(BaseGameHandler):
@@ -107,28 +111,35 @@ class POKEMONHandler(BaseGameHandler):
             source_id=source_id,
             instruction=instruction,
         )
-
         if order is not None:
             sample.order = order
 
         return sample
 
-    def list_entries_with_filtering(self, max_tile_ratio: float = 0.95, max_tile_count: int = 250) -> tuple[List[str], int, int]:
+    def list_entries_with_filtering(self, max_tile_ratio: Optional[float] = None, max_tile_count: Optional[int] = None) -> tuple[List[str], int, int]:
         """
         필터링을 적용하여 유효한 엔트리만 반환.
         
         Parameters
         ----------
-        max_tile_ratio : float
+        max_tile_ratio : Optional[float]
             한 타일이 차지할 수 있는 최대 비율 (패딩 전 10x10)
-        max_tile_count : int
+            None이면 config에서 가져옴
+        max_tile_count : Optional[int]
             패딩 후 16x16에서 한 타일이 차지할 수 있는 최대 개수
+            None이면 config에서 가져옴
         
         Returns
         -------
         tuple[List[str], int, int]
             (유효한 source_id 목록, max_tile_ratio로 제거된 개수, max_tile_count로 제거된 개수)
         """
+        # config에서 기본값 가져오기
+        if max_tile_ratio is None:
+            max_tile_ratio = self._handler_config.pokemon.max_tile_ratio if self._handler_config else 1.0
+        if max_tile_count is None:
+            max_tile_count = self._handler_config.pokemon.max_tile_count if self._handler_config else 256
+        
         valid_ids = []
         filtered_by_ratio = 0
         filtered_by_count = 0
@@ -160,14 +171,12 @@ class POKEMONHandler(BaseGameHandler):
             tile_counts = {}
             for val in padded_map.flatten():
                 tile_counts[val] = tile_counts.get(val, 0) + 1
-            
             max_count = max(tile_counts.values()) if tile_counts else 0
             if max_count >= max_tile_count:
                 filtered_by_count += 1
                 continue
             
             valid_ids.append(f"pokemon_{i:04d}")
-            
             # max_samples 도달 확인
             if len(valid_ids) >= max_samples:
                 break

@@ -13,14 +13,16 @@ from ...base import BasePreprocessor, TileLegend, enforce_top_left_16x16, GameSa
 
 
 class POKEMONTile:
-    """POKEMON 타일 ID (DoomTile과 동일한 매핑 사용)"""
     EMPTY   = 0
-    WALL    = 1
+    #WALL    = 1
     FLOOR   = 2
     ENEMY   = 3
     OBJECT  = 4
     SPAWN   = 5
     HAZARD  = 6
+    FENCE   = 7
+    TREE    = 8
+    HOUSE   = 9
     UNKNOWN = 99
 
 
@@ -34,12 +36,12 @@ POKEMON_TILESET_MAPPING = {
     6: POKEMONTile.FLOOR,
     7: POKEMONTile.OBJECT,
     8: POKEMONTile.OBJECT,
-    9: POKEMONTile.SPAWN,
-    10: POKEMONTile.WALL,
+    9: POKEMONTile.FENCE,
+    10: POKEMONTile.TREE,
     11: POKEMONTile.HAZARD,
-    12: POKEMONTile.WALL,
+    12: POKEMONTile.HOUSE,
     13: POKEMONTile.SPAWN,
-    14: POKEMONTile.WALL,
+    14: POKEMONTile.HOUSE,
     15: POKEMONTile.OBJECT,
 }
 
@@ -54,6 +56,9 @@ def make_legend() -> TileLegend:
         "4": ["object", "collectible"],
         "5": ["spawn", "interactive"],
         "6": ["hazard", "damaging"],
+        "7": ["hazard", "blocked"],
+        "8": ["solid", "Tree"],
+        "9": ["solid", "House"],
     }
     return TileLegend(char_to_attrs=attrs)
 

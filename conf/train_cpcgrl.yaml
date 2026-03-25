@@ -1,0 +1,10 @@
+defaults:
+  - cpcgrl
+  - _self_
+
+render_freq: -1
+
+hydra:
+  sweeper:
+    params: {}
+

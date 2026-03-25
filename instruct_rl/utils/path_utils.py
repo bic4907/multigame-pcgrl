@@ -40,6 +40,19 @@ def is_default_hiddims(config: Config):
 def get_exp_group(config):
     if config.env_name == 'PCGRL':
 
+        # ── MultiGameDataset 기반 CPCGRL 모드 ──
+        if hasattr(config, 'dataset_game') and config.dataset_game is not None:
+            config_dict = {
+                'model': config.model,
+                'exp': config.exp_name,
+                'game': config.dataset_game,
+            }
+            if hasattr(config, 'dataset_reward_enum') and config.dataset_reward_enum is not None:
+                config_dict['re'] = config.dataset_reward_enum
+            exp_group = '_'.join([f'{key}-{value}' for key, value in config_dict.items()])
+            exp_group += '_vec_ro'
+            return exp_group
+
         if config.use_nlp or config.vec_cont or config.use_clip:
             nlp_dict = {
                 'embed': config.embed_type,
@@ -161,7 +174,27 @@ def get_exp_dir(config):
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
-    if config.aug_type is not None and config.embed_type is not None and config.instruct is not None:
+    # ── MultiGameDataset 기반 CPCGRL 모드 ──────────────────────────────────
+    if hasattr(config, 'dataset_game') and config.dataset_game is not None:
+        # CPCGRL 모드 강제
+        config.vec_cont = True
+        config.raw_obs = True
+        config.use_nlp = False
+        config.use_clip = False
+        config.vec_input_dim = 9
+        config.nlp_input_dim = 0
+        # instruct_csv는 사용하지 않음
+        config.instruct_csv = None
+        print(f"[CPCGRL] dataset_game={config.dataset_game}, "
+              f"dataset_reward_enum={getattr(config, 'dataset_reward_enum', None)}")
+
+        if config.vec_cont is True and config.model != 'contconv':
+            config.model = 'contconv'
+            print("[CPCGRL] Setting model to `contconv` due to the vec_cont flag")
+
+        # exp_dir 등 공통 설정은 아래에서 계속 처리
+
+    elif config.aug_type is not None and config.embed_type is not None and config.instruct is not None:
         config.instruct_csv = f'{config.aug_type}/{config.embed_type}/{config.instruct}'
 
     if config.use_sim_reward == False and config.only_sim_reward == True:

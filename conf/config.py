@@ -22,7 +22,7 @@ class Config:
     activation: str = "relu"
     env_name: str = "PCGRL"
     ANNEAL_LR: bool = False
-    DEBUG: bool = True
+    DEBUG: bool = False
     exp_name: str = "def"
     seed: int = 0
 
@@ -131,6 +131,11 @@ class Config:
 
     instruct_csv: Optional[str] = None
 
+    # MultiGameDataset-based filtering (for CPCGRL)
+    dataset_game: Optional[str] = None          # e.g. "dungeon", "pokemon", "doom"
+    dataset_reward_enum: Optional[int] = None   # e.g. 1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction
+    dataset_train_ratio: float = 0.8
+
 @dataclass
 class CLIPConfig:
     freeze_text_enc: bool = True
@@ -221,6 +226,46 @@ class TrainConfig(Config):
 
     multimodal_condition: bool = False  # use multimodal condition
     human_demo_path: str = './human_dataset'
+
+
+@dataclass
+class CPCGRLConfig(TrainConfig):
+    """Conditional PCGRL (CPCGRL) 전용 config.
+
+    MultiGameDataset 기반으로 동작하며,
+    vec_cont=True, raw_obs=True 가 강제됩니다.
+    """
+    # ── CPCGRL 전용 기본값 ──────────────────────────────────
+    problem: str = "multigame"
+    dataset_game: Optional[str] = "dungeon"
+    dataset_reward_enum: Optional[int] = 1        # 1=region
+    dataset_train_ratio: float = 0.8
+
+    # CPCGRL 모드 강제
+    vec_cont: bool = True
+    raw_obs: bool = True
+    model: str = "contconv"
+    use_nlp: bool = False
+    use_clip: bool = False
+    vec_input_dim: Optional[int] = 9
+    nlp_input_dim: int = 0
+
+    # instruct CSV 비활성화
+    instruct: Optional[str] = None
+    instruct_csv: Optional[str] = None
+    aug_type: str = "sub_condition"
+    embed_type: str = "bert"
+
+    # encoder 비활성화
+    encoder: EncoderConfig = field(default_factory=EncoderConfig)
+
+    # sim reward 비활성화 (CPCGRL은 condition reward만 사용)
+    use_sim_reward: bool = False
+    only_sim_reward: bool = False
+    human_demo: bool = False
+
+    # wandb
+    wandb_project: Optional[str] = "cpcgrl"
 
 
 @dataclass
@@ -635,6 +680,7 @@ cs.store(name="ma_config", node=MultiAgentConfig)
 cs.store(name="enjoy_ma_pcgrl", node=EnjoyMultiAgentConfig)
 cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
+cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="debug_pcgrl", node=DebugConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)

@@ -195,7 +195,7 @@ class Dungeon3Problem(Problem):
         expanded_onehot = jax.lax.cond(
             jnp.equal(onehot_cond[0], -1),
             lambda _: jnp.zeros((4,)),
-            lambda _: to_onehot(onehot_cond[0]),
+            lambda _: to_onehot(onehot_cond[0].astype(jnp.int32)),
             operand=None
         )
 

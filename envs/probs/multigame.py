@@ -33,11 +33,13 @@ from __future__ import annotations
 
 import json
 from enum import IntEnum
+from functools import partial
 from pathlib import Path
 from typing import Optional, Tuple
 
 import chex
 from flax import struct
+import jax
 import jax.numpy as jnp
 import numpy as np
 from PIL import Image
@@ -190,6 +192,38 @@ class MultigameProblem(Problem):
     def draw_path(self, lvl_img, env_map, border_size, path_coords_tpl, tile_size):
         """경로 없음 → 이미지 그대로 반환."""
         return lvl_img
+
+    @partial(jax.jit, static_argnums=(0, 3))
+    def get_cont_obs(self, env_map, condition, raw_obs: bool = False) -> jnp.array:
+        """CPCGRL condition → observation 변환.
+
+        multigame은 게임별 통계를 계산하지 않으므로,
+        condition[:4] 값을 그대로 obs로 전달하고,
+        condition[4]는 one-hot으로 변환하여 concat한다.
+        총 output shape: (8,)  — Dungeon3Problem.get_cont_obs 와 동일.
+        """
+        _condition = condition[:4]
+        mask = jnp.not_equal(_condition, -1).astype(jnp.float32)
+
+        # raw_obs 모드: condition 값 그대로 사용
+        # non-raw_obs 모드: 통계가 없으므로 역시 condition 값 그대로
+        obs = jnp.where(mask == 1, _condition, 0.0)
+
+        # condition[4]: one-hot 인코딩 (bat_direction 등)
+        onehot_cond = condition[4:5]
+
+        def to_onehot(index, num_classes=4):
+            return jnp.eye(num_classes)[index]
+
+        expanded_onehot = jax.lax.cond(
+            jnp.equal(onehot_cond[0], -1),
+            lambda _: jnp.zeros((4,)),
+            lambda _: to_onehot(onehot_cond[0].astype(jnp.int32)),
+            operand=None,
+        )
+
+        obs = jnp.concatenate((obs, expanded_onehot), axis=-1)
+        return obs
 
     def init_graphics(self):
         """tile_mapping.json 의 _category_tile_images 를 읽어 타일 이미지를 초기화한다.

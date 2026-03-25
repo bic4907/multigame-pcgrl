@@ -14,12 +14,12 @@ from ...base import BasePreprocessor, TileLegend, enforce_top_left_16x16, GameSa
 
 class POKEMONTile:
     EMPTY   = 0
-    #WALL    = 1
+    WALL    = 1
     FLOOR   = 2
     ENEMY   = 3
     OBJECT  = 4
     SPAWN   = 5
-    HAZARD  = 6
+    WATER   = 6
     FENCE   = 7
     TREE    = 8
     HOUSE   = 9
@@ -38,7 +38,7 @@ POKEMON_TILESET_MAPPING = {
     8: POKEMONTile.OBJECT,
     9: POKEMONTile.FENCE,
     10: POKEMONTile.TREE,
-    11: POKEMONTile.HAZARD,
+    11: POKEMONTile.WATER,
     12: POKEMONTile.HOUSE,
     13: POKEMONTile.SPAWN,
     14: POKEMONTile.HOUSE,
@@ -114,12 +114,54 @@ class POKEMONPreprocessor(BasePreprocessor):
         return result
 
     def pad_to_16x16(self, map_10x10: np.ndarray) -> np.ndarray:
-        """10x10 맵을 16x16으로 확장."""
+        """
+        10x10 맵을 16x16으로 확장.
+        
+        패딩 방식:
+        - 원래 맵의 타일 중 empty(0), floor(2), water(6), tree(8)는 유지
+        - 나머지는 모두 floor(2)로 변환
+        """
+        # 먼저 edge padding으로 패딩
         padded = np.pad(
             map_10x10,
             pad_width=((3, 3), (3, 3)),
             mode='edge'
         )
+        
+        # 유지할 타일 정의
+        keep_tiles = {0, 2, 6, 8}  # empty, floor, water, tree
+        
+        # 패딩된 부분에서 keep_tiles에 없는 타일을 floor(2)로 변환
+        # 패딩된 부분: 
+        # - 상단: padded[0:3, :]
+        # - 하단: padded[13:16, :]
+        # - 좌측: padded[:, 0:3]
+        # - 우측: padded[:, 13:16]
+        
+        # 상단 패딩 (3행)
+        for i in range(3):
+            for j in range(16):
+                if padded[i, j] not in keep_tiles:
+                    padded[i, j] = POKEMONTile.FLOOR
+        
+        # 하단 패딩 (3행)
+        for i in range(13, 16):
+            for j in range(16):
+                if padded[i, j] not in keep_tiles:
+                    padded[i, j] = POKEMONTile.FLOOR
+        
+        # 좌측 패딩 (3열)
+        for i in range(16):
+            for j in range(3):
+                if padded[i, j] not in keep_tiles:
+                    padded[i, j] = POKEMONTile.FLOOR
+        
+        # 우측 패딩 (3열)
+        for i in range(16):
+            for j in range(13, 16):
+                if padded[i, j] not in keep_tiles:
+                    padded[i, j] = POKEMONTile.FLOOR
+        
         return padded
 
     def process_pokemon_sample(

@@ -104,14 +104,20 @@ class DoomPreprocessor(BasePreprocessor):
         VGLCGameHandler._discover()에서 호출됨.
         """
         # 설정 체크
-        if not hasattr(config, 'doom_slicing') or not config.doom_slicing.enabled:
+        if not hasattr(config, 'doom') or not config.doom.enabled:
             return [str(p) for p in files]
 
-        empty_max = config.doom_slicing.empty_max
-        floor_empty_max = config.doom_slicing.floor_empty_max
+        empty_max = config.doom.empty_max
+        floor_empty_max = config.doom.floor_empty_max
+        event_count_min = getattr(config.doom, 'event_count_min', 1)
+        max_samples = getattr(config.doom, 'max_samples', 1000)
 
         entries = []
         for txt_path in files:
+            # max_samples 도달 확인
+            if len(entries) >= max_samples:
+                break
+            
             text = txt_path.read_text(encoding='utf-8', errors='replace')
             char_grid = self.parse_txt(text)
             
@@ -119,9 +125,14 @@ class DoomPreprocessor(BasePreprocessor):
                 char_grid,
                 empty_max=empty_max,
                 floor_empty_max=floor_empty_max,
+                event_count_min=event_count_min,
             )
             
             for idx, sliced_data in enumerate(sliced):
+                # max_samples 도달 확인
+                if len(entries) >= max_samples:
+                    break
+                
                 source_id = f"{str(txt_path)}|{idx}"
                 entries.append(source_id)
 
@@ -148,6 +159,7 @@ class DoomPreprocessor(BasePreprocessor):
                         'col_start': sliced_data['col_start'],
                         'empty_count': sliced_data['empty_count'],
                         'floor_count': sliced_data['floor_count'],
+                        'event_count': sliced_data['event_count'],
                     }
                 )
         return entries
@@ -157,6 +169,7 @@ class DoomPreprocessor(BasePreprocessor):
         char_grid: List[List[str]],
         empty_max: int = 128,
         floor_empty_max: int = 239,
+        event_count_min: int = 1,
     ) -> List[Dict[str, Any]]:
         """
         큰 맵을 16x16 작은 맵들로 슬라이싱
@@ -164,7 +177,7 @@ class DoomPreprocessor(BasePreprocessor):
         규칙:
         1. 세로: 16줄씩 탐색
         2. 가로: 16칸씩 이동하며 유효성 체크. 유효한 맵만 추가
-        3. 유효성: empty("-") <= empty_max AND floor+empty <= floor_empty_max 인 경우만 추가
+        3. 유효성: empty("-") <= empty_max AND floor+empty <= floor_empty_max AND event_count >= event_count_min 인 경우만 추가
         
         Parameters
         ----------
@@ -174,9 +187,8 @@ class DoomPreprocessor(BasePreprocessor):
             유효한 맵의 최대 empty 타일 개수
         floor_empty_max : int
             유효한 맵의 floor+empty 합의 최대값
-            유효한 맵의 최대 empty 타일 개수
-        floor_empty_max : int
-            유효한 맵의 floor+empty 합의 최대값
+        event_count_min : int
+            유효한 맵의 enemy+object 합의 최솟값 (기본값: 1)
         
         Returns
         -------
@@ -187,6 +199,7 @@ class DoomPreprocessor(BasePreprocessor):
                 'col_start': 시작 열,
                 'empty_count': empty 타일 개수,
                 'floor_count': floor 타일 개수,
+                'event_count': enemy+object 타일 개수,
             }
         """
         if not char_grid:
@@ -225,17 +238,22 @@ class DoomPreprocessor(BasePreprocessor):
                 while len(map_16x16) < 16:
                     map_16x16.append(['-'] * 16)
                 
-                # 유효성 체크 (empty_max와 floor+empty <= floor_empty_max 확인)
+                # 유효성 체크 (empty_max, floor+empty, event_count 확인)
                 empty_count = sum(1 for r in map_16x16 for cell in r if cell == '-')
                 floor_count = sum(1 for r in map_16x16 for cell in r if cell in '.,:')
+                # event_count: enemy(E) + object(W,A,H,B,K) 합산
+                event_count = sum(1 for r in map_16x16 for cell in r if cell in 'EWAHBK')
                 
-                if empty_count <= empty_max and floor_count + empty_count <= floor_empty_max:
+                if (empty_count <= empty_max and 
+                    floor_count + empty_count <= floor_empty_max and
+                    event_count >= event_count_min):
                     sliced_maps.append({
                         'map': map_16x16,
                         'row_start': row,
                         'col_start': col,
                         'empty_count': empty_count,
                         'floor_count': floor_count,
+                        'event_count': event_count,
                     })
                 
                 # 다음 위치: 16칸 뛰어넘기

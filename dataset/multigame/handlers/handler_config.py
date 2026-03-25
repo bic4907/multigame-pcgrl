@@ -12,19 +12,21 @@ from typing import Dict, Any, Optional
 
 
 @dataclass
-class DoomSlicingConfig:
-    """Doom 게임 슬라이싱 설정"""
+class DoomConfig:
+    """Doom 게임 설정"""
     enabled: bool = True
-    empty_max: int = 144
-    floor_empty_max: int = 239
-
+    empty_max: int = 64
+    floor_empty_max: int = 235
+    event_count_min: int = 1
+    rotate_90: bool = False
+    max_samples: int = 1000
 
 @dataclass
 class FilteringConfig:
     """데이터셋 필터링 설정"""
     enabled: bool = True
     min_instruction_words: int = 2  # instruction이 이 이상의 단어 수를 가져야 함
-    max_tile_ratio: float = 0.95  # 한 타일이 차지하는 최대 비율 (0~1). 이상이면 제외. 예: 0.95 = 100개 중 95개 이상
+    max_tile_ratio: float = 0.9  # 한 타일이 차지하는 최대 비율 (0~1). 이상이면 제외. 예: 0.95 = 100개 중 95개 이상
 
 
 @dataclass
@@ -43,6 +45,7 @@ class VGLCGameConfig:
 class ZeldaConfig(VGLCGameConfig):
     """Zelda 게임 설정"""
     rotate_90: bool = False  # 시계방향 90도 회전 증강
+    max_samples: int = 1000
 
 
 @dataclass
@@ -73,24 +76,19 @@ class MegaManConfig(VGLCGameConfig):
 class DungeonConfig:
     """Dungeon Level Dataset 설정"""
     rotate_90: bool = False  # 시계방향 90도 회전 증강
+    max_samples: int = 10000
 
 
 @dataclass
 class POKEMONConfig:
     """Five-Dollar-Model (POKEMON) 게임 설정"""
-    rotate_90: bool =True  # 시계방향 90도 회전 증강
-
-
-@dataclass
-class DoomConfig:
-    """DOOM 게임 설정"""
-    rotate_90: bool = False  # 시계방향 90도 회전 증강
+    rotate_90: bool = True  # 시계방향 90도 회전 증강
+    max_samples: int = 1000
 
 
 @dataclass
 class HandlerConfig:
     """모든 핸들러의 통합 설정"""
-    doom_slicing: DoomSlicingConfig = field(default_factory=DoomSlicingConfig)
     filtering: FilteringConfig = field(default_factory=FilteringConfig)
     augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
     zelda: ZeldaConfig = field(default_factory=ZeldaConfig)
@@ -105,7 +103,6 @@ class HandlerConfig:
     def to_dict(self) -> Dict[str, Any]:
         """설정을 딕셔너리로 변환"""
         return {
-            'doom_slicing': asdict(self.doom_slicing),
             'filtering': asdict(self.filtering),
             'augmentation': asdict(self.augmentation),
             'zelda': asdict(self.zelda),
@@ -118,19 +115,6 @@ class HandlerConfig:
             'doom': asdict(self.doom),
         }
 
-    def update_doom_slicing(
-        self,
-        enabled: Optional[bool] = None,
-        empty_max: Optional[int] = None,
-        floor_empty_max: Optional[int] = None,
-    ) -> None:
-        """Doom 슬라이싱 설정 업데이트"""
-        if enabled is not None:
-            self.doom_slicing.enabled = enabled
-        if empty_max is not None:
-            self.doom_slicing.empty_max = empty_max
-        if floor_empty_max is not None:
-            self.doom_slicing.floor_empty_max = floor_empty_max
 
     def update_filtering(
         self,

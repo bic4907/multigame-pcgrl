@@ -65,6 +65,11 @@ class CLIPDatasetBuilder:
         self.max_len = max_len
         self.train_ratio = train_ratio
 
+        # Create game_name to index mapping
+        unique_games = sorted(set([s.game for s in self.paired_data._samples]))
+        self.game2idx = {game: idx for idx, game in enumerate(unique_games)}
+        self.idx2game = {idx: game for game, idx in self.game2idx.items()}
+
         self.dataset = self._build_dataset()
 
     def get_dataset(self) -> CLIPDataset:
@@ -100,8 +105,37 @@ class CLIPDatasetBuilder:
 
         language_inst_list = [s.instruction for s in samples]
 
-        # Extract reward_cond from meta field of each sample
-        reward_cond = np.array([s.meta.get("reward_cond", 0.0) for s in samples])
+        # Extract reward annotation (game_name, reward_enum, conditions) combination
+        reward_cond_list = []
+        for s in samples:
+            game_idx = self.game2idx.get(s.game, -1)  # Get game index
+            reward_enum = s.meta.get("reward_enum", None)
+            conditions = s.meta.get("conditions", {})  # e.g. {2: 40.0}
+            # Extract value from conditions dict (e.g., 40.0 from {2: 40.0})
+            condition_value = list(conditions.values())[0] if conditions else None
+            # Create tuple: (game_idx, reward_enum, condition_value)
+            reward_cond_tuple = (game_idx, int(reward_enum), condition_value)
+            reward_cond_list.append(reward_cond_tuple)
+
+        # Generate class_id based on unique (game_name, reward_enum, conditions) combinations
+        unique_reward_cond = sorted(set(reward_cond_list))
+        reward_cond2class_id = {rc: idx for idx, rc in enumerate(unique_reward_cond)}
+        class_ids = np.array([reward_cond2class_id[rc] for rc in reward_cond_list])
+
+        # Store the mapping for reference
+        self.reward_cond2class_id = reward_cond2class_id
+        self.class_id2reward_cond = {v: k for k, v in reward_cond2class_id.items()}
+
+        # Keep reward_cond as structured data
+        reward_cond = np.array([
+            {
+                "game_idx": rc[0],
+                "game_name": self.idx2game.get(rc[0], "unknown"),
+                "reward_enum": rc[1],
+                "condition_value": rc[2]
+            }
+            for rc in reward_cond_list
+        ], dtype=object)
 
         # Language instruction tokenization
         tokenized_instrs = self.processor(
@@ -126,7 +160,7 @@ class CLIPDatasetBuilder:
 
         return {
             "game_type":            games_type,
-            "class_ids":            game_ids,
+            "class_ids":            class_ids,
             "reward_cond":          reward_cond,
             "language_inst":        language_inst_list,
             "input_ids":            inst_input_ids,
@@ -147,6 +181,7 @@ class CLIPDatasetBuilder:
 
         train_dataset = CLIPDataset(
             class_ids=self.dataset.class_ids[train_mask],
+            reward_cond=self.dataset.reward_cond[train_mask],
             input_ids=self.dataset.input_ids[train_mask],
             attention_masks=self.dataset.attention_masks[train_mask],
             pixel_values=self.dataset.pixel_values[train_mask],
@@ -154,6 +189,7 @@ class CLIPDatasetBuilder:
         )
         test_dataset = CLIPDataset(
             class_ids=self.dataset.class_ids[test_mask],
+            reward_cond=self.dataset.reward_cond[test_mask],
             input_ids=self.dataset.input_ids[test_mask],
             attention_masks=self.dataset.attention_masks[test_mask],
             pixel_values=self.dataset.pixel_values[test_mask],
@@ -161,6 +197,14 @@ class CLIPDatasetBuilder:
         )
 
         return train_dataset, test_dataset
+
+    def get_class_id2reward_cond(self):
+        """
+        Get the mapping of class IDs to reward conditions.
+        Returns:
+            dict: Mapping of class IDs to reward conditions.
+        """
+        return self.class_id2reward_cond
 
 
 def create_clip_batch(dataset: CLIPDataset, batch_size: int, rng_key: jax.random.PRNGKey) -> CLIPContrastiveBatch:

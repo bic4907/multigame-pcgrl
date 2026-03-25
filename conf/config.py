@@ -105,7 +105,7 @@ class Config:
     initialize: Optional[bool] = None
 
     # Wandb
-    wandb_key: Optional[str] = "7abca172917546a3602b6ff1757ca40e10869186"
+    wandb_key: Optional[str] = None
     
     wandb_project: Optional[str] = 'instruct_pcgrl'
     wandb_entity: Optional[str] = 'st4889ha-gwangju-institute-of-science-and-technology'
@@ -217,7 +217,7 @@ class TrainConfig(Config):
     human_augment: bool = False
 
     multimodal_condition: bool = False  # use multimodal condition
-    human_demo_path: str = './ set'
+    human_demo_path: str = './human_dataset'
 
 
 @dataclass
@@ -583,7 +583,7 @@ class CLIPTrainConfig(Config):
     wandb_resume: str = 'allow'
     seed: int = 0
     
-    overwrite: bool = True
+    overwrite: bool = False
     ckpt_freq: int = int(5)
 
     # Goal img path

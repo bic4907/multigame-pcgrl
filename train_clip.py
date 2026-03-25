@@ -164,7 +164,8 @@ def make_train(config: CLIPTrainConfig):
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
-        
+        class_id2reward_cond = dataset_builder.get_class_id2reward_cond()
+
         n_train = len(train_clip_dataset.class_ids)
         n_test = len(test_clip_dataset.class_ids)
 
@@ -289,8 +290,8 @@ def make_train(config: CLIPTrainConfig):
  
             if (epoch + 1) % config.embed_visualize_freq == 0:
 
-                task_train_embed_paths = create_clip_embedding_figures(train_embed_queue, epoch, config, postfix='_train')
-                task_val_embed_paths = create_clip_embedding_figures(val_embed_queue, epoch, config, postfix='_val')
+                task_train_embed_paths = create_clip_embedding_figures(train_embed_queue, class_id2reward_cond, epoch, config, postfix='_train')
+                task_val_embed_paths = create_clip_embedding_figures(val_embed_queue, class_id2reward_cond, epoch, config, postfix='_val')
 
                 aux_dict = {
                     "train_tsne/embed_all": wandb.Image(task_train_embed_paths),

@@ -87,30 +87,65 @@ def create_embedding_figure(embed_queue, reward_df: pd.DataFrame, epoch, config,
     return fig_path
 
 
-def create_clip_embedding_figures(embed_queue, epoch, config, postfix=""):
+def create_clip_embedding_figures(embed_queue, class_id2reward_cond, epoch, config, postfix=""):
     # data set
     state_embeddings = np.array([e.state_embeddings for e in embed_queue])
     text_embeddings = np.array([e.text_embeddings for e in embed_queue])
-    class_ids = np.array([tuple(e.class_ids) if isinstance(e.class_ids, np.ndarray) else e.class_ids for e in embed_queue])
+    class_ids = np.array([e.class_ids for e in embed_queue])
 
     all_embeddings = np.concatenate([state_embeddings, text_embeddings], axis=0)
     modalities = np.array(["State"] * len(state_embeddings) + ["text"] * len(text_embeddings))
+
     class_ids = np.concatenate([class_ids, class_ids], axis=0)
 
-    # mapping
-    # ordered_games = {
-    #     1: "Dungeon",
-    #     2: "Sokoban",
-    #     3: "Pokemon",
-    #     4: "Zelda",
-    #     5: "Doom",
-    # }
-    ordered_games = {
+    # Extract reward_cond tuples from class_id2reward_cond mapping
+    # class_id2reward_cond should be a dictionary: {class_id_int: (game_idx, reward_enum, condition_value)}
+    reward_cond_tuples = []
+    for cid in class_ids:
+        # Ensure cid is a Python int, not numpy int
+        cid_int = int(cid)
+
+        # Handle both dict and other possible types
+        if isinstance(class_id2reward_cond, dict):
+            reward_cond_tuple = class_id2reward_cond.get(cid_int, None)
+        else:
+            print(f"Warning: class_id2reward_cond is not a dict, it's {type(class_id2reward_cond)}")
+            reward_cond_tuple = None
+
+        if reward_cond_tuple is not None:
+            reward_cond_tuples.append(reward_cond_tuple)
+        else:
+            reward_cond_tuples.append(None)
+
+    # Extract game indices from reward_cond tuples
+    # reward_cond tuple structure: (game_idx, reward_enum, condition_value)
+    game_indices = []
+    for rc_tuple in reward_cond_tuples:
+        if rc_tuple is not None and isinstance(rc_tuple, tuple) and len(rc_tuple) > 0:
+            game_idx = rc_tuple[0]  # First element is game_idx
+            game_indices.append(game_idx)
+        else:
+            game_indices.append(None)
+
+    # Mapping from game_idx to game_name
+    game_idx_mapping = {
         0: "Dungeon",
-        1: "Pokemon",
+        1: "Sokoban",
+        2: "Pokemon",
+        3: "Zelda",
+        4: "Doom",
     }
 
-    game_labels = [ordered_games.get(r, f"unknown-{r}") for r in class_ids]
+    # Convert game indices to game names, filter out None values
+    valid_indices = [i for i, g in enumerate(game_indices) if g is not None]
+    if len(valid_indices) == 0:
+        print("Warning: No valid game labels found")
+        return None
+
+    game_labels = [game_idx_mapping.get(game_indices[i], f"Game_{game_indices[i]}") for i in valid_indices]
+    all_embeddings = all_embeddings[valid_indices]
+    modalities_filtered = [modalities[i] for i in valid_indices]
+    modalities = np.array(modalities_filtered)
 
     game_color = {
         "Dungeon": "#e41a1c",
@@ -122,11 +157,13 @@ def create_clip_embedding_figures(embed_queue, epoch, config, postfix=""):
 
     save_dir = os.path.join(config.exp_dir, config.figure_dir)
     os.makedirs(save_dir, exist_ok=True)
+
     def compute_tsne_and_df(embeddings, game_labels, modalities):
         tsne = TSNE(n_components=2, random_state=42)
         tsne_embeds = tsne.fit_transform(embeddings)
         df = pd.DataFrame(tsne_embeds, columns=["tsne_x", "tsne_y"])
-        df["Game"] = pd.Categorical(game_labels, categories=list(ordered_games.values()), ordered=True)
+        unique_games = sorted(set(game_labels))
+        df["Game"] = pd.Categorical(game_labels, categories=unique_games, ordered=True)
         df["modality"] = modalities
         return df
 
@@ -160,7 +197,7 @@ def create_clip_embedding_figures(embed_queue, epoch, config, postfix=""):
         plt.close(fig)
         return path
     
-    # total tsnd+DF
+    # total tsne+DF
     tsne_df = compute_tsne_and_df(all_embeddings, game_labels, modalities)
 
     # graph 2: total + State/Text

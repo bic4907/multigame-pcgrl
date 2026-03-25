@@ -370,10 +370,8 @@ class EncoderCLIPConvForward(nn.Module):
                  input_ids = None,
                  attention_mask = None,
                  pixel_values = None,
-                 sketch_values = None,
                  return_text_embed:bool = True,
                  return_state_embed:bool = True,
-                 return_sketch_embed:bool = True,
                  training:bool = False):
         """
         return_embed: If True, return the CLIP embedding. If False, return the action and critic.
@@ -389,20 +387,14 @@ class EncoderCLIPConvForward(nn.Module):
             embed = jax.lax.stop_gradient(embed)
             return embed["state_embed"]
 
-        def sketch_embed_branch(sketch_values):
-            embed = self.encoder(sketch_values=sketch_values, mode='sketch', training=False)
-            embed = jax.lax.stop_gradient(embed)
-            return embed["sketch_embed"]
-
         text_data = (input_ids, attention_mask)
 
         text_embed = text_embed_branch(text_data) if return_text_embed else jnp.zeros((input_ids.shape[0], 64), jnp.float32)
         state_embed = state_embed_branch(pixel_values) if return_state_embed else jnp.zeros((input_ids.shape[0], 64), jnp.float32)
-        sketch_embed = sketch_embed_branch(sketch_values) if return_sketch_embed else jnp.zeros((input_ids.shape[0], 64), jnp.float32)
 
         act, critic = self.nlp_conv_forward(map_x, flat_x, nlp_x)
 
-        return act, critic, nlp_x, text_embed, state_embed, sketch_embed
+        return act, critic, nlp_x, text_embed, state_embed
     
 class SeqNCA(nn.Module):
     action_dim: Sequence[int]
@@ -583,7 +575,6 @@ class ActorCriticPCGRL(nn.Module):
                  rng=None,
                  return_text_embed:bool=True,
                  return_state_embed:bool=True,
-                 return_sketch_embed:bool=True,
                  training:bool=False):
         map_obs = x.map_obs
         ctrl_obs = x.flat_obs
@@ -591,21 +582,18 @@ class ActorCriticPCGRL(nn.Module):
         input_ids = x.input_ids
         attention_mask = x.attention_mask
         pixel_values = x.pixel_values
-        sketch_values = x.sketch_values
 
         ctrl_obs = ctrl_obs[:, :self.n_ctrl_metrics]
 
-        z_embed, text_embed, state_embed, sketch_embed = None, None, None, None
+        z_embed, text_embed, state_embed = None, None, None
         if self.model_type in ['nlpconv', 'nlpencconv', 'contconv']:
             act, val = self.subnet(map_obs, ctrl_obs, nlp_obs, rng)
         elif self.model_type in ['clipconv', 'cnnclipconv']:
-            act, val, z_embed, text_embed, state_embed, sketch_embed = self.subnet(map_obs, ctrl_obs, nlp_obs,
+            act, val, z_embed, text_embed, state_embed = self.subnet(map_obs, ctrl_obs, nlp_obs,
                                                                      input_ids, attention_mask,
                                                                      pixel_values,
-                                                                     sketch_values,
                                                                      return_text_embed,
                                                                      return_state_embed,
-                                                                     return_sketch_embed,
                                                                      training)
         else:
             act, val = self.subnet(map_obs, ctrl_obs)

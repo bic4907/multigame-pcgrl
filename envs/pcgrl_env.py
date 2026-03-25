@@ -98,8 +98,7 @@ class PCGRLObs:
     input_ids: chex.Array
     attention_mask: chex.Array
     pixel_values: chex.Array
-    sketch_values: chex.Array
-    
+
 
 @struct.dataclass
 class PCGRLEnvParams:
@@ -431,20 +430,18 @@ class PCGRLEnv(Environment):
         if self.nlp_input_dim > 0:
             nlp_obs = jnp.zeros(self.nlp_input_dim)
             obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=nlp_obs, input_ids=None,
-                           attention_mask=None, pixel_values=None, sketch_values=None)
+                           attention_mask=None, pixel_values=None)
         elif self.vec_input_dim > 0:
             vec_obs = jnp.zeros(8)
             obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=vec_obs,
-                           input_ids=None, attention_mask=None, pixel_values=None, sketch_values=None)
+                           input_ids=None, attention_mask=None, pixel_values=None)
         elif self.clip_input_channel > 0:
             nlp_obs = jnp.zeros(64)
             clip_input_ids = jnp.zeros((77), dtype=jnp.int32)
             clip_attention_mask = jnp.zeros((77), dtype=jnp.int32)
             clip_pixel_values = jnp.zeros((16, 16, self.clip_input_channel))
-            clip_sketch_values = jnp.zeros((244, 244, 1))
             obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=nlp_obs,
                            input_ids=clip_input_ids, attention_mask=clip_attention_mask, pixel_values=clip_pixel_values,
-                           sketch_values=clip_sketch_values
                            )
         else:
             obs = PCGRLObs(
@@ -457,7 +454,6 @@ class PCGRLEnv(Environment):
                 input_ids=None, 
                 attention_mask=None, 
                 pixel_values=None,
-                sketch_values=None,
             )
         return obs
 
@@ -575,11 +571,10 @@ class PCGRLEnv(Environment):
             clip_input_ids = jnp.zeros((1, 77), dtype=jnp.int32)
             clip_attention_mask = jnp.zeros((1, 77), dtype=jnp.int32)
             clip_pixel_values = jnp.zeros((1, 16, 16, env_params.clip_input_channel))
-            clip_sketch_values = jnp.zeros((1, 224, 224, 3))
             return PCGRLObs(map_x, map_x, ctrl_x, nlp_obs, clip_input_ids,
                             clip_attention_mask,
                             clip_pixel_values,
-                            clip_sketch_values)
+                            )
         else:
             return PCGRLObs(map_x, map_x, ctrl_x, jnp.zeros((1,)), None, None, None, None)
 

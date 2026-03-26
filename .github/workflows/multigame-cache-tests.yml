@@ -132,6 +132,7 @@ jobs:
             orbax-checkpoint \
             tensorboardX \
             wandb \
+            transformers \
             numpy pillow pytest pandas
 
       - name: Run CPCGRL config & dataset tests

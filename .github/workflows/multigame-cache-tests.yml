@@ -132,7 +132,7 @@ jobs:
             orbax-checkpoint \
             tensorboardX \
             wandb \
-            transformers \
+            "transformers<5" \
             numpy pillow pytest pandas
 
       - name: Run CPCGRL config & dataset tests

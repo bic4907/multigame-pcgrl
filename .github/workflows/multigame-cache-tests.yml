@@ -134,6 +134,7 @@ jobs:
             wandb \
             "transformers<5" \
             numpy pillow pytest pandas
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Run CPCGRL config & dataset tests
         run: |

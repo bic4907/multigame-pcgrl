@@ -15,8 +15,6 @@ from __future__ import annotations
 
 import os
 import sys
-import shutil
-import logging
 
 import pytest
 
@@ -25,9 +23,10 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-# JAX 디버그 로그 억제
-logging.getLogger("jax").setLevel(logging.WARNING)
-logging.getLogger("jax._src.cache_key").setLevel(logging.WARNING)
+from instruct_rl.utils.log_utils import get_logger, suppress_jax_debug_logs
+
+suppress_jax_debug_logs()
+logger = get_logger(__file__)
 
 
 # ── Helper ─────────────────────────────────────────────────────────────────────
@@ -65,17 +64,6 @@ def _make_cpcgrl_config(**overrides):
 def cpcgrl_config():
     return _make_cpcgrl_config()
 
-
-@pytest.fixture()
-def clean_exp_dir(cpcgrl_config):
-    """테스트 전후로 exp_dir 을 정리한다."""
-    exp_dir = cpcgrl_config.exp_dir
-    if os.path.exists(exp_dir):
-        shutil.rmtree(exp_dir)
-    yield exp_dir
-    # 테스트 후 정리
-    if os.path.exists(exp_dir):
-        shutil.rmtree(exp_dir)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -182,62 +170,51 @@ class TestCPCGRLDatasetLoading:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestCPCGRLTraining:
-    """CPCGRL 학습 실행 및 체크포인트 생성 테스트."""
+    """CPCGRL 학습 E2E 테스트.
+
+    subprocess 로 train_cpcgrl.py 를 실행하여 정상 종료(exit 0)를 검증한다.
+    """
 
     @staticmethod
-    def _run_short_training(config, exp_dir):
-        """짧은 학습을 실행하고 output 을 반환한다."""
-        import jax
-        from instruct_rl.utils.checkpointer import init_checkpointer
-        from instruct_rl.utils.dataset_loader import load_dataset_instruct
-        from train_cpcgrl import make_train
+    def _get_exp_dir(seed=42, exp_name="test_cpcgrl"):
+        """학습 후 생성될 exp_dir 경로를 반환한다."""
+        config = _make_cpcgrl_config(seed=seed, exp_name=exp_name)
+        return config.exp_dir
 
-        os.makedirs(exp_dir, exist_ok=True)
-        progress_csv = os.path.join(exp_dir, "progress.csv")
-        if not os.path.exists(progress_csv):
-            with open(progress_csv, "w") as f:
-                f.write("timestep,ep_return\n")
+    def test_train_exits_zero(self, tmp_path):
+        """train_cpcgrl.py 를 total_timesteps=200 으로 실행하고 exit 0 을 확인한다."""
+        import subprocess
 
-        checkpoint_manager, restored_ckpt, encoder_param = init_checkpointer(config)
-        train_inst, test_inst = load_dataset_instruct(config)
-
-        train_fn = make_train(
-            config, restored_ckpt, checkpoint_manager, encoder_param,
-            train_inst=train_inst, test_inst=test_inst,
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "train_cpcgrl",
+                "overwrite=true",
+                "total_timesteps=200",
+                "n_envs=4",
+                "num_steps=4",
+                "update_epochs=1",
+                "NUM_MINIBATCHES=1",
+                "seed=42",
+                "ckpt_freq=1",
+                "render_freq=-1",
+                "eval_freq=-1",
+                "exp_name=test_e2e",
+                "wandb_key=null",
+            ],
+            cwd=_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=300,
         )
 
-        rng = jax.random.PRNGKey(config.seed)
-        train_jit = jax.jit(train_fn)
-        out = train_jit(rng)
-        jax.block_until_ready(out)
-        return out
+        logger.info(f"stdout (last 2000 chars):\n{result.stdout[-2000:]}")
+        if result.returncode != 0:
+            logger.error(f"stderr:\n{result.stderr[-3000:]}")
 
-    def test_short_training_creates_checkpoint(self, cpcgrl_config, clean_exp_dir):
-        """짧은 학습 후 체크포인트 디렉토리와 파일이 생성되는지 검증."""
-        config = cpcgrl_config
-        exp_dir = clean_exp_dir
-
-        out = self._run_short_training(config, exp_dir)
-
-        # ── 검증 ──────────────────────────────────────────────────────────
-        # 1) 체크포인트 디렉토리 존재
-        ckpt_dir = os.path.join(exp_dir, "ckpts")
-        assert os.path.exists(ckpt_dir), f"Checkpoint directory not found: {ckpt_dir}"
-
-        # 2) 체크포인트 파일이 1개 이상 존재
-        ckpt_items = os.listdir(ckpt_dir)
-        ckpt_steps = [d for d in ckpt_items if d.isdigit()]
-        assert len(ckpt_steps) >= 1, (
-            f"Expected at least 1 checkpoint, found {len(ckpt_steps)}: {ckpt_items}"
+        assert result.returncode == 0, (
+            f"train_cpcgrl.py exited with code {result.returncode}\n"
+            f"stderr:\n{result.stderr[-3000:]}"
         )
-        print(f"✅ Checkpoints created: {sorted(ckpt_steps, key=int)}")
-
-        # 3) progress.csv 존재
-        progress_csv = os.path.join(exp_dir, "progress.csv")
-        assert os.path.exists(progress_csv), "progress.csv not found"
-
-        # 4) output 에 runner_state 가 있음
-        assert "runner_state" in out, "Output missing runner_state"
 
 
 

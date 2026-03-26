@@ -4,16 +4,15 @@ instruct_rl/utils/callbacks.py
 학습/평가 로그 콜백 함수 모음.
 train_cpcgrl.py 에서 분리.
 """
-import logging
-from os.path import basename
 from timeit import default_timer as timer
 
 import jax.numpy as jnp
 import pandas as pd
 
 from utils import render_callback
+from instruct_rl.utils.log_utils import get_logger
 
-logger = logging.getLogger(basename(__file__))
+logger = get_logger(__file__)
 
 
 def log_callback(metric, loss_mean, return_info, steps_prev_complete, config, writer, train_start_time):
@@ -57,13 +56,13 @@ def log_callback(metric, loss_mean, return_info, steps_prev_complete, config, wr
         # log metrics
         writer.log(metric, t)
 
-        print(
+        logger.info(
             f"[train] global step={t}; episodic return mean: {ep_return_mean:.02f}, "
-            + f"max: {ep_return_max:.02f}, min: {ep_return_min:.02f}, fps: {fps:.02f}, "
-            + f"loss: {loss_mean.total_loss:.02f}, "
-            + f"actor_loss: {loss_mean.actor_loss:.02f}, "
-            + f"value_loss: {loss_mean.value_loss:.02f}, "
-            + f"entropy: {loss_mean.entropy:.02f}"
+            f"max: {ep_return_max:.02f}, min: {ep_return_min:.02f}, fps: {fps:.02f}, "
+            f"loss: {loss_mean.total_loss:.02f}, "
+            f"actor_loss: {loss_mean.actor_loss:.02f}, "
+            f"value_loss: {loss_mean.value_loss:.02f}, "
+            f"entropy: {loss_mean.entropy:.02f}"
         )
 
 
@@ -121,9 +120,9 @@ def eval_callback(
             t=t,
         )
 
-        print(
+        logger.info(
             f"[eval] global step={t}; episodic return mean: {ep_return_mean} "
-            + f"max: {ep_return_max}, min: {ep_return_min}"
+            f"max: {ep_return_max}, min: {ep_return_min}"
         )
 
 
@@ -146,5 +145,32 @@ def loss_callback(metric, loss, config, writer):
 
         writer.log(dict_loss, t)
         dict_str = ", ".join([f"{k}: {v}" for k, v in dict_loss.items()])
-        print(f"[eval] global step={t}; loss: {dict_str}")
+        logger.info(f"[eval] global step={t}; loss: {dict_str}")
+
+
+def create_log_handler(config, handler_classes, train_start_time, steps_prev_complete):
+    """MultipleLoggingHandler 를 생성·초기화하고 반환한다.
+
+    Parameters
+    ----------
+    config : Config
+    handler_classes : list[type]
+        TensorBoardLoggingHandler, WandbLoggingHandler, CSVLoggingHandler 등.
+    train_start_time : float
+    steps_prev_complete : int
+
+    Returns
+    -------
+    MultipleLoggingHandler
+    """
+    from instruct_rl.utils.log_handler import MultipleLoggingHandler
+
+    handler = MultipleLoggingHandler(
+        config=config, handler_classes=handler_classes, logger=logger,
+    )
+    handler.set_start_time(train_start_time)
+    handler.set_steps_prev_complete(steps_prev_complete)
+    handler.add_text("Train/Config", f"```{str(config)}```")
+    return handler
+
 

@@ -1,10 +1,9 @@
 import os
-import logging
 import gymnax
 import jax
 from glob import glob
 import yaml
-from os.path import basename, abspath, join
+from os.path import abspath, join
 
 from encoder.model import apply_encoder_model
 from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder
@@ -15,10 +14,9 @@ from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
 from models import ActorCritic, ActorCriticPCGRL, AutoEncoder, ConvForward, ConvForward2, Dense, \
     NCA, SeqNCA, NLPConvForward, EncoderNLPConvForward, EncoderCLIPConvForward
 
+from instruct_rl.utils.log_utils import get_logger
 
-log_level = os.getenv('LOG_LEVEL', 'INFO').upper()  # Add the environment variable ;LOG_LEVEL=DEBUG
-logger = logging.getLogger(basename(__file__))
-logger.setLevel(getattr(logging, log_level, logging.INFO))
+logger = get_logger(__file__)
 
 
 def get_exp_dir_evo_map(config: EvoMapConfig):
@@ -185,12 +183,12 @@ def init_config(config: Config):
         config.nlp_input_dim = 0
         # instruct_csv는 사용하지 않음
         config.instruct_csv = None
-        print(f"[CPCGRL] dataset_game={config.dataset_game}, "
-              f"dataset_reward_enum={getattr(config, 'dataset_reward_enum', None)}")
+        logger.info(f"[CPCGRL] dataset_game={config.dataset_game}, "
+                    f"dataset_reward_enum={getattr(config, 'dataset_reward_enum', None)}")
 
         if config.vec_cont is True and config.model != 'contconv':
             config.model = 'contconv'
-            print("[CPCGRL] Setting model to `contconv` due to the vec_cont flag")
+            logger.info("[CPCGRL] Setting model to `contconv` due to the vec_cont flag")
 
         # exp_dir 등 공통 설정은 아래에서 계속 처리
 

@@ -4,7 +4,6 @@ instruct_rl/utils/checkpointer.py
 체크포인트 초기화 및 로딩 유틸.
 train_cpcgrl.py 에서 분리.
 """
-import logging
 import os
 from glob import glob
 from os.path import basename, join
@@ -22,6 +21,7 @@ from envs.pcgrl_env import (
     gen_dummy_queued_state,
     gen_dummy_queued_state_old,
 )
+from instruct_rl.utils.log_utils import get_logger
 from instruct_rl.utils.path_utils import (
     get_ckpt_dir,
     gymnax_pcgrl_make,
@@ -30,7 +30,7 @@ from instruct_rl.utils.path_utils import (
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from purejaxrl.structures import RunnerState
 
-logger = logging.getLogger(basename(__file__))
+logger = get_logger(__file__)
 
 
 def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
@@ -149,7 +149,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                     raise TypeError("Restored checkpoint is None")
                 break
             except TypeError as e:
-                print(
+                logger.warning(
                     f"Failed to load checkpoint at step {steps_prev_complete}. Error: {e}"
                 )
                 continue
@@ -201,7 +201,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                 break
 
             except TypeError as e:
-                logging.error(
+                logger.error(
                     f"Failed to load checkpoint at step {steps_prev_complete}. Error: {e}"
                 )
                 continue
@@ -209,4 +209,72 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
         enc_param = None
 
     return checkpoint_manager, restored_ckpt, enc_param
+
+
+# ── train_cpcgrl.py 에서 분리한 체크포인트 유틸 ─────────────────────────────
+
+
+def init_checkpoint_step(runner_state, checkpoint_manager):
+    """학습 시작 시 step=0 체크포인트를 저장한다. (jax.debug.callback 용)"""
+    ckpt = {"runner_state": runner_state, "step_i": 0}
+    ckpt = jax.device_get(ckpt)
+    checkpoint_manager.save(0, args=ocp.args.StandardSave(ckpt))
+
+
+def save_checkpoint_step(runner_state, info, steps_prev_complete,
+                         checkpoint_manager, config):
+    """에피소드 완료 시점 기준으로 체크포인트를 저장한다. (jax.debug.callback 용)"""
+    timesteps = info["timestep"][info["returned_episode"]] * config.n_envs
+
+    if len(timesteps) > 0:
+        t = timesteps[-1].item()
+        latest_ckpt_step = checkpoint_manager.latest_step()
+        if latest_ckpt_step is None or t - latest_ckpt_step >= config.ckpt_freq:
+            logger.info(f"Saving checkpoint at step {t}")
+            ckpt = {"runner_state": runner_state, "step_i": t}
+            ckpt = jax.device_get(ckpt)
+            checkpoint_manager.save(t, args=ocp.args.StandardSave(ckpt))
+
+
+def apply_encoder_params(runner_state, encoder_params, config):
+    """인코더 체크포인트 파라미터를 runner_state 에 적용하고 메모리 사용량을 로깅한다.
+
+    Parameters
+    ----------
+    runner_state : RunnerState
+    encoder_params : dict
+    config : Config
+
+    Returns
+    -------
+    runner_state : RunnerState (파라미터 주입 완료)
+    """
+    from flax.traverse_util import flatten_dict
+
+    logger.info(
+        f"Parameters loaded from encoder checkpoint ({config.encoder.ckpt_path})"
+    )
+    runner_state.train_state.params["params"]["subnet"]["encoder"] = encoder_params
+
+    logger.info("-" * 80)
+    for key, enc_param in encoder_params.items():
+        if "temperature" in key:
+            continue
+
+        flat_enc_params = flatten_dict(enc_param, sep="/")
+        total_bytes = 0
+        for path, array in flat_enc_params.items():
+            numel = array.size
+            bpe = array.dtype.itemsize
+            mem = int(numel * bpe)
+            total_bytes += mem
+
+        if total_bytes < 1024 ** 2:
+            total_hr = f"{total_bytes / 1024:,.1f} KB"
+        else:
+            total_hr = f"{total_bytes / 1024 ** 2:,.2f} MB"
+        logger.info(f"{key} parameters memory: {total_bytes:,d} bytes ({total_hr})")
+
+    return runner_state
+
 

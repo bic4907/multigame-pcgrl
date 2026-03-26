@@ -3,7 +3,10 @@ import wandb
 import pandas as pd
 from tensorboardX import SummaryWriter
 
+from instruct_rl.utils.log_utils import get_logger
 from instruct_rl.utils.logger import get_wandb_name
+
+_module_logger = get_logger(__file__)
 
 # Base logging handler
 class BaseLoggingHandler:
@@ -61,17 +64,13 @@ class WandbLoggingHandler(BaseLoggingHandler):
                 wandb.init(project=self.config.wandb_project, name=get_wandb_name(self.config), save_code=True)
                 wandb.config.update(dict(self.config), allow_val_change=True)
 
-                if self.logger is not None:
-                    self.logger.info(f"Initialized wandb with project {self.config.wandb_project}")
-                else:
-                    print(f"Initialized wandb with project {self.config.wandb_project}")
+                _log = self.logger or _module_logger
+                _log.info(f"Initialized wandb with project {self.config.wandb_project}")
 
                 self.use_wandb = True
             else:
-                if self.logger is not None:
-                    self.logger.info("wandb not initialized")
-                else:
-                    print("wandb not initialized")
+                _log = self.logger or _module_logger
+                _log.info("wandb not initialized")
                 self.use_wandb = False
         else:
             self.use_wandb = True

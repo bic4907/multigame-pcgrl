@@ -12,6 +12,9 @@ import jax
 import jax.numpy as jnp
 
 from instruct_rl.dataclass import Instruct
+from instruct_rl.utils.log_utils import get_logger
+
+logger = get_logger(__file__)
 
 # reward_enum → 사람이 읽을 수 있는 이름
 REWARD_ENUM_NAMES = {
@@ -37,8 +40,8 @@ def load_dataset_instruct(config):
     """
     from dataset.multigame import MultiGameDataset
 
-    print(f"[CPCGRL] Loading MultiGameDataset (game={config.dataset_game}, "
-          f"reward_enum={config.dataset_reward_enum})")
+    logger.info(f"[CPCGRL] Loading MultiGameDataset (game={config.dataset_game}, "
+                f"reward_enum={config.dataset_reward_enum})")
 
     ds = MultiGameDataset(
         include_dungeon=(config.dataset_game == 'dungeon'),
@@ -67,7 +70,7 @@ def load_dataset_instruct(config):
     )
 
     # ── 데이터셋 상세 로그 ──────────────────────────────────────────────
-    _print_dataset_summary(config, samples)
+    _log_dataset_summary(config, samples)
 
     # Train/Test 분할
     n_total = len(samples)
@@ -90,7 +93,7 @@ def load_dataset_instruct(config):
     test_inst = _build_instruct(test_samples, config)
 
     # ── Train/Test 분할 로그 ─────────────────────────────────────────────
-    _print_split_summary(train_samples, test_samples, train_inst)
+    _log_split_summary(train_samples, test_samples, train_inst)
 
     return train_inst, test_inst
 
@@ -129,17 +132,17 @@ def _build_instruct(sample_list, config):
     )
 
 
-def _print_dataset_summary(config, samples):
-    """데이터셋 요약을 콘솔에 출력한다."""
-    print("=" * 70)
-    print("[CPCGRL] Dataset Summary")
-    print(f"  Game           : {config.dataset_game}")
+def _log_dataset_summary(config, samples):
+    """데이터셋 요약을 로거로 출력한다."""
+    logger.info("=" * 70)
+    logger.info("[CPCGRL] Dataset Summary")
+    logger.info(f"  Game           : {config.dataset_game}")
     if config.dataset_reward_enum is not None:
-        print(f"  Reward Enum    : {config.dataset_reward_enum}"
-              f" ({REWARD_ENUM_NAMES.get(config.dataset_reward_enum, '?')})")
+        logger.info(f"  Reward Enum    : {config.dataset_reward_enum}"
+                    f" ({REWARD_ENUM_NAMES.get(config.dataset_reward_enum, '?')})")
     else:
-        print(f"  Reward Enum    : None (all)")
-    print(f"  Total Samples  : {len(samples)}")
+        logger.info(f"  Reward Enum    : None (all)")
+    logger.info(f"  Total Samples  : {len(samples)}")
 
     # reward_enum별 분포
     re_counter = Counter(s.meta["reward_enum"] for s in samples)
@@ -148,8 +151,8 @@ def _print_dataset_summary(config, samples):
             s.meta.get("feature_name", "?")
             for s in samples if s.meta["reward_enum"] == re_val
         )
-        print(f"    reward_enum={re_val} ({REWARD_ENUM_NAMES.get(re_val, '?')}): "
-              f"{re_counter[re_val]} samples, features={feat_names}")
+        logger.info(f"    reward_enum={re_val} ({REWARD_ENUM_NAMES.get(re_val, '?')}): "
+                     f"{re_counter[re_val]} samples, features={feat_names}")
 
     # condition 값 통계
     for re_val in sorted(re_counter.keys()):
@@ -161,19 +164,19 @@ def _print_dataset_summary(config, samples):
             if val is not None:
                 cond_vals.add(float(val))
         if cond_vals:
-            print(f"    → condition values: {sorted(cond_vals)}")
+            logger.info(f"    → condition values: {sorted(cond_vals)}")
 
-    print(f"  Train Ratio    : {config.dataset_train_ratio}")
-    print("=" * 70)
+    logger.info(f"  Train Ratio    : {config.dataset_train_ratio}")
+    logger.info("=" * 70)
 
 
-def _print_split_summary(train_samples, test_samples, train_inst):
-    """Train/Test 분할 결과를 콘솔에 출력한다."""
+def _log_split_summary(train_samples, test_samples, train_inst):
+    """Train/Test 분할 결과를 로거로 출력한다."""
     train_re = Counter(s.meta["reward_enum"] for s in train_samples)
     test_re = Counter(s.meta["reward_enum"] for s in test_samples)
-    print("[CPCGRL] Train/Test Split")
-    print(f"  Train : {len(train_samples)} samples  {dict(sorted(train_re.items()))}")
-    print(f"  Test  : {len(test_samples)} samples  {dict(sorted(test_re.items()))}")
-    print(f"  Instruct reward_i shape : {train_inst.reward_i.shape}")
-    print(f"  Instruct condition shape: {train_inst.condition.shape}")
+    logger.info("[CPCGRL] Train/Test Split")
+    logger.info(f"  Train : {len(train_samples)} samples  {dict(sorted(train_re.items()))}")
+    logger.info(f"  Test  : {len(test_samples)} samples  {dict(sorted(test_re.items()))}")
+    logger.info(f"  Instruct reward_i shape : {train_inst.reward_i.shape}")
+    logger.info(f"  Instruct condition shape: {train_inst.condition.shape}")
 

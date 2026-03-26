@@ -1,40 +1,35 @@
 from datetime import datetime
-import logging
 import os
-import numpy as np
 import wandb
 import shutil
 from functools import partial
-from os.path import abspath, basename, dirname, join
 from timeit import default_timer as timer
 import hydra
 import jax
 import jax.numpy as jnp
 import optax
-import orbax.checkpoint as ocp
-import pandas as pd
-from transformers import CLIPProcessor
 from flax.training.train_state import TrainState
-from flax.traverse_util import flatten_dict
 from tensorboardX import SummaryWriter
 
-from conf.config import TrainConfig, CPCGRLConfig
+from conf.config import CPCGRLConfig
 from envs.pcgrl_env import gen_dummy_queued_state
-from envs.pcgrl_env import PCGRLObs
-from instruct_rl.dataclass import Instruct
 from instruct_rl.evaluate import get_loss_batch
 from evaluator import get_reward_batch
-from instruct_rl.human_data.dataset import DatasetManager
-from instruct_rl.utils.instruction import sample_levels, update_instruction
-from instruct_rl.utils.callbacks import log_callback, eval_callback, loss_callback
-from instruct_rl.utils.checkpointer import init_checkpointer
+from instruct_rl.utils.instruction import update_instruction
+from instruct_rl.utils.callbacks import log_callback, eval_callback, loss_callback, create_log_handler
+from instruct_rl.utils.checkpointer import (
+    init_checkpointer,
+    init_checkpoint_step,
+    save_checkpoint_step,
+    apply_encoder_params,
+)
 from instruct_rl.utils.dataset_loader import load_dataset_instruct
 from instruct_rl.utils.log_handler import (
     CSVLoggingHandler,
-    MultipleLoggingHandler,
     TensorBoardLoggingHandler,
     WandbLoggingHandler,
 )
+from instruct_rl.utils.log_utils import get_logger, suppress_jax_debug_logs
 from instruct_rl.utils.logger import get_wandb_name, get_group_name
 from instruct_rl.utils.path_utils import (
     gymnax_pcgrl_make,
@@ -44,12 +39,9 @@ from instruct_rl.utils.path_utils import (
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from purejaxrl.structures import RunnerState, Transition, LossInfo, ReturnInfo
 
-log_level = os.getenv(
-    "LOG_LEVEL", "INFO"
-).upper()
+suppress_jax_debug_logs()
 
-logger = logging.getLogger(basename(__file__))
-logger.setLevel(getattr(logging, log_level, logging.INFO))
+logger = get_logger(__file__)
 
 
 def make_train(config, restored_ckpt, checkpoint_manager, encoder_params, train_inst=None, test_inst=None):
@@ -76,9 +68,6 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params, train_
     def train(rng, runner_state):
         train_start_time = timer()
 
-        # Create a tensorboard writer
-        writer = SummaryWriter(config.exp_dir)
-
         # INIT NETWORK
         network = init_network(env, env_params, config)
 
@@ -86,11 +75,6 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params, train_
         init_x = env.gen_dummy_obs(env_params)
 
         network_params = network.init(_rng, init_x)
-
-        if config.human_demo:
-            human_level_db_path = abspath(join(dirname(__file__), "instruct_rl", "human_data", f"{config.human_level}.npz"))
-            human_level_db = np.load(human_level_db_path, allow_pickle=True)['arr_0'].item()['levels']
-            human_level_db = jnp.array(human_level_db)
 
         if config.ANNEAL_LR:
             tx = optax.chain(
@@ -132,190 +116,15 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params, train_
             )
 
         if encoder_params is not None:
-            logger.info(
-                f"Parameters loaded from encoder checkpoint ({config.encoder.ckpt_path})"
-            )
-            runner_state.train_state.params["params"]["subnet"]["encoder"] = (
-                encoder_params
-            )
+            runner_state = apply_encoder_params(runner_state, encoder_params, config)
 
-            logger.info("-" * 80)
-            for key, enc_param in encoder_params.items():
-                if "temperature" in key:
-                    continue
 
-                flat_enc_params = flatten_dict(enc_param, sep="/")
-                total_bytes = 0
-                for path, array in flat_enc_params.items():
-                    numel = array.size
-                    bpe   = array.dtype.itemsize   # bytes per element
-                    mem   = int(numel * bpe)
-                    total_bytes += mem
-
-                if total_bytes < 1024**2:
-                    total_hr = f"{total_bytes/1024:,.1f} KB"
-                else:
-                    total_hr = f"{total_bytes/1024**2:,.2f} MB"
-                logger.info(f"{key} parameters memory: {total_bytes:,d} bytes ({total_hr})")
-        
-        # ── instruct 로딩 ────────────────────────────────────────────────
-        # 외부(main_chunk)에서 전달받았으면 그대로 사용, 아니면 CSV 로딩
-        nonlocal train_inst, test_inst
-
-        if config.instruct_csv and train_inst is None:
-            csv_path = abspath(
-                join(dirname(__file__), "instruct", f"{config.instruct_csv}.csv")
-            )
-
-            instruct_df = pd.read_csv(csv_path)            
-            instruct_df['cond_id'] = (instruct_df.index // 4) + (instruct_df['reward_enum']-1)*8
-            processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-            
-            def get_train_test(df, is_train=True):
-                df = df[df["train"] == is_train]
-
-                cond_id = jnp.array(df["cond_id"].to_list()).reshape(-1, 1)
-
-                embedding_df = df.filter(regex="embed_*")
-                embedding_df = embedding_df.reindex(
-                    sorted(embedding_df.columns, key=lambda x: int(x.split("_")[-1])),
-                    axis=1,
-                )
-                embedding = jnp.array(embedding_df.to_numpy())
-
-                if config.nlp_input_dim > embedding.shape[1]:
-                    embedding = jnp.pad(
-                        embedding,
-                        ((0, 0), (0, config.nlp_input_dim - embedding.shape[1])),
-                        mode="constant",
-                    )
-
-                condition_df = df.filter(regex=r'(?<!sub_)condition_')
-                condition_df = condition_df.reindex(
-                    sorted(condition_df.columns, key=lambda x: int(x.split("_")[-1])),
-                    axis=1,
-                )
-                condition = jnp.array(condition_df.to_numpy())
-
-                reward_enum_list = [[int(digit) for digit in str(num)] for num in df["reward_enum"].to_list()]
-                max_len = max(len(x) for x in reward_enum_list)
-
-                reward_enum = jnp.array([
-                    x + [0] * (max_len - len(x)) for x in reward_enum_list
-                ])
-
-                if config.multimodal_condition:
-                    dataset_mgr = DatasetManager(config.human_demo_path)
-                else:
-                    dataset_mgr = None
-
-                if config.encoder.model == 'clip':
-                    language_instr_list = df["instruction"].to_list()
-                    tokenized_instrs = processor(
-                        text = language_instr_list,
-                        return_tensors="jax",
-                        padding="max_length",
-                        truncation=True,
-                        max_length=77
-                    )
-                    input_ids, attention_mask = tokenized_instrs['input_ids'], tokenized_instrs['attention_mask']
-
-                    instr_x = PCGRLObs(
-                        map_obs=jnp.repeat(init_x.map_obs, input_ids.shape[0], axis=0),
-                        past_map_obs=None,
-                        flat_obs=jnp.repeat(init_x.flat_obs, input_ids.shape[0], axis=0),
-                        nlp_obs=jnp.repeat(init_x.nlp_obs, input_ids.shape[0], axis=0),
-                        input_ids=input_ids,
-                        attention_mask=attention_mask,
-                        pixel_values=jnp.zeros((input_ids.shape[0], 224, 224, config.clip_input_channel), dtype=jnp.float32),
-                    )
-                    _, _, _, embedding, _, _ = network.apply(runner_state.train_state.params, x=instr_x,
-                                                             return_text_embed=True,
-                                                             return_state_embed=False,
-                                                             return_sketch_embed=False)
-                    logger.info(
-                        f"Generated clip text embeddings for {input_ids.shape[0]} instructions. is_train: {is_train}"
-                    )
-                elif config.encoder.model == 'cnnclip':
-                    language_instr_list = df["instruction"].to_list()
-                    tokenized_instrs = processor(
-                        text = language_instr_list,
-                        return_tensors="jax",
-                        padding="max_length",
-                        truncation=True,
-                        max_length=77
-                    )
-                    input_ids, attention_mask = tokenized_instrs['input_ids'], tokenized_instrs['attention_mask']
-
-                    if config.multimodal_condition:
-                        levels = dataset_mgr.get_levels(language_instr_list, n=10, to_jax=True, squeeze_n=False, coord_channel=True) # (5, 10, 16, 16, 5)
-                        sketches = dataset_mgr.get_sketches(language_instr_list, n=10, to_jax=True, squeeze_n=False, coord_channel=True) # (5, 10, 224, 224, 3)
-
-                        n_inst, n_samples, H, W, C = levels.shape
-                        n_inst, n_samples, H_, W_, C_ = sketches.shape
-
-                        levels = jnp.reshape(levels, (n_inst * n_samples, H, W, C))  # (50, 16, 16, 5)
-                        sketches = jnp.reshape(sketches, (n_inst * n_samples, H_, W_, C_))
-
-                        input_ids = jnp.repeat(input_ids, n_samples, axis=0)
-                        attention_mask = jnp.repeat(attention_mask, n_samples, axis=0)
-
-                    else:
-                        levels = jnp.zeros((input_ids.shape[0], 16, 16, 5), dtype=jnp.float32)
-                        sketches = jnp.zeros((input_ids.shape[0], 224, 224, 3), dtype=jnp.float32)
-
-                    instr_x = PCGRLObs(
-                        map_obs=jnp.repeat(init_x.map_obs, input_ids.shape[0], axis=0),
-                        past_map_obs=None,
-                        flat_obs=jnp.repeat(init_x.flat_obs, input_ids.shape[0], axis=0),
-                        nlp_obs=jnp.repeat(init_x.nlp_obs, input_ids.shape[0], axis=0),
-                        input_ids=input_ids,
-                        attention_mask=attention_mask,
-                        pixel_values=levels,
-                        sketch_values=sketches,
-                    )
-
-                    _, _, _, embedding_t, embedding_s, embedding_k = network.apply(runner_state.train_state.params, x=instr_x,
-                                                             return_text_embed=True,
-                                                             return_state_embed=True if config.multimodal_condition else False,
-                                                             return_sketch_embed=True if config.multimodal_condition else False)
-
-                    if config.multimodal_condition:
-                        embedding = jnp.concatenate([embedding_t, embedding_s, embedding_k], axis=0)
-                    else:
-                        embedding = embedding_t
-
-                    logger.info(
-                        f"Generated cnnclip {embedding.shape} embeddings for {input_ids.shape[0]} instructions. (is_train: {is_train}, multimodal: {config.multimodal_condition})"
-                    )
-
-                return Instruct(
-                    reward_i=reward_enum,
-                    condition=condition,
-                    embedding=embedding,
-                    condition_id=cond_id,
-                )
-
-            train_inst = get_train_test(instruct_df, is_train=True)
-            test_inst = get_train_test(instruct_df, is_train=False)
-
- 
-
-        handler_classes = [
-            TensorBoardLoggingHandler,
-            WandbLoggingHandler,
-            CSVLoggingHandler,
-        ]
-        multiple_handler = MultipleLoggingHandler(
-            config=config, handler_classes=handler_classes, logger=logger
+        multiple_handler = create_log_handler(
+            config,
+            handler_classes=[TensorBoardLoggingHandler, WandbLoggingHandler, CSVLoggingHandler],
+            train_start_time=train_start_time,
+            steps_prev_complete=steps_prev_complete,
         )
-
-        # Set the start time and previous steps
-        multiple_handler.set_start_time(train_start_time)
-        multiple_handler.set_steps_prev_complete(steps_prev_complete)
-
-        multiple_handler.add_text("Train/Config", f"```{str(config)}```")
-        # if reward_function is in this scope
 
         _log_callback = partial(
             log_callback,
@@ -338,24 +147,12 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params, train_
                 )
             )
 
-        def init_checkpoint(runner_state):
-            ckpt = {"runner_state": runner_state, "step_i": 0}
-            ckpt = jax.device_get(ckpt)
-            checkpoint_manager.save(0, args=ocp.args.StandardSave(ckpt))
-
-        def save_checkpoint(runner_state, info, steps_prev_complete):
-            # Get the global env timestep numbers corresponding to the points at which different episodes were finished
-            timesteps = info["timestep"][info["returned_episode"]] * config.n_envs
-
-            if len(timesteps) > 0:
-                # Get the latest global timestep at which some episode was finished
-                t = timesteps[-1].item()
-                latest_ckpt_step = checkpoint_manager.latest_step()
-                if latest_ckpt_step is None or t - latest_ckpt_step >= config.ckpt_freq:
-                    print(f"Saving checkpoint at step {t}")
-                    ckpt = {"runner_state": runner_state, "step_i": t}
-                    ckpt = jax.device_get(ckpt)
-                    checkpoint_manager.save(t, args=ocp.args.StandardSave(ckpt))
+        init_checkpoint = partial(init_checkpoint_step, checkpoint_manager=checkpoint_manager)
+        save_checkpoint = partial(
+            save_checkpoint_step,
+            checkpoint_manager=checkpoint_manager,
+            config=config,
+        )
 
         # TRAIN LOOP
         def _update_step_with_render(update_runner_state, _):
@@ -645,7 +442,7 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params, train_
 
                     if config.use_clip and test_inst is not None:
                         last_obs = last_obs.replace(nlp_obs=instruct_sample.embedding)
-                    
+
                     # SELECT ACTION
                     rng, _rng = jax.random.split(rng)
                     # Squash the gpu dimension (network only takes one batch dimension)
@@ -775,24 +572,14 @@ def make_train(config, restored_ckpt, checkpoint_manager, encoder_params, train_
         # Begin train
 
         # sample n_envs rows from the instruct struct
-        if train_inst is not None:
 
-            random_indices = jax.random.randint(
-                runner_state.rng, (config.n_envs,), 0, train_inst.reward_i.shape[0]
-            )
-            instruct_sample = jax.tree.map(lambda x: x[random_indices], train_inst)
+        random_indices = jax.random.randint(
+            runner_state.rng, (config.n_envs,), 0, train_inst.reward_i.shape[0]
+        )
+        instruct_sample = jax.tree.map(lambda x: x[random_indices], train_inst)
+        level_sample = None
+        logger.info(f"Instruction: {instruct_sample}")
 
-            if config.human_demo:
-                level_sample = sample_levels(
-                    human_level_db, instruct_sample, runner_state.rng, config.human_augment
-                )
-            else:
-                level_sample = None
-            logger.info(f"Instruction: {instruct_sample}")
-        else:
-            instruct_sample = None
-            level_sample = None
-            logger.info("Instruction: None")
 
         return_info = ReturnInfo(
                 jnp.zeros((config.n_envs, )), 
@@ -893,7 +680,7 @@ def main(config: CPCGRLConfig):
             config.total_timesteps = config.timestep_chunk_size + (
                 i * config.timestep_chunk_size
             )
-            print(f"Running chunk {i + 1}/{n_chunks}")
+            logger.info(f"Running chunk {i + 1}/{n_chunks}")
             out = main_chunk(config, rng, exp_dir)
 
     else:

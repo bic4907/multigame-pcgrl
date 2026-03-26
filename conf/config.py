@@ -230,10 +230,13 @@ class TrainConfig(Config):
 
 @dataclass
 class CPCGRLConfig(TrainConfig):
-    """Conditional PCGRL (CPCGRL) 전용 config.
+    """Conditional PCGRL (CPCGRL) / Instructed PCGRL (IPCGRL) config.
 
-    MultiGameDataset 기반으로 동작하며,
-    vec_cont=True, raw_obs=True 가 강제됩니다.
+    MultiGameDataset 기반으로 동작합니다.
+
+    - CPCGRL (기본): vec_cont=True, raw condition 벡터를 입력으로 사용.
+    - IPCGRL: use_nlp=True, BERT 임베딩을 입력으로 사용.
+      실행 예: python -m train_cpcgrl use_nlp=true
     """
     # ── CPCGRL 전용 기본값 ──────────────────────────────────
     problem: str = "multigame"

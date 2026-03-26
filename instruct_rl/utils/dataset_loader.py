@@ -121,7 +121,12 @@ def _build_instruct(sample_list, config):
         condition_list.append(row)
     condition = jnp.array(condition_list, dtype=jnp.float32)
 
-    embedding = jnp.zeros((n, max(1, config.nlp_input_dim)), dtype=jnp.float32)
+    # ── 임베딩 계산 ──────────────────────────────────────────────────────
+    if getattr(config, "use_nlp", False) and config.nlp_input_dim > 0:
+        embedding = _compute_bert_embeddings(sample_list, config.nlp_input_dim)
+    else:
+        embedding = jnp.zeros((n, max(1, config.nlp_input_dim)), dtype=jnp.float32)
+
     condition_id = jnp.arange(n, dtype=jnp.int32).reshape(-1, 1)
 
     return Instruct(
@@ -130,6 +135,61 @@ def _build_instruct(sample_list, config):
         embedding=embedding,
         condition_id=condition_id,
     )
+
+
+def _compute_bert_embeddings(sample_list, nlp_input_dim):
+    """BERT를 사용하여 instruction 텍스트에서 임베딩을 계산한다.
+
+    instruction이 None인 샘플은 zeros 임베딩으로 대체한다.
+    """
+    import numpy as np
+
+    try:
+        from transformers import AutoTokenizer, FlaxAutoModel
+    except ImportError:
+        logger.warning("transformers not installed — falling back to zero embeddings")
+        return jnp.zeros((len(sample_list), nlp_input_dim), dtype=jnp.float32)
+
+    model_name = "bert-base-uncased"  # 768-dim
+    logger.info(f"Computing BERT embeddings with {model_name} for {len(sample_list)} samples")
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = FlaxAutoModel.from_pretrained(model_name)
+
+    texts = []
+    has_text = []
+    for s in sample_list:
+        if s.instruction is not None and len(s.instruction.strip()) > 0:
+            texts.append(s.instruction)
+            has_text.append(True)
+        else:
+            texts.append("")  # placeholder
+            has_text.append(False)
+
+    # 배치 토크나이즈
+    tokens = tokenizer(
+        texts, return_tensors="jax",
+        padding=True, truncation=True, max_length=128,
+    )
+    # BERT forward → [CLS] 토큰 임베딩
+    outputs = model(**tokens)
+    cls_embeddings = np.array(outputs.last_hidden_state[:, 0, :])  # (N, 768)
+
+    # instruction 없는 샘플은 zeros
+    for i, ht in enumerate(has_text):
+        if not ht:
+            cls_embeddings[i] = 0.0
+
+    # nlp_input_dim에 맞게 패딩 또는 절삭
+    bert_dim = cls_embeddings.shape[1]
+    if nlp_input_dim > bert_dim:
+        pad_width = ((0, 0), (0, nlp_input_dim - bert_dim))
+        cls_embeddings = np.pad(cls_embeddings, pad_width, mode="constant")
+    elif nlp_input_dim < bert_dim:
+        cls_embeddings = cls_embeddings[:, :nlp_input_dim]
+
+    logger.info(f"BERT embeddings shape: {cls_embeddings.shape}")
+    return jnp.array(cls_embeddings, dtype=jnp.float32)
 
 
 def _log_dataset_summary(config, samples):

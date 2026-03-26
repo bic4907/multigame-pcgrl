@@ -122,7 +122,9 @@ def _build_instruct(sample_list, config):
     condition = jnp.array(condition_list, dtype=jnp.float32)
 
     # ── 임베딩 계산 ──────────────────────────────────────────────────────
-    if getattr(config, "use_nlp", False) and config.nlp_input_dim > 0:
+    if getattr(config, "use_clip", False) and config.nlp_input_dim > 0:
+        embedding = _compute_clip_embeddings(sample_list, config.nlp_input_dim)
+    elif getattr(config, "use_nlp", False) and config.nlp_input_dim > 0:
         embedding = _compute_bert_embeddings(sample_list, config.nlp_input_dim)
     else:
         embedding = jnp.zeros((n, max(1, config.nlp_input_dim)), dtype=jnp.float32)
@@ -135,6 +137,61 @@ def _build_instruct(sample_list, config):
         embedding=embedding,
         condition_id=condition_id,
     )
+
+
+def _compute_clip_embeddings(sample_list, nlp_input_dim):
+    """CLIP text encoder를 사용하여 instruction 텍스트에서 임베딩을 계산한다.
+
+    instruction이 None인 샘플은 zeros 임베딩으로 대체한다.
+    """
+    import numpy as np
+
+    try:
+        from transformers import CLIPProcessor, FlaxCLIPModel
+    except ImportError:
+        logger.warning("transformers not installed — falling back to zero embeddings")
+        return jnp.zeros((len(sample_list), nlp_input_dim), dtype=jnp.float32)
+
+    model_name = "openai/clip-vit-base-patch32"  # 512-dim
+    logger.info(f"Computing CLIP text embeddings with {model_name} for {len(sample_list)} samples")
+
+    processor = CLIPProcessor.from_pretrained(model_name)
+    model = FlaxCLIPModel.from_pretrained(model_name)
+
+    texts = []
+    has_text = []
+    for s in sample_list:
+        if s.instruction is not None and len(s.instruction.strip()) > 0:
+            texts.append(s.instruction)
+            has_text.append(True)
+        else:
+            texts.append("")  # placeholder
+            has_text.append(False)
+
+    # 배치 토크나이즈
+    inputs = processor(
+        text=texts, return_tensors="jax",
+        padding=True, truncation=True, max_length=77,
+    )
+    # CLIP text encoder → text features
+    text_features = model.get_text_features(**inputs)
+    clip_embeddings = np.array(text_features)  # (N, 512)
+
+    # instruction 없는 샘플은 zeros
+    for i, ht in enumerate(has_text):
+        if not ht:
+            clip_embeddings[i] = 0.0
+
+    # nlp_input_dim에 맞게 패딩 또는 절삭
+    clip_dim = clip_embeddings.shape[1]
+    if nlp_input_dim > clip_dim:
+        pad_width = ((0, 0), (0, nlp_input_dim - clip_dim))
+        clip_embeddings = np.pad(clip_embeddings, pad_width, mode="constant")
+    elif nlp_input_dim < clip_dim:
+        clip_embeddings = clip_embeddings[:, :nlp_input_dim]
+
+    logger.info(f"CLIP embeddings shape: {clip_embeddings.shape}")
+    return jnp.array(clip_embeddings, dtype=jnp.float32)
 
 
 def _compute_bert_embeddings(sample_list, nlp_input_dim):

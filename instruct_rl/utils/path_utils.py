@@ -38,7 +38,7 @@ def is_default_hiddims(config: Config):
 def get_exp_group(config):
     if config.env_name == 'PCGRL':
 
-        # ── MultiGameDataset 기반 CPCGRL / IPCGRL 모드 ──
+        # ── MultiGameDataset 기반 CPCGRL / IPCGRL / VIPCGRL 모드 ──
         if hasattr(config, 'dataset_game') and config.dataset_game is not None:
             config_dict = {
                 'model': config.model,
@@ -48,7 +48,9 @@ def get_exp_group(config):
             if hasattr(config, 'dataset_reward_enum') and config.dataset_reward_enum is not None:
                 config_dict['re'] = config.dataset_reward_enum
             exp_group = '_'.join([f'{key}-{value}' for key, value in config_dict.items()])
-            if config.use_nlp:
+            if config.use_clip:
+                exp_group += '_clip'
+            elif config.use_nlp:
                 exp_group += '_nlp'
             else:
                 exp_group += '_vec_ro'
@@ -175,14 +177,31 @@ def get_exp_dir(config):
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
-    # ── MultiGameDataset 기반 CPCGRL / IPCGRL 모드 ────────────────────────
+    # ── MultiGameDataset 기반 CPCGRL / IPCGRL / VIPCGRL 모드 ─────────────
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:
         config.raw_obs = True
-        config.use_clip = False
         # instruct_csv는 사용하지 않음
         config.instruct_csv = None
 
-        if config.use_nlp:
+        if config.use_clip:
+            # ── VIPCGRL 모드: pretrained CLIP 임베딩을 입력으로 사용 ──
+            config.vec_cont = False
+            config.use_nlp = False
+            if config.encoder.model is None:
+                config.encoder.model = 'cnnclip'
+            if config.nlp_input_dim <= 0:
+                config.nlp_input_dim = 512  # CLIP text feature dim
+            config.vec_input_dim = config.nlp_input_dim
+            config.use_sim_reward = True
+            # dataset 기반 VIPCGRL: CLIP 임베딩이 사전 계산되어 nlp_obs에 직접 입력
+            # → cnnclipconv 가 아닌 nlpconv 로 설정 (내부 CLIP encoder 불필요)
+            if config.model not in ('nlpconv',):
+                config.model = 'nlpconv'
+            logger.info(f"[VIPCGRL] dataset_game={config.dataset_game}, "
+                        f"dataset_reward_enum={getattr(config, 'dataset_reward_enum', None)}, "
+                        f"nlp_input_dim={config.nlp_input_dim}, "
+                        f"encoder={config.encoder.model}")
+        elif config.use_nlp:
             # ── IPCGRL 모드: BERT → MLP 인코더 피처를 입력으로 사용 ──
             config.vec_cont = False
             if config.nlp_input_dim <= 0:
@@ -372,12 +391,15 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         config.model = 'contconv'
 
     if config.encoder.model is not None:
-        if config.encoder.model == 'clip':
-            config.model = 'clipconv'
-            logger.info(f"Setting model to `clipconv` due to the `clip.encoder.model={config.encoder.model}`")
-        elif config.encoder.model == 'cnnclip':
-            config.model = 'cnnclipconv'
-            logger.info(f"Setting model to `cnnclipconv` due to the `clip.encoder.model={config.encoder.model}`")
+        # dataset 기반 모드에서는 model이 이미 설정되어 있으므로 스킵
+        _is_dataset_mode = hasattr(config, 'dataset_game') and config.dataset_game is not None
+        if not _is_dataset_mode:
+            if config.encoder.model == 'clip':
+                config.model = 'clipconv'
+                logger.info(f"Setting model to `clipconv` due to the `clip.encoder.model={config.encoder.model}`")
+            elif config.encoder.model == 'cnnclip':
+                config.model = 'cnnclipconv'
+                logger.info(f"Setting model to `cnnclipconv` due to the `clip.encoder.model={config.encoder.model}`")
 
     if config.model == "dense":
         network = Dense(
@@ -387,9 +409,14 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
 
     elif config.model == "nlpconv" or config.model == 'contconv':
 
+        # dataset 기반 VIPCGRL: encoder 불필요 (CLIP 임베딩이 사전 계산됨)
+        _skip_encoder = (
+            hasattr(config, 'dataset_game') and config.dataset_game is not None
+            and config.encoder.model in ('cnnclip', 'clip')
+        )
         network = EncoderNLPConvForward(
             config=config.encoder,
-            encoder=apply_encoder_model(config.encoder) if config.encoder.model else None,
+            encoder=None if _skip_encoder else (apply_encoder_model(config.encoder) if config.encoder.model else None),
             train_encoder=config.encoder.trainable,
             nlp_conv_forward=NLPConvForward(
                 action_dim=action_dim, activation=config.activation,
@@ -492,6 +519,11 @@ def get_env_params_from_config(config: Config):
     prob_cls = PROB_CLASSES[problem]
     ctrl_metrics = tuple([int(prob_cls.metrics_enum[c.upper()]) for c in config.ctrl_metrics])
 
+    # dataset 기반 VIPCGRL 은 nlp_input_dim 으로 CLIP embedding 차원을 전달
+    _use_nlp_dim = config.use_nlp or (
+        config.use_clip and hasattr(config, 'dataset_game') and config.dataset_game is not None
+    )
+
     env_params = PCGRLEnvParams(
         problem=problem,
         representation=int(RepEnum[config.representation.upper()]),
@@ -507,9 +539,9 @@ def get_env_params_from_config(config: Config):
         randomize_map_shape=config.randomize_map_shape,
         empty_start=config.empty_start,
         pinpoints=config.pinpoints,
-        nlp_input_dim=config.nlp_input_dim if config.use_nlp else -1,
+        nlp_input_dim=config.nlp_input_dim if _use_nlp_dim else -1,
         vec_input_dim=config.vec_input_dim if config.vec_cont else -1,
-        clip_input_channel=config.clip_input_channel if config.use_clip else -1,
+        clip_input_channel=config.clip_input_channel if (config.use_clip and not _use_nlp_dim) else -1,
     )
     return env_params
 

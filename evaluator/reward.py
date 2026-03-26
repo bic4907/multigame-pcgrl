@@ -54,6 +54,7 @@ def get_reward_batch(
 
     # Map indices to functions using `switch`
     def compute_value(func_idx, cond_value, _prev_env_map, _curr_env_map):
+        func_idx = func_idx.astype(jnp.int32)
         reward_values = vmap(lambda idx: jax.lax.switch(idx, reward_funcs, cond_value, _prev_env_map, _curr_env_map))(func_idx)
         return jnp.sum(reward_values)
 

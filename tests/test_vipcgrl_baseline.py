@@ -45,7 +45,6 @@ def _make_vipcgrl_config(**overrides):
         render_freq=-1,
         dataset_game="dungeon",
         dataset_reward_enum=1,
-        wandb_key=None,
         exp_name="test_vipcgrl",
         use_clip=True,
     )

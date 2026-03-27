@@ -44,7 +44,7 @@ def main(config: SweepConfig):
 
         logger.info('Evaluation finished.')
     else:
-        for eval_modality in ['text', 'state']:
+        for eval_modality in ['text', 'state', 'sketch']:
             config = deepcopy(train_config)
 
             config.eval_modality = eval_modality

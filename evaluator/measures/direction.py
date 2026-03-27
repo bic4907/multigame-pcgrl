@@ -29,7 +29,8 @@ def generate_direction_map(
         lambda row, _: jnp.greater_equal(row, jnp.divide(rows, 2)),  # 3 (south)
     ]
 
-    direction = direction[0]
+    direction = direction[0].astype(jnp.int32)
+    direction = jnp.clip(direction, 0, 3)
     indices_col, indices_row = jnp.meshgrid(jnp.arange(rows), jnp.arange(cols))
 
     return jax.vmap(

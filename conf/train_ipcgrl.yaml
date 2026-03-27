@@ -1,0 +1,11 @@
+defaults:
+  - cpcgrl
+  - _self_
+
+use_nlp: true
+render_freq: -1
+
+hydra:
+  sweeper:
+    params: {}
+

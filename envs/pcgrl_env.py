@@ -17,6 +17,7 @@ from envs.probs.dungeon2 import Dungeon2Problem
 from envs.probs.dungeon3 import Dungeon3Problem
 from envs.probs.maze import MazeProblem
 from envs.probs.maze_play import MazePlayProblem
+from envs.probs.multigame import MultigameProblem
 from envs.probs.problem import MapData, Problem, ProblemState
 from envs.reps.narrow import NarrowRepresentation
 from envs.reps.player import PlayerRepresentation
@@ -34,6 +35,7 @@ class ProbEnum(IntEnum):
     MAZE_PLAY = 3
     DUNGEON2 = 4
     DUNGEON3 = 5
+    MULTIGAME = 6
 
 
 PROB_CLASSES = {
@@ -43,7 +45,7 @@ PROB_CLASSES = {
     ProbEnum.DUNGEON2: Dungeon2Problem,
     ProbEnum.DUNGEON3: Dungeon3Problem,
     ProbEnum.MAZE_PLAY: MazePlayProblem,
-    ProbEnum.DUNGEON3: Dungeon3Problem,
+    ProbEnum.MULTIGAME: MultigameProblem,
 }
 
 

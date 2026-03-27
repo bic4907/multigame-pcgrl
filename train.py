@@ -1174,10 +1174,12 @@ def main(config: TrainConfig):
     exp_dir = config.exp_dir
     logger.info(f"running experiment at {exp_dir}")
 
-    if config.wandb_key:
+    from instruct_rl.utils.env_loader import get_wandb_key
+    wandb_key = get_wandb_key()
+    if wandb_key:
         dt = datetime.now().strftime("%Y%m%d%H%M%S")
         wandb_id = f"{get_wandb_name(config)}-{dt}"
-        wandb.login(key=config.wandb_key)
+        wandb.login(key=wandb_key)
         wandb.init(
             project=config.wandb_project,
             group=get_group_name(config),
@@ -1186,7 +1188,6 @@ def main(config: TrainConfig):
             id=wandb_id,
             save_code=True,
             config_exclude_keys=[
-                "wandb_key",
                 "_vid_dir",
                 "_img_dir",
                 "_numpy_dir",

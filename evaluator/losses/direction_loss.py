@@ -23,12 +23,12 @@ def direction_loss(
     Returns:
         chex.Array: Loss value for the direction metric
     """
-    # vectorize direction
-    direction = jnp.array(direction).flatten()
+    # vectorize direction and ensure int32 type
+    direction = jnp.array(direction).flatten().astype(jnp.int32)
 
     tile_counts = get_direction(env_map, tile_type, direction, rows, cols)
     opposite_tile_counts = get_direction(
-        env_map, tile_type, (direction + 2) % 4, rows, cols
+        env_map, tile_type, ((direction + 2) % 4).astype(jnp.int32), rows, cols
     )
 
     loss = -tile_counts + opposite_tile_counts * 0.5 #  + penalty

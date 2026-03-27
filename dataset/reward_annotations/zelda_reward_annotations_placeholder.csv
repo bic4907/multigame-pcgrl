@@ -1,6 +1,0 @@
-game,is_placeholder,reward_enum,feature_name,sub_condition,condition_1,condition_2,condition_3,condition_4,condition_5
-zelda,true,1,region,room,1.0,,,,
-zelda,true,2,path_length,,,15.0,,,
-zelda,true,3,block,wall,,,0.3,,
-zelda,true,4,bat_amount,enemy,,,,3.0,
-zelda,true,5,bat_direction,enemy,,,,,0.5

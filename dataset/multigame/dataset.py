@@ -51,6 +51,11 @@ from .handlers.fdm_game.augmentation import create_rotated_sample
 from .handlers.handler_config import HandlerConfig, get_default_config
 from . import tags as tag_utils
 from .cache_utils import (
+    build_per_game_cache_key,
+    load_game_samples_from_cache,
+    save_game_samples_to_cache,
+    load_any_game_cache,
+    # legacy (하위 호환)
     build_cache_key,
     load_samples_from_cache,
     save_samples_to_cache,
@@ -170,133 +175,144 @@ class MultiGameDataset:
         if cache_dir is None:
             cache_dir = _HERE / "cache" / "artifacts"
         cache_dir = Path(cache_dir)
+        self._cache_dir = cache_dir
+        self._use_cache = use_cache
 
-        args_for_key = {
-            "dungeon_root": str(dungeon_root),
-            "pokemon_root": str(pokemon_root),
-            "sokoban_root": str(sokoban_root),
-            "doom_root": str(doom_root),
-            "doom2_root": str(doom2_root),
-            "zelda_root": str(zelda_root),
-            "include_dungeon": include_dungeon,
-            "include_pokemon": include_pokemon,
-            "handler_config": handler_config.to_dict(),
-            "include_sokoban": include_sokoban,
-            "include_doom": include_doom,
-            "include_doom2": include_doom2,
-            "include_zelda": include_zelda,
-        }
-        cache_key = build_cache_key(args_for_key, code_root=_HERE)
+        hc = handler_config.to_dict()
 
-        if use_cache:
-            cached = load_samples_from_cache(cache_dir, cache_key)
-            if cached is not None:
-                self._samples = cached
-                return
-
-        # ── Dungeon 로드 ────────────────────────────────────────────────────────
-        if include_dungeon and Path(dungeon_root).exists():
-            self._dungeon_handler = DungeonHandler(root=dungeon_root)
-            for i, sample in enumerate(self._dungeon_handler):
-                sample.order = len(self._samples)
-                self._samples.append(sample)
-
-        # ── Sokoban 로드 ────────────────────────────────────────────────────────
-        if include_sokoban and Path(sokoban_root).exists():
-            self._sokoban_handler = BoxobanHandler(root=sokoban_root)
-            for sample in self._sokoban_handler:
-                sample.order = len(self._samples)
-                self._samples.append(sample)
-
-        # ── Zelda 로드 ─────────────────────────────────────────────────────────
-        if include_zelda and Path(zelda_root).exists():
-            try:
-                self._zelda_handler = ZeldaHandler(root=zelda_root, handler_config=self._handler_config)
-                for sample in self._zelda_handler:
-                    sample.order = len(self._samples)
-                    self._samples.append(sample)
-                n_zelda = len([s for s in self._samples if s.game == GameTag.ZELDA])
-                if n_zelda > 0:
-                    print(f"[MultiGameDataset] Zelda: Loaded {n_zelda} rooms")
-            except (FileNotFoundError, ValueError) as e:
-                print(f"Warning: Could not load Zelda dataset: {e}")
-
-        # ── POKEMON 로드 ────────────────────────────────────────────────────────────
-        if include_pokemon and Path(pokemon_root).exists():
-            try:
-                self._pokemon_handler = POKEMONHandler(root=pokemon_root, handler_config=self._handler_config)
-                # POKEMON은 로드 전에 필터링 적용 (패딩 전 10x10 기반 + 패딩 후 tileset 필터링)
-                valid_ids, filtered_ratio, filtered_count = self._pokemon_handler.list_entries_with_filtering(
-                    max_tile_ratio=self._handler_config.pokemon.max_tile_ratio,
-                    max_tile_count=self._handler_config.pokemon.max_tile_count
-                )
-                for i, source_id in enumerate(valid_ids):
-                    sample = self._pokemon_handler.load_sample(source_id)
-                    sample.order = len(self._samples)
-                    self._samples.append(sample)
-
-                total_filtered = filtered_ratio + filtered_count
-                if total_filtered > 0:
-                    total_pokemon = len(valid_ids) + total_filtered
-                    print(f"[MultiGameDataset] POKEMON: Filtered {total_pokemon} → {len(valid_ids)} samples "
-                          f"({total_filtered} removed, max_tile_ratio={self._handler_config.pokemon.max_tile_ratio})")
-            except (FileNotFoundError, ValueError) as e:
-                print(f"Warning: Could not load FDM dataset: {e}")
-        # ── DOOM 로드 ────────────────────────────────────────────────────────
+        # ── 게임별 로드 설정 (game, include, root, handler_config_sub) ────────
+        _game_specs = []
+        if include_dungeon:
+            _game_specs.append(("dungeon", str(dungeon_root), hc.get("dungeon", {})))
+        if include_sokoban:
+            _game_specs.append(("sokoban", str(sokoban_root), hc.get("sokoban", {})))
+        if include_zelda:
+            _game_specs.append(("zelda", str(zelda_root), hc.get("zelda", {})))
+        if include_pokemon:
+            _game_specs.append(("pokemon", str(pokemon_root), hc.get("pokemon", {})))
         if include_doom:
-            if Path(doom_root).exists():
-                try:
-                    self._doom_handler = DoomHandler(root=doom_root, handler_config=self._handler_config)
-                    for sample in self._doom_handler:
-                        sample.order = len(self._samples)
-                        self._samples.append(sample)
-                    
-                    n_doom = len([s for s in self._samples if s.game == GameTag.DOOM])
-                    if n_doom > 0:
-                        print(f"[MultiGameDataset] DOOM: Loaded {n_doom} samples")
-                except (FileNotFoundError, ValueError) as e:
-                    print(f"Warning: Could not load DOOM dataset: {e}")
-            else:
-                print(f"[MultiGameDataset] DOOM dataset directory not found: {doom_root}")
-
-        # ── DOOM2 로드 ────────────────────────────────────────────────────────
+            _game_specs.append(("doom", str(doom_root), hc.get("doom", {})))
         if include_doom2:
-            if Path(doom2_root).exists():
-                try:
-                    doom2_handler = DoomHandler(root=doom2_root, handler_config=self._handler_config)
-                    for sample in doom2_handler:
-                        sample.order = len(self._samples)
-                        self._samples.append(sample)
-                    
-                    n_doom2 = len([s for s in self._samples if s.game == GameTag.DOOM and s.meta.get("file", "").startswith("MAP")])
-                    if n_doom2 > 0:
-                        print(f"[MultiGameDataset] DOOM 2: Loaded {n_doom2} samples")
-                except (FileNotFoundError, ValueError) as e:
-                    print(f"Warning: Could not load DOOM 2 dataset: {e}")
-            else:
-                print(f"[MultiGameDataset] DOOM 2 dataset directory not found: {doom2_root}")
+            _game_specs.append(("doom2", str(doom2_root), hc.get("doom", {})))
 
+        # ── 게임별 로드 루프 ─────────────────────────────────────────────────
+        for game, game_root, game_hc in _game_specs:
+            cache_key = build_per_game_cache_key(game, game_root, game_hc)
 
-        # ── POKEMON 패딩 후 필터링 (타일셋 기준: 256개 중 250개 이상) ──────────────────
+            # (1) per-game 캐시 히트 시도
+            if use_cache:
+                cached = load_game_samples_from_cache(cache_dir, game, cache_key)
+                if cached is not None:
+                    for s in cached:
+                        s.order = len(self._samples)
+                        self._samples.append(s)
+                    continue
+
+            # (2) 원본 데이터셋에서 로드
+            game_samples = self._load_game_from_source(
+                game, game_root, handler_config
+            )
+
+            if game_samples is not None:
+                for s in game_samples:
+                    s.order = len(self._samples)
+                    self._samples.append(s)
+                # 캐시에 저장
+                if use_cache:
+                    save_game_samples_to_cache(
+                        cache_dir, game, cache_key, game_samples
+                    )
+                continue
+
+            # (3) artifact-only fallback: 키 불일치지만 해당 게임 캐시가 있으면 로드
+            if use_cache:
+                fallback = load_any_game_cache(cache_dir, game)
+                if fallback is not None:
+                    print(f"[MultiGameDataset] {game}: artifact-only fallback "
+                          f"({len(fallback)} samples from existing cache)")
+                    for s in fallback:
+                        s.order = len(self._samples)
+                        self._samples.append(s)
+                    continue
+
+            # (4) 아무것도 없으면 경고만 출력
+            print(f"[MultiGameDataset] {game}: no source data and no cache — skipped")
+
+        # ── 글로벌 후처리 (캐시에 저장하지 않고 매번 런타임 적용) ──────────────
         if self._handler_config.pokemon.enabled:
             self._apply_pokemon_tileset_filtering()
 
-
-
-        # ── instruction 단어 수 기반 필터링 (패딩 후) ────────────────────────────
         if self._handler_config.pokemon.enabled:
             self._apply_instruction_filtering()
 
-        # ── 데이터 증강: 시계방향 90도 회전 (게임별 설정) ────────────────────────
         if self._handler_config.augmentation.enabled:
             self._augment_with_rotations_per_game()
 
-        # ── reward annotation 로드 및 샘플에 부착 ────────────────────────────
         if reward_annotations_dir is not None:
             self._load_reward_annotations(Path(reward_annotations_dir))
 
-        if use_cache:
-            save_samples_to_cache(cache_dir, cache_key, self._samples)
+
+    def _load_game_from_source(
+        self, game: str, game_root: str, handler_config: HandlerConfig
+    ) -> Optional[List[GameSample]]:
+        """원본 데이터셋에서 게임 샘플을 로드한다. 실패 시 None 반환."""
+        root = Path(game_root)
+        if not root.exists():
+            return None
+
+        samples: List[GameSample] = []
+        try:
+            if game == "dungeon":
+                self._dungeon_handler = DungeonHandler(root=game_root)
+                for sample in self._dungeon_handler:
+                    samples.append(sample)
+
+            elif game == "sokoban":
+                self._sokoban_handler = BoxobanHandler(root=game_root)
+                for sample in self._sokoban_handler:
+                    samples.append(sample)
+
+            elif game == "zelda":
+                self._zelda_handler = ZeldaHandler(root=game_root, handler_config=handler_config)
+                for sample in self._zelda_handler:
+                    samples.append(sample)
+                if samples:
+                    print(f"[MultiGameDataset] Zelda: Loaded {len(samples)} rooms")
+
+            elif game == "pokemon":
+                self._pokemon_handler = POKEMONHandler(root=game_root, handler_config=handler_config)
+                valid_ids, filtered_ratio, filtered_count = \
+                    self._pokemon_handler.list_entries_with_filtering(
+                        max_tile_ratio=handler_config.pokemon.max_tile_ratio,
+                        max_tile_count=handler_config.pokemon.max_tile_count,
+                    )
+                for source_id in valid_ids:
+                    sample = self._pokemon_handler.load_sample(source_id)
+                    samples.append(sample)
+                total_filtered = filtered_ratio + filtered_count
+                if total_filtered > 0:
+                    total_pokemon = len(valid_ids) + total_filtered
+                    print(f"[MultiGameDataset] POKEMON: Filtered {total_pokemon} → "
+                          f"{len(valid_ids)} samples ({total_filtered} removed)")
+
+            elif game in ("doom", "doom2"):
+                handler = DoomHandler(root=game_root, handler_config=handler_config)
+                if game == "doom":
+                    self._doom_handler = handler
+                for sample in handler:
+                    samples.append(sample)
+                if samples:
+                    print(f"[MultiGameDataset] {game.upper()}: Loaded {len(samples)} samples")
+
+            else:
+                print(f"[MultiGameDataset] Unknown game: {game}")
+                return None
+
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Warning: Could not load {game} dataset: {e}")
+            return None
+
+        return samples if samples else None
 
     def _apply_floor_filtering(self, samples: List[GameSample], floor_empty_max: int) -> List[GameSample]:
         """

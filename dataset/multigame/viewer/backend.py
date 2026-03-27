@@ -66,12 +66,12 @@ class DatasetViewerBackend:
         
         self._games: List[str] = []
         self._counts: Dict[str, int] = {}
-        self._samples_by_game: Dict[str, List[GameSample]] = {}  # 게임별 샘플 캐시
+        self._raw_samples_by_game: Dict[str, List[GameSample]] = {}  # 게임별 raw 샘플 캐시
         
-        # MultiGameDataset 로드 (기본값 사용 - 캐시 자동 활용)
+        # MultiGameDataset 로드: use_tile_mapping=False로 raw array 유지
         try:
-            self._dataset = MultiGameDataset(use_cache=True)
-            print(f"[DatasetViewerBackend] ✅ 로드 완료", flush=True)
+            self._dataset = MultiGameDataset(use_cache=True, use_tile_mapping=False)
+            print(f"[DatasetViewerBackend] ✅ 로드 완료 (raw array)", flush=True)
         except Exception as e:
             print(f"[DatasetViewerBackend] ❌ 로드 실패: {e}", flush=True)
             import traceback
@@ -82,9 +82,9 @@ class DatasetViewerBackend:
         self._games: List[str] = self._dataset.available_games()
         self._counts: Dict[str, int] = self._dataset.count_by_game()
         
-        # 게임별 샘플을 미리 필터링해서 캐시 (초기화 시점에 한 번만)
+        # 게임별 raw 샘플을 미리 필터링해서 캐시 (초기화 시점에 한 번만)
         for game in self._games:
-            self._samples_by_game[game] = self._dataset.by_game(game)
+            self._raw_samples_by_game[game] = self._dataset.by_game(game)
         
         print(f"[DatasetViewerBackend] 게임: {self._games}", flush=True)
         print(f"[DatasetViewerBackend] 샘플: {self._counts}", flush=True)
@@ -107,17 +107,21 @@ class DatasetViewerBackend:
     def get_sample(self, game: str, index: int) -> Dict[str, Any]:
         sample = self._load_sample(game, index)
         raw_palette = self._palette_for_game(game)
-        unified_arr = to_unified(sample.array, game, warn_unmapped=False)
+        # raw_array: 변형되지 않은 원본 데이터
+        raw_array = sample.array
+        # unified_array: mapping에 따라 변환된 unified category
+        unified_array = to_unified(raw_array, game, warn_unmapped=False)
+        
         return {
             "game": game,
             "index": index,
             "count": self.count(game),
             "source_id": sample.source_id,
             "shape": [int(sample.array.shape[0]), int(sample.array.shape[1])],
-            "array": sample.array.astype(int).tolist(),
+            "array": raw_array.astype(int).tolist(),
             "palette": {str(k): list(v) for k, v in raw_palette.items()},
             "tile_names": _raw_tile_names(game),
-            "unified_array": unified_arr.astype(int).tolist(),
+            "unified_array": unified_array.astype(int).tolist(),
             "unified_palette": _UNIFIED_PALETTE,
             "unified_names": _UNIFIED_NAMES,
             "instruction": sample.instruction,
@@ -125,10 +129,10 @@ class DatasetViewerBackend:
         }
 
     def _load_sample(self, game: str, index: int) -> GameSample:
-        if game not in self._samples_by_game:
+        if game not in self._raw_samples_by_game:
             raise KeyError(f"Game {game} not found")
         
-        samples = self._samples_by_game[game]
+        samples = self._raw_samples_by_game[game]
         n = len(samples)
         
         if index < 0 or index >= n:

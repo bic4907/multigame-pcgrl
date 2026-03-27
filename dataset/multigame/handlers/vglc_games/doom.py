@@ -25,9 +25,12 @@ class DoomTile:
     WALL    = 1
     FLOOR   = 2
     ENEMY   = 3
-    OBJECT  = 4
+    # OBJECT  = 4
     SPAWN   = 5
     HAZARD  = 6
+    ITEM = 7
+    DANGER = 8
+    DOOR = 9
     UNKNOWN = 99
 
 
@@ -39,17 +42,17 @@ _CHAR_MAP: dict[str, int] = {
     ".": DoomTile.FLOOR,
     ",": DoomTile.FLOOR,
     "E": DoomTile.ENEMY,
-    "W": DoomTile.OBJECT,
-    "A": DoomTile.OBJECT,
-    "H": DoomTile.OBJECT,
-    "B": DoomTile.OBJECT,
-    "K": DoomTile.OBJECT,
+    "W": DoomTile.ITEM,
+    "A": DoomTile.ITEM,
+    "H": DoomTile.ITEM,
+    "B": DoomTile.DANGER,
+    "K": DoomTile.ITEM,
     "<": DoomTile.SPAWN,
     "T": DoomTile.SPAWN,
     ":": DoomTile.FLOOR,
-    "L": DoomTile.SPAWN,
+    "L": DoomTile.DOOR,
     "t": DoomTile.SPAWN,
-    "+": DoomTile.SPAWN,
+    "+": DoomTile.DOOR,
     ">": DoomTile.SPAWN
 }
 
@@ -57,10 +60,11 @@ DOOM_PALETTE: dict[int, tuple[int, int, int]] = {
     DoomTile.EMPTY:   (20,  20,  20),
     DoomTile.WALL:    (80,  80,  80),
     DoomTile.FLOOR:   (160, 140, 120),
-    DoomTile.HAZARD:  (80,  80,  220),
     DoomTile.ENEMY:   (220, 50,  50),
-    DoomTile.OBJECT:  (230,  230, 20),
-    DoomTile.UNKNOWN: (255, 255,   255),
+    DoomTile.ITEM:    (230,  230, 20),
+    DoomTile.UNKNOWN: (255, 255,  255),
+    DoomTile.DANGER:  (80,  80,  220),
+    DoomTile.DOOR:    (80, 60, 40)
 }
 
 

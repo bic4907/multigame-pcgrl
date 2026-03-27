@@ -21,13 +21,6 @@ class DoomConfig:
     rotate_90: bool = False
     max_samples: int = 1000
 
-@dataclass
-class FilteringConfig:
-    """데이터셋 필터링 설정"""
-    enabled: bool = True
-    min_instruction_words: int = 2  # instruction이 이 이상의 단어 수를 가져야 함
-    max_tile_ratio: float = 0.9  # 한 타일이 차지하는 최대 비율 (0~1). 이상이면 제외. 예: 0.95 = 100개 중 95개 이상
-
 
 @dataclass
 class AugmentationConfig:
@@ -84,12 +77,16 @@ class POKEMONConfig:
     """Five-Dollar-Model (POKEMON) 게임 설정"""
     rotate_90: bool = True  # 시계방향 90도 회전 증강
     max_samples: int = 1000
+    # 필터링 설정
+    enabled: bool = True
+    min_instruction_words: int = 2  # instruction이 이 이상의 단어 수를 가져야 함
+    max_tile_ratio: float = 0.95  # 한 타일이 차지하는 최대 비율 (0~1). 이상이면 제외. 예: 0.95 = 100개 중 95개 이상
+    max_tile_count: int = 250  # 패딩 후 16x16에서 한 타일이 차지할 수 있는 최대 개수
 
 
 @dataclass
 class HandlerConfig:
     """모든 핸들러의 통합 설정"""
-    filtering: FilteringConfig = field(default_factory=FilteringConfig)
     augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
     zelda: ZeldaConfig = field(default_factory=ZeldaConfig)
     mario: MarioConfig = field(default_factory=MarioConfig)
@@ -103,7 +100,6 @@ class HandlerConfig:
     def to_dict(self) -> Dict[str, Any]:
         """설정을 딕셔너리로 변환"""
         return {
-            'filtering': asdict(self.filtering),
             'augmentation': asdict(self.augmentation),
             'zelda': asdict(self.zelda),
             'mario': asdict(self.mario),
@@ -116,20 +112,6 @@ class HandlerConfig:
         }
 
 
-    def update_filtering(
-        self,
-        enabled: Optional[bool] = None,
-        min_instruction_words: Optional[int] = None,
-        max_tile_ratio: Optional[float] = None,
-    ) -> None:
-        """필터링 설정 업데이트"""
-        if enabled is not None:
-            self.filtering.enabled = enabled
-        if min_instruction_words is not None:
-            self.filtering.min_instruction_words = min_instruction_words
-        if max_tile_ratio is not None:
-            self.filtering.max_tile_ratio = max_tile_ratio
-
     def update_augmentation(
         self,
         enabled: Optional[bool] = None,
@@ -137,6 +119,23 @@ class HandlerConfig:
         """증강 설정 업데이트 (활성화 여부만)"""
         if enabled is not None:
             self.augmentation.enabled = enabled
+
+    def update_pokemon_filtering(
+        self,
+        enabled: Optional[bool] = None,
+        min_instruction_words: Optional[int] = None,
+        max_tile_ratio: Optional[float] = None,
+        max_tile_count: Optional[int] = None,
+    ) -> None:
+        """POKEMON 필터링 설정 업데이트"""
+        if enabled is not None:
+            self.pokemon.enabled = enabled
+        if min_instruction_words is not None:
+            self.pokemon.min_instruction_words = min_instruction_words
+        if max_tile_ratio is not None:
+            self.pokemon.max_tile_ratio = max_tile_ratio
+        if max_tile_count is not None:
+            self.pokemon.max_tile_count = max_tile_count
 
 def get_default_config() -> HandlerConfig:
     """기본 설정 반환"""

@@ -227,8 +227,8 @@ class MultiGameDataset:
                 self._pokemon_handler = POKEMONHandler(root=pokemon_root, handler_config=self._handler_config)
                 # POKEMON은 로드 전에 필터링 적용 (패딩 전 10x10 기반 + 패딩 후 tileset 필터링)
                 valid_ids, filtered_ratio, filtered_count = self._pokemon_handler.list_entries_with_filtering(
-                    max_tile_ratio=self._handler_config.filtering.max_tile_ratio,
-                    max_tile_count=250
+                    max_tile_ratio=self._handler_config.pokemon.max_tile_ratio,
+                    max_tile_count=self._handler_config.pokemon.max_tile_count
                 )
                 for i, source_id in enumerate(valid_ids):
                     sample = self._pokemon_handler.load_sample(source_id)
@@ -239,10 +239,9 @@ class MultiGameDataset:
                 if total_filtered > 0:
                     total_pokemon = len(valid_ids) + total_filtered
                     print(f"[MultiGameDataset] POKEMON: Filtered {total_pokemon} → {len(valid_ids)} samples "
-                          f"({total_filtered} removed, max_tile_ratio={self._handler_config.filtering.max_tile_ratio})")
+                          f"({total_filtered} removed, max_tile_ratio={self._handler_config.pokemon.max_tile_ratio})")
             except (FileNotFoundError, ValueError) as e:
                 print(f"Warning: Could not load FDM dataset: {e}")
-
         # ── DOOM 로드 ────────────────────────────────────────────────────────
         if include_doom:
             if Path(doom_root).exists():
@@ -279,14 +278,13 @@ class MultiGameDataset:
 
 
         # ── POKEMON 패딩 후 필터링 (타일셋 기준: 256개 중 250개 이상) ──────────────────
-        if self._handler_config.filtering.enabled:
+        if self._handler_config.pokemon.enabled:
             self._apply_pokemon_tileset_filtering()
 
 
 
-
-        # ── instruction 단어 수 기반 필터링 (패딩 후) ────────────────────────
-        if self._handler_config.filtering.enabled:
+        # ── instruction 단어 수 기반 필터링 (패딩 후) ────────────────────────────
+        if self._handler_config.pokemon.enabled:
             self._apply_instruction_filtering()
 
         # ── 데이터 증강: 시계방향 90도 회전 (게임별 설정) ────────────────────────
@@ -335,13 +333,13 @@ class MultiGameDataset:
         # instruction이 있는 샘플만 필터링 (instruction이 없는 샘플은 유지)
         self._samples = [
             s for s in self._samples
-            if s.instruction is None or len(s.instruction.split()) >= self._handler_config.filtering.min_instruction_words
+            if s.instruction is None or len(s.instruction.split()) >= self._handler_config.pokemon.min_instruction_words
         ]
 
         filtered_count = original_count - len(self._samples)
         if filtered_count > 0:
             print(f"[MultiGameDataset] Instruction filtering: {original_count} → {len(self._samples)} samples "
-                  f"({filtered_count} removed, min_words={self._handler_config.filtering.min_instruction_words})")
+                  f"({filtered_count} removed, min_words={self._handler_config.pokemon.min_instruction_words})")
 
     def _apply_pokemon_tileset_filtering(self) -> None:
         """
@@ -557,6 +555,90 @@ class MultiGameDataset:
                       f"attached to {game_attached} {game_name} samples")
 
 
+    def _load_reward_annotations(self, annotations_dir: Path) -> None:
+        """
+        reward_annotations 폴더에서 CSV 파일을 읽어 해당 게임 샘플의 meta에
+        reward annotation 정보를 부착한다.
+        - {game}_reward_annotations.csv         : per-sample 실제 annotation
+        - {game}_reward_annotations_placeholder.csv : 게임 단위 더미 annotation
+            → conditions 접근 시 WARNING 로그 출력
+        reward_enum은 모든 게임 통일 1~5:
+          1=region / 2=path_length / 3=block / 4=bat_amount / 5=bat_direction
+        """
+        logger = logging.getLogger(__name__)
+        # ── dungeon: per-sample CSV ───────────────────────────────────────
+        dungeon_csv = annotations_dir / "dungeon_reward_annotations.csv"
+        if dungeon_csv.exists():
+            annotation_map: Dict[str, Dict[str, Any]] = {}
+            with open(dungeon_csv, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    annotation_map[row["key"]] = row
+            attached = 0
+            for sample in self._samples:
+                if sample.game != GameTag.DUNGEON:
+                    continue
+                ann = annotation_map.get(sample.source_id)
+                if ann is None:
+                    continue
+                sample.meta["reward_enum"] = int(ann["reward_enum"])
+                sample.meta["feature_name"] = ann["feature_name"]
+                sample.meta["sub_condition"] = ann["sub_condition"]
+                conditions: Dict[int, float] = {}
+                for i in range(1, 6):
+                    val = ann.get(f"condition_{i}", "")
+                    if val != "":
+                        conditions[i] = float(val)
+                sample.meta["conditions"] = conditions
+                attached += 1
+            if attached > 0:
+                print(f"[MultiGameDataset] Reward annotations: attached to {attached} dungeon samples")
+        # ── 나머지 게임: *_placeholder.csv 읽어서 game-level 적용 ─────────
+        # 파일명에 _placeholder가 포함된 CSV를 자동 탐지
+        for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):
+            game_name = ph_csv.name.replace("_reward_annotations_placeholder.csv", "")
+            # CSV에서 feature 목록 파싱
+            ph_features: list[Dict[str, Any]] = []
+            with open(ph_csv, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    reward_enum = int(row["reward_enum"])
+                    conditions: Dict[int, float] = {}
+                    for i in range(1, 6):
+                        val = row.get(f"condition_{i}", "")
+                        if val != "":
+                            conditions[i] = float(val)
+                    ph_features.append({
+                        "reward_enum":  reward_enum,
+                        "feature_name": row["feature_name"],
+                        "sub_condition": row["sub_condition"],
+                        "conditions":   conditions,
+                    })
+            if not ph_features:
+                continue
+            # 모든 조건을 합친 dict (placeholder 전체를 한 번에)
+            all_conditions: Dict[int, float] = {}
+            for feat in ph_features:
+                all_conditions.update(feat["conditions"])
+            game_attached = 0
+            for sample in self._samples:
+                if sample.game != game_name:
+                    continue
+                # 기본 reward_enum = 첫 번째 feature
+                sample.meta["reward_enum"]  = ph_features[0]["reward_enum"]
+                sample.meta["feature_name"] = ph_features[0]["feature_name"]
+                sample.meta["sub_condition"] = ph_features[0]["sub_condition"]
+                sample.meta["conditions"] = _WarningConditionsDict(
+                    all_conditions,
+                    game=game_name,
+                    logger=logger,
+                )
+                game_attached += 1
+            if game_attached > 0:
+                print(f"[MultiGameDataset] Reward annotations (placeholder): "
+                      f"attached to {game_attached} {game_name} samples")
+
+
     def apply_filtering(self, apply_filter: bool = True) -> None:
         """
         필터링 조건을 적용하여 _samples를 재필터링한다.
@@ -572,7 +654,7 @@ class MultiGameDataset:
         apply_filter : bool
             True이면 필터링 적용, False이면 원본 유지
         """
-        if not apply_filter or not self._handler_config.filtering.enabled:
+        if not apply_filter or not self._handler_config.pokemon.enabled:
             return
 
         self._apply_instruction_filtering()

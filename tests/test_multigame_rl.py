@@ -158,7 +158,6 @@ def multigame_setup():
         input_ids=None,
         attention_mask=None,
         pixel_values=None,
-        sketch_values=None,
     )
     network_params = network.init(_rng, dummy_obs)
 
@@ -408,7 +407,6 @@ def _stack_obs(transitions):
         input_ids    =None,
         attention_mask=None,
         pixel_values  =None,
-        sketch_values =None,
     )
 
 

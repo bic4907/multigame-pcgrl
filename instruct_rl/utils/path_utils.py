@@ -1,4 +1,5 @@
 import os
+import logging
 import gymnax
 import jax
 from glob import glob
@@ -105,9 +106,6 @@ def get_exp_group(config):
             if config.encoder.state:
                 state_ratio_str = 's' if config.state_ratio==1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
                 modality.append(state_ratio_str)
-            if config.encoder.sketch:
-                sketch_ratio_str = 'k' if config.sketch_ratio==1.0 else f"k.{str(config.sketch_ratio).split('.')[1]}"
-                modality.append(sketch_ratio_str)
             modality = ''.join(modality)
             encoder_dict['md'] = modality
 
@@ -302,6 +300,18 @@ def init_config(config: Config):
                     if config.encoder.sketch:
                         sketch_ratio_str = 'k' if config.sketch_ratio==1.0 else f"k.{str(config.sketch_ratio).split('.')[1]}"
                         modality.append(sketch_ratio_str)
+            conditions = {
+                'embed_type': f'enc-{config.encoder.model}',
+                'embed_size': f'es-{config.encoder.output_dim}',
+                'buffer_ratio': f'br-{config.buffer_ratio}',
+            }
+
+            if config.encoder.model in ['cnnclip', 'clip']:
+                text_ratio_str = 't' if config.text_ratio==1.0 else f"t.{str(config.text_ratio).split('.')[1]}"
+                modality = [text_ratio_str]
+                if config.encoder.state:
+                    state_ratio_str = 's' if config.state_ratio==1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
+                    modality.append(state_ratio_str)
 
                     modality = ''.join(modality)
                     conditions['md'] = modality

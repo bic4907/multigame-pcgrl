@@ -140,7 +140,7 @@ def make_eval(config, restored_ckpt, encoder_params):
         ])
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
-        pixel_values, sketch_values = None, None
+        pixel_values = None
 
         if config.encoder.model == 'clip':
             language_instr_list = instruct_df["instruction"].to_list()
@@ -162,7 +162,7 @@ def make_eval(config, restored_ckpt, encoder_params):
                 attention_mask=attention_mask,
                 pixel_values=jnp.zeros((input_ids.shape[0], 224, 224, config.clip_input_channel), dtype=jnp.float32),
             )
-            _, _, _, embedding, _, _ = network.apply(runner_state.train_state.params, x=instr_x, return_text_embed=True, return_state_embed=False, return_sketch_embed=False)
+            _, _, _, embedding, _, _ = network.apply(runner_state.train_state.params, x=instr_x, return_text_embed=True, return_state_embed=False)
             logger.info(
                 f"Generated clip text embeddings for {input_ids.shape[0]} instructions."
             )
@@ -213,25 +213,6 @@ def make_eval(config, restored_ckpt, encoder_params):
                         wandb.log({f"CondState/reward_{i}": wandb.Image(image_arr)})
 
                 logger.info(f"Generated cnnclip state embeddings for {input_level.shape[0]} instructions.")
-
-
-            elif config.eval_modality == 'sketch':
-
-                input_ids = jnp.zeros((1, 77), dtype=jnp.int32)  # Dummy input_ids for state modality
-                attention_mask = jnp.ones((1, 77), dtype=jnp.int32)
-
-                language_instr_list = instruct_df["instruction"].to_list()
-                dataset_mgr = DatasetManager(config.eval_human_demo_path)
-
-                sketch_values_raw = dataset_mgr.get_sketches(instructions=language_instr_list, n=1, squeeze_n=True)
-                sketch_values = add_coord_channel_batch(sketch_values_raw)
-
-                if wandb.run:
-                    for i, sketch_arr in enumerate(sketch_values_raw):
-                        sketch_arr = np.array(sketch_arr, dtype=np.float32)
-                        wandb.log({f"CondSketch/reward_{i}": wandb.Image(sketch_arr)})
-
-                logger.info(f"Generated cnnclip sketch embeddings for {sketch_values.shape[0]} instructions.")
             else:
                 raise ValueError(f"Unknown eval_modality: {config.eval_modality}")
 
@@ -244,21 +225,18 @@ def make_eval(config, restored_ckpt, encoder_params):
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 pixel_values=pixel_values,
-                sketch_values=sketch_values
             )
 
-            _, _, _, text_embed, state_embed, sketch_embed = network.apply(runner_state.train_state.params, x=instr_x,
+            _, _, _, text_embed, state_embed = network.apply(runner_state.train_state.params, x=instr_x,
                                                   return_text_embed=True if config.eval_modality == 'text' else False,
                                                   return_state_embed=True if config.eval_modality == 'state' else False,
-                                                  return_sketch_embed=True if config.eval_modality == 'sketch' else False)
+                                                  )
 
 
             if config.eval_modality == 'text':
                 embedding = text_embed
             elif config.eval_modality == 'state':
                 embedding = state_embed
-            elif config.eval_modality == 'sketch':
-                embedding = sketch_embed
 
         instruct = Instruct(
                     reward_i=reward_enum,
@@ -341,7 +319,7 @@ def make_eval(config, restored_ckpt, encoder_params):
                     pi, value, _, _ ,_, _ = network.apply(runner_state.train_state.params, last_obs,
                                                        return_text_embed=False,
                                                        return_state_embed=False,
-                                                       return_sketch_embed=False)
+                                                       )
 
                     action = pi.sample(seed=_rng)
 

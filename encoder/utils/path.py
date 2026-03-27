@@ -55,9 +55,6 @@ def get_exp_group(config):
         if config.encoder.state:
             state_ratio_str = 's' if config.state_ratio==1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
             modality.append(state_ratio_str)
-        if config.encoder.sketch:
-            sketch_ratio_str = 'k' if config.sketch_ratio==1.0 else f"k.{str(config.sketch_ratio).split('.')[1]}"
-            modality.append(sketch_ratio_str)
 
         modality = ''.join(modality)
 

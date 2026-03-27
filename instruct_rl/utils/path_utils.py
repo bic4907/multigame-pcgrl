@@ -96,17 +96,16 @@ def get_exp_group(config):
         if hasattr(config, 'random_agent') and config.random_agent:
             config_dict['model'] = 'rand'
 
-
         encoder_dict = dict()
 
         if config.encoder.model in ['clip', 'cnnclip']:
-            text_ratio_str = 't' if config.text_ratio==1.0 else f"t.{str(config.text_ratio).split('.')[1]}"
+            text_ratio_str = 't' if config.text_ratio == 1.0 else f"t.{str(config.text_ratio).split('.')[1]}"
             modality = [text_ratio_str]
             if config.encoder.state:
-                state_ratio_str = 's' if config.state_ratio==1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
+                state_ratio_str = 's' if config.state_ratio == 1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
                 modality.append(state_ratio_str)
             if config.encoder.sketch:
-                sketch_ratio_str = 'k' if config.sketch_ratio==1.0 else f"k.{str(config.sketch_ratio).split('.')[1]}"
+                sketch_ratio_str = 'k' if config.sketch_ratio == 1.0 else f"k.{str(config.sketch_ratio).split('.')[1]}"
                 modality.append(sketch_ratio_str)
             modality = ''.join(modality)
             encoder_dict['md'] = modality
@@ -263,12 +262,9 @@ def init_config(config: Config):
                 config.model = 'nlpconv'
                 logger.info("Setting model to `nlpconv` due to the instruct set")
 
-
     if config.vec_cont is True and config.model != 'contconv':
         config.model = 'contconv'
         logger.warning("Setting model to `contconv` due to the vec_cont flag")
-
-
 
     if config.encoder.model is not None:
         logger.info(f'Loading checkpoint for the encoder model: {config.encoder.model} '
@@ -276,7 +272,7 @@ def init_config(config: Config):
 
         # For coord Channel(x,y)
         config.clip_input_channel = config.clip_input_channel + 2
-        config.text_ratio = min([0.25,0.5,0.75,1.0], key=lambda x: abs(x - config.text_ratio))
+        config.text_ratio = min([0.25, 0.5, 0.75, 1.0], key=lambda x: abs(x - config.text_ratio))
 
         # encoder.ckpt 가 지정되지 않은 경우(dataset 기반 IPCGRL 등) 체크포인트 탐색 스킵
         if config.encoder.ckpt is None and hasattr(config, 'dataset_game') and config.dataset_game is not None:
@@ -294,13 +290,13 @@ def init_config(config: Config):
                 }
 
                 if config.encoder.model in ['cnnclip', 'clip']:
-                    text_ratio_str = 't' if config.text_ratio==1.0 else f"t.{str(config.text_ratio).split('.')[1]}"
+                    text_ratio_str = 't' if config.text_ratio == 1.0 else f"t.{str(config.text_ratio).split('.')[1]}"
                     modality = [text_ratio_str]
                     if config.encoder.state:
-                        state_ratio_str = 's' if config.state_ratio==1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
+                        state_ratio_str = 's' if config.state_ratio == 1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
                         modality.append(state_ratio_str)
                     if config.encoder.sketch:
-                        sketch_ratio_str = 'k' if config.sketch_ratio==1.0 else f"k.{str(config.sketch_ratio).split('.')[1]}"
+                        sketch_ratio_str = 'k' if config.sketch_ratio == 1.0 else f"k.{str(config.sketch_ratio).split('.')[1]}"
                         modality.append(sketch_ratio_str)
 
                     modality = ''.join(modality)
@@ -385,7 +381,6 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     else:
         action_dim = env.num_actions
 
-
     if config.vec_cont is True and config.model != 'contconv':
         logger.warning("Setting model to `contconv` due to the vec_cont flag")
         config.model = 'contconv'
@@ -430,7 +425,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     elif config.model == "clipconv":
         network = EncoderCLIPConvForward(
             config=config.encoder,
-            encoder= get_clip_encoder(config.encoder) if config.encoder.model else None,
+            encoder=get_clip_encoder(config.encoder) if config.encoder.model else None,
             train_encoder=config.encoder.trainable,
             nlp_conv_forward=NLPConvForward(
                 action_dim=action_dim, activation=config.activation,

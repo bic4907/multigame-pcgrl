@@ -1,5 +1,4 @@
 import os
-import logging
 import gymnax
 import jax
 from glob import glob
@@ -28,7 +27,7 @@ def get_exp_dir_evo_map(config: EvoMapConfig):
         f'parents-{config.n_parents}_' +
         f'mut-{config.mut_rate}_' +
         f'{config.seed}_{config.exp_name}',
-    )
+        )
     return exp_dir
 
 
@@ -106,6 +105,9 @@ def get_exp_group(config):
             if config.encoder.state:
                 state_ratio_str = 's' if config.state_ratio==1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
                 modality.append(state_ratio_str)
+            if config.encoder.sketch:
+                sketch_ratio_str = 'k' if config.sketch_ratio==1.0 else f"k.{str(config.sketch_ratio).split('.')[1]}"
+                modality.append(sketch_ratio_str)
             modality = ''.join(modality)
             encoder_dict['md'] = modality
 
@@ -271,7 +273,7 @@ def init_config(config: Config):
     if config.encoder.model is not None:
         logger.info(f'Loading checkpoint for the encoder model: {config.encoder.model} '
                     f'(embed size: {config.encoder.output_dim}, buffer_ratio: {config.buffer_ratio})')
-        
+
         # For coord Channel(x,y)
         config.clip_input_channel = config.clip_input_channel + 2
         config.text_ratio = min([0.25,0.5,0.75,1.0], key=lambda x: abs(x - config.text_ratio))
@@ -300,18 +302,6 @@ def init_config(config: Config):
                     if config.encoder.sketch:
                         sketch_ratio_str = 'k' if config.sketch_ratio==1.0 else f"k.{str(config.sketch_ratio).split('.')[1]}"
                         modality.append(sketch_ratio_str)
-            conditions = {
-                'embed_type': f'enc-{config.encoder.model}',
-                'embed_size': f'es-{config.encoder.output_dim}',
-                'buffer_ratio': f'br-{config.buffer_ratio}',
-            }
-
-            if config.encoder.model in ['cnnclip', 'clip']:
-                text_ratio_str = 't' if config.text_ratio==1.0 else f"t.{str(config.text_ratio).split('.')[1]}"
-                modality = [text_ratio_str]
-                if config.encoder.state:
-                    state_ratio_str = 's' if config.state_ratio==1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
-                    modality.append(state_ratio_str)
 
                     modality = ''.join(modality)
                     conditions['md'] = modality
@@ -421,8 +411,8 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
 
         # dataset 기반 VIPCGRL: encoder 불필요 (CLIP 임베딩이 사전 계산됨)
         _skip_encoder = (
-            hasattr(config, 'dataset_game') and config.dataset_game is not None
-            and config.encoder.model in ('cnnclip', 'clip')
+                hasattr(config, 'dataset_game') and config.dataset_game is not None
+                and config.encoder.model in ('cnnclip', 'clip')
         )
         network = EncoderNLPConvForward(
             config=config.encoder,
@@ -436,7 +426,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 hidden_dims=config.hidden_dims
             )
         )
-    
+
     elif config.model == "clipconv":
         network = EncoderCLIPConvForward(
             config=config.encoder,
@@ -531,7 +521,7 @@ def get_env_params_from_config(config: Config):
 
     # dataset 기반 VIPCGRL 은 nlp_input_dim 으로 CLIP embedding 차원을 전달
     _use_nlp_dim = config.use_nlp or (
-        config.use_clip and hasattr(config, 'dataset_game') and config.dataset_game is not None
+            config.use_clip and hasattr(config, 'dataset_game') and config.dataset_game is not None
     )
 
     env_params = PCGRLEnvParams(
@@ -615,4 +605,3 @@ def make_directory_recursive(path):
     else:
         return
     os.makedirs(path, exist_ok=True)
-

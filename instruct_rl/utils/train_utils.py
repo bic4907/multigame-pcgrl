@@ -202,9 +202,9 @@ def make_train(
                 if inject_obs_fn is not None and train_inst is not None:
                     last_obs = inject_obs_fn(last_obs, env_state, instruct_sample, config, env)
 
-                pi, value, _, _, _, _ = network.apply(
+                pi, value, _, _, _ = network.apply(
                     train_state.params, last_obs, rng=_rng,
-                    return_text_embed=False, return_state_embed=False, return_sketch_embed=False,
+                    return_text_embed=False, return_state_embed=False,
                 )
 
                 rng, _rng = jax.random.split(rng)
@@ -271,9 +271,9 @@ def make_train(
                 runner_state.last_obs,
                 runner_state.rng,
             )
-            _, last_val, _, _, _, _ = network.apply(
+            _, last_val, _, _, _ = network.apply(
                 train_state.params, last_obs,
-                return_text_embed=False, return_state_embed=False, return_sketch_embed=False,
+                return_text_embed=False, return_state_embed=False,
             )
 
             def _calculate_gae(traj_batch, last_val):
@@ -301,9 +301,9 @@ def make_train(
                     traj_batch, advantages, targets = batch_info
 
                     def _loss_fn(params, traj_batch, gae, targets, mutation_key):
-                        pi, value, _, _, _, _ = network.apply(
+                        pi, value, _, _, _ = network.apply(
                             params, traj_batch.obs,
-                            return_text_embed=False, return_state_embed=False, return_sketch_embed=False,
+                            return_text_embed=False, return_state_embed=False,
                         )
                         log_prob = pi.log_prob(traj_batch.action)
 
@@ -403,9 +403,9 @@ def make_train(
                         last_obs = inject_obs_fn(last_obs, env_state, instruct_sample, config, env)
 
                     rng, _rng = jax.random.split(rng)
-                    pi, value, _, _, _, _ = network.apply(
+                    pi, value, _, _, _ = network.apply(
                         train_state.params, last_obs,
-                        return_text_embed=False, return_state_embed=False, return_sketch_embed=False,
+                        return_text_embed=False, return_state_embed=False,
                     )
                     action = pi.sample(seed=_rng)
                     log_prob = pi.log_prob(action)

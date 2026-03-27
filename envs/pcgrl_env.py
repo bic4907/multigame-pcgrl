@@ -435,8 +435,7 @@ class PCGRLEnv(Environment):
                            attention_mask=None, pixel_values=None)
         elif self.vec_input_dim > 0:
             vec_obs = jnp.zeros(8)
-            obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=vec_obs,
-                           input_ids=None, attention_mask=None, pixel_values=None)
+            obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=vec_obs, input_ids=None, attention_mask=None, pixel_values=None)
         elif self.clip_input_channel > 0:
             nlp_obs = jnp.zeros(64)
             clip_input_ids = jnp.zeros((77), dtype=jnp.int32)
@@ -564,10 +563,10 @@ class PCGRLEnv(Environment):
 
         if env_params.nlp_input_dim > 0:
             nlp_obs = jnp.zeros((1, env_params.nlp_input_dim))
-            return PCGRLObs(map_x, map_x, ctrl_x, nlp_obs, None, None, None, None)
+            return PCGRLObs(map_x, map_x, ctrl_x, nlp_obs, None, None, None)
         elif env_params.vec_input_dim > 0:
             vec_obs = jnp.zeros((1, 8))
-            return PCGRLObs(map_x, map_x, ctrl_x, vec_obs, None, None, None, None)
+            return PCGRLObs(map_x, map_x, ctrl_x, vec_obs, None, None, None)
         elif env_params.clip_input_channel > 0:
             nlp_obs = jnp.zeros((1, 64))
             clip_input_ids = jnp.zeros((1, 77), dtype=jnp.int32)
@@ -578,7 +577,7 @@ class PCGRLEnv(Environment):
                             clip_pixel_values,
                             )
         else:
-            return PCGRLObs(map_x, map_x, ctrl_x, jnp.zeros((1,)), None, None, None, None)
+            return PCGRLObs(map_x, map_x, ctrl_x, jnp.zeros((1,)), None, None, None)
 
     def sample_action(self, rng):
         action_shape = self.action_shape()

@@ -105,6 +105,7 @@ class Config:
     initialize: Optional[bool] = None
 
     # Wandb (WANDB_API_KEY 는 .env 파일 또는 환경변수로 설정)
+    wandb_key: Optional[str] = None
     wandb_project: Optional[str] = 'instruct_pcgrl'
     wandb_entity: Optional[str] = 'st4889ha-gwangju-institute-of-science-and-technology'
     wandb_resume: str = 'allow'
@@ -237,7 +238,7 @@ class CPCGRLConfig(TrainConfig):
     problem: str = "multigame"
     dataset_game: Optional[str] = "dungeon"
     dataset_reward_enum: Optional[int] = 1        # 1=region
-    dataset_train_ratio: float = 0.8
+    dataset_train_ratio: float = 0.95
 
     # CPCGRL 모드 강제
     vec_cont: bool = True

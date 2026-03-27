@@ -1,0 +1,15 @@
+name: cpcgrl-re1
+pod:
+  template_id: o6u732ibrq
+  gpu: NVIDIA GeForce RTX 5090
+  gpu_count: 1
+  spot: false
+options:
+  timeout: true
+  time_limit: 43200
+  terminate: true
+runtime:
+  cmds:
+  - cd /workspace/multigame-pcgrl
+  - python train_cpcgrl.py n_envs=600 dataset_reward_enum=1
+

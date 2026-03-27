@@ -180,7 +180,6 @@ class TestVIPCGRLTraining:
                 "render_freq=-1",
                 "eval_freq=-1",
                 "exp_name=test_vipcgrl_e2e",
-                "wandb_key=null",
             ],
             cwd=_ROOT,
             capture_output=True,

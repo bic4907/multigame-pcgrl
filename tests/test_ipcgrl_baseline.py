@@ -182,7 +182,6 @@ class TestIPCGRLTraining:
                 "render_freq=-1",
                 "eval_freq=-1",
                 "exp_name=test_ipcgrl_e2e",
-                "wandb_key=null",
             ],
             cwd=_ROOT,
             capture_output=True,

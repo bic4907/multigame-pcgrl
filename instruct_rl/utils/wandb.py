@@ -1,4 +1,3 @@
-from copy import deepcopy
 import wandb
 from conf.config import Config
 
@@ -24,14 +23,13 @@ def get_run_by_id(entity: str, project: str, run_id: str):
 
 
 def start_wandb(config: Config):
-    config = deepcopy(config)
+    from instruct_rl.utils.env_loader import get_wandb_key
 
-    if wandb.api.api_key:
-        config.wandb_key = wandb.api.api_key
+    wandb_key = get_wandb_key() or wandb.api.api_key
 
-    if config.wandb_key and config.wandb_project:
+    if wandb_key and config.wandb_project:
 
-        wandb.login(key=config.wandb_key)
+        wandb.login(key=wandb_key)
         run = wandb.init(
             project=config.wandb_project,
             resume=config.wandb_resume,

@@ -58,9 +58,11 @@ class WandbLoggingHandler(BaseLoggingHandler):
         super().__init__(**kwargs)
 
         if wandb.run is None:
-            if self.config.wandb_key and self.config.wandb_project:
+            from instruct_rl.utils.env_loader import get_wandb_key
+            wandb_key = get_wandb_key()
+            if wandb_key and self.config.wandb_project:
 
-                wandb.login(key=self.config.wandb_key)
+                wandb.login(key=wandb_key)
                 wandb.init(project=self.config.wandb_project, name=get_wandb_name(self.config), save_code=True)
                 wandb.config.update(dict(self.config), allow_val_change=True)
 

@@ -20,14 +20,14 @@ This repository provides a **multi-game dataset pipeline** for level-text repres
   - `dataset/dungeon_level_dataset` (instruction-level pairs)
 
 ---
-
+[train_cpcgrl.py](train_cpcgrl.py)
 ## Installation
 
 ```bash
 conda create -n mgpcgrl python=3.11
 conda activate mgpcgrl
 pip install -r requirements.txt
-```
+```[train_cpcgrl.py](train_cpcgrl.py)
 
 ---
 

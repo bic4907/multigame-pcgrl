@@ -104,9 +104,7 @@ class Config:
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     initialize: Optional[bool] = None
 
-    # Wandb
-    wandb_key: Optional[str] = None
-    
+    # Wandb (WANDB_API_KEY 는 .env 파일 또는 환경변수로 설정)
     wandb_project: Optional[str] = 'instruct_pcgrl'
     wandb_entity: Optional[str] = 'st4889ha-gwangju-institute-of-science-and-technology'
     wandb_resume: str = 'allow'
@@ -134,7 +132,7 @@ class Config:
     # MultiGameDataset-based filtering (for CPCGRL)
     dataset_game: Optional[str] = None          # e.g. "dungeon", "pokemon", "doom"
     dataset_reward_enum: Optional[int] = None   # e.g. 1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction
-    dataset_train_ratio: float = 0.8
+    dataset_train_ratio: float = 0.95
 
 @dataclass
 class CLIPConfig:

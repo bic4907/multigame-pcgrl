@@ -513,10 +513,12 @@ def main(config: CLIPTrainConfig):
     rng_key = jax.random.PRNGKey(config.seed)
     np.random.seed(config.seed)
 
-    if config.wandb_key:
+    from instruct_rl.utils.env_loader import get_wandb_key
+    wandb_key = get_wandb_key()
+    if wandb_key:
         dt = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         wandb_id = f'{get_wandb_name(config)}-{dt}'
-        wandb.login(key=config.wandb_key)
+        wandb.login(key=wandb_key)
         wandb.init(
             project=config.wandb_project,
             group=config.instruct,

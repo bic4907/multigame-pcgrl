@@ -1,8 +1,9 @@
 name: cpcgrl-re4
 pod:
-  template_id: o6u732ibrq
+  template_id: runpod-torch-v280
   gpu: NVIDIA GeForce RTX 5090
   gpu_count: 1
+  network_volume_id: dx18rniw3p
   spot: false
 options:
   timeout: true
@@ -10,6 +11,7 @@ options:
   terminate: true
 runtime:
   cmds:
+  - source /workspace/venv/bin/activate
   - cd /workspace/multigame-pcgrl
   - python train_cpcgrl.py n_envs=600 dataset_reward_enum=4
 

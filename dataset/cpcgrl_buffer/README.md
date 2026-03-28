@@ -1,0 +1,97 @@
+# CPCGRL Pair Dataset
+
+## 개요
+
+CPCGRL (Conditional PCGRL) 에이전트의 학습 중 수집된 trajectory 버퍼로부터
+**연속 2-step env_map 쌍** `(before, after)`을 추출하여 전처리한 데이터셋입니다.
+
+5개 reward_enum (1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction) 별로
+학습된 에이전트의 버퍼에서 골고루 추출한 뒤, **쌍 단위 중복을 완전히 제거**하여
+단일 `.npz` 파일로 저장합니다.
+
+## 파일
+
+```
+dataset/cpcgrl_buffer/
+├── build_pair_dataset.py       # 전처리 스크립트
+├── cpcgrl_pair_dataset.npz     # 최종 데이터셋 (단일 파일)
+└── README.md
+```
+
+## 데이터 Shape
+
+`cpcgrl_pair_dataset.npz` 내부 키:
+
+| 키 | Shape | dtype | 설명 |
+|---|---|---|---|
+| `env_map_pairs` | `(6792, 2, 16, 16)` | int32 | (before, after) env_map 쌍 |
+| `reward_enums` | `(6792,)` | int32 | 각 쌍의 reward_enum 라벨 (1~5) |
+| `timesteps` | `(6792,)` | int64 | 각 쌍의 시작 timestep (total_timesteps 기준) |
+
+- `env_map_pairs[:, 0]` → **before** (t 시점의 맵)
+- `env_map_pairs[:, 1]` → **after** (t+1 시점의 맵)
+- 맵 크기: 16×16, 타일 값: dungeon3 기준 정수 (0~7)
+
+## reward_enum 별 분포
+
+| reward_enum | feature | 쌍 수 |
+|:-----------:|---------|------:|
+| 1 | region | 3,469 |
+| 2 | path_length | 1,616 |
+| 3 | block | 884 |
+| 4 | bat_amount | 534 |
+| 5 | bat_direction | 289 |
+| **합계** | | **6,792** |
+
+> 중복 제거 전 20,000 쌍 → 제거 후 **6,792** 쌍.
+> reward_enum 별 중복률이 다른 이유는 일부 에이전트가 유사한 맵을 반복 생성하기 때문입니다.
+
+## 생성 방법
+
+```bash
+# saves/ 에 학습 버퍼가 있는 상태에서 실행
+python dataset/cpcgrl_buffer/build_pair_dataset.py \
+    --saves_dir saves \
+    --pairs_per_re 4000 \
+    --seed 42
+```
+
+### 전처리 파이프라인
+
+1. `saves/` 에서 `_re-{N}_` 패턴으로 reward_enum 별 버퍼 디렉토리 자동 탐색
+2. 각 버퍼의 env_map 을 전부 로드하여 **연속 2-step 쌍** `(env_map[t], env_map[t+1])` 생성
+   - `done=True` 경계 건너뜀 (에피소드 끊긴 곳)
+   - timestep 비정상 점프 건너뜀
+3. reward_enum 당 4,000개씩 중복 없이 랜덤 샘플링
+4. 전체 병합 후 **쌍 단위 중복 제거** (env_map 2장이 완전히 동일한 쌍 제거)
+5. 셔플 후 단일 `.npz` 로 저장
+
+### 원본 버퍼 출처
+
+학습 50%~100% 구간에서 `BufferCollector`가 수집한 trajectory:
+
+```
+saves/model-contconv_exp-def_game-dungeon_re-{1..5}_vec_ro_s-0/buffer/
+    buffer_000000_ts460800.npz
+    buffer_000001_ts537600.npz
+    ...
+```
+
+## 사용법
+
+```python
+import numpy as np
+
+data = np.load("dataset/cpcgrl_buffer/cpcgrl_pair_dataset.npz")
+pairs = data["env_map_pairs"]    # (6792, 2, 16, 16)
+re_labels = data["reward_enums"] # (6792,)
+ts = data["timesteps"]           # (6792,)
+
+# before / after 분리
+before_maps = pairs[:, 0]  # (6792, 16, 16)
+after_maps  = pairs[:, 1]  # (6792, 16, 16)
+
+# reward_enum=1 (region) 만 필터
+region_pairs = pairs[re_labels == 1]  # (3469, 2, 16, 16)
+```
+

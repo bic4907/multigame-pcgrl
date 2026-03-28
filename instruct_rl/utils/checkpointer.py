@@ -218,7 +218,11 @@ def init_checkpoint_step(runner_state, checkpoint_manager):
     """학습 시작 시 step=0 체크포인트를 저장한다. (jax.debug.callback 용)"""
     ckpt = {"runner_state": runner_state, "step_i": 0}
     ckpt = jax.device_get(ckpt)
-    checkpoint_manager.save(0, args=ocp.args.StandardSave(ckpt))
+    try:
+        checkpoint_manager.save(0, args=ocp.args.StandardSave(ckpt))
+        checkpoint_manager.wait_until_finished()
+    except Exception as e:
+        logger.warning(f"init_checkpoint_step failed: {e}")
 
 
 def save_checkpoint_step(runner_state, info, steps_prev_complete,
@@ -233,7 +237,11 @@ def save_checkpoint_step(runner_state, info, steps_prev_complete,
             logger.info(f"Saving checkpoint at step {t}")
             ckpt = {"runner_state": runner_state, "step_i": t}
             ckpt = jax.device_get(ckpt)
-            checkpoint_manager.save(t, args=ocp.args.StandardSave(ckpt))
+            try:
+                checkpoint_manager.save(t, args=ocp.args.StandardSave(ckpt))
+                checkpoint_manager.wait_until_finished()
+            except Exception as e:
+                logger.warning(f"save_checkpoint_step failed at step {t}: {e}")
 
 
 def apply_encoder_params(runner_state, encoder_params, config):

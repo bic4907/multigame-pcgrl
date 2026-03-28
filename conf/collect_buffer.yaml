@@ -1,0 +1,11 @@
+defaults:
+  - collect_buffer_schema
+  - _self_
+
+render_freq: -1
+
+
+hydra:
+  sweeper:
+    params: {}
+

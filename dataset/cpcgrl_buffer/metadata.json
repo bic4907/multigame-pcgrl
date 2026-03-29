@@ -1,9 +1,9 @@
 {
-  "created_at": "2026-03-29 16:40:29",
+  "created_at": "2026-03-29 16:45:47",
   "hostname": "MacBookPro.local",
   "platform": "macOS-15.7.4-arm64-arm-64bit",
   "seed": 42,
-  "pairs_per_re_requested": 20000,
+  "pairs_per_re_requested": 50000,
   "saves_dir": "/Users/inchang/multigame-pcgrl/saves",
   "total_pairs": 12655,
   "total_before_dedup": 39684,

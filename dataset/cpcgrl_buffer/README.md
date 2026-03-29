@@ -27,26 +27,25 @@ dataset/cpcgrl_buffer/
 
 | 키 | Shape | dtype | 설명 |
 |---|---|---|---|
-| `env_map_pairs` | `(6792, 2, 16, 16)` | int32 | (before, after) env_map 쌍 |
-| `reward_enums` | `(6792,)` | int32 | 각 쌍의 reward_enum 라벨 (1~5) |
-| `timesteps` | `(6792,)` | int64 | 각 쌍의 시작 timestep (total_timesteps 기준) |
+| `env_map_pairs` | `(12655, 2, 16, 16)` | int32 | (before, after) env_map 쌍 |
+| `reward_enums` | `(12655,)` | int32 | 각 쌍의 reward_enum 라벨 (1~5) |
+| `timesteps` | `(12655,)` | int64 | 각 쌍의 시작 timestep (total_timesteps 기준) |
 
 - `env_map_pairs[:, 0]` → **before** (t 시점의 맵)
 - `env_map_pairs[:, 1]` → **after** (t+1 시점의 맵)
-- 맵 크기: 16×16, 타일 값: dungeon3 기준 정수 (0~7)
+- 맵 크기: 16×16, 타일 값: dungeon3 기준 정수 (1~7)
 
 ## reward_enum 별 분포
 
 | reward_enum | feature | 쌍 수 |
 |:-----------:|---------|------:|
-| 1 | region | 3,469 |
-| 2 | path_length | 1,616 |
-| 3 | block | 884 |
-| 4 | bat_amount | 534 |
-| 5 | bat_direction | 289 |
-| **합계** | | **6,792** |
+| 1 | region | 736 |
+| 3 | block | 5,469 |
+| 4 | bat_amount | 3,347 |
+| 5 | bat_direction | 3,103 |
+| **합계** | | **12,655** |
 
-> 중복 제거 전 20,000 쌍 → 제거 후 **6,792** 쌍.
+> 중복 제거 전 39,684 쌍 → 제거 후 **12,655** 쌍.
 > reward_enum 별 중복률이 다른 이유는 일부 에이전트가 유사한 맵을 반복 생성하기 때문입니다.
 
 ## metadata.json
@@ -55,14 +54,14 @@ dataset/cpcgrl_buffer/
 
 | 키 | 설명 | 예시 |
 |---|---|---|
-| `created_at` | 생성 시각 | `"2026-03-29 16:37:24"` |
+| `created_at` | 생성 시각 | `"2026-03-29 16:45:47"` |
 | `hostname` | 생성 PC 이름 | `"MacBookPro.local"` |
 | `platform` | OS/아키텍처 | `"macOS-15.7.4-arm64-arm-64bit"` |
-| `total_pairs` | 중복 제거 후 최종 쌍 수 | `6554` |
-| `total_before_dedup` | 중복 제거 전 쌍 수 | `16000` |
+| `total_pairs` | 중복 제거 후 최종 쌍 수 | `12655` |
+| `total_before_dedup` | 중복 제거 전 쌍 수 | `39684` |
 | `tile_min` / `tile_max` | env_map 타일 값 범위 | `1` / `7` |
-| `env_map_shape` | 데이터 shape | `[6554, 2, 16, 16]` |
-| `reward_enum_distribution` | re별 쌍 수 | `{"1": 483, "3": 2745, ...}` |
+| `env_map_shape` | 데이터 shape | `[12655, 2, 16, 16]` |
+| `reward_enum_distribution` | re별 쌍 수 | `{"1": 736, "3": 5469, ...}` |
 | `seed` | 랜덤 시드 | `42` |
 
 ## 생성 방법

@@ -11,6 +11,8 @@ re-1~5 에서 골고루 추출 · 중복 제거 후 **단일 .npz 파일**로 �
         - env_map_pairs  : (N, 2, 16, 16) int32   # (before, after) 쌍
         - reward_enums   : (N,) int32              # 각 쌍의 reward_enum 라벨
         - timesteps      : (N,) int64              # 각 쌍의 시작 timestep
+    dataset/cpcgrl_buffer/metadata.json
+        - 데이터 개수, 타일 최대/최소값, 생성 PC, 생성 시간 등
 
 Usage:
     python dataset/cpcgrl_buffer/build_pair_dataset.py \\
@@ -22,8 +24,12 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
+import platform
 import re
+import socket
+from datetime import datetime
 
 import numpy as np
 
@@ -88,7 +94,7 @@ def main():
         description="CPCGRL buffer → deduplicated pair dataset (single file)"
     )
     parser.add_argument("--saves_dir", default="saves")
-    parser.add_argument("--pairs_per_re", type=int, default=4000,
+    parser.add_argument("--pairs_per_re", type=int, default=50000,
                         help="reward_enum 당 추출할 쌍 수")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -156,7 +162,25 @@ def main():
     merged_re = merged_re[perm]
     merged_ts = merged_ts[perm]
 
-    # 6. 저장
+    # 6. 메타데이터 수집
+    re_dist = {int(rn): int((merged_re == rn).sum()) for rn in found}
+    metadata = {
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "hostname": socket.gethostname(),
+        "platform": platform.platform(),
+        "seed": args.seed,
+        "pairs_per_re_requested": args.pairs_per_re,
+        "saves_dir": os.path.abspath(args.saves_dir),
+        "total_pairs": int(merged_pairs.shape[0]),
+        "total_before_dedup": int(len(all_pairs) and sum(p.shape[0] for p in all_pairs)),
+        "env_map_shape": list(merged_pairs.shape),       # (N, 2, H, W)
+        "tile_min": int(merged_pairs.min()),
+        "tile_max": int(merged_pairs.max()),
+        "reward_enum_distribution": re_dist,
+        "reward_enums_found": found,
+    }
+
+    # 7. 저장
     out_path = os.path.join(out_dir, "cpcgrl_pair_dataset.npz")
     np.savez_compressed(
         out_path,
@@ -165,21 +189,30 @@ def main():
         timesteps=merged_ts,
     )
 
+    meta_path = os.path.join(out_dir, "metadata.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2, ensure_ascii=False)
+
     print(f"\n{'=' * 60}")
     print(f"  CPCGRL Pair Dataset")
     print(f"{'=' * 60}")
     print(f"  env_map_pairs : {merged_pairs.shape}  {merged_pairs.dtype}")
     print(f"  reward_enums  : {merged_re.shape}  {merged_re.dtype}")
     print(f"  timesteps     : {merged_ts.shape}  {merged_ts.dtype}")
+    print(f"  tile range    : [{metadata['tile_min']}, {metadata['tile_max']}]")
     print(f"  file size     : {os.path.getsize(out_path) / 1024:.0f} KB")
     print(f"  path          : {out_path}")
+    print(f"  metadata      : {meta_path}")
 
-    # re 별 분포
     print(f"\n  reward_enum distribution:")
     for rn in found:
-        cnt = (merged_re == rn).sum()
-        print(f"    re-{rn}: {cnt:,}")
+        print(f"    re-{rn}: {re_dist[rn]:,}")
     print(f"    total: {merged_pairs.shape[0]:,}")
+
+    print(f"\n  build info:")
+    print(f"    created_at : {metadata['created_at']}")
+    print(f"    hostname   : {metadata['hostname']}")
+    print(f"    platform   : {metadata['platform']}")
     print(f"{'=' * 60}")
 
 

@@ -27,6 +27,8 @@ from enum import Enum
 from pathlib import Path
 from itertools import product
 from multiprocessing import Process, Manager
+from multiprocessing.managers import DictProxy
+from typing import Optional
 from datetime import datetime
 from rich.console import Console
 from rich.table import Table
@@ -39,8 +41,8 @@ import requests
 from dotenv import load_dotenv
 
 
-_active_pods = {} 
-_cleanup_lock = None
+_active_pods: Optional[DictProxy] = None   # will be set to Manager().dict() in run_multiple_pods
+_api_key: Optional[str] = None             # stored globally so signal handlers can use it
 _console = Console()
 
 config_folder_path = os.path.join(os.path.dirname(__file__), 'config')
@@ -179,6 +181,9 @@ def create_pod_config_from_yaml(config_data):
         'gpuCount': gpu_count,
     }
 
+    if pod_cfg.get('network_volume_id'):
+        runpod_config['networkVolumeId'] = pod_cfg['network_volume_id']
+
     if pod_cfg.get('spot'):
         runpod_config['interruptible'] = True
 
@@ -200,19 +205,36 @@ def create_pod_config_from_yaml(config_data):
 
 
 def cleanup_all_pods(signum=None, frame=None):
-    """Emergency cleanup function to terminate all active pods"""
-    global _active_pods, _cleanup_lock
+    """Emergency cleanup function to terminate all active pods.
+
+    Works with both the shared ``Manager().dict()`` (_active_pods) populated
+    by child processes AND the global ``_api_key`` set in the parent process.
+    """
+    global _active_pods, _api_key
 
     if not _active_pods:
         return
 
+    # snapshot: Manager proxy → regular dict so we don't hold the proxy lock
+    try:
+        snapshot = dict(_active_pods)
+    except Exception:
+        snapshot = {}
+
+    if not snapshot:
+        return
+
     _console.print("\n[bold red]🚨 Emergency cleanup initiated...[/bold red]")
-    _console.print(f"[yellow]Terminating {len(_active_pods)} active pod(s)...[/yellow]")
+    _console.print(f"[yellow]Terminating {len(snapshot)} active pod(s)...[/yellow]")
+
+    # Determine the API key to use
+    api_key = _api_key or os.getenv('RUNPOD_API_KEY')
+    if api_key:
+        runpod.api_key = api_key
 
     cleanup_results = []
-    for pod_id, api_key in list(_active_pods.items()):
+    for pod_id in snapshot:
         try:
-            runpod.api_key = api_key
             pod_info = runpod.get_pod(pod_id=pod_id)
             if pod_info:
                 runpod.terminate_pod(pod_id=pod_id)
@@ -225,7 +247,10 @@ def cleanup_all_pods(signum=None, frame=None):
             cleanup_results.append((pod_id, f'error: {str(e)[:30]}'))
             _console.print(f"[red]✗[/red] Failed to terminate {pod_id[:12]}...: {str(e)[:50]}")
 
-    _active_pods.clear()
+    try:
+        _active_pods.clear()
+    except Exception:
+        pass
 
     success_count = sum(1 for _, status in cleanup_results if status == 'success')
     _console.print(f"\n[cyan]Cleanup complete: {success_count}/{len(cleanup_results)} pods terminated[/cyan]")
@@ -236,20 +261,27 @@ def cleanup_all_pods(signum=None, frame=None):
         os._exit(0)
 
 
-def register_pod(pod_id, api_key):
-    """Register a pod for cleanup tracking"""
+def register_pod(pod_id, api_key=None):
+    """Register a pod for cleanup tracking (uses shared Manager dict)"""
     global _active_pods
-    _active_pods[pod_id] = api_key
+    if _active_pods is not None:
+        _active_pods[pod_id] = True
 
 
 def unregister_pod(pod_id):
     """Unregister a pod from cleanup tracking"""
     global _active_pods
-    _active_pods.pop(pod_id, None)
+    if _active_pods is not None:
+        try:
+            _active_pods.pop(pod_id, None)
+        except Exception:
+            pass
 
 
-def run_single_pod(pod_config, status_dict, pod_id_key, API_KEY, log_queue):
+def run_single_pod(pod_config, status_dict, pod_id_key, API_KEY, log_queue, active_pods):
     """Run a single pod and update its status"""
+    global _active_pods
+    _active_pods = active_pods  # share the Manager dict into this child process
     runpod.api_key = API_KEY
     headers = {
         'Authorization': f'Bearer {API_KEY}',
@@ -330,24 +362,41 @@ def run_single_pod(pod_config, status_dict, pod_id_key, API_KEY, log_queue):
         if 'dockerStartCmd' in runpod_request:
             runpod_request['dockerStartCmd'][-1] += ' && runpodctl stop pod $RUNPOD_POD_ID'
 
-        # ── HTTP 요청 로깅 ──
+        # ── Pod 생성 요청 (GPU 미가용 시 자동 재시도) ──
         import json as _json
-        _ts = datetime.now().strftime('%H:%M:%S')
-        _req_summary = {k: v for k, v in runpod_request.items() if k != 'dockerStartCmd'}
-        log_queue.append(f"[{_ts}] {pod_name} → POST /pods  {_json.dumps(_req_summary, ensure_ascii=False)}")
+        RETRY_INTERVAL = 5          # 재시도 간격(초)
+        # 이 문자열 중 하나라도 에러 메시지에 포함되면 일시적 부족으로 간주
+        _RETRYABLE_KEYWORDS = [
+            'no instances currently',
+            'no available instances',
+            'insufficient capacity',
+            'out of stock',
+            'no gpu',
+        ]
 
-        response = requests.post(f'{base_url}/pods', headers=headers, json=runpod_request)
+        retry_count = 0
+        while True:
+            _ts = datetime.now().strftime('%H:%M:%S')
+            _req_summary = {k: v for k, v in runpod_request.items() if k != 'dockerStartCmd'}
+            if retry_count == 0:
+                log_queue.append(f"[{_ts}] {pod_name} → POST /pods  {_json.dumps(_req_summary, ensure_ascii=False)}")
 
-        # ── HTTP 응답 로깅 (성공/실패 모두) ──
-        _ts = datetime.now().strftime('%H:%M:%S')
-        try:
-            _resp_body = response.json()
-            _resp_text = _json.dumps(_resp_body, ensure_ascii=False)
-        except Exception:
-            _resp_text = response.text[:300] if response.text else '(empty body)'
-        log_queue.append(f"[{_ts}] {pod_name} ← HTTP {response.status_code}  {_resp_text[:300]}")
+            response = requests.post(f'{base_url}/pods', headers=headers, json=runpod_request)
 
-        if not response.ok:
+            # ── HTTP 응답 로깅 ──
+            _ts = datetime.now().strftime('%H:%M:%S')
+            try:
+                _resp_body = response.json()
+                _resp_text = _json.dumps(_resp_body, ensure_ascii=False)
+            except Exception:
+                _resp_text = response.text[:300] if response.text else '(empty body)'
+            log_queue.append(f"[{_ts}] {pod_name} ← HTTP {response.status_code}  {_resp_text[:300]}")
+
+            # ── 성공 ──
+            if response.ok:
+                break
+
+            # ── 실패: 재시도 가능 여부 판단 ──
             status_code = response.status_code
             try:
                 resp_body = response.json()
@@ -355,13 +404,43 @@ def run_single_pod(pod_config, status_dict, pod_id_key, API_KEY, log_queue):
             except Exception:
                 error_msg = response.text[:200] if response.text else 'No response body'
 
-            error_detail = f"[HTTP {status_code}] {error_msg}"
+            error_lower = str(error_msg).lower()
+            is_retryable = any(kw in error_lower for kw in _RETRYABLE_KEYWORDS)
+
+            if not is_retryable:
+                # 재시도 불가능한 에러 → 즉시 실패
+                error_detail = f"[HTTP {status_code}] {error_msg}"
+                update_status(pod_id_key,
+                    status='❌ ERROR',
+                    error=error_detail,
+                    progress=f'API failed ({status_code})'
+                )
+                return
+
+            # ── 재시도 가능 → 대기 후 다시 시도 ──
+            retry_count += 1
+            spinner_char = spinners[spinner_idx % len(spinners)]
+            spinner_idx += 1
+            elapsed_wait = retry_count * RETRY_INTERVAL
+            elapsed_min = elapsed_wait // 60
+            if elapsed_min > 0:
+                wait_str = f'{elapsed_min}m{elapsed_wait % 60}s'
+            else:
+                wait_str = f'{elapsed_wait}s'
+
             update_status(pod_id_key,
-                status='❌ ERROR',
-                error=error_detail,
-                progress=f'API failed ({status_code})'
+                status=f'{spinner_char} WAITING',
+                progress=f'No GPU available, retry #{retry_count} ({wait_str})',
+                error=str(error_msg)[:200]
             )
-            return
+
+            if retry_count % 12 == 1:  # 1분에 한 번 로그
+                log_queue.append(
+                    f"[{_ts}] {pod_name} ⏳ GPU unavailable, retrying every {RETRY_INTERVAL}s "
+                    f"(attempt #{retry_count}, waited {wait_str})"
+                )
+
+            time.sleep(RETRY_INTERVAL)
 
         pod_id = response.json().get('id', '')
         if not pod_id:
@@ -371,6 +450,10 @@ def run_single_pod(pod_config, status_dict, pod_id_key, API_KEY, log_queue):
                 progress='Failed'
             )
             return
+
+        if retry_count > 0:
+            _ts = datetime.now().strftime('%H:%M:%S')
+            log_queue.append(f"[{_ts}] {pod_name} ✅ GPU acquired after {retry_count} retries")
 
         # Register pod for emergency cleanup
         register_pod(pod_id, API_KEY)
@@ -589,9 +672,13 @@ def generate_dashboard(status_dict, log_queue, max_logs=30):
 
 def run_multiple_pods(pod_configs, API_KEY):
     """Run multiple pods in parallel with dashboard monitoring"""
+    global _active_pods, _api_key
+
     manager = Manager()
     status_dict = manager.dict()
     log_queue = manager.list()  # Shared log queue
+    _active_pods = manager.dict()  # Shared pod tracker for emergency cleanup
+    _api_key = API_KEY  # Store API key globally for signal handlers
     processes = []
     
     console = Console()
@@ -600,7 +687,7 @@ def run_multiple_pods(pod_configs, API_KEY):
     # Start all processes
     for idx, pod_config in enumerate(pod_configs):
         console.print(f"[yellow]Starting pod {idx}: {pod_config.get('name', 'unnamed')}[/yellow]")
-        p = Process(target=run_single_pod, args=(pod_config, status_dict, idx, API_KEY, log_queue))
+        p = Process(target=run_single_pod, args=(pod_config, status_dict, idx, API_KEY, log_queue, _active_pods))
         p.start()
         processes.append(p)
         time.sleep(0.5)  # Stagger pod creation

@@ -36,6 +36,7 @@ from instruct_rl.utils.checkpointer import (
     init_checkpointer,
     save_checkpoint_step,
 )
+from instruct_rl.utils.buffer_collector import BufferCollector
 from instruct_rl.utils.dataset_loader import load_dataset_instruct
 from instruct_rl.utils.instruction import update_instruction
 from instruct_rl.utils.log_handler import (
@@ -181,6 +182,31 @@ def make_train(
             config=config,
         )
 
+        # ── BufferCollector (collect_buffer 모드) ─────────────────────────
+        _buffer_collector: BufferCollector | None = None
+        if getattr(config, 'collect_env_map', False):
+            _buf_dir = getattr(config, 'buffer_save_dir', None)
+            if _buf_dir is None and config.exp_dir is not None:
+                _buf_dir = os.path.join(config.exp_dir, "buffer")
+            if _buf_dir is not None:
+                _buffer_collector = BufferCollector(
+                    save_dir=_buf_dir,
+                    total_updates=config.NUM_UPDATES,
+                    max_samples=getattr(config, 'buffer_max_samples', 5_000),
+                    num_steps=config.num_steps,
+                    n_envs=config.n_envs,
+                    collect_start_ratio=getattr(config, 'collect_start_ratio', 0.5),
+                    collect_end_ratio=getattr(config, 'collect_end_ratio', 1.0),
+                )
+
+        def _buffer_collect_callback(update_steps, traj_batch, env_state):
+            """jax.debug.callback 으로 호출되는 버퍼 수집 콜백."""
+            if _buffer_collector is None:
+                return
+            step_int = int(update_steps)
+            if _buffer_collector.should_collect(step_int):
+                _buffer_collector.collect_and_save(step_int, traj_batch, env_state)
+
         # ── TRAIN LOOP ────────────────────────────────────────────────────
         def _update_step(update_runner_state, _):
             runner_state, update_steps, instruct_sample, level_sample, return_info = update_runner_state
@@ -202,9 +228,9 @@ def make_train(
                 if inject_obs_fn is not None and train_inst is not None:
                     last_obs = inject_obs_fn(last_obs, env_state, instruct_sample, config, env)
 
-                pi, value, _, _, _, _ = network.apply(
+                pi, value, _, _, _ = network.apply(
                     train_state.params, last_obs, rng=_rng,
-                    return_text_embed=False, return_state_embed=False, return_sketch_embed=False,
+                    return_text_embed=False, return_state_embed=False,
                 )
 
                 rng, _rng = jax.random.split(rng)
@@ -247,9 +273,10 @@ def make_train(
 
                 info["returned_episode_returns"] = env_state.returned_episode_returns
 
+                _store_env_map = config.use_sim_reward or getattr(config, 'collect_env_map', False)
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info,
-                    env_state.env_state.env_map if config.use_sim_reward else None,
+                    env_state.env_state.env_map if _store_env_map else None,
                     level_sample if config.human_demo else None,
                 )
                 runner_state = RunnerState(
@@ -271,9 +298,9 @@ def make_train(
                 runner_state.last_obs,
                 runner_state.rng,
             )
-            _, last_val, _, _, _, _ = network.apply(
+            _, last_val, _, _, _ = network.apply(
                 train_state.params, last_obs,
-                return_text_embed=False, return_state_embed=False, return_sketch_embed=False,
+                return_text_embed=False, return_state_embed=False,
             )
 
             def _calculate_gae(traj_batch, last_val):
@@ -301,9 +328,9 @@ def make_train(
                     traj_batch, advantages, targets = batch_info
 
                     def _loss_fn(params, traj_batch, gae, targets, mutation_key):
-                        pi, value, _, _, _, _ = network.apply(
+                        pi, value, _, _, _ = network.apply(
                             params, traj_batch.obs,
-                            return_text_embed=False, return_state_embed=False, return_sketch_embed=False,
+                            return_text_embed=False, return_state_embed=False,
                         )
                         log_prob = pi.log_prob(traj_batch.action)
 
@@ -376,6 +403,9 @@ def make_train(
 
             jax.debug.callback(save_checkpoint, runner_state, metric, steps_prev_complete)
             jax.debug.callback(_log_callback, metric, loss_mean, return_info)
+            jax.debug.callback(
+                _buffer_collect_callback, update_steps, traj_batch, env_state
+            )
 
             runner_state = RunnerState(
                 train_state, env_state, last_obs, rng,
@@ -403,9 +433,9 @@ def make_train(
                         last_obs = inject_obs_fn(last_obs, env_state, instruct_sample, config, env)
 
                     rng, _rng = jax.random.split(rng)
-                    pi, value, _, _, _, _ = network.apply(
+                    pi, value, _, _, _ = network.apply(
                         train_state.params, last_obs,
-                        return_text_embed=False, return_state_embed=False, return_sketch_embed=False,
+                        return_text_embed=False, return_state_embed=False,
                     )
                     action = pi.sample(seed=_rng)
                     log_prob = pi.log_prob(action)

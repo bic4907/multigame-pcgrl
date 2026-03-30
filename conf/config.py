@@ -105,6 +105,7 @@ class Config:
     initialize: Optional[bool] = None
 
     # Wandb (WANDB_API_KEY 는 .env 파일 또는 환경변수로 설정)
+    wandb_key: Optional[str] = None
     wandb_project: Optional[str] = 'instruct_pcgrl'
     wandb_entity: Optional[str] = 'st4889ha-gwangju-institute-of-science-and-technology'
     wandb_resume: str = 'allow'
@@ -237,7 +238,7 @@ class CPCGRLConfig(TrainConfig):
     problem: str = "multigame"
     dataset_game: Optional[str] = "dungeon"
     dataset_reward_enum: Optional[int] = 1        # 1=region
-    dataset_train_ratio: float = 0.8
+    dataset_train_ratio: float = 0.95
 
     # CPCGRL 모드 강제
     vec_cont: bool = True
@@ -524,6 +525,26 @@ class CollectConfig(TrainConfig):
 
 
 @dataclass
+class CollectBufferConfig(CPCGRLConfig):
+    """학습 중 trajectory 버퍼를 수집하는 Config.
+
+    학습 50%~100% 구간(collect_start_ratio~collect_end_ratio)에서
+    첫 번째 환경(env_idx=0) 기준으로 데이터를 수집하여
+    실험 폴더의 buffer/ 디렉토리에 .npz 파일로 저장한다.
+    """
+    wandb_project: str = 'collect_buffer'
+
+    # ── 버퍼 수집 파라미터 ──
+    buffer_max_samples: int = 10_000       # 수집할 최대 transition 수
+    collect_start_ratio: float = 0.5        # 수집 시작 비율 (0.5 = 학습 50%)
+    collect_end_ratio: float = 1.0          # 수집 종료 비율 (1.0 = 학습 100%)
+    buffer_save_dir: Optional[str] = None   # 저장 경로 (None이면 exp_dir/buffer)
+
+    # 학습 중 env_map을 transition에 저장 (수집에 필요)
+    collect_env_map: bool = True
+
+
+@dataclass
 class BertConfig(Config):
 
     overwrite: bool = True
@@ -692,6 +713,7 @@ cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
 cs.store(name="sweep_pcgrl", node=SweepConfig)
 cs.store(name="collect_pcgrl", node=CollectConfig)
+cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs
 cs.store(name="train_clip", node=CLIPTrainConfig)

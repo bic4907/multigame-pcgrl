@@ -235,7 +235,6 @@ def _generate_cnnclip_embedding(df, config, processor, network, network_params, 
         input_ids=input_ids,
         attention_mask=attention_mask,
         pixel_values=levels,
-        sketch_values=sketches,
     )
 
     _, _, _, embedding_t, embedding_s, embedding_k = network.apply(

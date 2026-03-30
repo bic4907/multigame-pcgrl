@@ -114,7 +114,8 @@ class PlayPCGRLEnv(Environment):
     def get_obs(self, env_map, static_map, rep_state, prob_state):
         rep_obs = self.rep.get_obs(env_map, static_map, rep_state)
         prob_obs = self.prob.observe_ctrls(prob_state)
-        obs = PCGRLObs(map_obs=rep_obs, flat_obs=prob_obs)
+        obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs,
+                       nlp_obs=jnp.zeros(1,), input_ids=None, attention_mask=None, pixel_values=None)
         return obs
 
     @partial(jax.jit, static_argnums=(0, 4))
@@ -187,7 +188,7 @@ class PlayPCGRLEnv(Environment):
     def gen_dummy_obs(self, env_params: PlayPCGRLEnvParams):
         map_x = jnp.zeros((1,) + self.observation_space(env_params).shape)
         ctrl_x = jnp.zeros((1, 1))
-        return PCGRLObs(map_x, ctrl_x)
+        return PCGRLObs(map_x, map_x, ctrl_x, jnp.zeros((1,)), None, None, None)
 
     def sample_action(self, rng):
         action_shape = self.action_shape()

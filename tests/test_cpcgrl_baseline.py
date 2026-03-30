@@ -48,7 +48,6 @@ def _make_cpcgrl_config(**overrides):
         render_freq=-1,
         dataset_game="dungeon",
         dataset_reward_enum=1,
-        wandb_key=None,
         exp_name="test_cpcgrl",
     )
     defaults.update(overrides)
@@ -199,7 +198,6 @@ class TestCPCGRLTraining:
                 "render_freq=-1",
                 "eval_freq=-1",
                 "exp_name=test_e2e",
-                "wandb_key=null",
             ],
             cwd=_ROOT,
             capture_output=True,

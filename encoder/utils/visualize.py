@@ -53,15 +53,14 @@ def create_scatter_plot(df, epoch, config, min_val=0, max_val=1,
     return fig_path
 
 
-def create_embedding_figure(embed_queue, reward_df: pd.DataFrame, epoch, config, postfix="") -> str:
-    reward_ids = [e.reward_id for e in embed_queue]
+def create_embedding_figure(embed_queue, epoch, config, postfix="") -> str:
     embeds = np.array([e.embedding for e in embed_queue])
 
     # TSNE (2dim)
     tsne = TSNE(n_components=2, random_state=42)
     tsne_embeds = tsne.fit_transform(embeds)
 
-    inst_cols = reward_df.iloc[reward_ids][['reward_enum']].reset_index()
+    inst_cols = [e.reward_enum for e in embed_queue]
     tsne_df = pd.DataFrame(tsne_embeds, columns=['tsne_x', 'tsne_y']).reset_index()
     df = pd.concat([inst_cols, tsne_df], axis=1).drop(columns=['index'])
 

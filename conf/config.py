@@ -555,6 +555,7 @@ class BertConfig(Config):
 @dataclass
 class BertTrainConfig(BertConfig):
     wandb_project: str = 'embedding'
+    wandb_key: Optional[str] = None
 
     max_length: int = 128
 
@@ -616,6 +617,12 @@ class RewardConfig(Config):
 @dataclass
 class RewardTrainConfig(RewardConfig):
     wandb_project: str = 'train_mlp_encoder'
+    wandb_key: Optional[str] = None
+
+    pretrained_model: str = "bert"
+    model_size: str = "base"
+
+    max_len: int = 77
 
     n_envs: int = 300
     ckpt_freq: int = 5

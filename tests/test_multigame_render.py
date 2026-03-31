@@ -286,7 +286,7 @@ def _save_samples():
     dummy_qs = gen_dummy_queued_state(env)
 
     # ── ① 랜덤 맵 5장 ────────────────────────────────────────────────────────
-    print("\n[1] 랜덤 맵 렌더링...")
+    print("\n[1] Rendering random maps...")
     for i in range(5):
         rng = jax.random.PRNGKey(i)
         _, state = env.reset(rng, env_params, dummy_qs)
@@ -298,11 +298,11 @@ def _save_samples():
               f"unique tiles={np.unique(env_map).tolist()})")
 
     # ── ② 타일 범례 이미지 ────────────────────────────────────────────────────
-    print("\n[2] 타일 범례 렌더링...")
+    print("\n[2] Rendering tile legend...")
     _save_tile_legend()
 
     # ── ③ 카테고리별 solid 맵 (각 카테고리로 가득 찬 16×16) ─────────────────
-    print("\n[3] 카테고리별 solid 맵...")
+    print("\n[3] Solid maps per category...")
     for cat_idx, cat_name in _CATEGORIES.items():
         tile_val = cat_idx + 1   # BORDER shift
         solid_map = np.full((16, 16), tile_val, dtype=np.int32)
@@ -311,10 +311,10 @@ def _save_samples():
         img.save(out)
         print(f"  → {out}")
 
-    print(f"\n✅ 샘플 이미지 저장 완료: {_SAMPLES_DIR}")
+    print(f"\n✅ Sample images saved to: {_SAMPLES_DIR}")
 
     # ── ④ overview: 범례 + 랜덤 맵 5장 합성 ──────────────────────────────────
-    print("\n[4] overview 합성...")
+    print("\n[4] Composing overview...")
     maps = [Image.open(_SAMPLES_DIR / f"random_map_{i:02d}.png") for i in range(5)]
     legend = Image.open(_SAMPLES_DIR / "tile_legend.png")
     MW, MH = maps[0].size

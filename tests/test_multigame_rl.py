@@ -529,14 +529,14 @@ def test_ppo_multi_update_no_nan(multigame_setup):
 
 if __name__ == "__main__":
     print("=" * 70)
-    print(" MultigameEnv JAX RL 통합 테스트")
+    print(" MultigameEnv JAX RL Integration Test")
     print("=" * 70)
 
     env_raw, env_params = make_multigame_env()
     env = LogWrapper(env_raw)
     env.init_graphics()
 
-    print(f"\n환경 기본 정보")
+    print(f"\nEnvironment Info")
     print(f"  NUM_CATEGORIES        : {NUM_CATEGORIES}")
     print(f"  action_space.n        : {env_raw.action_space(env_params).n}")
     print(f"  rep.n_editable_tiles  : {env_raw.rep.n_editable_tiles}")
@@ -565,6 +565,6 @@ if __name__ == "__main__":
     print(f"  step action={int(action.flatten()[0])}  "
           f"(valid range: 0–{NUM_CATEGORIES-1})")
 
-    print("\n✅ 모든 기본 검증 통과")
-    print("  pytest tests/test_multigame_rl.py -v  로 전체 테스트를 실행하세요.")
+    print("\n✅ All basic checks passed")
+    print("  Run full tests with: pytest tests/test_multigame_rl.py -v")
 

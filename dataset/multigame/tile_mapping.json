@@ -3,9 +3,9 @@
   "_categories": {
     "0": "empty",
     "1": "wall",
-    "2": "object",
-    "3": "mob",
-    "4": "item"
+    "2": "interactive",
+    "3": "hazard",
+    "4": "collectable"
   },
   "_category_colors_rgb": {
     "0": [160, 140, 120],

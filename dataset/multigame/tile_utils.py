@@ -8,13 +8,11 @@ vocabulary defined in ``tile_mapping.json``, then optionally one-hot encoded.
 
 Unified categories
 ------------------
-  0  empty   – background / void
-  1  wall    – solid, impassable obstacle
-  2  floor   – traversable ground / rope / ladder
-  3  enemy   – hostile entity
-  4  object  – item / pickup / collectible
-  5  spawn   – player start / exit / door
-  6  hazard  – environmental damage / trap
+  0  empty       – background / void
+  1  wall        – solid, impassable obstacle
+  2  interactive – interactable tiles (doors, objects, exits)
+  3  hazard      – enemy / damaging entity
+  4  collectable – collectible item / pickup
 
 Usage
 -----
@@ -32,10 +30,10 @@ Usage
     arr = sample.array                     # (16, 16) int32
 
     # map to unified category indices
-    unified = to_unified(arr, sample.game) # (16, 16) int32, values in [0, 6]
+    unified = to_unified(arr, sample.game) # (16, 16) int32, values in [0, 4]
 
     # one-hot encode
-    oh = to_onehot(unified)                # (16, 16, 7) uint8, values in {0, 1}
+    oh = to_onehot(unified)                # (16, 16, 5) uint8, values in {0, 1}
 
     # both at once
     unified, oh = to_unified_and_onehot(arr, sample.game)

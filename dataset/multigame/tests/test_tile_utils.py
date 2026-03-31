@@ -33,13 +33,13 @@ from dataset.multigame.tile_utils import (
 
 class TestConstants:
     def test_num_categories(self):
-        assert NUM_CATEGORIES == 7
+        assert NUM_CATEGORIES == 5
 
     def test_unified_categories_keys(self):
-        assert set(UNIFIED_CATEGORIES.keys()) == set(range(7))
+        assert set(UNIFIED_CATEGORIES.keys()) == set(range(5))
 
     def test_unified_category_names(self):
-        expected = {"empty", "wall", "floor", "enemy", "object", "spawn", "hazard"}
+        expected = {"empty", "wall", "interactive", "hazard", "collectable"}
         assert set(UNIFIED_CATEGORIES.values()) == expected
 
     def test_available_games_includes_all(self):
@@ -50,7 +50,9 @@ class TestConstants:
     def test_category_name(self):
         assert category_name(0) == "empty"
         assert category_name(1) == "wall"
-        assert category_name(6) == "hazard"
+        assert category_name(2) == "interactive"
+        assert category_name(3) == "hazard"
+        assert category_name(4) == "collectable"
 
     def test_category_name_unknown(self):
         name = category_name(999)
@@ -73,40 +75,40 @@ class TestToUnified:
         result = to_unified(arr, "zelda")
         assert result[0, 0] == 1  # wall
 
-    def test_zelda_mob_is_enemy(self):
+    def test_zelda_mob_is_hazard(self):
         arr = self._make_array([[6]])
         result = to_unified(arr, "zelda")
-        assert result[0, 0] == 3  # enemy
+        assert result[0, 0] == 3  # hazard
 
-    def test_zelda_door_is_spawn(self):
+    def test_zelda_door_is_interactive(self):
         arr = self._make_array([[3]])
         result = to_unified(arr, "zelda")
-        assert result[0, 0] == 5  # spawn
+        assert result[0, 0] == 2  # interactive
 
-    def test_mario_enemy_is_enemy(self):
+    def test_mario_enemy_is_hazard(self):
         arr = self._make_array([[4]])
         result = to_unified(arr, "mario")
-        assert result[0, 0] == 3  # enemy
+        assert result[0, 0] == 3  # hazard
 
-    def test_mario_cannon_is_hazard(self):
+    def test_mario_cannon_is_interactive(self):
         arr = self._make_array([[7]])
         result = to_unified(arr, "mario")
-        assert result[0, 0] == 6  # hazard
+        assert result[0, 0] == 2  # interactive
 
-    def test_dungeon_floor(self):
+    def test_dungeon_floor_is_empty(self):
         arr = self._make_array([[1]])
         result = to_unified(arr, "dungeon")
-        assert result[0, 0] == 2  # floor
+        assert result[0, 0] == 0  # empty
 
     def test_dungeon_wall(self):
         arr = self._make_array([[2]])
         result = to_unified(arr, "dungeon")
         assert result[0, 0] == 1  # wall
 
-    def test_dungeon_enemy(self):
+    def test_dungeon_enemy_is_hazard(self):
         arr = self._make_array([[3]])
         result = to_unified(arr, "dungeon")
-        assert result[0, 0] == 3  # enemy
+        assert result[0, 0] == 3  # hazard
 
     def test_shape_preserved(self):
         arr = np.zeros((16, 16), dtype=np.int32)
@@ -171,7 +173,7 @@ class TestToOnehot:
         assert unique <= {0, 1}
 
     def test_each_cell_sums_to_one(self):
-        unified = np.array([[0, 1, 2, 3, 4, 5, 6, 0]], dtype=np.int32)
+        unified = np.array([[0, 1, 2, 3, 4, 0]], dtype=np.int32)
         oh = to_onehot(unified)
         assert (oh.sum(axis=-1) == 1).all()
 

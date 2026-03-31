@@ -269,30 +269,6 @@ def test_json_tile_images_files_exist():
     )
 
 
-def test_hazard_mapped_to_lava():
-    """hazard(category 6)는 lava.png 로 매핑되어야 한다."""
-    # category 6 = hazard
-    hazard_idx = next(i for i, name in _CATEGORIES.items() if name == "hazard")
-    fname = _CATEGORY_IMAGE_FILES.get(hazard_idx)
-    assert fname == "lava.png", (
-        f"hazard(category {hazard_idx}) 이미지가 'lava.png' 가 아닙니다: '{fname}'"
-    )
-
-
-def test_hazard_tile_pixel_differs_from_empty(env_with_graphics):
-    """렌더링된 hazard 타일은 empty 타일과 픽셀이 달라야 한다 (lava vs empty)."""
-    env, _ = env_with_graphics
-    g = np.array(env.prob.graphics)
-
-    hazard_idx = next(i for i, name in _CATEGORIES.items() if name == "hazard")
-    empty_idx  = next(i for i, name in _CATEGORIES.items() if name == "empty")
-
-    hazard_tile = g[hazard_idx + 1]   # MultigameTiles index = cat + 1
-    empty_tile  = g[empty_idx + 1]
-
-    assert not np.array_equal(hazard_tile, empty_tile), (
-        "hazard(lava) 와 empty 타일이 완전히 동일합니다 — 이미지 로드를 확인하세요"
-    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

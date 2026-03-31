@@ -1,6 +1,7 @@
 """tests/test_multigame_evaluator.py
 
-evaluator/measures, losses, fitnesses, rewards 의 multigame_amount 테스트.
+evaluator/measures, losses, fitnesses, rewards 의 multigame_amount 및
+multigame_placement 테스트.
 
 - 정확한 값 검증
 - jax.jit 컴파일 검증
@@ -33,6 +34,12 @@ from evaluator.measures.multigame_amount import (
 from evaluator.losses.multigame_amount_loss import multigame_amount_loss
 from evaluator.fitnesses.multigame_amount import get_multigame_amount_fitness
 from evaluator.rewards.multigame_amount import get_multigame_amount_reward
+from evaluator.rewards.multigame_placement import (
+    get_multigame_placement_reward,
+    _cluster_penalty,
+    _accessibility_bonus,
+    _spread_bonus,
+)
 
 
 # ── 공통 Fixture ───────────────────────────────────────────────────────────────
@@ -236,4 +243,242 @@ class TestVmapCompilation:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  8. placement — cluster_penalty 값 검증
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestClusterPenalty:
+
+    def test_no_cluster_isolated_items(self):
+        """아이템이 모두 고립되어 있으면 penalty=0."""
+        # INTERACTIVE(3)들이 서로 인접하지 않음
+        m = jnp.array([
+            [3, 1, 3],
+            [1, 1, 1],
+            [3, 1, 3],
+        ], dtype=jnp.int32)
+        assert float(_cluster_penalty(m)) == 0.0
+
+    def test_cluster_adjacent_same(self):
+        """같은 아이템이 인접하면 penalty > 0."""
+        # 3-3 가로 인접 → 각각 이웃 1개씩 = 2
+        m = jnp.array([
+            [3, 3, 1],
+            [1, 1, 1],
+            [1, 1, 1],
+        ], dtype=jnp.int32)
+        assert float(_cluster_penalty(m)) == 2.0
+
+    def test_cluster_line_of_three(self):
+        """3개 일직선 배치 → 양 끝 1 + 가운데 2 = 4."""
+        m = jnp.array([
+            [3, 3, 3],
+            [1, 1, 1],
+            [1, 1, 1],
+        ], dtype=jnp.int32)
+        assert float(_cluster_penalty(m)) == 4.0
+
+    def test_non_item_same_neighbors_ignored(self):
+        """WALL-WALL 인접은 아이템이 아니므로 penalty 에 안 잡힘."""
+        m = jnp.array([
+            [2, 2, 1],
+            [1, 1, 1],
+            [1, 1, 1],
+        ], dtype=jnp.int32)
+        assert float(_cluster_penalty(m)) == 0.0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  9. placement — accessibility_bonus 값 검증
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestAccessibilityBonus:
+
+    def test_all_accessible(self):
+        """모든 아이템 이웃에 EMPTY 있음 → 1.0."""
+        m = jnp.array([
+            [1, 3, 1],
+            [1, 1, 1],
+            [1, 4, 1],
+        ], dtype=jnp.int32)
+        assert float(_accessibility_bonus(m)) == pytest.approx(1.0)
+
+    def test_walled_item(self):
+        """사방이 WALL/BORDER 로 막힌 아이템 → 접근 불가."""
+        # (1,1)=INTERACTIVE, 상하좌우 모두 WALL(2)
+        m = jnp.array([
+            [2, 2, 2],
+            [2, 3, 2],
+            [2, 2, 2],
+        ], dtype=jnp.int32)
+        assert float(_accessibility_bonus(m)) == pytest.approx(0.0)
+
+    def test_partially_accessible(self):
+        """2개 아이템 중 1개만 접근 가능 → 0.5."""
+        # (0,1)=3 → 이웃: BORDER(경계밖), WALL(2), EMPTY(1), WALL(2) → EMPTY 1개 → 접근 가능
+        # (2,1)=3 → 이웃: WALL(2), BORDER(경계밖), WALL(2), WALL(2) → 0개 → 접근 불가
+        m = jnp.array([
+            [2, 3, 1],
+            [2, 2, 2],
+            [2, 3, 2],
+        ], dtype=jnp.int32)
+        assert float(_accessibility_bonus(m)) == pytest.approx(0.5)
+
+    def test_no_items_returns_one(self):
+        """아이템 0개 → 1.0 (패널티 없음)."""
+        m = jnp.ones((4, 4), dtype=jnp.int32)  # all EMPTY
+        assert float(_accessibility_bonus(m)) == pytest.approx(1.0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 10. placement — spread_bonus 값 검증
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestSpreadBonus:
+
+    def test_spread_max_corners(self):
+        """대각선 양 끝 배치 → 최대 분산."""
+        m = jnp.ones((4, 4), dtype=jnp.int32)
+        m = m.at[0, 0].set(3)  # 좌상단
+        m = m.at[3, 3].set(3)  # 우하단
+        # L1 거리 = 3+3=6, max_dist=3+3=6, bonus=6/6=1.0
+        assert float(_spread_bonus(m)) == pytest.approx(1.0)
+
+    def test_spread_adjacent(self):
+        """바로 옆 배치 → 낮은 분산."""
+        m = jnp.ones((4, 4), dtype=jnp.int32)
+        m = m.at[0, 0].set(3)
+        m = m.at[0, 1].set(3)
+        # L1 거리 = 1, max_dist=6, bonus=1/6
+        assert float(_spread_bonus(m)) == pytest.approx(1.0 / 6.0)
+
+    def test_spread_single_item_zero(self):
+        """아이템 1개 → 분산 측정 불가 → 0.0."""
+        m = jnp.ones((4, 4), dtype=jnp.int32)
+        m = m.at[2, 2].set(5)
+        assert float(_spread_bonus(m)) == pytest.approx(0.0)
+
+    def test_spread_no_items_zero(self):
+        """아이템 0개 → 0.0."""
+        m = jnp.ones((4, 4), dtype=jnp.int32)
+        assert float(_spread_bonus(m)) == pytest.approx(0.0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 11. placement — 통합 reward 검증
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestPlacementReward:
+
+    def test_improvement_gives_positive_reward(self):
+        """뭉친 배치 → 분산 배치로 개선하면 양수 reward."""
+        prev = jnp.array([
+            [3, 3, 3, 1],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+        ], dtype=jnp.int32)
+        # 일직선 3개를 분산시킴
+        curr = jnp.array([
+            [3, 1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 3, 1],
+            [1, 1, 1, 3],
+        ], dtype=jnp.int32)
+        reward = get_multigame_placement_reward(prev, curr)
+        assert float(reward) > 0.0
+
+    def test_worsening_gives_negative_reward(self):
+        """분산 → 뭉침으로 악화하면 음수 reward."""
+        prev = jnp.array([
+            [3, 1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 3, 1],
+            [1, 1, 1, 3],
+        ], dtype=jnp.int32)
+        curr = jnp.array([
+            [3, 3, 3, 1],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+        ], dtype=jnp.int32)
+        reward = get_multigame_placement_reward(prev, curr)
+        assert float(reward) < 0.0
+
+    def test_no_change_zero_reward(self, env_map):
+        """동일 맵 → reward=0."""
+        reward = get_multigame_placement_reward(env_map, env_map)
+        assert float(reward) == pytest.approx(0.0)
+
+    def test_walling_off_item_penalised(self):
+        """아이템 주변을 WALL 로 막으면 음수 reward."""
+        prev = jnp.array([
+            [1, 1, 1],
+            [1, 3, 1],
+            [1, 1, 1],
+        ], dtype=jnp.int32)
+        # 사방을 WALL 로 막음
+        curr = jnp.array([
+            [1, 2, 1],
+            [2, 3, 2],
+            [1, 2, 1],
+        ], dtype=jnp.int32)
+        reward = get_multigame_placement_reward(prev, curr)
+        assert float(reward) < 0.0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 12. placement — jax.jit / vmap 컴파일 검증
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestPlacementJitVmap:
+
+    def test_jit_cluster_penalty(self, env_map):
+        jitted = jax.jit(_cluster_penalty)
+        result = jitted(env_map)
+        assert result.shape == ()
+
+    def test_jit_accessibility_bonus(self, env_map):
+        jitted = jax.jit(_accessibility_bonus)
+        result = jitted(env_map)
+        assert result.shape == ()
+        assert 0.0 <= float(result) <= 1.0
+
+    def test_jit_spread_bonus(self, env_map):
+        from functools import partial
+        jitted = jax.jit(partial(_spread_bonus, max_items=32))
+        result = jitted(env_map)
+        assert result.shape == ()
+        assert 0.0 <= float(result) <= 1.0
+
+    def test_jit_placement_reward(self, env_map):
+        """get_multigame_placement_reward 는 이미 jax.jit 적용."""
+        result = get_multigame_placement_reward(env_map, env_map)
+        assert result.shape == ()
+        assert float(result) == pytest.approx(0.0)
+
+    def test_vmap_cluster_penalty(self, env_map):
+        batch = jnp.stack([env_map, jnp.ones_like(env_map)])
+        vmapped = jax.vmap(_cluster_penalty)
+        results = vmapped(batch)
+        assert results.shape == (2,)
+        assert float(results[1]) == 0.0  # all-EMPTY → no items → 0
+
+    def test_vmap_accessibility_bonus(self, env_map):
+        batch = jnp.stack([env_map, jnp.ones_like(env_map)])
+        vmapped = jax.vmap(_accessibility_bonus)
+        results = vmapped(batch)
+        assert results.shape == (2,)
+        assert float(results[1]) == pytest.approx(1.0)  # no items → 1.0
+
+    def test_vmap_placement_reward(self, env_map):
+        prev_batch = jnp.stack([env_map, env_map])
+        curr_batch = jnp.stack([env_map, env_map])
+        vmapped = jax.vmap(get_multigame_placement_reward)
+        results = vmapped(prev_batch, curr_batch)
+        assert results.shape == (2,)
+        assert float(results[0]) == pytest.approx(0.0)
+
 

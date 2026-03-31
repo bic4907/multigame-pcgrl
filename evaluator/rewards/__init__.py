@@ -1,5 +1,6 @@
 from .amount import get_amount_reward
 from .multigame_amount import get_multigame_amount_reward
+from .multigame_placement import get_multigame_placement_reward
 from .region import get_region_reward
 from .path_length import get_path_length_reward
 
@@ -10,7 +11,9 @@ except ImportError:
 
 __all__ = [
     "get_amount_reward",
+    "get_direction_reward",
     "get_multigame_amount_reward",
+    "get_multigame_placement_reward",
     "get_path_length_reward",
     "get_region_reward",
 ]

@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from envs.probs.dungeon3 import Dungeon3Tiles
 
 from .fitnesses import *
+from .fitnesses.multigame_amount import get_multigame_amount_fitness
 from .measures import get_amount
 from .weights import FitnessWeight
 
@@ -35,10 +36,10 @@ def get_fitness_batch(
         lambda cond, curr_map: 0.0,  # 0
         lambda cond, curr_map: get_region_fitness(curr_map, cond[0]) * FitnessWeight.REGION,  # 1 (region)
         lambda cond, curr_map: get_path_length_fitness(curr_map, cond[1]) * FitnessWeight.PATH_LENGTH,  # 2 (diameter)
-        lambda cond, curr_map: get_amount_fitness(curr_map, cond[2], Dungeon3Tiles.WALL) * FitnessWeight.WALL,  # 3 (block)
-        lambda cond, curr_map: get_amount_fitness(curr_map, cond[3], Dungeon3Tiles.BAT) * FitnessWeight.MONSTER,  # 4 (bat_amount)
-        lambda cond, curr_map: get_direction_fitness(curr_map, cond[4], Dungeon3Tiles.BAT) * FitnessWeight.DIRECTION,  # 5 (bat_direction)
-        lambda cond, curr_map: 0.0,  # 6+
+        lambda cond, curr_map: get_multigame_amount_fitness(curr_map, cond[4], tile_name="interactive") * FitnessWeight.MONSTER,  # 5 (interactive_amount)
+        lambda cond, curr_map: get_multigame_amount_fitness(curr_map, cond[5], tile_name="hazard") * FitnessWeight.MONSTER,  # 6 (hazard_amount)
+        lambda cond, curr_map: get_multigame_amount_fitness(curr_map, cond[6], tile_name="collectable") * FitnessWeight.MONSTER,  # 7 (collectable_amount)
+        lambda cond, curr_map: 0.0,  # 8+ (no function)
     ]
 
     # Map indices to functions using `switch`

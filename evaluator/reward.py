@@ -8,6 +8,7 @@ from envs.probs.dungeon3 import Dungeon3Tiles
 
 
 from .rewards import *
+from .rewards.multigame_amount import get_multigame_amount_reward
 from .weights import RewardWeight, RewardBias
 
 
@@ -40,16 +41,16 @@ def get_reward_batch(
         lambda cond, prev_map, curr_map: get_path_length_reward(
             prev_map, curr_map, cond[1]
         ) * RewardWeight.PATH_LENGTH + RewardBias.PATH_LENGTH,  # 2 (diameter)
-        lambda cond, prev_map, curr_map: get_amount_reward(
-            prev_map, curr_map, cond[2], Dungeon3Tiles.WALL.value
-        ) * RewardWeight.WALL + RewardBias.WALL,  # 3 (block)
-        lambda cond, prev_map, curr_map: get_amount_reward(
-            prev_map, curr_map, cond[3], Dungeon3Tiles.BAT.value
-        ) * RewardWeight.MONSTER + RewardBias.MONSTER,  # 4 (bat_amount)
-        lambda cond, prev_map, curr_map: get_direction_reward(
-            prev_map, curr_map, cond[4], Dungeon3Tiles.BAT.value, rows=map_size, cols=map_size
-        ) * RewardWeight.DIRECTION + RewardBias.DIRECTION,  # 5 (bat_direction)
-        lambda cond, prev_map, curr_map: 0.0,
+        lambda cond, prev_map, curr_map: get_multigame_amount_reward(
+            prev_map, curr_map, cond[4], tile_name="interactive"
+        ) * RewardWeight.MONSTER,  # 5 (interactive_amount)
+        lambda cond, prev_map, curr_map: get_multigame_amount_reward(
+            prev_map, curr_map, cond[5], tile_name="hazard"
+        ) * RewardWeight.MONSTER,  # 6 (hazard_amount)
+        lambda cond, prev_map, curr_map: get_multigame_amount_reward(
+            prev_map, curr_map, cond[6], tile_name="collectable"
+        ) * RewardWeight.MONSTER,  # 7 (collectable_amount)
+        lambda cond, prev_map, curr_map: 0.0,  # 8+ (no function)
     ]
 
     # Map indices to functions using `switch`

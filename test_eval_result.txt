@@ -1,0 +1,49 @@
+Error processing line 1 of /opt/anaconda3/envs/pcgrl-jax/lib/python3.11/site-packages/distutils-precedence.pth:
+
+  Traceback (most recent call last):
+    File "<frozen site>", line 195, in addpackage
+    File "<string>", line 1, in <module>
+  ModuleNotFoundError: No module named '_distutils_hack'
+
+Remainder of file ignored
+============================= test session starts ==============================
+platform darwin -- Python 3.11.9, pytest-8.3.3, pluggy-1.5.0 -- /opt/anaconda3/envs/pcgrl-jax/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/inchang/multigame-pcgrl
+configfile: pyproject.toml
+plugins: anyio-4.6.0, hydra-core-1.3.2
+collecting ... collected 31 items
+
+tests/test_multigame_evaluator.py::TestMeasures::test_interactive_count PASSED [  3%]
+tests/test_multigame_evaluator.py::TestMeasures::test_hazard_count PASSED [  6%]
+tests/test_multigame_evaluator.py::TestMeasures::test_collectable_count PASSED [  9%]
+tests/test_multigame_evaluator.py::TestMeasures::test_tile_counts_dict PASSED [ 12%]
+tests/test_multigame_evaluator.py::TestMeasures::test_empty_map_returns_zero PASSED [ 16%]
+tests/test_multigame_evaluator.py::TestLoss::test_absolute_loss[interactive] PASSED [ 19%]
+tests/test_multigame_evaluator.py::TestLoss::test_absolute_loss[hazard] PASSED [ 22%]
+tests/test_multigame_evaluator.py::TestLoss::test_absolute_loss[collectable] PASSED [ 25%]
+tests/test_multigame_evaluator.py::TestLoss::test_signed_loss[interactive] PASSED [ 29%]
+tests/test_multigame_evaluator.py::TestLoss::test_signed_loss[hazard] PASSED [ 32%]
+tests/test_multigame_evaluator.py::TestLoss::test_signed_loss[collectable] PASSED [ 35%]
+tests/test_multigame_evaluator.py::TestLoss::test_zero_loss_when_matched PASSED [ 38%]
+tests/test_multigame_evaluator.py::TestFitness::test_fitness_positive PASSED [ 41%]
+tests/test_multigame_evaluator.py::TestFitness::test_fitness_negative PASSED [ 45%]
+tests/test_multigame_evaluator.py::TestReward::test_reward_positive_when_improved PASSED [ 48%]
+tests/test_multigame_evaluator.py::TestReward::test_reward_zero_when_unchanged PASSED [ 51%]
+tests/test_multigame_evaluator.py::TestReward::test_reward_negative_when_worsened PASSED [ 54%]
+tests/test_multigame_evaluator.py::TestJitCompilation::test_jit_interactive_count PASSED [ 58%]
+tests/test_multigame_evaluator.py::TestJitCompilation::test_jit_hazard_count PASSED [ 61%]
+tests/test_multigame_evaluator.py::TestJitCompilation::test_jit_collectable_count PASSED [ 64%]
+tests/test_multigame_evaluator.py::TestJitCompilation::test_jit_loss[interactive] PASSED [ 67%]
+tests/test_multigame_evaluator.py::TestJitCompilation::test_jit_loss[hazard] PASSED [ 70%]
+tests/test_multigame_evaluator.py::TestJitCompilation::test_jit_loss[collectable] PASSED [ 74%]
+tests/test_multigame_evaluator.py::TestJitCompilation::test_jit_fitness[interactive] PASSED [ 77%]
+tests/test_multigame_evaluator.py::TestJitCompilation::test_jit_fitness[hazard] PASSED [ 80%]
+tests/test_multigame_evaluator.py::TestJitCompilation::test_jit_fitness[collectable] PASSED [ 83%]
+tests/test_multigame_evaluator.py::TestJitCompilation::test_jit_reward PASSED [ 87%]
+tests/test_multigame_evaluator.py::TestVmapCompilation::test_vmap_interactive_count PASSED [ 90%]
+tests/test_multigame_evaluator.py::TestVmapCompilation::test_vmap_loss PASSED [ 93%]
+tests/test_multigame_evaluator.py::TestVmapCompilation::test_vmap_reward PASSED [ 96%]
+tests/test_multigame_evaluator.py::TestGradCompilation::test_grad_count_compiles PASSED [100%]
+
+============================== 31 passed in 1.87s ==============================

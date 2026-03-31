@@ -175,7 +175,7 @@ def make_train(config: BertTrainConfig):
                 i = 1
 
                 val_y_gt, val_y_pd, val_reward_id = list(), list(), list()
-                for X_batch, y_batch, reward_id, reward_enum in create_batches(test_set, config.batch_size):
+                for X_batch, y_batch, reward_id, reward_enum, instruct in create_batches(test_set, config.batch_size):
                     X_batch = jax.device_put(X_batch)
                     y_batch = jax.device_put(y_batch)
 

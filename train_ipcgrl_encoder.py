@@ -147,7 +147,7 @@ def make_train(config: BertTrainConfig):
                 train_y_gt, train_y_pd, train_reward_id = list(), list(), list()
 
                 # Training Loop
-                for X_batch, y_batch, reward_id, reward_enum in create_batches(train_set, config.batch_size, augment=True):
+                for X_batch, y_batch, reward_id, reward_enum, instruct in create_batches(train_set, config.batch_size, augment=True):
                     X_batch = jax.device_put(X_batch)
                     y_batch = jax.device_put(y_batch)
 
@@ -156,7 +156,7 @@ def make_train(config: BertTrainConfig):
                         use_kl_loss=use_kl_loss
                     )
 
-                    embeddings = [EmbedData(reward_id=r, reward_enum=re, embedding=e) for r, re, e in zip(reward_id, reward_enum, embed)]
+                    embeddings = [EmbedData(reward_id=r, reward_enum=re, instruct=i, embedding=e) for r, re, i, e in zip(reward_id, reward_enum, instruct, embed)]
                     train_embed_queue.extend(embeddings)
 
                     train_losses["total"] += batch_total_loss
@@ -184,7 +184,7 @@ def make_train(config: BertTrainConfig):
                         use_kl_loss=use_kl_loss
                     )
 
-                    embeddings = [EmbedData(reward_id=r, reward_enum=re, embedding=e) for r, re, e in zip(reward_id, reward_enum, embed)]
+                    embeddings = [EmbedData(reward_id=r, reward_enum=re, instruct=i, embedding=e) for r, re, i, e in zip(reward_id, reward_enum, instruct, embed)]
                     val_embed_queue.extend(embeddings)
 
                     val_losses["total"] += batch_total_loss

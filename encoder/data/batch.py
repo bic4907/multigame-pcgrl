@@ -40,6 +40,7 @@ class Dataset:
 class EmbedData:
     reward_id: int
     reward_enum: int
+    instrcut: str
     embedding: np.ndarray
 
 
@@ -58,6 +59,7 @@ def create_batches(dataset: Dataset, batch_size: int, augment: bool = False):
 
         reward_id = dataset.reward_id[batch_indices]
         reward_enum = dataset.reward_enum[batch_indices]
+        instruct = dataset.instruct[batch_indices]
 
         if augment:
             # Only augment data where augmentable == True (1)
@@ -83,7 +85,7 @@ def create_batches(dataset: Dataset, batch_size: int, augment: bool = False):
         X = (curr_onehot, embed)
         y = dataset.reward[batch_indices]
 
-        yield X, y, reward_id, reward_enum
+        yield X, y, reward_id, reward_enum, instruct
 
 
 def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTrainConfig):
@@ -100,9 +102,6 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
 
     whole_language_inst_list = [s.instruction for s in dataset_samples]
 
-    # reward_enum: digit 배열 형태로 수집 (get_fitness_batch 입력 형식: (batch, n_digits))
-    # condition: 전체 조건 벡터 형태로 수집 (get_fitness_batch 입력 형식: (batch, n_condition_cols))
-    # fitness.py 기준 condition col: [cond1(region), cond2(path), cond3(wall), cond4(bat), cond5(dir)]
     N_CONDITION_COLS = 5
     whole_reward_enum_digits = []
     whole_condition_vecs = []
@@ -147,11 +146,8 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
 
     dataset = None
     for game in unique_games:
-        # file_list = glob(os.path.join(buffer_dir, game, '**', '*.npz'), recursive=True)
+        # file_list = os.path.join(buffer_dir, game, '*.npz') # TODO: 데이터셋 구조에 맞게 추후 수정
         file = os.path.join(buffer_dir, 'cpcgrl_buffer', 'cpcgrl_pair_dataset.npz')
-        # file_list = glob(os.path.join(buffer_dir, game, '*.npz'), recursive=True)
-        # file_list += glob(os.path.join(buffer_dir, game, '**', '*.npz'), recursive=True)
-        # logger.info(f"Found {len(file_list)} files for game '{game}'")
 
         data = np.load(file, allow_pickle=True)
 

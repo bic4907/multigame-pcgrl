@@ -1,6 +1,0 @@
-game,is_placeholder,reward_enum,feature_name,sub_condition,condition_1,condition_2,condition_3,condition_4,condition_5
-pokemon,true,1,region,,2.0,,,,
-pokemon,true,2,path_length,,,20.0,,,
-pokemon,true,3,block,wall,,,0.4,,
-pokemon,true,4,bat_amount,object,,,,4.0,
-pokemon,true,5,bat_direction,,,,,,0.5

@@ -12,6 +12,21 @@ import numpy as np
 from ...base import BasePreprocessor, TileLegend, enforce_top_left_16x16, GameSample
 
 
+POKEMON_PALETTE: dict[int, tuple[int, int, int]] = {
+    0:  (20,  20,  20),   # empty   – 어두운 회색
+    #1:  (80,  80,  80),   # wall    – 중간 회색
+    2:  (200, 180, 120),  # floor   – 밝은 베이지
+    #3:  (220, 50,  50),   # enemy   – 빨강
+    4:  (255, 215, 0),    # object  – 금색
+    5:  (200, 0,   0),    # spawn   – 초록색
+    6:  (100, 100, 255),  # hazard  – 주황색
+    7:  (150, 75,  0),    # fence   – 갈색
+    8:  (34,  139, 34),   # tree    – 숲 녹색
+    9:  (200, 150, 150),  # house   – 빨강 (집)
+    99: (255, 0,   255),  # unknown – 분홍색 (오류)
+}
+
+
 class POKEMONTile:
     EMPTY   = 0
     WALL    = 1
@@ -44,6 +59,8 @@ POKEMON_TILESET_MAPPING = {
     14: POKEMONTile.HOUSE,
     15: POKEMONTile.OBJECT,
 }
+
+
 
 
 def make_legend() -> TileLegend:

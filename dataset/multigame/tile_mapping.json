@@ -199,6 +199,19 @@
       "9": "HOUSE",
       "99": "UNKNOWN"
     },
+    "_tile_images": {
+      "0": "EMPTY",
+      "1": "WALL",
+      "2": "pokemon/floor_0.png",
+      "3": "ENEMY",
+      "4": "pokemon/pokeball.png",
+      "5": "pokemon/door.png",
+      "6": "pokemon/water.png",
+      "7": "pokemon/fence.png",
+      "8": "pokemon/tree.png",
+      "9": "pokemon/wall.png",
+      "99": "UNKNOWN"
+    },
     "mapping": {
       "0":  1,
       "1":  1,

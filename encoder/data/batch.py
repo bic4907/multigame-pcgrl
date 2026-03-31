@@ -40,7 +40,7 @@ class Dataset:
 class EmbedData:
     reward_id: int
     reward_enum: int
-    instrcut: str
+    instruct: str
     embedding: np.ndarray
 
 

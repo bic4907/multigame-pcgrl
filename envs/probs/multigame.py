@@ -113,8 +113,8 @@ def _load_or_color_tile(cat_idx: int, size: int = _TILE_SIZE) -> Image.Image:
 #   EMPTY  = 1          (category 0)
 #   WALL   = 2          (category 1)
 #   INTERACTABLE = 3      (category 2)
-#   HAZARD = 5          (category 3)
-#   COLLECTIBLE = 6      (category 4)
+#   HAZARD = 4          (category 3)
+#   COLLECTIBLE = 5      (category 4)
 
 MultigameTiles = IntEnum(
     "MultigameTiles",

@@ -221,3 +221,150 @@ cluster_penalty = jax.jit(_cluster_penalty)
 accessibility_bonus = jax.jit(_accessibility_bonus)
 spread_bonus = jax.jit(partial(_spread_bonus, max_items=32), static_argnames=("max_items",))
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  타일별(tile-specific) placement reward
+#  — interactive / hazard / collectable 각각에 대해
+#    개수(amount) + 배치품질(cluster/access/spread) 를 한번에 평가
+# ══════════════════════════════════════════════════════════════════════════════
+
+_TILE_VALUE = {
+    "interactive": int(MultigameTiles.INTERACTIVE),
+    "hazard":      int(MultigameTiles.HAZARD),
+    "collectable": int(MultigameTiles.COLLECTABLE),
+}
+
+
+def _cluster_penalty_tile(env_map: chex.Array, tile_val: int) -> jnp.ndarray:
+    """특정 타일의 4방향 이웃 중 같은 타일 수 합산."""
+    is_target = (env_map == tile_val)
+
+    up    = jnp.pad(env_map[:-1, :], ((1, 0), (0, 0)), constant_values=-1)
+    down  = jnp.pad(env_map[1:, :],  ((0, 1), (0, 0)), constant_values=-1)
+    left  = jnp.pad(env_map[:, :-1], ((0, 0), (1, 0)), constant_values=-1)
+    right = jnp.pad(env_map[:, 1:],  ((0, 0), (0, 1)), constant_values=-1)
+
+    same_neighbor = (
+        (env_map == up).astype(jnp.int32) +
+        (env_map == down).astype(jnp.int32) +
+        (env_map == left).astype(jnp.int32) +
+        (env_map == right).astype(jnp.int32)
+    )
+    return jnp.sum(same_neighbor * is_target).astype(float)
+
+
+def _accessibility_bonus_tile(env_map: chex.Array, tile_val: int) -> jnp.ndarray:
+    """특정 타일 중 4방향에 통행 가능 타일이 1개 이상인 비율."""
+    is_target = (env_map == tile_val)
+    n_targets = jnp.sum(is_target).astype(float)
+
+    passable = jnp.isin(env_map, _PASSABLE_TILES)
+
+    up    = jnp.pad(passable[:-1, :], ((1, 0), (0, 0)), constant_values=False)
+    down  = jnp.pad(passable[1:, :],  ((0, 1), (0, 0)), constant_values=False)
+    left  = jnp.pad(passable[:, :-1], ((0, 0), (1, 0)), constant_values=False)
+    right = jnp.pad(passable[:, 1:],  ((0, 0), (0, 1)), constant_values=False)
+
+    n_passable_neighbors = (
+        up.astype(jnp.int32) + down.astype(jnp.int32) +
+        left.astype(jnp.int32) + right.astype(jnp.int32)
+    )
+
+    accessible = ((n_passable_neighbors >= 1) & is_target).astype(float)
+    n_accessible = jnp.sum(accessible)
+    return jnp.where(n_targets > 0, n_accessible / n_targets, 1.0)
+
+
+def _spread_bonus_tile(env_map: chex.Array, tile_val: int, max_items: int = 32) -> jnp.ndarray:
+    """특정 타일 좌표 간 평균 L1 거리 (맵 크기로 정규화)."""
+    H, W = env_map.shape
+    max_dist = (H - 1.0) + (W - 1.0)
+
+    is_target = (env_map == tile_val)
+    n_targets = jnp.sum(is_target).astype(jnp.int32)
+
+    rows, cols = jnp.where(is_target, size=max_items, fill_value=-1)
+    coords = jnp.stack([rows, cols], axis=-1)
+
+    valid = (coords[:, 0] >= 0)
+    diff = jnp.abs(coords[:, None, :] - coords[None, :, :])
+    pairwise_l1 = jnp.sum(diff, axis=-1)
+
+    valid_pair = valid[:, None] & valid[None, :] & ~jnp.eye(max_items, dtype=bool)
+    n_pairs = jnp.sum(valid_pair).astype(float)
+    total_dist = jnp.sum(pairwise_l1 * valid_pair).astype(float)
+
+    mean_dist = jnp.where(n_pairs > 0, total_dist / n_pairs, 0.0)
+    bonus = jnp.where(max_dist > 0, mean_dist / max_dist, 0.0)
+    return jnp.where(n_targets > 1, bonus, 0.0)
+
+
+def _tile_amount_diff(prev_env_map: chex.Array, curr_env_map: chex.Array,
+                      tile_val: int, cond: chex.Array) -> jnp.ndarray:
+    """타일 개수 조건 달성 개선량 (prev_loss − curr_loss)."""
+    prev_count = jnp.sum(prev_env_map == tile_val).astype(float)
+    curr_count = jnp.sum(curr_env_map == tile_val).astype(float)
+    prev_loss = jnp.abs(prev_count - cond)
+    curr_loss = jnp.abs(curr_count - cond)
+    return prev_loss - curr_loss
+
+
+@partial(jax.jit, static_argnames=("tile_name", "max_items"))
+def get_multigame_tile_placement_reward(
+    prev_env_map: chex.Array,
+    curr_env_map: chex.Array,
+    cond: chex.Array,
+    tile_name: str = "interactive",
+    w_amount: float = 0.4,
+    w_cluster: float = 0.2,
+    w_access: float = 0.2,
+    w_spread: float = 0.2,
+    max_items: int = 32,
+) -> chex.Array:
+    """특정 타일의 개수 + 배치 품질을 동시에 평가하는 통합 reward.
+
+    Parameters
+    ----------
+    prev_env_map, curr_env_map : (H, W) int 맵.
+    cond : scalar — 목표 타일 개수.
+    tile_name : "interactive", "hazard", "collectable".
+    w_amount  : 개수 조건 달성 가중치.
+    w_cluster : 반복 배치 패널티 가중치.
+    w_access  : 접근성 보상 가중치.
+    w_spread  : 분산 보상 가중치.
+    max_items : spread 계산용 고정 배열 크기.
+
+    Returns
+    -------
+    scalar reward (양수 = 개선).
+    """
+    tile_val = _TILE_VALUE[tile_name]
+
+    # ── amount ──
+    amount_reward = _tile_amount_diff(prev_env_map, curr_env_map, tile_val, cond)
+
+    # ── cluster (낮을수록 좋음 → prev − curr) ──
+    cluster_reward = (
+        _cluster_penalty_tile(prev_env_map, tile_val)
+        - _cluster_penalty_tile(curr_env_map, tile_val)
+    )
+
+    # ── access (높을수록 좋음 → curr − prev) ──
+    access_reward = (
+        _accessibility_bonus_tile(curr_env_map, tile_val)
+        - _accessibility_bonus_tile(prev_env_map, tile_val)
+    )
+
+    # ── spread (높을수록 좋음 → curr − prev) ──
+    spread_reward = (
+        _spread_bonus_tile(curr_env_map, tile_val, max_items)
+        - _spread_bonus_tile(prev_env_map, tile_val, max_items)
+    )
+
+    reward = (
+        w_amount  * amount_reward  +
+        w_cluster * cluster_reward +
+        w_access  * access_reward  +
+        w_spread  * spread_reward
+    )
+    return reward.astype(float)

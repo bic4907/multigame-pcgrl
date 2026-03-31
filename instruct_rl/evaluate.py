@@ -8,9 +8,9 @@ from flax.struct import dataclass
 from jax import vmap
 
 from envs.probs.dungeon3 import Dungeon3Tiles
-from evaluator.losses import region_loss, path_length_loss, amount_loss
+from evaluator.losses import region_loss, path_length_loss
 from evaluator.losses.multigame_amount_loss import multigame_amount_loss
-from evaluator.measures import get_region, get_path_length, get_amount
+from evaluator.measures import get_region, get_path_length
 from evaluator.measures.multigame_amount import (
     get_interactive_count,
     get_hazard_count,
@@ -54,12 +54,10 @@ def get_loss_batch(
         lambda cond, env_map: jnp.array(default_loss),  # 0 (no function)
         lambda cond, env_map: get_region(env_map),  # 1 (region)
         lambda cond, env_map: get_path_length(env_map),  # 2 (path_length)
-        lambda cond, env_map: get_amount(env_map, Dungeon3Tiles.WALL.value),  # 3 (block)
-        lambda cond, env_map: get_amount(env_map, Dungeon3Tiles.BAT.value),  # 4 (bat_amount)
-        lambda cond, env_map: get_interactive_count(env_map),  # 5 (interactive_amount)
-        lambda cond, env_map: get_hazard_count(env_map),  # 6 (hazard_amount)
-        lambda cond, env_map: get_collectable_count(env_map),  # 7 (collectable_amount)
-        lambda cond, env_map: jnp.array(default_loss),  # 8+ (no function)
+        lambda cond, env_map: get_interactive_count(env_map),  # 3 (interactive)
+        lambda cond, env_map: get_hazard_count(env_map),  # 4 (hazard)
+        lambda cond, env_map: get_collectable_count(env_map),  # 5 (collectable)
+        lambda cond, env_map: jnp.array(default_loss),  # 6+ (no function)
     ]
 
     loss_funcs = [
@@ -68,22 +66,16 @@ def get_loss_batch(
         lambda cond, env_map: path_length_loss(
             env_map, cond[1]
         ),  # 2 (path_length)
-        lambda cond, env_map: amount_loss(
-            env_map, Dungeon3Tiles.WALL.value, cond[2], absolute=True
-        ),  # 3 (block)
-        lambda cond, env_map: amount_loss(
-            env_map, Dungeon3Tiles.BAT.value, cond[3], absolute=True
-        ),  # 4 (bat_amount)
         lambda cond, env_map: multigame_amount_loss(
-            env_map, "interactive", cond[4], absolute=True
-        ),  # 5 (interactive_amount)
+            env_map, "interactive", cond[2], absolute=True
+        ),  # 3 (interactive)
         lambda cond, env_map: multigame_amount_loss(
-            env_map, "hazard", cond[5], absolute=True
-        ),  # 6 (hazard_amount)
+            env_map, "hazard", cond[3], absolute=True
+        ),  # 4 (hazard)
         lambda cond, env_map: multigame_amount_loss(
-            env_map, "collectable", cond[6], absolute=True
-        ),  # 7 (collectable_amount)
-        lambda cond, env_map: jnp.array(default_loss),  # 8+ (no function)
+            env_map, "collectable", cond[4], absolute=True
+        ),  # 5 (collectable)
+        lambda cond, env_map: jnp.array(default_loss),  # 6+ (no function)
     ]
 
 
@@ -105,15 +97,12 @@ def get_loss_batch(
     def measure_all(env_map):
         n_region = get_region(env_map)
         n_path_length = get_path_length(env_map)
-        n_block = get_amount(env_map, Dungeon3Tiles.WALL.value)
-        n_bat = get_amount(env_map, Dungeon3Tiles.BAT.value)
         n_interactive = get_interactive_count(env_map)
         n_hazard = get_hazard_count(env_map)
         n_collectable = get_collectable_count(env_map)
 
         return jnp.array([
             n_region, n_path_length,
-            n_block, n_bat,
             n_interactive, n_hazard, n_collectable,
         ])
 

@@ -36,9 +36,14 @@ from evaluator.fitnesses.multigame_amount import get_multigame_amount_fitness
 from evaluator.rewards.multigame_amount import get_multigame_amount_reward
 from evaluator.rewards.multigame_placement import (
     get_multigame_placement_reward,
+    get_multigame_tile_placement_reward,
     _cluster_penalty,
     _accessibility_bonus,
     _spread_bonus,
+    _cluster_penalty_tile,
+    _accessibility_bonus_tile,
+    _spread_bonus_tile,
+    _tile_amount_diff,
 )
 
 
@@ -482,3 +487,179 @@ class TestPlacementJitVmap:
         assert float(results[0]) == pytest.approx(0.0)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 13. tile-specific placement — 내부 함수 값 검증
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestTilePlacementHelpers:
+    """_cluster_penalty_tile, _accessibility_bonus_tile, _spread_bonus_tile, _tile_amount_diff 검증."""
+
+    def test_cluster_penalty_tile_isolated(self):
+        """INTERACTIVE(3)가 고립 → penalty=0."""
+        m = jnp.array([
+            [3, 1, 3],
+            [1, 1, 1],
+            [3, 1, 3],
+        ], dtype=jnp.int32)
+        assert float(_cluster_penalty_tile(m, 3)) == 0.0
+
+    def test_cluster_penalty_tile_adjacent(self):
+        """INTERACTIVE(3) 2개 인접 → 각 1씩 = 2."""
+        m = jnp.array([
+            [3, 3, 1],
+            [1, 1, 1],
+            [1, 1, 1],
+        ], dtype=jnp.int32)
+        assert float(_cluster_penalty_tile(m, 3)) == 2.0
+
+    def test_cluster_ignores_other_tiles(self):
+        """HAZARD(4) 인접이어도 INTERACTIVE(3) penalty는 0."""
+        m = jnp.array([
+            [3, 4, 1],
+            [1, 1, 1],
+            [1, 1, 1],
+        ], dtype=jnp.int32)
+        assert float(_cluster_penalty_tile(m, 3)) == 0.0
+
+    def test_accessibility_tile_open(self):
+        """HAZARD(4) 주변에 EMPTY → 접근 가능 = 1.0."""
+        m = jnp.array([
+            [1, 4, 1],
+            [1, 1, 1],
+            [1, 1, 1],
+        ], dtype=jnp.int32)
+        assert float(_accessibility_bonus_tile(m, 4)) == pytest.approx(1.0)
+
+    def test_accessibility_tile_walled(self):
+        """HAZARD(4) 사방 WALL → 접근 불가 = 0.0."""
+        m = jnp.array([
+            [2, 2, 2],
+            [2, 4, 2],
+            [2, 2, 2],
+        ], dtype=jnp.int32)
+        assert float(_accessibility_bonus_tile(m, 4)) == pytest.approx(0.0)
+
+    def test_spread_tile_far(self):
+        """COLLECTABLE(5) 양 끝 배치 → 최대 분산."""
+        m = jnp.ones((4, 4), dtype=jnp.int32)
+        m = m.at[0, 0].set(5).at[3, 3].set(5)
+        # L1 dist=6, max_dist=6 → 1.0
+        assert float(_spread_bonus_tile(m, 5)) == pytest.approx(1.0)
+
+    def test_spread_tile_single(self):
+        """타일 1개 → 0.0."""
+        m = jnp.ones((4, 4), dtype=jnp.int32).at[0, 0].set(5)
+        assert float(_spread_bonus_tile(m, 5)) == pytest.approx(0.0)
+
+    def test_amount_diff_improved(self):
+        """개수가 목표에 가까워지면 양수."""
+        prev = jnp.array([[3, 3, 3], [1, 1, 1], [1, 1, 1]], dtype=jnp.int32)
+        curr = jnp.array([[3, 3, 1], [1, 1, 1], [1, 1, 1]], dtype=jnp.int32)
+        # cond=2: prev |3-2|=1, curr |2-2|=0 → diff=1
+        assert float(_tile_amount_diff(prev, curr, 3, jnp.array(2.0))) == pytest.approx(1.0)
+
+    def test_amount_diff_worsened(self):
+        """개수가 목표에서 멀어지면 음수."""
+        prev = jnp.array([[3, 3, 1], [1, 1, 1], [1, 1, 1]], dtype=jnp.int32)
+        curr = jnp.array([[3, 3, 3], [1, 1, 1], [1, 1, 1]], dtype=jnp.int32)
+        # cond=2: prev |2-2|=0, curr |3-2|=1 → diff=-1
+        assert float(_tile_amount_diff(prev, curr, 3, jnp.array(2.0))) == pytest.approx(-1.0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 14. tile-specific placement — 통합 reward 값 검증
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestTilePlacementReward:
+
+    def test_no_change_zero(self, env_map):
+        """동일 맵 → 0."""
+        r = get_multigame_tile_placement_reward(env_map, env_map, jnp.array(3.0), tile_name="interactive")
+        assert float(r) == pytest.approx(0.0)
+
+    def test_amount_improvement_positive(self):
+        """개수만 개선 (분산/cluster 동일) → 양수."""
+        prev = jnp.array([
+            [3, 1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+        ], dtype=jnp.int32)
+        curr = jnp.array([
+            [3, 1, 1, 3],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+        ], dtype=jnp.int32)
+        # cond=2: prev count=1, curr count=2 → amount 개선, spread 개선, cluster 변화 없음
+        r = get_multigame_tile_placement_reward(prev, curr, jnp.array(2.0), tile_name="interactive")
+        assert float(r) > 0.0
+
+    def test_clustering_penalised(self):
+        """분산 배치 → 뭉침 배치로 바뀌면 음수."""
+        prev = jnp.array([
+            [3, 1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 3, 1],
+            [1, 1, 1, 3],
+        ], dtype=jnp.int32)
+        curr = jnp.array([
+            [3, 3, 3, 1],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+        ], dtype=jnp.int32)
+        # cond=3: 개수 동일, 하지만 cluster↑, spread↓ → 음수
+        r = get_multigame_tile_placement_reward(prev, curr, jnp.array(3.0), tile_name="interactive")
+        assert float(r) < 0.0
+
+    @pytest.mark.parametrize("tile_name", ["interactive", "hazard", "collectable"])
+    def test_all_tile_names_work(self, env_map, tile_name):
+        """세 tile_name 모두 에러 없이 동작."""
+        r = get_multigame_tile_placement_reward(env_map, env_map, jnp.array(2.0), tile_name=tile_name)
+        assert r.shape == ()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 15. tile-specific placement — jax.jit / vmap 컴파일 검증
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestTilePlacementJitVmap:
+
+    def test_jit_tile_placement(self, env_map):
+        """이미 @jax.jit 적용 — 실행 확인."""
+        r = get_multigame_tile_placement_reward(env_map, env_map, jnp.array(2.0), tile_name="interactive")
+        assert r.shape == ()
+
+    def test_jit_cluster_penalty_tile(self, env_map):
+        jitted = jax.jit(lambda m: _cluster_penalty_tile(m, 3))
+        r = jitted(env_map)
+        assert r.shape == ()
+
+    def test_jit_accessibility_bonus_tile(self, env_map):
+        jitted = jax.jit(lambda m: _accessibility_bonus_tile(m, 3))
+        r = jitted(env_map)
+        assert r.shape == ()
+        assert 0.0 <= float(r) <= 1.0
+
+    def test_jit_spread_bonus_tile(self, env_map):
+        jitted = jax.jit(lambda m: _spread_bonus_tile(m, 3))
+        r = jitted(env_map)
+        assert r.shape == ()
+        assert 0.0 <= float(r) <= 1.0
+
+    def test_vmap_tile_placement(self, env_map):
+        prev_batch = jnp.stack([env_map, env_map])
+        curr_batch = jnp.stack([env_map, env_map])
+        conds = jnp.array([2.0, 3.0])
+        vmapped = jax.vmap(lambda p, c, cd: get_multigame_tile_placement_reward(p, c, cd, tile_name="interactive"))
+        results = vmapped(prev_batch, curr_batch, conds)
+        assert results.shape == (2,)
+        assert float(results[0]) == pytest.approx(0.0)
+
+    def test_vmap_cluster_penalty_tile(self, env_map):
+        batch = jnp.stack([env_map, jnp.ones_like(env_map)])
+        vmapped = jax.vmap(lambda m: _cluster_penalty_tile(m, 3))
+        results = vmapped(batch)
+        assert results.shape == (2,)
+        assert float(results[1]) == 0.0  # all-EMPTY → no 3 tiles → 0

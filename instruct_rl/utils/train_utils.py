@@ -34,6 +34,7 @@ from instruct_rl.utils.checkpointer import (
     apply_encoder_params,
     init_checkpoint_step,
     init_checkpointer,
+    log_encoder_params_summary,
     save_checkpoint_step,
 )
 from instruct_rl.utils.buffer_collector import BufferCollector
@@ -145,7 +146,10 @@ def make_train(
             )
 
         if encoder_params is not None:
+            log_encoder_params_summary(encoder_params, config)
             runner_state = apply_encoder_params(runner_state, encoder_params, config)
+        else:
+            log_encoder_params_summary(encoder_params, config)
 
         multiple_handler = create_log_handler(
             config,

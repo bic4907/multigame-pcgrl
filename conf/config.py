@@ -159,6 +159,7 @@ class EncoderConfig(CLIPConfig):
 
     ckpt_dir: str = "./encoder_ckpts"
     ckpt: Optional[str] = None
+    ckpt_name: Optional[str] = None  # pretrained_encoders/ 아래 이름 (e.g. "vipcgrl/default")
 
     # DO NOT SET THIS
     ckpt_path: Optional[str] = None

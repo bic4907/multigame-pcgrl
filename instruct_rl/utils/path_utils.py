@@ -274,8 +274,18 @@ def init_config(config: Config):
         config.clip_input_channel = config.clip_input_channel + 2
         config.text_ratio = min([0.25, 0.5, 0.75, 1.0], key=lambda x: abs(x - config.text_ratio))
 
+        # ── encoder.ckpt_name 으로 pretrained_encoders/ 에서 직접 로드 ──
+        if config.encoder.ckpt_name is not None:
+            _project_root = os.path.dirname(os.path.dirname(os.path.dirname(abspath(__file__))))
+            _pretrained_dir = join(_project_root, "pretrained_encoders", config.encoder.ckpt_name, "ckpts")
+            if not os.path.isdir(_pretrained_dir):
+                logger.error(f"Pretrained encoder checkpoint not found: {_pretrained_dir}")
+                exit(-1)
+            config.encoder.ckpt_path = _pretrained_dir
+            logger.info(f"Encoder checkpoint set from ckpt_name='{config.encoder.ckpt_name}' → [{config.encoder.ckpt_path}]")
+
         # encoder.ckpt 가 지정되지 않은 경우(dataset 기반 IPCGRL 등) 체크포인트 탐색 스킵
-        if config.encoder.ckpt is None and hasattr(config, 'dataset_game') and config.dataset_game is not None:
+        elif config.encoder.ckpt is None and hasattr(config, 'dataset_game') and config.dataset_game is not None:
             logger.info("[IPCGRL] encoder.ckpt not specified — MLP encoder will be trained from scratch")
         else:
             try:

@@ -65,18 +65,21 @@ from .tile_utils import to_unified, render_unified_rgb, game_mapping_rows
 _HERE = Path(__file__).parent
 _DEFAULT_REWARD_ANNOTATIONS_DIR = _HERE.parent / "reward_annotations"
 
+logger = logging.getLogger(__name__)
+
 
 class _WarningConditionsDict(dict):
     """
     placeholder conditions dict.
     아직 per-sample annotation이 없는 게임에서 conditions 값에 접근하면
-    WARNING 로그를 출력한다.
+    WARNING 로그를 출력한다.  (게임별 1회만)
     """
+    _warned_games: set = set()  # 클래스 변수: 이미 경고한 게임 이름
+
     def __init__(self, data: dict, game: str, logger) -> None:
         super().__init__(data)
         self._game = game
         self._logger = logger
-        self._warned = False
 
     def __getitem__(self, key):
         self._warn()
@@ -99,13 +102,13 @@ class _WarningConditionsDict(dict):
         return super().values()
 
     def _warn(self):
-        if not self._warned:
+        if self._game not in _WarningConditionsDict._warned_games:
             self._logger.warning(
-                "[%s] conditions 접근: 이 게임은 아직 per-sample reward annotation이 없습니다. "
-                "placeholder 값이 반환됩니다.",
+                "[%s] conditions accessed: this game does not have per-sample reward annotations yet. "
+                "Placeholder values will be returned.",
                 self._game,
             )
-            self._warned = True
+            _WarningConditionsDict._warned_games.add(self._game)
 
 
 class MultiGameDataset:
@@ -228,15 +231,15 @@ class MultiGameDataset:
             if use_cache:
                 fallback = load_any_game_cache(cache_dir, game)
                 if fallback is not None:
-                    print(f"[MultiGameDataset] {game}: artifact-only fallback "
-                          f"({len(fallback)} samples from existing cache)")
+                    logger.info("%s: artifact-only fallback (%d samples from existing cache)",
+                                game, len(fallback))
                     for s in fallback:
                         s.order = len(self._samples)
                         self._samples.append(s)
                     continue
 
             # (4) 아무것도 없으면 경고만 출력
-            print(f"[MultiGameDataset] {game}: no source data and no cache — skipped")
+            logger.warning("%s: no source data and no cache — skipped", game)
 
         # ── 글로벌 후처리 (캐시에 저장하지 않고 매번 런타임 적용) ──────────────
         if self._handler_config.pokemon.enabled:
@@ -277,7 +280,7 @@ class MultiGameDataset:
                 for sample in self._zelda_handler:
                     samples.append(sample)
                 if samples:
-                    print(f"[MultiGameDataset] Zelda: Loaded {len(samples)} rooms")
+                    logger.info("Zelda: Loaded %d rooms", len(samples))
 
             elif game == "pokemon":
                 self._pokemon_handler = POKEMONHandler(root=game_root, handler_config=handler_config)
@@ -292,8 +295,8 @@ class MultiGameDataset:
                 total_filtered = filtered_ratio + filtered_count
                 if total_filtered > 0:
                     total_pokemon = len(valid_ids) + total_filtered
-                    print(f"[MultiGameDataset] POKEMON: Filtered {total_pokemon} → "
-                          f"{len(valid_ids)} samples ({total_filtered} removed)")
+                    logger.info("POKEMON: Filtered %d → %d samples (%d removed)",
+                                total_pokemon, len(valid_ids), total_filtered)
 
             elif game in ("doom", "doom2"):
                 handler = DoomHandler(root=game_root, handler_config=handler_config)
@@ -302,14 +305,14 @@ class MultiGameDataset:
                 for sample in handler:
                     samples.append(sample)
                 if samples:
-                    print(f"[MultiGameDataset] {game.upper()}: Loaded {len(samples)} samples")
+                    logger.info("%s: Loaded %d samples", game.upper(), len(samples))
 
             else:
-                print(f"[MultiGameDataset] Unknown game: {game}")
+                logger.warning("Unknown game: %s", game)
                 return None
 
         except (FileNotFoundError, ValueError) as e:
-            print(f"Warning: Could not load {game} dataset: {e}")
+            logger.warning("Could not load %s dataset: %s", game, e)
             return None
 
         return samples if samples else None
@@ -354,8 +357,9 @@ class MultiGameDataset:
 
         filtered_count = original_count - len(self._samples)
         if filtered_count > 0:
-            print(f"[MultiGameDataset] Instruction filtering: {original_count} → {len(self._samples)} samples "
-                  f"({filtered_count} removed, min_words={self._handler_config.pokemon.min_instruction_words})")
+            logger.info("Instruction filtering: %d → %d samples (%d removed, min_words=%d)",
+                        original_count, len(self._samples), filtered_count,
+                        self._handler_config.pokemon.min_instruction_words)
 
     def _apply_pokemon_tileset_filtering(self) -> None:
         """
@@ -391,8 +395,10 @@ class MultiGameDataset:
         self._samples = filtered_samples
         pokemon_filtered_count = original_pokemon_count - len([s for s in self._samples if s.game == "pokemon"])
         if pokemon_filtered_count > 0:
-            print(f"[MultiGameDataset] POKEMON tileset filtering: {original_pokemon_count} → {len([s for s in self._samples if s.game == 'pokemon'])} samples "
-                  f"({pokemon_filtered_count} removed, max_tile_count_threshold=250)")
+            logger.info("POKEMON tileset filtering: %d → %d samples (%d removed, max_tile_count_threshold=250)",
+                        original_pokemon_count,
+                        len([s for s in self._samples if s.game == 'pokemon']),
+                        pokemon_filtered_count)
 
     def _augment_with_rotations_per_game(self) -> None:
         """
@@ -428,9 +434,9 @@ class MultiGameDataset:
             sample.order = i
 
         if len(rotated_samples) > 0:
-            print(f"[MultiGameDataset] Data augmentation: {original_count} → {len(self._samples)} samples "
-                  f"(added {len(rotated_samples)} rotated versions)")
-        
+            logger.info("Data augmentation: %d → %d samples (added %d rotated versions)",
+                        original_count, len(self._samples), len(rotated_samples))
+
         # ── 증강 후 각 게임별 제한 (handler_config의 max_samples 참조) ────────────
         game_sample_counts = {}
         filtered_samples = []
@@ -465,7 +471,8 @@ class MultiGameDataset:
             for i, sample in enumerate(self._samples):
                 sample.order = i
             
-            print(f"[MultiGameDataset] Game-wise limit (per config): {original_count} → {len(self._samples)} samples")
+            logger.info("Game-wise limit (per config): %d → %d samples",
+                        original_count, len(self._samples))
             for game, count in sorted(game_sample_counts.items()):
                 limited_count = count
                 max_samples = None
@@ -481,11 +488,11 @@ class MultiGameDataset:
                 if max_samples is not None:
                     limited_count = min(count, max_samples)
                     if limited_count < count:
-                        print(f"  {game}: {count} → {limited_count} (max_samples={max_samples})")
+                        logger.info("  %s: %d → %d (max_samples=%d)", game, count, limited_count, max_samples)
                     else:
-                        print(f"  {game}: {count} (max_samples={max_samples})")
+                        logger.info("  %s: %d (max_samples=%d)", game, count, max_samples)
                 else:
-                    print(f"  {game}: {count} (no limit)")
+                    logger.info("  %s: %d (no limit)", game, count)
 
     def _load_reward_annotations(self, annotations_dir: Path) -> None:
         """
@@ -497,7 +504,6 @@ class MultiGameDataset:
         reward_enum은 모든 게임 통일 1~5:
           1=region / 2=path_length / 3=block / 4=bat_amount / 5=bat_direction
         """
-        logger = logging.getLogger(__name__)
         # ── dungeon: per-sample CSV ───────────────────────────────────────
         dungeon_csv = annotations_dir / "dungeon_reward_annotations.csv"
         if dungeon_csv.exists():
@@ -524,7 +530,7 @@ class MultiGameDataset:
                 sample.meta["conditions"] = conditions
                 attached += 1
             if attached > 0:
-                print(f"[MultiGameDataset] Reward annotations: attached to {attached} dungeon samples")
+                logger.info("Reward annotations: attached to %d dungeon samples", attached)
         # ── 나머지 게임: *_placeholder.csv 읽어서 game-level 적용 ─────────
         # 파일명에 _placeholder가 포함된 CSV를 자동 탐지
         for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):
@@ -567,8 +573,8 @@ class MultiGameDataset:
                 )
                 game_attached += 1
             if game_attached > 0:
-                print(f"[MultiGameDataset] Reward annotations (placeholder): "
-                      f"attached to {game_attached} {game_name} samples")
+                logger.info("Reward annotations (placeholder): attached to %d %s samples",
+                            game_attached, game_name)
 
 
     def _load_reward_annotations(self, annotations_dir: Path) -> None:
@@ -581,7 +587,6 @@ class MultiGameDataset:
         reward_enum은 모든 게임 통일 1~5:
           1=region / 2=path_length / 3=block / 4=bat_amount / 5=bat_direction
         """
-        logger = logging.getLogger(__name__)
         # ── dungeon: per-sample CSV ───────────────────────────────────────
         dungeon_csv = annotations_dir / "dungeon_reward_annotations.csv"
         if dungeon_csv.exists():
@@ -608,7 +613,7 @@ class MultiGameDataset:
                 sample.meta["conditions"] = conditions
                 attached += 1
             if attached > 0:
-                print(f"[MultiGameDataset] Reward annotations: attached to {attached} dungeon samples")
+                logger.info("Reward annotations: attached to %d dungeon samples", attached)
         # ── 나머지 게임: *_placeholder.csv 읽어서 game-level 적용 ─────────
         # 파일명에 _placeholder가 포함된 CSV를 자동 탐지
         for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):
@@ -651,8 +656,8 @@ class MultiGameDataset:
                 )
                 game_attached += 1
             if game_attached > 0:
-                print(f"[MultiGameDataset] Reward annotations (placeholder): "
-                      f"attached to {game_attached} {game_name} samples")
+                logger.info("Reward annotations (placeholder): attached to %d %s samples",
+                            game_attached, game_name)
 
 
     def apply_filtering(self, apply_filter: bool = True) -> None:

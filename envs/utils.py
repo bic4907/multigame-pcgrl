@@ -283,5 +283,5 @@ def print_tile_info(problem: str = "dungeon", representation: str = "narrow") ->
     print(f"  n_all_tiles    : {info['n_all_tiles']}")
     print(f"  unavailable    : {info['unavailable_tiles']}")
     print(f"  editable tiles : {info['editable_tiles']}")
-    print(f"  n_editable     : {info['n_editable_tiles']}  ← action의 tile 차원 크기")
+    print(f"  n_editable     : {info['n_editable_tiles']}  ← size of action tile dimension")
     print(f"{'='*52}")

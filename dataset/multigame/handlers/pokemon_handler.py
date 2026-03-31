@@ -8,29 +8,14 @@ POKEMON은 싱글 NPY 파일에 모든 맵과 레이블이 저장되어 있다.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 
 from ..base import BaseGameHandler, GameSample, GameTag, TileLegend
-from .fdm_game.pokemon import POKEMONPreprocessor, make_legend
+from .fdm_game.pokemon import POKEMONPreprocessor, make_legend, POKEMON_PALETTE  # noqa: F401
 
 _DEFAULT_POKEMON_ROOT = Path(__file__).parent.parent.parent / "five-dollar-model"
-
-# ── POKEMON 팔레트 ─────────────────────────────────────────────────────────────
-POKEMON_PALETTE: Dict[int, tuple[int, int, int]] = {
-    0:  (20,  20,  20),   # empty   – 어두운 회색
-    #1:  (80,  80,  80),   # wall    – 중간 회색
-    2:  (200, 180, 120),  # floor   – 밝은 베이지
-    #3:  (220, 50,  50),   # enemy   – 빨강
-    4:  (255, 215, 0),    # object  – 금색
-    5:  (200, 0, 0),    # spawn   – 초록색
-    6:  (100, 100, 255),   # hazard  – 주황색
-    7:  (150, 75,  0),    # fence   – 갈색
-    8:  (34,  139, 34),   # tree    – 숲 녹색
-    9:  (200, 150, 150),    # house   – 빨강 (집)
-    99: (255, 0,   255),  # unknown – 분홍색 (오류)
-}
 
 
 

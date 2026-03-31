@@ -429,7 +429,15 @@ class PCGRLEnv(Environment):
         prob_obs = self.prob.observe_ctrls(prob_state)
 
 
-        if self.nlp_input_dim > 0:
+        if self.nlp_input_dim > 0 and self.clip_input_channel > 0:
+            # cnnclipconv/clipconv: nlp_obs + CLIP inputs 모두 필요
+            nlp_obs = jnp.zeros(self.nlp_input_dim)
+            clip_input_ids = jnp.zeros((77), dtype=jnp.int32)
+            clip_attention_mask = jnp.zeros((77), dtype=jnp.int32)
+            clip_pixel_values = jnp.zeros((16, 16, self.clip_input_channel))
+            obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=nlp_obs,
+                           input_ids=clip_input_ids, attention_mask=clip_attention_mask, pixel_values=clip_pixel_values)
+        elif self.nlp_input_dim > 0:
             nlp_obs = jnp.zeros(self.nlp_input_dim)
             obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=nlp_obs, input_ids=None,
                            attention_mask=None, pixel_values=None)
@@ -561,7 +569,15 @@ class PCGRLEnv(Environment):
         map_x = jnp.zeros((1,) + self.observation_space(env_params).shape)
         ctrl_x = jnp.zeros((1, len(env_params.ctrl_metrics)))
 
-        if env_params.nlp_input_dim > 0:
+        if env_params.nlp_input_dim > 0 and env_params.clip_input_channel > 0:
+            # cnnclipconv/clipconv: nlp_obs + CLIP input_ids/attention_mask/pixel_values 모두 필요
+            nlp_obs = jnp.zeros((1, env_params.nlp_input_dim))
+            clip_input_ids = jnp.zeros((1, 77), dtype=jnp.int32)
+            clip_attention_mask = jnp.zeros((1, 77), dtype=jnp.int32)
+            clip_pixel_values = jnp.zeros((1, 16, 16, env_params.clip_input_channel))
+            return PCGRLObs(map_x, map_x, ctrl_x, nlp_obs, clip_input_ids,
+                            clip_attention_mask, clip_pixel_values)
+        elif env_params.nlp_input_dim > 0:
             nlp_obs = jnp.zeros((1, env_params.nlp_input_dim))
             return PCGRLObs(map_x, map_x, ctrl_x, nlp_obs, None, None, None)
         elif env_params.vec_input_dim > 0:

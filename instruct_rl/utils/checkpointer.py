@@ -165,8 +165,11 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
             "No checkpoint found in encoder checkpoint path. Set 'encoder.ckpt_path' to the paths ends with '**/ckpts'"
         )
 
+        logger.info(f"  Available checkpoint steps: {sorted(ckpt_steps)}")
+
         # Sort in decreasing order
         ckpt_steps.sort(reverse=True)
+        enc_param = None
         for steps_prev_complete in ckpt_steps:
             ckpt_dir = os.path.join(config.encoder.ckpt_path, str(steps_prev_complete))
 
@@ -198,6 +201,8 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                     enc_param = get_encoder_params_recursive(enc_param, "encoder")
                     assert enc_param is not None, "Encoder not found in checkpoint"
 
+                # ── 로딩 성공 로그 ──
+                log_encoder_ckpt_loaded(enc_param, ckpt_dir, steps_prev_complete)
                 break
 
             except TypeError as e:
@@ -205,6 +210,9 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                     f"Failed to load checkpoint at step {steps_prev_complete}. Error: {e}"
                 )
                 continue
+
+        if enc_param is None:
+            logger.error(f"  ❌ Failed to load any encoder checkpoint from {config.encoder.ckpt_path}")
     else:
         enc_param = None
 
@@ -286,3 +294,57 @@ def apply_encoder_params(runner_state, encoder_params, config):
     return runner_state
 
 
+# ── 인코더 체크포인트 로깅 유틸 ──────────────────────────────────────────────
+
+
+def log_encoder_ckpt_loaded(enc_param, ckpt_dir: str, step: int):
+    """인코더 체크포인트 로딩 성공 시 요약 로그를 출력한다."""
+    logger.info(f"  ✅ Encoder checkpoint loaded successfully (step={step})")
+    logger.info(f"     ckpt_dir: {ckpt_dir}")
+    if isinstance(enc_param, dict):
+        from flax.traverse_util import flatten_dict
+        logger.info(f"     top-level keys: {list(enc_param.keys())}")
+        _total_params = 0
+        for _k, _v in enc_param.items():
+            if isinstance(_v, dict):
+                _flat = flatten_dict(_v, sep="/")
+                _n = sum(a.size for a in _flat.values())
+            else:
+                _n = _v.size if hasattr(_v, 'size') else 0
+            _total_params += _n
+        logger.info(f"     total encoder params: {_total_params:,d}")
+
+
+def log_encoder_params_summary(encoder_params, config):
+    """encoder_params 존재 여부와 내용물 상세 정보를 로그로 출력한다."""
+    if encoder_params is not None:
+        from flax.traverse_util import flatten_dict
+        logger.info("=" * 80)
+        logger.info("✅ Encoder checkpoint found — applying pretrained encoder params")
+        logger.info(f"   ckpt_path : {config.encoder.ckpt_path}")
+        logger.info(f"   ckpt_name : {getattr(config.encoder, 'ckpt_name', None)}")
+        logger.info(f"   encoder   : {config.encoder.model}")
+        if isinstance(encoder_params, dict):
+            logger.info(f"   top-level keys: {list(encoder_params.keys())}")
+            for k, v in encoder_params.items():
+                if isinstance(v, dict):
+                    _flat = flatten_dict(v, sep="/")
+                    _n = sum(a.size for a in _flat.values())
+                    logger.info(f"     [{k}] sub-keys={len(_flat)}, params={_n:,d}")
+                    for _path, _arr in list(_flat.items())[:5]:
+                        logger.info(f"       {_path}: shape={_arr.shape}, dtype={_arr.dtype}")
+                    if len(_flat) > 5:
+                        logger.info(f"       ... and {len(_flat) - 5} more")
+                elif hasattr(v, 'shape'):
+                    logger.info(f"     [{k}] shape={v.shape}, dtype={v.dtype}")
+                else:
+                    logger.info(f"     [{k}] type={type(v).__name__}")
+        else:
+            logger.info(f"   encoder_params type: {type(encoder_params).__name__}")
+        logger.info("=" * 80)
+    else:
+        logger.info("=" * 80)
+        logger.info("⚠️  No encoder checkpoint — encoder_params is None")
+        logger.info(f"   ckpt_path : {getattr(config.encoder, 'ckpt_path', None)}")
+        logger.info(f"   ckpt_name : {getattr(config.encoder, 'ckpt_name', None)}")
+        logger.info("=" * 80)

@@ -27,7 +27,7 @@ from dataset.multigame import MultiGameDataset
 from encoder.schedular import create_learning_rate_fn
 from instruct_rl.utils.logger import get_wandb_name
 from encoder.utils.path import (get_ckpt_dir, init_config)
-from encoder.data import CLIPDatasetBuilder, create_clip_batch, CLIPContrastiveBatch, CLIPEmbedData
+from encoder.data import CLIPDatasetBuilder, create_clip_batch, CLIPContrastiveBatch, CLIPEmbedData, CLIPDataset
 
 from conf.config import CLIPTrainConfig
 
@@ -152,7 +152,14 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
 def make_train(config: CLIPTrainConfig):
     def train(rng_key):
         rng_key, subkey = jax.random.split(rng_key)
-        dataset = MultiGameDataset()
+        dataset = MultiGameDataset(
+            include_dungeon=config.include_dungeon,
+            include_pokemon=config.include_pokemon,
+            include_sokoban=config.include_sokoban,
+            include_doom=config.include_doom,
+            include_doom2=config.include_doom2,
+            include_zelda=config.include_zelda,
+        )
 
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         dataset_builder = CLIPDatasetBuilder(
@@ -165,6 +172,27 @@ def make_train(config: CLIPTrainConfig):
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
         class_id2reward_cond = dataset_builder.get_class_id2reward_cond()
+
+        # dry-run: 데이터 개수 제한
+        if config.max_samples is not None:
+            n = config.max_samples
+            n_train_orig = len(train_clip_dataset.class_ids)
+            n_test_orig = len(test_clip_dataset.class_ids)
+            def _slice_dataset(ds, n):
+                n = min(n, len(ds.class_ids))
+                return CLIPDataset(
+                    class_ids=ds.class_ids[:n],
+                    reward_cond=ds.reward_cond[:n],
+                    input_ids=ds.input_ids[:n],
+                    attention_masks=ds.attention_masks[:n],
+                    pixel_values=ds.pixel_values[:n],
+                    is_train=ds.is_train[:n],
+                )
+            train_clip_dataset = _slice_dataset(train_clip_dataset, n)
+            test_clip_dataset = _slice_dataset(test_clip_dataset, n)
+            logger.info(f"[dry-run] max_samples={n} → "
+                        f"train: {n_train_orig} → {len(train_clip_dataset.class_ids)}, "
+                        f"test: {n_test_orig} → {len(test_clip_dataset.class_ids)}")
 
         n_train = len(train_clip_dataset.class_ids)
         n_test = len(test_clip_dataset.class_ids)

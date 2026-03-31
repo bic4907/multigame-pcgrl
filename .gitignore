@@ -49,4 +49,6 @@ human_trajectory_cache/
 
 # 렌더링 부산물
 tests/render_samples/
-
+pretrained_encoders/*
+!pretrained_encoders/vipcgrl_sample/
+pretrained_encoders/vipcgrl_sample/.DS_Store

@@ -269,30 +269,6 @@ def test_json_tile_images_files_exist():
     )
 
 
-def test_hazard_mapped_to_lava():
-    """hazard(category 6)는 lava.png 로 매핑되어야 한다."""
-    # category 6 = hazard
-    hazard_idx = next(i for i, name in _CATEGORIES.items() if name == "hazard")
-    fname = _CATEGORY_IMAGE_FILES.get(hazard_idx)
-    assert fname == "lava.png", (
-        f"hazard(category {hazard_idx}) 이미지가 'lava.png' 가 아닙니다: '{fname}'"
-    )
-
-
-def test_hazard_tile_pixel_differs_from_empty(env_with_graphics):
-    """렌더링된 hazard 타일은 empty 타일과 픽셀이 달라야 한다 (lava vs empty)."""
-    env, _ = env_with_graphics
-    g = np.array(env.prob.graphics)
-
-    hazard_idx = next(i for i, name in _CATEGORIES.items() if name == "hazard")
-    empty_idx  = next(i for i, name in _CATEGORIES.items() if name == "empty")
-
-    hazard_tile = g[hazard_idx + 1]   # MultigameTiles index = cat + 1
-    empty_tile  = g[empty_idx + 1]
-
-    assert not np.array_equal(hazard_tile, empty_tile), (
-        "hazard(lava) 와 empty 타일이 완전히 동일합니다 — 이미지 로드를 확인하세요"
-    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -310,7 +286,7 @@ def _save_samples():
     dummy_qs = gen_dummy_queued_state(env)
 
     # ── ① 랜덤 맵 5장 ────────────────────────────────────────────────────────
-    print("\n[1] 랜덤 맵 렌더링...")
+    print("\n[1] Rendering random maps...")
     for i in range(5):
         rng = jax.random.PRNGKey(i)
         _, state = env.reset(rng, env_params, dummy_qs)
@@ -322,11 +298,11 @@ def _save_samples():
               f"unique tiles={np.unique(env_map).tolist()})")
 
     # ── ② 타일 범례 이미지 ────────────────────────────────────────────────────
-    print("\n[2] 타일 범례 렌더링...")
+    print("\n[2] Rendering tile legend...")
     _save_tile_legend()
 
     # ── ③ 카테고리별 solid 맵 (각 카테고리로 가득 찬 16×16) ─────────────────
-    print("\n[3] 카테고리별 solid 맵...")
+    print("\n[3] Solid maps per category...")
     for cat_idx, cat_name in _CATEGORIES.items():
         tile_val = cat_idx + 1   # BORDER shift
         solid_map = np.full((16, 16), tile_val, dtype=np.int32)
@@ -335,10 +311,10 @@ def _save_samples():
         img.save(out)
         print(f"  → {out}")
 
-    print(f"\n✅ 샘플 이미지 저장 완료: {_SAMPLES_DIR}")
+    print(f"\n✅ Sample images saved to: {_SAMPLES_DIR}")
 
     # ── ④ overview: 범례 + 랜덤 맵 5장 합성 ──────────────────────────────────
-    print("\n[4] overview 합성...")
+    print("\n[4] Composing overview...")
     maps = [Image.open(_SAMPLES_DIR / f"random_map_{i:02d}.png") for i in range(5)]
     legend = Image.open(_SAMPLES_DIR / "tile_legend.png")
     MW, MH = maps[0].size

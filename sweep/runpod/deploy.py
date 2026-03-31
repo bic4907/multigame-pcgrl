@@ -769,7 +769,7 @@ def main(args):
         for p in _env_candidates:
             exists = "✓" if p.exists() else "✗"
             _console.print(f"  {exists} {p}")
-        _console.print("\n[yellow]Set it via: export RUNPOD_API_KEY=xxx 또는 .env 파일에 추가[/yellow]")
+        _console.print("\n[yellow]Set it via: export RUNPOD_API_KEY=xxx or add it to your .env file[/yellow]")
         return
 
     _console.print(f"[green]✅ API Key loaded (***{API_KEY[-4:]})[/green]")

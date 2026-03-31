@@ -7,10 +7,12 @@ Doom (TheVGLC) 전처리 핸들러.
 ---------
 0  : empty   (-)
 1  : wall    (X)
-2  : floor   (.)
-3  : hazard  (,)
-4  : enemy   (E)
-5  : object  (H, :)
+2  : floor   (., ,, :)
+3  : enemy   (E)
+4  : spawn   (<, T, t, >)
+5  : item    (W, A, H, K)
+6  : danger  (B)
+7  : door    (L, +)
 99 : unknown
 """
 from __future__ import annotations
@@ -25,12 +27,10 @@ class DoomTile:
     WALL    = 1
     FLOOR   = 2
     ENEMY   = 3
-    # OBJECT  = 4
-    SPAWN   = 5
-    HAZARD  = 6
-    ITEM = 7
-    DANGER = 8
-    DOOR = 9
+    SPAWN   = 4
+    ITEM    = 5
+    DANGER  = 6
+    DOOR    = 7
     UNKNOWN = 99
 
 
@@ -61,10 +61,11 @@ DOOM_PALETTE: dict[int, tuple[int, int, int]] = {
     DoomTile.WALL:    (80,  80,  80),
     DoomTile.FLOOR:   (160, 140, 120),
     DoomTile.ENEMY:   (220, 50,  50),
-    DoomTile.ITEM:    (230,  230, 20),
-    DoomTile.UNKNOWN: (255, 255,  255),
+    DoomTile.SPAWN:   (0,   200, 0),
+    DoomTile.ITEM:    (230, 230, 20),
     DoomTile.DANGER:  (80,  80,  220),
-    DoomTile.DOOR:    (80, 60, 40)
+    DoomTile.DOOR:    (80,  60,  40),
+    DoomTile.UNKNOWN: (255, 255, 255),
 }
 
 

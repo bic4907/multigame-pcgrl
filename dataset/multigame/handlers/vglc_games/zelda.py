@@ -32,6 +32,7 @@ class ZeldaTile:
     START   = 5
     MOB     = 6
     OBJECT  = 7
+    HAZARD  = 8
     UNKNOWN = 99
 
 
@@ -45,9 +46,9 @@ _CHAR_MAP: dict[str, int] = {
     "B": ZeldaTile.BLOCK,
     "S": ZeldaTile.START,
     "M": ZeldaTile.MOB,
-    "O": ZeldaTile.OBJECT,   # ELEMENT + FLOOR (LAVA/BLOCK, WATER/BLOCK)
-    "I": ZeldaTile.OBJECT,   # ELEMENT + BLOCK
-    "P": ZeldaTile.OBJECT,   # ELEMENT (LAVA, WATER)
+    "O": ZeldaTile.HAZARD,   # ELEMENT + FLOOR (LAVA/BLOCK, WATER/BLOCK)
+    "I": ZeldaTile.HAZARD,   # ELEMENT + BLOCK
+    "P": ZeldaTile.HAZARD,   # ELEMENT (LAVA, WATER)
     "o": ZeldaTile.OBJECT,
     "t": ZeldaTile.OBJECT,   # triforce
     "k": ZeldaTile.OBJECT,   # key

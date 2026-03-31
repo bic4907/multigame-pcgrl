@@ -46,13 +46,14 @@ def train_step(train_state: TrainState, X_batch, y_batch, rng, lr_rate_fn, is_tr
         def compute_kl_loss(mu, log_var):
             return -0.5 * jnp.sum(1 + log_var - jnp.square(mu) - jnp.exp(log_var))
 
-        X_prev_env_map, X_curr_env_map, X_embedding = X_batch
+        X_curr_env_map, X_embedding = X_batch
 
-        X_prev_env_map = jnp.expand_dims(X_prev_env_map, axis=0)
+        # X_curr_env_map: (batch_size, 16, 16, 4) - already one-hot encoded
+        # Add batch dimension for each sample: (16, 16, 4) → (1, 16, 16, 4)
         X_curr_env_map = jnp.expand_dims(X_curr_env_map, axis=0)
 
         # Stack two maps
-        X_env_map = jnp.concatenate([X_prev_env_map, X_curr_env_map], axis=3)
+        X_env_map = X_curr_env_map
 
         X_embedding = jnp.expand_dims(X_embedding, axis=0)
 
@@ -117,8 +118,8 @@ def make_train(config: BertTrainConfig):
         logger.info(f"reward max: {reward_max}, reward min: {reward_min}")
 
         train_set, test_set = split_dataset(database, train_ratio=config.train_ratio)
-        n_train = len(train_set.curr_map_obs)
-        n_test = len(test_set.curr_map_obs)
+        n_train = len(train_set.curr_env_map)
+        n_test = len(test_set.curr_env_map)
 
         # Training loops
         n_train_batch = math.ceil(n_train / config.batch_size)
@@ -146,7 +147,7 @@ def make_train(config: BertTrainConfig):
                 train_y_gt, train_y_pd, train_reward_id = list(), list(), list()
 
                 # Training Loop
-                for X_batch, y_batch, reward_id in create_batches(train_set, config.batch_size, augment=True):
+                for X_batch, y_batch, reward_id, reward_enum in create_batches(train_set, config.batch_size, augment=True):
                     X_batch = jax.device_put(X_batch)
                     y_batch = jax.device_put(y_batch)
 
@@ -155,7 +156,7 @@ def make_train(config: BertTrainConfig):
                         use_kl_loss=use_kl_loss
                     )
 
-                    embeddings = [EmbedData(reward_id=r, embedding=e) for r, e in zip(reward_id, embed)]
+                    embeddings = [EmbedData(reward_id=r, reward_enum=re, embedding=e) for r, re, e in zip(reward_id, reward_enum, embed)]
                     train_embed_queue.extend(embeddings)
 
                     train_losses["total"] += batch_total_loss
@@ -174,7 +175,7 @@ def make_train(config: BertTrainConfig):
                 i = 1
 
                 val_y_gt, val_y_pd, val_reward_id = list(), list(), list()
-                for X_batch, y_batch, reward_id in create_batches(test_set, config.batch_size):
+                for X_batch, y_batch, reward_id, reward_enum in create_batches(test_set, config.batch_size):
                     X_batch = jax.device_put(X_batch)
                     y_batch = jax.device_put(y_batch)
 
@@ -183,7 +184,7 @@ def make_train(config: BertTrainConfig):
                         use_kl_loss=use_kl_loss
                     )
 
-                    embeddings = [EmbedData(reward_id=r, embedding=e) for r, e in zip(reward_id, embed)]
+                    embeddings = [EmbedData(reward_id=r, reward_enum=re, embedding=e) for r, re, e in zip(reward_id, reward_enum, embed)]
                     val_embed_queue.extend(embeddings)
 
                     val_losses["total"] += batch_total_loss
@@ -204,22 +205,56 @@ def make_train(config: BertTrainConfig):
             rand_train_idx = np.random.choice(len(train_y_gt), min(len(train_y_gt), 1000), replace=False)
             rand_val_idx = np.random.choice(len(val_y_gt), min(len(val_y_gt), 1000), replace=False)
 
-            train_reward_ids = [e.reward_enum for e in train_embed_queue]
-            val_reward_ids = [e.reward_enum for e in val_embed_queue]
+            # Convert to numpy arrays for consistent indexing
+            train_y_gt_array = np.array(train_y_gt)
+            train_y_pd_array = np.array(train_y_pd)
+            val_y_gt_array = np.array(val_y_gt)
+            val_y_pd_array = np.array(val_y_pd)
+
+            # Use only the portion of embed_queue that matches the actual predictions
+            n_train_samples = len(train_y_gt)
+            n_val_samples = len(val_y_gt)
+
+            # Get the last n_train_samples from train_embed_queue
+            train_embed_list = list(train_embed_queue)[-n_train_samples:] if n_train_samples <= len(train_embed_queue) else list(train_embed_queue)
+            val_embed_list = list(val_embed_queue)[-n_val_samples:] if n_val_samples <= len(val_embed_queue) else list(val_embed_queue)
+
+            # Extract reward_id and reward_enum from embed_list
+            train_reward_ids = [e.reward_id for e in train_embed_list]
+            train_reward_enums = []
+            for e in train_embed_list:
+                if isinstance(e.reward_enum, np.ndarray):
+                    train_reward_enums.append(int(e.reward_enum.item()) if e.reward_enum.size == 1 else int(e.reward_enum[0]))
+                else:
+                    train_reward_enums.append(int(e.reward_enum))
+
+            val_reward_ids = [e.reward_id for e in val_embed_list]
+            val_reward_enums = []
+            for e in val_embed_list:
+                if isinstance(e.reward_enum, np.ndarray):
+                    val_reward_enums.append(int(e.reward_enum.item()) if e.reward_enum.size == 1 else int(e.reward_enum[0]))
+                else:
+                    val_reward_enums.append(int(e.reward_enum))
+
+            # Ensure lengths match
+            min_train_len = min(len(train_reward_ids), len(train_y_gt_array))
+            min_val_len = min(len(val_reward_ids), len(val_y_gt_array))
 
             # Pandas DataFrame 생성
             df_train = pd.DataFrame({
                 "epoch": epoch,
-                "reward_id": train_reward_ids,
-                "ground_truth": [float(train_y_gt[j]) for j in rand_train_idx],
-                "prediction": [float(train_y_pd[j]) for j in rand_train_idx]
+                "reward_id": [train_reward_ids[j] for j in rand_train_idx if j < min_train_len],
+                "reward_enum": [train_reward_enums[j] for j in rand_train_idx if j < min_train_len],
+                "ground_truth": train_y_gt_array[rand_train_idx[rand_train_idx < min_train_len]].astype(float),
+                "prediction": train_y_pd_array[rand_train_idx[rand_train_idx < min_train_len]].astype(float)
             })
 
             df_val = pd.DataFrame({
                 "epoch": epoch,
-                "reward_id": val_reward_ids,
-                "ground_truth": [float(val_y_gt[j]) for j in rand_val_idx],
-                "prediction": [float(val_y_pd[j]) for j in rand_val_idx]
+                "reward_id": [val_reward_ids[j] for j in rand_val_idx if j < min_val_len],
+                "reward_enum": [val_reward_enums[j] for j in rand_val_idx if j < min_val_len],
+                "ground_truth": val_y_gt_array[rand_val_idx[rand_val_idx < min_val_len]].astype(float),
+                "prediction": val_y_pd_array[rand_val_idx[rand_val_idx < min_val_len]].astype(float)
             })
 
             settings = {'epoch': epoch, 'config': config, 'min_val': 0, 'max_val': config.n_epochs,
@@ -283,7 +318,7 @@ def get_train_state(config: BertTrainConfig, rng: jax.random.PRNGKey):
 
     state = create_train_state(model,
                                rng=rng,
-                               buffer=np.zeros((1, 31, 31, 5 * 2), dtype=np.float32),
+                               buffer=np.zeros((1, 16, 16, 4), dtype=np.float32),
                                num_samples=1,
                                )
     return state, lr_schedular

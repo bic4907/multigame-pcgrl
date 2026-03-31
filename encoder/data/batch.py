@@ -28,9 +28,9 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 @dataclass
 class Dataset:
     reward_id: np.ndarray
-    curr_map_obs: np.ndarray
     reward_enum: np.ndarray
     reward: np.ndarray
+    curr_env_map: np.ndarray
     instruct: np.ndarray
     embedding: np.ndarray
     augmentable: np.ndarray
@@ -39,11 +39,12 @@ class Dataset:
 @dataclass
 class EmbedData:
     reward_id: int
+    reward_enum: int
     embedding: np.ndarray
 
 
 def create_batches(dataset: Dataset, batch_size: int, augment: bool = False):
-    num_samples = len(dataset.curr_map_obs)
+    num_samples = len(dataset.curr_env_map)
     indices = np.arange(num_samples)
     np.random.shuffle(indices)
 
@@ -51,11 +52,12 @@ def create_batches(dataset: Dataset, batch_size: int, augment: bool = False):
         end_idx = min(start_idx + batch_size, num_samples)
         batch_indices = indices[start_idx:end_idx]
 
-        curr = dataset.curr_map_obs[batch_indices]
+        curr = dataset.curr_env_map[batch_indices]
         embed = dataset.embedding[batch_indices]
         augmentable = dataset.augmentable[batch_indices]
 
         reward_id = dataset.reward_id[batch_indices]
+        reward_enum = dataset.reward_enum[batch_indices]
 
         if augment:
             # Only augment data where augmentable == True (1)
@@ -71,10 +73,17 @@ def create_batches(dataset: Dataset, batch_size: int, augment: bool = False):
             if np.random.rand() > 0.5:
                 curr[augment_mask] = np.flip(curr[augment_mask], axis=2)
 
-        X = (curr, embed)
+        # Convert env_map to one-hot encoding: (batch_size, 16, 16) → (batch_size, 16, 16, 4)
+        # Handle tile values: clamp to valid range [0, 3] for Dungeon3Tiles
+        curr_clamped = np.clip(curr.astype(np.int32), 0, 3)
+        curr_onehot = np.zeros((*curr_clamped.shape, 4), dtype=np.float32)
+        for i in range(4):
+            curr_onehot[..., i] = (curr_clamped == i).astype(np.float32)
+
+        X = (curr_onehot, embed)
         y = dataset.reward[batch_indices]
 
-        yield X, y, reward_id
+        yield X, y, reward_id, reward_enum
 
 
 def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTrainConfig):
@@ -90,16 +99,33 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
     sample_reward_id = np.arange(len(dataset_samples))
 
     whole_language_inst_list = [s.instruction for s in dataset_samples]
-    whole_reward_enum = []
-    whole_condition = []
+
+    # reward_enum: digit 배열 형태로 수집 (get_fitness_batch 입력 형식: (batch, n_digits))
+    # condition: 전체 조건 벡터 형태로 수집 (get_fitness_batch 입력 형식: (batch, n_condition_cols))
+    # fitness.py 기준 condition col: [cond1(region), cond2(path), cond3(wall), cond4(bat), cond5(dir)]
+    N_CONDITION_COLS = 5
+    whole_reward_enum_digits = []
+    whole_condition_vecs = []
     for s in dataset_samples:
-        reward_e = s.meta.get("reward_enum", None)
+        reward_e = int(s.meta.get("reward_enum", 1))
         conditions = s.meta.get("conditions", {})  # e.g. {2: 40.0}
-        # Extract value from conditions dict (e.g., 40.0 from {2: 40.0})
-        condition_value = list(conditions.values())[0] if conditions else None
-        # Create tuple: (game_idx, reward_enum, condition_value)
-        whole_reward_enum.append(int(reward_e))
-        whole_condition.append(condition_value)
+
+        # reward_enum → digit 배열 (e.g. 2 → [2], 12 → [1, 2])
+        whole_reward_enum_digits.append([int(d) for d in str(reward_e)])
+
+        # conditions dict → 전체 조건 벡터 (1-based key → 0-based index)
+        cond_arr = np.zeros(N_CONDITION_COLS, dtype=np.float32)
+        for col_key, val in conditions.items():
+            arr_idx = int(col_key) - 1
+            if 0 <= arr_idx < N_CONDITION_COLS:
+                cond_arr[arr_idx] = float(val)
+        whole_condition_vecs.append(cond_arr)
+
+    max_re_len = max(len(x) for x in whole_reward_enum_digits)
+    whole_reward_enum = np.array(
+        [x + [0] * (max_re_len - len(x)) for x in whole_reward_enum_digits]
+    )  # (n_samples, max_re_len)
+    whole_condition = np.array(whole_condition_vecs)  # (n_samples, N_CONDITION_COLS)
 
     pretrained_model, tokenizer = apply_pretrained_model(config)
 
@@ -121,44 +147,23 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
 
     dataset = None
     for game in unique_games:
-        file_list = glob(os.path.join(buffer_dir, game, '*.npz'), recursive=True)
-        file_list += glob(os.path.join(buffer_dir, game, '**', '*.npz'), recursive=True)
-        logger.info(f"Found {len(file_list)} files for game '{game}'")
+        # file_list = glob(os.path.join(buffer_dir, game, '**', '*.npz'), recursive=True)
+        file = os.path.join(buffer_dir, 'cpcgrl_buffer', 'cpcgrl_pair_dataset.npz')
+        # file_list = glob(os.path.join(buffer_dir, game, '*.npz'), recursive=True)
+        # file_list += glob(os.path.join(buffer_dir, game, '**', '*.npz'), recursive=True)
+        # logger.info(f"Found {len(file_list)} files for game '{game}'")
 
-        assert len(file_list) > 0, f"No buffer files found in {buffer_dir}"
+        data = np.load(file, allow_pickle=True)
 
-        arr_curr_map_obs, arr_curr_env_map = [], []
+        arr_env_map = data['env_map_pairs']
 
-        for file in tqdm(file_list, desc="Loading buffer files"):
-            data = np.load(file, allow_pickle=True).get('buffer').item()
-
-            obs = data.get('obs')
-            map_obs = np.array(obs.get('map_obs'))
-            done = np.array(data.get('done'))
-            env_map = np.array(data.get('env_map'))
-
-            curr_map_obs = map_obs[:, 1:]
-            curr_env_map = env_map[:, 1:]
-            done = done[:, 1:]
-
-            done_indices = np.where(done != True)
-
-            curr_map_obs = curr_map_obs[done_indices[0], done_indices[1], ...]
-            curr_env_map = curr_env_map[done_indices[0], done_indices[1], ...]
-
-            arr_curr_env_map.append(curr_env_map)
-            arr_curr_map_obs.append(curr_map_obs)
-
-        # Concat
-        curr_map_obs = np.concatenate(arr_curr_map_obs, axis=0)
-        curr_env_map = np.concatenate(arr_curr_env_map, axis=0)
-        # reward = np.concatenate(rewards, axis=0)
+        # prev_env_map = arr_env_map[:, 0, :, :]
+        curr_env_map = arr_env_map[:, 1, :, :]
 
         unique_pair_indices = get_unique_pair_indices(
                 curr_env_map
             )
 
-        curr_map_obs = curr_map_obs[unique_pair_indices]
         curr_env_map = curr_env_map[unique_pair_indices]
 
         game_idxes = np.where(game_ids == game2idx[game])[0]
@@ -177,7 +182,9 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
         instruct = np.tile(instruct, repeat_count)[:sample_size]
         reward_id = np.tile(reward_id, repeat_count)[:sample_size]
         embedding = np.tile(embedding, (repeat_count, 1))[:sample_size]
+        # reward_enum: (n_game_samples, max_re_len) → tile → (sample_size, max_re_len)
         reward_enum = np.tile(reward_enum, (repeat_count, 1))[:sample_size]
+        # condition:  (n_game_samples, N_CONDITION_COLS) → tile → (sample_size, N_CONDITION_COLS)
         condition = np.tile(condition, (repeat_count, 1))[:sample_size]
 
         # if reward_enum is 5, it is not augmentable
@@ -214,42 +221,10 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
 
         reward = np.concatenate(recalculated_reward, axis=0)
 
-        del condition, curr_env_map
-
-        # Reward Replacement
-
-        if config.zero_reward_ratio is not None:
-            zero_indices = np.where((reward < 0.001) & (reward > -0.001))[0]
-            zero_ratio = len(zero_indices) / len(reward) * 100
-
-            n_keep = int(len(zero_indices) * config.zero_reward_ratio) # (111, )
-            zero_indices_keep = np.random.choice(zero_indices, n_keep, replace=False)
-
-            non_zero_indices = np.where(reward != 0)[0] # (111, )
-            sample_indices = np.concatenate([non_zero_indices, zero_indices_keep], axis=0)
-
-            non_zero_count = len(non_zero_indices)
-            final_zero_count = len(zero_indices_keep)
-            final_total_count = len(sample_indices)
-            filtered_zero_ratio = final_zero_count / final_total_count * 100
-            filtered_non_zero_ratio = 100 - filtered_zero_ratio
-
-            # logging
-            logging.info(
-                f"Initial dataset: {len(reward):,} samples. Zero reward samples: {len(zero_indices):,} ({zero_ratio:.2f}%).")
-            logging.info(
-                f"After filtering: Non-zero samples: {non_zero_count:,}, Kept zero samples: {final_zero_count:,}.")
-            logging.info(
-                f"Final dataset: {final_total_count:,} samples. Zero reward: {filtered_zero_ratio:.2f}%, Non-zero: {filtered_non_zero_ratio:.2f}%.")
-
-            curr_map_obs = curr_map_obs[sample_indices]
-
-            reward = reward[sample_indices]
-            augmentable = augmentable[sample_indices]
+        del condition
 
         if dataset is not None:
             dataset.reward_id.expend(reward_id)
-            dataset.curr_map_obs.expend(curr_map_obs)
             dataset.reward_enum.expend(reward_enum)
             dataset.reward.expend(reward)
             dataset.instruct.expend(instruct)
@@ -257,14 +232,14 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
             dataset.augmentable.expend(augmentable)
         else:
             dataset = Dataset(reward_id=reward_id,
-                              curr_map_obs=curr_map_obs,
                               reward_enum=reward_enum,
                               reward=reward,
+                              curr_env_map=curr_env_map,
                               instruct=instruct,
                               embedding=embedding,
                               augmentable=augmentable
                               )
-        del reward_enum, reward_id, curr_map_obs, reward, embedding
+        del reward_enum, reward_id, reward, embedding, curr_env_map
 
     return dataset
 
@@ -280,7 +255,7 @@ def split_dataset(database: Dataset, train_ratio: float = 0.8):
     Returns:
         Tuple[Dataset, Dataset]: Train and Test datasets.
     """
-    total_size = database.curr_map_obs.shape[0]
+    total_size = database.curr_env_map.shape[0]
     train_size = int(total_size * train_ratio)
 
     indices = np.random.permutation(total_size)
@@ -290,9 +265,9 @@ def split_dataset(database: Dataset, train_ratio: float = 0.8):
     # Train Dataset
     train_dataset = Dataset(
         reward_id=database.reward_id[train_indices],
-        curr_map_obs=database.curr_map_obs[train_indices],
         reward_enum=database.reward_enum[train_indices],
         reward=database.reward[train_indices],
+        curr_env_map=database.curr_env_map[train_indices],
         instruct=database.instruct[train_indices],
         embedding=database.embedding[train_indices],
         augmentable=database.augmentable[train_indices]
@@ -301,9 +276,9 @@ def split_dataset(database: Dataset, train_ratio: float = 0.8):
     # Test Dataset
     test_dataset = Dataset(
         reward_id=database.reward_id[test_indices],
-        curr_map_obs=database.curr_map_obs[test_indices],
         reward_enum=database.reward_enum[test_indices],
         reward=database.reward[test_indices],
+        curr_env_map=database.curr_env_map[test_indices],
         instruct=database.instruct[train_indices],
         embedding=database.embedding[test_indices],
         augmentable=database.augmentable[test_indices]

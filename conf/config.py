@@ -612,7 +612,7 @@ class RewardConfig(Config):
     output_dim: int = 1
 
     figure_dir: str = "figures"
-    buffer_dir: str = "./pcgrl_buffer"
+    buffer_dir: str = "./dataset"
     n_buffer: int = -1
     train_ratio: float = 0.8
     n_epochs: int = 100

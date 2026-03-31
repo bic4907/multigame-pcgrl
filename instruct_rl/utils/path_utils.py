@@ -273,8 +273,12 @@ def init_config(config: Config):
         config.clip_input_channel = config.clip_input_channel + 2
         config.text_ratio = min([0.25, 0.5, 0.75, 1.0], key=lambda x: abs(x - config.text_ratio))
 
+        # ── encoder.ckpt_path 가 이미 지정된 경우 스킵 ──
+        if config.encoder.ckpt_path is not None:
+            logger.info(f"Encoder checkpoint path already set: [{config.encoder.ckpt_path}]")
+
         # ── encoder.ckpt_name 으로 pretrained_encoders/ 에서 직접 로드 ──
-        if config.encoder.ckpt_name is not None:
+        elif config.encoder.ckpt_name is not None:
             _project_root = os.path.dirname(os.path.dirname(os.path.dirname(abspath(__file__))))
             _pretrained_dir = join(_project_root, "pretrained_encoders", config.encoder.ckpt_name, "ckpts")
             if not os.path.isdir(_pretrained_dir):

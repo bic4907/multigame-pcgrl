@@ -1,0 +1,54 @@
+name: VIPCGRL Checkpoint Pipeline
+
+on:
+  push:
+    paths:
+      - "train_clip.py"
+      - "train_vipcgrl.py"
+      - "encoder/**"
+      - "instruct_rl/**"
+      - "conf/**"
+      - "envs/**"
+      - "models.py"
+      - "tests/test_vipcgrl_checkpoint.py"
+  pull_request:
+    paths:
+      - "train_clip.py"
+      - "train_vipcgrl.py"
+      - "encoder/**"
+      - "instruct_rl/**"
+      - "conf/**"
+      - "envs/**"
+      - "models.py"
+      - "tests/test_vipcgrl_checkpoint.py"
+  workflow_dispatch:
+
+jobs:
+  vipcgrl_checkpoint:
+    name: vipcgrl_checkpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run vipcgrl_checkpoint test
+        env:
+          WANDB_MODE: disabled
+          JAX_PLATFORMS: cpu
+        run: |
+          python -m pytest tests/test_vipcgrl_checkpoint.py -v -s --timeout=600
+

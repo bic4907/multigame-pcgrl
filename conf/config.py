@@ -681,11 +681,11 @@ class CLIPTrainConfig(Config):
 
     # Game selection
     include_dungeon: bool = True
-    include_pokemon: bool = True
-    include_sokoban: bool = True
-    include_doom: bool = True
-    include_doom2: bool = True
-    include_zelda: bool = True
+    include_pokemon: bool = False
+    include_sokoban: bool = False
+    include_doom: bool = False
+    include_doom2: bool = False
+    include_zelda: bool = False
 
     # Goal img path
     img_data_path: str = "./human_dataset"
@@ -706,6 +706,7 @@ class CLIPTrainConfig(Config):
     figure_dir: str = "figures"
     
     steps_per_epoch: Optional[int] = None
+    max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     
     # overwrite

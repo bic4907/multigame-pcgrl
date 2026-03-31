@@ -647,11 +647,18 @@ class CLIPTrainConfig(Config):
     exp_name: str = "def"
     
     wandb_project: str = 'train_clip'
-    wandb_resume: str = 'allow'
     seed: int = 0
     
     overwrite: bool = False
     ckpt_freq: int = int(5)
+
+    # Game selection
+    include_dungeon: bool = True
+    include_pokemon: bool = True
+    include_sokoban: bool = True
+    include_doom: bool = True
+    include_doom2: bool = True
+    include_zelda: bool = True
 
     # Goal img path
     img_data_path: str = "./human_dataset"

@@ -152,7 +152,14 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
 def make_train(config: CLIPTrainConfig):
     def train(rng_key):
         rng_key, subkey = jax.random.split(rng_key)
-        dataset = MultiGameDataset()
+        dataset = MultiGameDataset(
+            include_dungeon=config.include_dungeon,
+            include_pokemon=config.include_pokemon,
+            include_sokoban=config.include_sokoban,
+            include_doom=config.include_doom,
+            include_doom2=config.include_doom2,
+            include_zelda=config.include_zelda,
+        )
 
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         dataset_builder = CLIPDatasetBuilder(

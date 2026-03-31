@@ -269,6 +269,32 @@ class CPCGRLConfig(TrainConfig):
 
 
 @dataclass
+class VIPCGRLConfig(CPCGRLConfig):
+    """Vision-Instructed PCGRL (VIPCGRL) config.
+
+    pretrained CLIP 인코더 임베딩을 입력 피처로 사용한다.
+    encoder.ckpt_name 을 지정하면 pretrained_encoders/ 에서 체크포인트를 로드한다.
+    """
+    # VIPCGRL 모드
+    use_clip: bool = True
+    model: str = "cnnclipconv"
+
+    # CLIP encoder 기본값
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="cnnclip"))
+
+    # NLP 비활성화, CLIP text feature dim
+    use_nlp: bool = False
+    vec_cont: bool = False
+    nlp_input_dim: int = 512
+
+    # sim reward 활성화
+    use_sim_reward: bool = True
+
+    # wandb
+    wandb_project: Optional[str] = "vipcgrl"
+
+
+@dataclass
 class DebugConfig(Config):
     overwrite: bool = True
 
@@ -707,6 +733,7 @@ cs.store(name="enjoy_ma_pcgrl", node=EnjoyMultiAgentConfig)
 cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="cpcgrl", node=CPCGRLConfig)
+cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="debug_pcgrl", node=DebugConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
@@ -726,4 +753,6 @@ cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)
 
 cs.store(name="train_reward", node=RewardTrainConfig)
+
+
 

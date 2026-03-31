@@ -12,7 +12,7 @@ dataset 기반 파이프라인(MultiGameDataset)으로 동작한다.
 """
 import hydra
 
-from conf.config import CPCGRLConfig
+from conf.config import VIPCGRLConfig
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.train_utils import main_entry
 
@@ -29,8 +29,9 @@ def inject_vipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
 # ── Hydra entrypoint ──────────────────────────────────────────────────────────
 
 @hydra.main(version_base=None, config_path="./conf", config_name="train_vipcgrl")
-def main(config: CPCGRLConfig):
+def main(config: VIPCGRLConfig):
     main_entry(config, inject_obs_fn=inject_vipcgrl_obs)
+
 
 
 if __name__ == "__main__":

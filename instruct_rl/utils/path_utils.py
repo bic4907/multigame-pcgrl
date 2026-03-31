@@ -192,9 +192,8 @@ def init_config(config: Config):
                 config.nlp_input_dim = 512  # CLIP text feature dim
             config.vec_input_dim = config.nlp_input_dim
             config.use_sim_reward = True
-            # dataset 기반 VIPCGRL: CLIP 임베딩이 사전 계산되어 nlp_obs에 직접 입력
-            # → cnnclipconv 가 아닌 nlpconv 로 설정 (내부 CLIP encoder 불필요)
-            if config.model not in ('nlpconv',):
+            # dataset 기반 VIPCGRL: cnnclipconv/clipconv 가 이미 설정된 경우 유지
+            if config.model not in ('nlpconv', 'cnnclipconv', 'clipconv'):
                 config.model = 'nlpconv'
             logger.info(f"[VIPCGRL] dataset_game={config.dataset_game}, "
                         f"dataset_reward_enum={getattr(config, 'dataset_reward_enum', None)}, "
@@ -529,6 +528,9 @@ def get_env_params_from_config(config: Config):
             config.use_clip and hasattr(config, 'dataset_game') and config.dataset_game is not None
     )
 
+    # cnnclipconv/clipconv 모델은 nlp_input_dim과 clip_input_channel 둘 다 필요
+    _needs_clip_channel = config.model in ('cnnclipconv', 'clipconv')
+
     env_params = PCGRLEnvParams(
         problem=problem,
         representation=int(RepEnum[config.representation.upper()]),
@@ -546,7 +548,7 @@ def get_env_params_from_config(config: Config):
         pinpoints=config.pinpoints,
         nlp_input_dim=config.nlp_input_dim if _use_nlp_dim else -1,
         vec_input_dim=config.vec_input_dim if config.vec_cont else -1,
-        clip_input_channel=config.clip_input_channel if (config.use_clip and not _use_nlp_dim) else -1,
+        clip_input_channel=config.clip_input_channel if (config.use_clip and (not _use_nlp_dim or _needs_clip_channel)) else -1,
     )
     return env_params
 

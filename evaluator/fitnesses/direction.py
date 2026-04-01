@@ -8,7 +8,7 @@ from envs.probs.dungeon3 import Dungeon3Tiles
 def get_direction_fitness(
     curr_env_map: chex.Array,
     cond: chex.Array,
-    tile_type: chex.Array = Dungeon3Tiles,
+    tile_type: chex.Array,
     rows: int = 16,
     cols: int = 16,
 ):

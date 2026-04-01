@@ -3,7 +3,6 @@ import jax
 
 import jax.numpy as jnp
 
-from envs.probs.dungeon3 import Dungeon3Tiles
 from evaluator.types.direction import Direction
 
 
@@ -71,20 +70,3 @@ def get_direction(
     aggregated_count = jnp.sum(direction_map * aggregated_map, dtype=float)
 
     return aggregated_count
-
-
-if __name__ == "__main__":
-    sample_map = jnp.zeros((4, 4)).at[0, 0].set(Dungeon3Tiles.BAT.value)
-
-    direction_map = generate_direction_map(jnp.array([Direction.west.value]), 4, 4)
-    aggregated = get_direction(
-        sample_map,
-        Dungeon3Tiles.BAT.value,
-        jnp.array([Direction.west.value]),
-        4,
-        4,
-    )
-
-    print(f"direction_map:\n{direction_map}")
-    print(f"map:\n{sample_map}")
-    print(f"aggregated:\n{aggregated}")

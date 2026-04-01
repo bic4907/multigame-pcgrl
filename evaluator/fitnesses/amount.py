@@ -8,7 +8,7 @@ from evaluator.losses import amount_loss
 def get_amount_fitness(
     curr_env_map: chex.Array,
     cond: chex.Array,
-    tile_type: chex.Array = Dungeon3Tiles,
+    tile_type: chex.Array,
 ) -> chex.Array:
     """
     Simple fit reward function for the current map.

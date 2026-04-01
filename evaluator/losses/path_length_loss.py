@@ -9,7 +9,7 @@ from ..measures import get_path_length
 def path_length_loss(
     env_map: chex.Array,
     cond: chex.Array,
-    passable_tiles: chex.Array = Dungeon3Passible,
+    passable_tiles: chex.Array,
 ):
     """
     Loss function for path length.

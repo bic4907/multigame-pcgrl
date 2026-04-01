@@ -8,7 +8,7 @@ from evaluator.losses import region_loss
 def get_region_fitness(
     curr_env_map: chex.Array,
     cond: chex.Array,
-    passable_tiles: chex.Array = Dungeon3Passible,
+    passable_tiles: chex.Array,
 ) -> chex.Array:
     """
     Simple fit reward function for the current map.

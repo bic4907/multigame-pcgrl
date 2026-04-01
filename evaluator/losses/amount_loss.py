@@ -9,7 +9,7 @@ from ..measures import get_amount
 
 def amount_loss(
     env_map: chex.Array,
-    tile_type: Dungeon3Tiles,
+    tile_type: chex.Array,
     cond: chex.Array,
     absolute: bool = True,
 ) -> chex.Array:

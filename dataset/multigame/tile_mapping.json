@@ -200,19 +200,21 @@
       "7": "FENCE",
       "8": "TREE",
       "9": "HOUSE",
+      "10": "GRASS",
       "99": "UNKNOWN"
     },
     "_tile_images": {
       "0": "pokemon/wall.png",
       "1": "pokemon/wall.png",
       "2": "pokemon/floor_0.png",
-      "3": "pokemon/stump.png",
+      "3": "bat.png",
       "4": "pokemon/pokeball.png",
       "5": "pokemon/door.png",
       "6": "pokemon/water.png",
       "7": "pokemon/fence.png",
       "8": "pokemon/tree.png",
       "9": "pokemon/roof.png",
+      "10": "pokemon/floor_1.png",
       "99": "pokemon/floor_0.png"
     },
     "mapping": {
@@ -226,6 +228,7 @@
       "7":  1,
       "8":  1,
       "9":  1,
+      "10": 0,
       "99": 0
     }
   },

@@ -135,12 +135,14 @@ class MultiGameDataset:
 
     def __init__(
         self,
+
         dungeon_root:     Path | str = _DEFAULT_DUNGEON_ROOT,
         pokemon_root:     Path | str = _DEFAULT_POKEMON_ROOT,
         sokoban_root:     Path | str = _DEFAULT_BOXOBAN_ROOT,
         doom_root:        Path | str = _DEFAULT_DOOM_ROOT,
         doom2_root:       Path | str = _DEFAULT_DOOM2_ROOT,
         zelda_root:       Path | str = _DEFAULT_ZELDA_ROOT,
+        N:                int = 0,
         include_dungeon:  bool = True,
         include_pokemon:  bool = True,
         include_sokoban:  bool = True,
@@ -289,6 +291,27 @@ class MultiGameDataset:
         if reward_annotations_dir is not None:
             self._load_reward_annotations(Path(reward_annotations_dir))
 
+        # ── N 샘플 서브샘플링 (게임별, 마스크 기반) ─────────────────────────
+        if N >= 1:
+            import random as _random
+            _total = len(self._samples)
+            _rng = _random.Random(42)
+            _mask = [False] * _total
+            # 게임별 인덱스를 삽입 순서 유지로 수집
+            _game_buckets: dict = {}
+            for i, s in enumerate(self._samples):
+                _game_buckets.setdefault(s.game, []).append(i)
+            for _game, _idxs in _game_buckets.items():
+                if len(_idxs) > N:
+                    _chosen = _rng.sample(_idxs, N)
+                    logger.info("N=%d per-game subsampling [%s]: %d → %d", N, _game, len(_idxs), N)
+                else:
+                    _chosen = _idxs
+                for i in _chosen:
+                    _mask[i] = True
+            self._samples = [s for s, m in zip(self._samples, _mask) if m]
+            if len(self._samples) < _total:
+                logger.info("N=%d per-game subsampling total: %d → %d samples", N, _total, len(self._samples))
 
     def _postprocess_game_samples(
         self, game: str, samples: List[GameSample], handler_config: HandlerConfig

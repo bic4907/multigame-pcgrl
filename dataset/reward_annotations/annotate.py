@@ -116,7 +116,7 @@ _GAME_CONFIG = {
 CSV_HEADER = [
     "key", "instruction", "level_id", "sample_id",
     "reward_enum", "feature_name", "sub_condition",
-    "condition_1", "condition_2", "condition_3", "condition_4", "condition_5",
+    "condition_0", "condition_1", "condition_2", "condition_3", "condition_4",
 ]
 
 
@@ -277,11 +277,11 @@ def _make_rows(
     # val_idx: computed 튜플에서의 인덱스 (3=rg, 4=pl, 5=wc, 6=oc, 7=mc, 8=ic)
     # enum 순서: 1=region, 2=path_length, 3=interactable, 4=hazard, 5=collectable
     enum_specs = [
-        (1, "region",             "condition_1", 3, ""),
-        (2, "path_length",        "condition_2", 4, ""),
-        (3, "interactable_count", "condition_3", 6, sc_object),
-        (4, "hazard_count",       "condition_4", 7, sc_mob),
-        (5, "collectable_count",  "condition_5", 8, sc_item),
+        (0, "region",             "condition_0", 3, ""),
+        (1, "path_length",        "condition_1", 4, ""),
+        (2, "interactable_count", "condition_2", 5, sc_object),
+        (3, "hazard_count",       "condition_3", 6, sc_mob),
+        (4, "collectable_count",  "condition_4", 7, sc_item),
     ]
 
     rows: List[dict] = []
@@ -298,11 +298,11 @@ def _make_rows(
                 "reward_enum":   reward_enum,
                 "feature_name":  feature_name,
                 "sub_condition": sub_cond,
+                "condition_0":   "",
                 "condition_1":   "",
                 "condition_2":   "",
                 "condition_3":   "",
                 "condition_4":   "",
-                "condition_5":   "",
             }
             row[cond_col] = value
             rows.append(row)

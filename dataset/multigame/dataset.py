@@ -135,12 +135,14 @@ class MultiGameDataset:
 
     def __init__(
         self,
+
         dungeon_root:     Path | str = _DEFAULT_DUNGEON_ROOT,
         pokemon_root:     Path | str = _DEFAULT_POKEMON_ROOT,
         sokoban_root:     Path | str = _DEFAULT_BOXOBAN_ROOT,
         doom_root:        Path | str = _DEFAULT_DOOM_ROOT,
         doom2_root:       Path | str = _DEFAULT_DOOM2_ROOT,
         zelda_root:       Path | str = _DEFAULT_ZELDA_ROOT,
+        N:                int = 0,
         include_dungeon:  bool = True,
         include_pokemon:  bool = True,
         include_sokoban:  bool = True,
@@ -289,6 +291,27 @@ class MultiGameDataset:
         if reward_annotations_dir is not None:
             self._load_reward_annotations(Path(reward_annotations_dir))
 
+        # ── N 샘플 서브샘플링 (게임별, 마스크 기반) ─────────────────────────
+        if N >= 1:
+            import random as _random
+            _total = len(self._samples)
+            _rng = _random.Random(42)
+            _mask = [False] * _total
+            # 게임별 인덱스를 삽입 순서 유지로 수집
+            _game_buckets: dict = {}
+            for i, s in enumerate(self._samples):
+                _game_buckets.setdefault(s.game, []).append(i)
+            for _game, _idxs in _game_buckets.items():
+                if len(_idxs) > N:
+                    _chosen = _rng.sample(_idxs, N)
+                    logger.info("N=%d per-game subsampling [%s]: %d → %d", N, _game, len(_idxs), N)
+                else:
+                    _chosen = _idxs
+                for i in _chosen:
+                    _mask[i] = True
+            self._samples = [s for s, m in zip(self._samples, _mask) if m]
+            if len(self._samples) < _total:
+                logger.info("N=%d per-game subsampling total: %d → %d samples", N, _total, len(self._samples))
 
     def _postprocess_game_samples(
         self, game: str, samples: List[GameSample], handler_config: HandlerConfig
@@ -582,12 +605,17 @@ class MultiGameDataset:
         - {game}_reward_annotations_placeholder.csv : 게임 단위 더미 annotation
             → conditions 접근 시 WARNING 로그 출력
         reward_enum은 모든 게임 통일 1~5:
-          1=region / 2=path_length / 3=block / 4=bat_amount / 5=bat_direction
+          1=region / 2=path_length / 3=interactable / 4=hazard / 5=collectable
+
+        CSV 포맷 (annotate.py 출력):
+          - sample_id 컬럼: 실제 source_id (dungeon 키 예: "000000")
+          - reward_enum 컬럼: 0-indexed (0=region … 4=collectable) → +1 offset 적용
+          - condition 컬럼: 0-indexed (condition_0 … condition_4) → 1-indexed로 변환
         """
-        logger = logging.getLogger(__name__)
         # ── dungeon: per-sample CSV ───────────────────────────────────────
         dungeon_csv = annotations_dir / "dungeon_reward_annotations.csv"
         if dungeon_csv.exists():
+            # key가 dungeon source_id("000006") 형식으로 저장되어 있음
             annotation_map: Dict[str, Dict[str, Any]] = {}
             with open(dungeon_csv, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -600,94 +628,12 @@ class MultiGameDataset:
                 ann = annotation_map.get(sample.source_id)
                 if ann is None:
                     continue
+                # CSV reward_enum은 0-indexed (0=region … 4=collectable) → 그대로 사용
                 sample.meta["reward_enum"] = int(ann["reward_enum"])
                 sample.meta["feature_name"] = ann["feature_name"]
                 sample.meta["sub_condition"] = ann["sub_condition"]
                 conditions: Dict[int, float] = {}
-                for i in range(1, 6):
-                    val = ann.get(f"condition_{i}", "")
-                    if val != "":
-                        conditions[i] = float(val)
-                sample.meta["conditions"] = conditions
-                attached += 1
-            if attached > 0:
-                print(f"[MultiGameDataset] Reward annotations: attached to {attached} dungeon samples")
-        # ── 나머지 게임: *_placeholder.csv 읽어서 game-level 적용 ─────────
-        # 파일명에 _placeholder가 포함된 CSV를 자동 탐지
-        for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):
-            game_name = ph_csv.name.replace("_reward_annotations_placeholder.csv", "")
-            # CSV에서 feature 목록 파싱
-            ph_features: list[Dict[str, Any]] = []
-            with open(ph_csv, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    reward_enum = int(row["reward_enum"])
-                    conditions: Dict[int, float] = {}
-                    for i in range(1, 6):
-                        val = row.get(f"condition_{i}", "")
-                        if val != "":
-                            conditions[i] = float(val)
-                    ph_features.append({
-                        "reward_enum":  reward_enum,
-                        "feature_name": row["feature_name"],
-                        "sub_condition": row["sub_condition"],
-                        "conditions":   conditions,
-                    })
-            if not ph_features:
-                continue
-            # 모든 조건을 합친 dict (placeholder 전체를 한 번에)
-            all_conditions: Dict[int, float] = {}
-            for feat in ph_features:
-                all_conditions.update(feat["conditions"])
-            game_attached = 0
-            for sample in self._samples:
-                if sample.game != game_name:
-                    continue
-                # 기본 reward_enum = 첫 번째 feature
-                sample.meta["reward_enum"]  = ph_features[0]["reward_enum"]
-                sample.meta["feature_name"] = ph_features[0]["feature_name"]
-                sample.meta["sub_condition"] = ph_features[0]["sub_condition"]
-                sample.meta["conditions"] = _WarningConditionsDict(
-                    all_conditions,
-                    game=game_name,
-                    logger=logger,
-                )
-                game_attached += 1
-            if game_attached > 0:
-                logger.info("Reward annotations (placeholder): attached to %d %s samples",
-                            game_attached, game_name)
-
-
-    def _load_reward_annotations(self, annotations_dir: Path) -> None:
-        """
-        reward_annotations 폴더에서 CSV 파일을 읽어 해당 게임 샘플의 meta에
-        reward annotation 정보를 부착한다.
-        - {game}_reward_annotations.csv         : per-sample 실제 annotation
-        - {game}_reward_annotations_placeholder.csv : 게임 단위 더미 annotation
-            → conditions 접근 시 WARNING 로그 출력
-        reward_enum은 모든 게임 통일 1~5:
-          1=region / 2=path_length / 3=block / 4=bat_amount / 5=bat_direction
-        """
-        # ── dungeon: per-sample CSV ───────────────────────────────────────
-        dungeon_csv = annotations_dir / "dungeon_reward_annotations.csv"
-        if dungeon_csv.exists():
-            annotation_map: Dict[str, Dict[str, Any]] = {}
-            with open(dungeon_csv, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    annotation_map[row["key"]] = row
-            attached = 0
-            for sample in self._samples:
-                if sample.game != GameTag.DUNGEON:
-                    continue
-                ann = annotation_map.get(sample.source_id)
-                if ann is None:
-                    continue
-                sample.meta["reward_enum"] = int(ann["reward_enum"])
-                sample.meta["feature_name"] = ann["feature_name"]
-                sample.meta["sub_condition"] = ann["sub_condition"]
-                conditions: Dict[int, float] = {}
-                for i in range(1, 6):
+                for i in range(0, 5):
                     val = ann.get(f"condition_{i}", "")
                     if val != "":
                         conditions[i] = float(val)

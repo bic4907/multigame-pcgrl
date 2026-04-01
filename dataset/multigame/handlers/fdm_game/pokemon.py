@@ -5,6 +5,7 @@ POKEMON 게임 맵 전처리 핸들러.
 """
 from __future__ import annotations
 
+import hashlib
 from typing import List, Dict, Any
 from pathlib import Path
 import numpy as np
@@ -16,13 +17,14 @@ POKEMON_PALETTE: dict[int, tuple[int, int, int]] = {
     0:  (20,  20,  20),   # empty   – 어두운 회색
     #1:  (80,  80,  80),   # wall    – 중간 회색
     2:  (200, 180, 120),  # floor   – 밝은 베이지
-    #3:  (220, 50,  50),   # enemy   – 빨강
+    3:  (220, 50,  50),   # enemy   – 빨강 (monster)
     4:  (255, 215, 0),    # object  – 금색
     5:  (200, 0,   0),    # spawn   – 초록색
     6:  (100, 100, 255),  # hazard  – 주황색
     7:  (150, 75,  0),    # fence   – 갈색
     8:  (34,  139, 34),   # tree    – 숲 녹색
     9:  (200, 150, 150),  # house   – 빨강 (집)
+    10: (170, 150,  90),  # grass   – 베이지 짙은 톤 (floor보다 약간 짙음)
     99: (255, 0,   255),  # unknown – 분홍색 (오류)
 }
 
@@ -38,17 +40,18 @@ class POKEMONTile:
     FENCE   = 7
     TREE    = 8
     HOUSE   = 9
+    GRASS  = 10
     UNKNOWN = 99
 
 
 POKEMON_TILESET_MAPPING = {
     0: POKEMONTile.FLOOR,
-    1: POKEMONTile.FLOOR,
-    2: POKEMONTile.FLOOR,
-    3: POKEMONTile.FLOOR,
-    4: POKEMONTile.FLOOR,
-    5: POKEMONTile.FLOOR,
-    6: POKEMONTile.FLOOR,
+    1: POKEMONTile.GRASS,
+    2: POKEMONTile.GRASS,
+    3: POKEMONTile.GRASS,
+    4: POKEMONTile.GRASS,
+    5: POKEMONTile.GRASS,
+    6: POKEMONTile.GRASS,
     7: POKEMONTile.OBJECT,
     8: POKEMONTile.OBJECT,
     9: POKEMONTile.FENCE,
@@ -76,6 +79,7 @@ def make_legend() -> TileLegend:
         "7": ["hazard", "blocked"],
         "8": ["solid", "Tree"],
         "9": ["solid", "House"],
+        "10": ["grass", "walkable"],
     }
     return TileLegend(char_to_attrs=attrs)
 
@@ -146,7 +150,7 @@ class POKEMONPreprocessor(BasePreprocessor):
         )
         
         # 유지할 타일 정의
-        keep_tiles = {0, 2, 6, 8}  # empty, floor, water, tree
+        keep_tiles = {0, 2, 6, 8, 10}  # empty, floor, water, tree, grass
         
         # 패딩된 부분에서 keep_tiles에 없는 타일을 floor(2)로 변환
         # 패딩된 부분: 
@@ -181,6 +185,28 @@ class POKEMONPreprocessor(BasePreprocessor):
         
         return padded
 
+    def apply_grass_to_monster(self, array: np.ndarray) -> np.ndarray:
+        """
+        GRASS 타일 일부를 ENEMY(monster) 타일로 변환한다.
+
+        - 각 GRASS 타일마다 독립적으로 1/5 확률로 ENEMY로 교체
+        - 시드는 맵 배열 내용의 MD5 해시에서 결정 → 동일 입력이면 항상 동일 결과
+        """
+        seed = int.from_bytes(
+            hashlib.md5(array.tobytes()).digest()[:4], byteorder='big'
+        )
+        rng = np.random.default_rng(seed)
+
+        result = array.copy()
+        grass_mask = result == POKEMONTile.GRASS
+        grass_positions = np.argwhere(grass_mask)
+
+        for pos in grass_positions:
+            if rng.random() < 0.2:  # 1/5 확률
+                result[pos[0], pos[1]] = POKEMONTile.ENEMY
+
+        return result
+
     def process_pokemon_sample(
         self,
         onehot_map: np.ndarray,
@@ -190,7 +216,8 @@ class POKEMONPreprocessor(BasePreprocessor):
         """POKEMON one-hot 맵 -> GameSample 변환."""
         map_10x10 = self.transform_pokemon_onehot(onehot_map)
         array = self.pad_to_16x16(map_10x10)
-        
+        array = self.apply_grass_to_monster(array)
+
         array = enforce_top_left_16x16(
             array,
             game="pokemon",

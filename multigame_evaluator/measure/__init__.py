@@ -5,4 +5,5 @@ __all__ = [
     "zelda",
     "sokoban",
     "pokemon",
+    "dungeon"
 ]

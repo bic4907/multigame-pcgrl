@@ -131,7 +131,7 @@ class Config:
 
     # MultiGameDataset-based filtering (for CPCGRL)
     dataset_game: Optional[str] = None          # e.g. "dungeon", "pokemon", "doom"
-    dataset_reward_enum: Optional[int] = None   # e.g. 1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction
+    dataset_reward_enum: Optional[int] = None   # e.g. 0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable
     dataset_train_ratio: float = 0.95
 
 @dataclass
@@ -238,7 +238,7 @@ class CPCGRLConfig(TrainConfig):
     # ── CPCGRL 전용 기본값 ──────────────────────────────────
     problem: str = "multigame"
     dataset_game: Optional[str] = "dungeon"
-    dataset_reward_enum: Optional[int] = 1        # 1=region
+    dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
 
     # CPCGRL 모드 강제

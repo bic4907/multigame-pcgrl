@@ -291,7 +291,7 @@ def _make_rows(
         for instruction, order_idx, source_id, *vals in computed:
             value = vals[val_idx - 3]  # offset: idx 3 → vals[0]
             row: dict = {
-                "key":           key,
+                "key":           f"{key:06d}",
                 "instruction":   instruction,
                 "level_id":      order_idx,
                 "sample_id":     source_id,

@@ -165,7 +165,7 @@ class EncoderConfig(CLIPConfig):
     deterministic: bool = True
     num_layers: int = 2
     hidden_dim: int = 256
-    output_dim: int = 512
+    output_dim: int = 64
 
     dropout_rate: float = 0.3
     num_heads: int = 8

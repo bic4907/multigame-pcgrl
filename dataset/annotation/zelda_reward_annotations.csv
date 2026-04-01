@@ -1,4 +1,4 @@
-key,instruction,level_id,sample_id,reward_enum,feature_name,sub_condition,condition_1,condition_2,condition_3,condition_4,condition_5,condition_6
+1key,instruction,level_id,sample_id,reward_enum,feature_name,sub_condition,condition_1,condition_2,condition_3,condition_4,condition_5,condition_6
 006000,,0,tloz1_1_r0_c2,1,region,,0.0,,,,,
 006001,,1,tloz1_1_r1_c0,1,region,,5.0,,,,,
 006002,,2,tloz1_1_r1_c0_rot90,1,region,,5.0,,,,,

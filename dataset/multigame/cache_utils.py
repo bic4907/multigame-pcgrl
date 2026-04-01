@@ -109,6 +109,25 @@ def build_per_game_cache_key(
     return _sha256_bytes(_stable_json(payload).encode("utf-8"))
 
 
+def build_combined_doom_cache_key(
+    doom_root: str,
+    doom2_root: str,
+    include_doom: bool,
+    include_doom2: bool,
+    handler_config_dict: Dict[str, Any],
+) -> str:
+    """doom + doom2 통합 캐시 키를 생성한다."""
+    payload = {
+        "schema": CACHE_SCHEMA_VERSION,
+        "game": "doom",
+        "doom_root": _normalize_path(doom_root) if include_doom else None,
+        "doom2_root": _normalize_path(doom2_root) if include_doom2 else None,
+        "handler_config": handler_config_dict,
+        "code_hash": hash_handler_files("doom"),
+    }
+    return _sha256_bytes(_stable_json(payload).encode("utf-8"))
+
+
 def _game_cache_dir(cache_dir: Path, game: str) -> Path:
     return cache_dir / game
 

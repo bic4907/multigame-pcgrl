@@ -52,6 +52,7 @@ from .handlers.handler_config import HandlerConfig, get_default_config
 from . import tags as tag_utils
 from .cache_utils import (
     build_per_game_cache_key,
+    build_combined_doom_cache_key,
     load_game_samples_from_cache,
     save_game_samples_to_cache,
     load_any_game_cache,
@@ -190,10 +191,7 @@ class MultiGameDataset:
             _game_specs.append(("zelda", str(zelda_root), hc.get("zelda", {})))
         if include_pokemon:
             _game_specs.append(("pokemon", str(pokemon_root), hc.get("pokemon", {})))
-        if include_doom:
-            _game_specs.append(("doom", str(doom_root), hc.get("doom", {})))
-        if include_doom2:
-            _game_specs.append(("doom2", str(doom2_root), hc.get("doom", {})))
+        # doom/doom2는 통합 처리 (루프 후 별도 블록에서)
 
         # ── 게임별 로드 루프 ─────────────────────────────────────────────────
         for game, game_root, game_hc in _game_specs:
@@ -214,6 +212,12 @@ class MultiGameDataset:
             )
 
             if game_samples is not None:
+                # 캐시 저장 전 max_samples 적용
+                max_s = game_hc.get("max_samples") if isinstance(game_hc, dict) else getattr(game_hc, "max_samples", None)
+                if max_s is not None and len(game_samples) > max_s:
+                    game_samples = game_samples[:max_s]
+                # 캐시 저장 전 필터링 + 증강 적용 (viewer/annotate 모두 동일한 수를 보도록)
+                game_samples = self._postprocess_game_samples(game, game_samples, handler_config)
                 for s in game_samples:
                     s.order = len(self._samples)
                     self._samples.append(s)
@@ -238,19 +242,117 @@ class MultiGameDataset:
             # (4) 아무것도 없으면 경고만 출력
             print(f"[MultiGameDataset] {game}: no source data and no cache — skipped")
 
-        # ── 글로벌 후처리 (캐시에 저장하지 않고 매번 런타임 적용) ──────────────
-        if self._handler_config.pokemon.enabled:
-            self._apply_pokemon_tileset_filtering()
-
-        if self._handler_config.pokemon.enabled:
-            self._apply_instruction_filtering()
-
-        if self._handler_config.augmentation.enabled:
-            self._augment_with_rotations_per_game()
+        # ── doom + doom2 통합 로드 (합산 max_samples=1000 적용 후 캐시 저장) ──
+        if include_doom or include_doom2:
+            doom_hc = hc.get("doom", {})
+            doom_cache_key = build_combined_doom_cache_key(
+                str(doom_root), str(doom2_root),
+                include_doom, include_doom2,
+                doom_hc,
+            )
+            doom_cached = load_game_samples_from_cache(cache_dir, "doom", doom_cache_key) if use_cache else None
+            if doom_cached is not None:
+                for s in doom_cached:
+                    s.order = len(self._samples)
+                    self._samples.append(s)
+            else:
+                doom_combined: List[GameSample] = []
+                if include_doom:
+                    raw = self._load_game_from_source("doom", str(doom_root), handler_config)
+                    if raw:
+                        doom_combined.extend(raw)
+                if include_doom2:
+                    raw = self._load_game_from_source("doom2", str(doom2_root), handler_config)
+                    if raw:
+                        doom_combined.extend(raw)
+                if doom_combined:
+                    max_s = doom_hc.get("max_samples") if isinstance(doom_hc, dict) else getattr(doom_hc, "max_samples", None)
+                    if max_s is not None and len(doom_combined) > max_s:
+                        doom_combined = doom_combined[:max_s]
+                    doom_combined = self._postprocess_game_samples("doom", doom_combined, handler_config)
+                    for s in doom_combined:
+                        s.order = len(self._samples)
+                        self._samples.append(s)
+                    if use_cache:
+                        save_game_samples_to_cache(cache_dir, "doom", doom_cache_key, doom_combined)
+                else:
+                    fallback = load_any_game_cache(cache_dir, "doom") if use_cache else None
+                    if fallback is not None:
+                        print(f"[MultiGameDataset] doom: artifact-only fallback ({len(fallback)} samples)")
+                        for s in fallback:
+                            s.order = len(self._samples)
+                            self._samples.append(s)
 
         if reward_annotations_dir is not None:
             self._load_reward_annotations(Path(reward_annotations_dir))
 
+
+    def _postprocess_game_samples(
+        self, game: str, samples: List[GameSample], handler_config: HandlerConfig
+    ) -> List[GameSample]:
+        """
+        캐시 저장 전에 필터링과 증강을 적용한다.
+
+        적용 순서:
+        1. Pokemon 타일셋 필터링 (max_tile_count 초과 샘플 제거)
+        2. Instruction 단어 수 필터링 (min_instruction_words 미만 제거)
+        3. 회전 증강 (rotate_90 설정 시 90도 회전 사본 추가)
+        4. 증강 후 max_samples 재적용
+        """
+        # (1) Pokemon 타일셋 필터링
+        if game == "pokemon" and handler_config.pokemon.enabled:
+            max_tile_count = handler_config.pokemon.max_tile_count
+            before = len(samples)
+            samples = [
+                s for s in samples
+                if int(np.max(np.bincount(s.array.ravel().astype(int)))) < max_tile_count
+            ]
+            removed = before - len(samples)
+            if removed > 0:
+                print(f"[MultiGameDataset] POKEMON tileset filtering: {before} → {len(samples)} "
+                      f"({removed} removed, max_tile_count={max_tile_count})")
+
+        # (2) Instruction 단어 수 필터링
+        if handler_config.pokemon.enabled:
+            min_words = handler_config.pokemon.min_instruction_words
+            before = len(samples)
+            samples = [
+                s for s in samples
+                if s.instruction is None or len(s.instruction.split()) >= min_words
+            ]
+            removed = before - len(samples)
+            if removed > 0:
+                print(f"[MultiGameDataset] {game} instruction filtering: {before} → {len(samples)} "
+                      f"({removed} removed, min_words={min_words})")
+
+        # (3) 회전 증강
+        if handler_config.augmentation.enabled:
+            should_augment = (
+                (game == "pokemon" and handler_config.pokemon.rotate_90) or
+                (game == "dungeon" and handler_config.dungeon.rotate_90) or
+                (game in ("doom", "doom2") and handler_config.doom.rotate_90) or
+                (game == "zelda" and handler_config.zelda.rotate_90)
+            )
+            if should_augment:
+                rotated = [create_rotated_sample(s) for s in samples]
+                samples = samples + rotated
+                print(f"[MultiGameDataset] {game} augmentation: {len(rotated)} rotated samples added → {len(samples)} total")
+
+        # (4) 증강 후 max_samples 재적용
+        max_s: Optional[int] = None
+        if game == "pokemon":
+            max_s = handler_config.pokemon.max_samples
+        elif game in ("doom", "doom2"):
+            max_s = handler_config.doom.max_samples
+        elif game == "zelda":
+            max_s = handler_config.zelda.max_samples
+        elif game == "dungeon":
+            max_s = handler_config.dungeon.max_samples
+        if max_s is not None and len(samples) > max_s:
+            print(f"[MultiGameDataset] {game} post-augmentation limit: {len(samples)} → {max_s}")
+            samples = samples[:max_s]
+
+        return samples
 
     def _load_game_from_source(
         self, game: str, game_root: str, handler_config: HandlerConfig
@@ -329,163 +431,7 @@ class MultiGameDataset:
                 filtered.append(sample)
         return filtered
 
-    def _is_valid_sample(self, sample: GameSample) -> bool:
-        """
-        [Deprecated] 이 메서드는 더 이상 사용되지 않습니다.
-        필터링은 각 게임별 로드 시점에 수행됩니다.
-        """
-        pass
 
-    def _apply_instruction_filtering(self) -> None:
-        """
-        instruction 단어 수 기반 필터링을 적용한다.
-        (타일 비율 필터링은 각 게임별 로드 시 수행됨)
-
-        필터링 기준:
-        - instruction 단어 수 < min_instruction_words인 샘플 제외
-        """
-        original_count = len(self._samples)
-
-        # instruction이 있는 샘플만 필터링 (instruction이 없는 샘플은 유지)
-        self._samples = [
-            s for s in self._samples
-            if s.instruction is None or len(s.instruction.split()) >= self._handler_config.pokemon.min_instruction_words
-        ]
-
-        filtered_count = original_count - len(self._samples)
-        if filtered_count > 0:
-            print(f"[MultiGameDataset] Instruction filtering: {original_count} → {len(self._samples)} samples "
-                  f"({filtered_count} removed, min_words={self._handler_config.pokemon.min_instruction_words})")
-
-    def _apply_pokemon_tileset_filtering(self) -> None:
-        """
-        POKEMON 샘플만 타일셋 기준으로 필터링.
-        (패딩 후 16x16 그리드에서 한 타일이 250개 이상이면 제외)
-
-        필터링 기준:
-        - POKEMON 게임만 대상
-        - 한 타일 종류가 256개 중 250개 이상이면 제외 (모노톤한 맵)
-        """
-        pokemon_indices = [i for i, s in enumerate(self._samples) if s.game == "pokemon"]
-
-        if not pokemon_indices:
-            return
-
-        original_pokemon_count = len(pokemon_indices)
-        filtered_samples = []
-
-        for i, sample in enumerate(self._samples):
-            if sample.game == "pokemon":
-                # POKEMON 샘플: 타일셋 기준 필터링
-                flat = sample.array.ravel()
-                tile_counts = np.bincount(flat.astype(int))
-                max_tile_count = int(np.max(tile_counts)) if len(tile_counts) > 0 else 0
-
-                # 256개 타일 중 250개 이상이 같은 타일이 아니면 유지
-                if max_tile_count < 250:
-                    filtered_samples.append(sample)
-            else:
-                # 다른 게임: 그대로 유지
-                filtered_samples.append(sample)
-
-        self._samples = filtered_samples
-        pokemon_filtered_count = original_pokemon_count - len([s for s in self._samples if s.game == "pokemon"])
-        if pokemon_filtered_count > 0:
-            print(f"[MultiGameDataset] POKEMON tileset filtering: {original_pokemon_count} → {len([s for s in self._samples if s.game == 'pokemon'])} samples "
-                  f"({pokemon_filtered_count} removed, max_tile_count_threshold=250)")
-
-    def _augment_with_rotations_per_game(self) -> None:
-        """
-        게임별 설정에 따라 각 게임의 샘플을 회전시켜 증강.
-
-        각 게임의 config에 rotate_90 설정이 있으면 해당 게임만 회전 증강을 수행한다.
-        예: config.pokemon.rotate_90 = True면 POKEMON 게임만 회전 증강
-        """
-        original_count = len(self._samples)
-        rotated_samples = []
-
-        for sample in self._samples:
-            # 게임별 config에서 rotate_90 설정 확인
-            should_augment = False
-            if sample.game == "pokemon" and self._handler_config.pokemon.rotate_90:
-                should_augment = True
-            elif sample.game == "dungeon" and self._handler_config.dungeon.rotate_90:
-                should_augment = True
-            elif sample.game == GameTag.DOOM and self._handler_config.doom.rotate_90:
-                should_augment = True
-            elif sample.game == GameTag.ZELDA and self._handler_config.zelda.rotate_90:
-                should_augment = True
-
-            if should_augment:
-                rotated = create_rotated_sample(sample)
-                rotated_samples.append(rotated)
-
-        # 원본 다음에 회전 샘플 추가
-        self._samples.extend(rotated_samples)
-
-        # order 재지정
-        for i, sample in enumerate(self._samples):
-            sample.order = i
-
-        if len(rotated_samples) > 0:
-            print(f"[MultiGameDataset] Data augmentation: {original_count} → {len(self._samples)} samples "
-                  f"(added {len(rotated_samples)} rotated versions)")
-        
-        # ── 증강 후 각 게임별 제한 (handler_config의 max_samples 참조) ────────────
-        game_sample_counts = {}
-        filtered_samples = []
-        
-        for sample in self._samples:
-            game = sample.game
-            if game not in game_sample_counts:
-                game_sample_counts[game] = 0
-            
-            # 각 게임의 handler_config에서 max_samples 가져오기
-            max_samples = None
-            if game == "pokemon":
-                max_samples = self._handler_config.pokemon.max_samples
-            elif game == "doom":
-                max_samples = self._handler_config.doom.max_samples
-            elif game == "zelda":
-                max_samples = self._handler_config.zelda.max_samples
-            elif game == "dungeon":
-                max_samples = self._handler_config.dungeon.max_samples
-            # sokoban은 handler_config에 설정이 없으므로 제한하지 않음
-            
-            # max_samples 제한 확인
-            if max_samples is None or game_sample_counts[game] < max_samples:
-                filtered_samples.append(sample)
-                game_sample_counts[game] += 1
-        
-        # 필터링된 샘플이 있으면 적용
-        if len(filtered_samples) < len(self._samples):
-            self._samples = filtered_samples
-            
-            # order 재지정
-            for i, sample in enumerate(self._samples):
-                sample.order = i
-            
-            print(f"[MultiGameDataset] Game-wise limit (per config): {original_count} → {len(self._samples)} samples")
-            for game, count in sorted(game_sample_counts.items()):
-                limited_count = count
-                max_samples = None
-                if game == "pokemon":
-                    max_samples = self._handler_config.pokemon.max_samples
-                elif game == "doom":
-                    max_samples = self._handler_config.doom.max_samples
-                elif game == "zelda":
-                    max_samples = self._handler_config.zelda.max_samples
-                elif game == "dungeon":
-                    max_samples = self._handler_config.dungeon.max_samples
-                
-                if max_samples is not None:
-                    limited_count = min(count, max_samples)
-                    if limited_count < count:
-                        print(f"  {game}: {count} → {limited_count} (max_samples={max_samples})")
-                    else:
-                        print(f"  {game}: {count} (max_samples={max_samples})")
-                else:
-                    print(f"  {game}: {count} (no limit)")
 
     def _load_reward_annotations(self, annotations_dir: Path) -> None:
         """
@@ -654,26 +600,6 @@ class MultiGameDataset:
                 print(f"[MultiGameDataset] Reward annotations (placeholder): "
                       f"attached to {game_attached} {game_name} samples")
 
-
-    def apply_filtering(self, apply_filter: bool = True) -> None:
-        """
-        필터링 조건을 적용하여 _samples를 재필터링한다.
-
-        Note: 이 메서드는 instruction 단어 수 필터링만 수행합니다.
-        타일 비율 필터링은 각 게임별 로드 시점에 적용됩니다.
-
-        필터링 기준:
-        - instruction 단어 수 >= min_instruction_words
-
-        Parameters
-        ----------
-        apply_filter : bool
-            True이면 필터링 적용, False이면 원본 유지
-        """
-        if not apply_filter or not self._handler_config.pokemon.enabled:
-            return
-
-        self._apply_instruction_filtering()
 
     def _apply_mapping(self, sample: GameSample) -> GameSample:
         """

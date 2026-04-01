@@ -727,6 +727,9 @@ def main(config: CLIPDecoderTrainConfig):
 
     make_train(config)(rng_key)
 
+    if wandb.run:
+        wandb.finish()
+
 
 def _create_condition_scatter_plots(
     true_raw: np.ndarray,

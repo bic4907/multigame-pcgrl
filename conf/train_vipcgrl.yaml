@@ -1,9 +1,10 @@
 defaults:
-  - cpcgrl
+  - vipcgrl
   - _self_
 
-use_clip: true
 render_freq: -1
+
+
 
 hydra:
   sweeper:

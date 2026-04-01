@@ -62,18 +62,18 @@ class DatasetViewerBackend:
         doom_root: Path | str = _DEFAULT_DOOM_ROOT,
         doom2_root: Path | str = _DEFAULT_DOOM2_ROOT,
     ) -> None:
-        print("[DatasetViewerBackend] 초기화 중...", flush=True)
-        
+        print("[DatasetViewerBackend] Initializing...", flush=True)
+
         self._games: List[str] = []
         self._counts: Dict[str, int] = {}
-        self._raw_samples_by_game: Dict[str, List[GameSample]] = {}  # 게임별 raw 샘플 캐시
-        
-        # MultiGameDataset 로드: use_tile_mapping=False로 raw array 유지
+        self._raw_samples_by_game: Dict[str, List[GameSample]] = {}  # per-game raw sample cache
+
+        # Load MultiGameDataset with use_tile_mapping=False to keep raw arrays
         try:
             self._dataset = MultiGameDataset(use_cache=True, use_tile_mapping=False)
-            print(f"[DatasetViewerBackend] ✅ 로드 완료 (raw array)", flush=True)
+            print(f"[DatasetViewerBackend] ✅ Loaded successfully (raw array)", flush=True)
         except Exception as e:
-            print(f"[DatasetViewerBackend] ❌ 로드 실패: {e}", flush=True)
+            print(f"[DatasetViewerBackend] ❌ Failed to load: {e}", flush=True)
             import traceback
             traceback.print_exc()
             self._dataset = None
@@ -82,12 +82,12 @@ class DatasetViewerBackend:
         self._games: List[str] = self._dataset.available_games()
         self._counts: Dict[str, int] = self._dataset.count_by_game()
         
-        # 게임별 raw 샘플을 미리 필터링해서 캐시 (초기화 시점에 한 번만)
+        # Pre-filter and cache raw samples per game (once at init)
         for game in self._games:
             self._raw_samples_by_game[game] = self._dataset.by_game(game)
         
-        print(f"[DatasetViewerBackend] 게임: {self._games}", flush=True)
-        print(f"[DatasetViewerBackend] 샘플: {self._counts}", flush=True)
+        print(f"[DatasetViewerBackend] Games: {self._games}", flush=True)
+        print(f"[DatasetViewerBackend] Samples: {self._counts}", flush=True)
 
     def games_with_counts(self) -> List[Dict[str, Any]]:
         return [

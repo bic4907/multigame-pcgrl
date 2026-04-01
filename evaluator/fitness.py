@@ -5,10 +5,8 @@ from jax import vmap
 import chex
 import jax.numpy as jnp
 
-from envs.probs.dungeon3 import Dungeon3Tiles
-
 from .fitnesses import *
-from .measures import get_amount
+from .fitnesses.multigame_amount import get_multigame_amount_fitness
 from .weights import FitnessWeight
 
 @partial(jax.jit, static_argnums=())
@@ -18,27 +16,23 @@ def get_fitness_batch(
     curr_env_map: chex.Array,
     normal_weights: chex.Array,
 ) -> chex.Array:
-    """
-    Compute batch rewards by mapping indices to reward functions and executing them in parallel.
+    """Compute batch fitness.
 
-    Args:
-        reward_i: Array of indices mapping to functions in call_reward.
-        condition: Array of conditions corresponding to each reward calculation.
-        prev_env_map: Previous environment map.
-        curr_env_map: Current environment map.
+    인덱스 매핑은 reward.py 와 동일:
+    0=none, 1=region, 2=path_length,
+    3=interactive, 4=hazard, 5=collectable, 6+=none
 
-    Returns:
-        rewards: Array of computed rewards.
+    fitness 에서는 placement(배치품질)는 사용하지 않고
+    amount(개수 달성도)만 평가한다.
     """
-    # List of reward functions
     fitness_funcs = [
-        lambda cond, curr_map: 0.0,  # 0
-        lambda cond, curr_map: get_region_fitness(curr_map, cond[0]) * FitnessWeight.REGION,  # 1 (region)
-        lambda cond, curr_map: get_path_length_fitness(curr_map, cond[1]) * FitnessWeight.PATH_LENGTH,  # 2 (diameter)
-        lambda cond, curr_map: get_amount_fitness(curr_map, cond[2], Dungeon3Tiles.WALL) * FitnessWeight.WALL,  # 3 (block)
-        lambda cond, curr_map: get_amount_fitness(curr_map, cond[3], Dungeon3Tiles.BAT) * FitnessWeight.MONSTER,  # 4 (bat_amount)
-        lambda cond, curr_map: get_direction_fitness(curr_map, cond[4], Dungeon3Tiles.BAT) * FitnessWeight.DIRECTION,  # 5 (bat_direction)
-        lambda cond, curr_map: 0.0,  # 6+
+        lambda cond, curr_map: 0.0,  # 0: no-op
+        lambda cond, curr_map: get_region_fitness(curr_map, cond[0]) * FitnessWeight.REGION,  # 1: region
+        lambda cond, curr_map: get_path_length_fitness(curr_map, cond[1]) * FitnessWeight.PATH_LENGTH,  # 2: path_length
+        lambda cond, curr_map: get_multigame_amount_fitness(curr_map, cond[2], tile_name="interactive") * FitnessWeight.MONSTER,  # 3: interactive
+        lambda cond, curr_map: get_multigame_amount_fitness(curr_map, cond[3], tile_name="hazard") * FitnessWeight.MONSTER,  # 4: hazard
+        lambda cond, curr_map: get_multigame_amount_fitness(curr_map, cond[4], tile_name="collectable") * FitnessWeight.MONSTER,  # 5: collectable
+        lambda cond, curr_map: 0.0,  # 6+: no-op
     ]
 
     # Map indices to functions using `switch`
@@ -54,4 +48,3 @@ def get_fitness_batch(
     rewards = jnp.divide(rewards, normal_weights)
 
     return jax.lax.stop_gradient(rewards)
-

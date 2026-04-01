@@ -1,0 +1,19 @@
+# conf/train_clip_decoder.yaml
+# CLIP Encoder + Reward Decoder 학습 설정
+# Usage: python train_clip_decoder.py --config-name train_clip_decoder game=dg
+
+defaults:
+  - train_clip_decoder_schema
+  - _self_
+
+
+# 디코더 설정
+decoder:
+  hidden_dim: 128
+  num_layers: 2
+  num_reward_classes: 5
+
+# loss 가중치
+contrastive_weight: 1.0
+cls_weight: 1.0
+reg_weight: 0.1

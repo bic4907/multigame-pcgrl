@@ -7,6 +7,7 @@ import os
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 from sklearn.manifold import TSNE
+from encoder.utils.game_palette import palette_for_games
 
 
 def create_scatter_plot(df, epoch, config, min_val=0, max_val=1,
@@ -19,7 +20,7 @@ def create_scatter_plot(df, epoch, config, min_val=0, max_val=1,
     """
 
     sns.set_theme(style="whitegrid")
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(6.4, 4.8))
 
     # color normalize
     norm = mcolors.Normalize(vmin=min_val, vmax=max_val)
@@ -67,7 +68,7 @@ def create_embedding_figure(embed_queue, reward_df: pd.DataFrame, epoch, config,
 
     # draw scatter plot
     sns.set_theme(style="whitegrid")
-    fig, ax = plt.subplots(figsize=(6, 5))
+    fig, ax = plt.subplots(figsize=(5.2, 4.2))
     sns.scatterplot(
         data=df, x="tsne_x", y="tsne_y",
         hue="reward_enum", palette="bright", alpha=0.9, ax=ax
@@ -147,13 +148,8 @@ def create_clip_embedding_figures(embed_queue, class_id2reward_cond, epoch, conf
     modalities_filtered = [modalities[i] for i in valid_indices]
     modalities = np.array(modalities_filtered)
 
-    game_color = {
-        "Dungeon": "#e41a1c",
-        "Sokoban": "#ff7f00",
-        "Pokemon": "#377eb8",
-        "Zelda": "#4daf4a",
-        "Doom": "#984ea3"
-    }
+    # Shared palette (same colors as decoder scatter)
+    game_color = palette_for_games(game_labels)
 
     save_dir = os.path.join(config.exp_dir, config.figure_dir)
     os.makedirs(save_dir, exist_ok=True)
@@ -169,7 +165,7 @@ def create_clip_embedding_figures(embed_queue, class_id2reward_cond, epoch, conf
 
     
     def plot_seaborn(df, hue, style, markers, filename, style_order=None):
-        fig, ax = plt.subplots(figsize=(8, 5))
+        fig, ax = plt.subplots(figsize=(6.4, 4.6))
         sns.set_theme(style="whitegrid")
         sns.scatterplot(
             data=df,

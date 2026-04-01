@@ -186,6 +186,7 @@ class DecoderConfig:
     hidden_dim: int = 128
     num_layers: int = 2
     output_dim: int = 1
+    num_reward_classes: int = 6   # reward_enum 종류 수 (1~6 → 0~5)
 
 @dataclass
 class TrainConfig(Config):
@@ -495,6 +496,24 @@ class CLIPEvalConfig(EvalConfig):
     wandb_project: str = 'eval_clip_pcgrl'
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
 
+@dataclass
+class CLIPDecoderTrainConfig(CLIPTrainConfig):
+    """CLIP Encoder + Reward Decoder 학습 Config.
+
+    기존 contrastive loss에 더해 디코더 브랜치를 추가하여
+    state embedding으로부터 reward_enum(분류)과 condition(회귀)을 예측한다.
+    """
+    wandb_project: str = 'train_clip_decoder'
+    dir_prefix: str = "clipdec-"
+
+    # ── 디코더 설정 ──
+    decoder: DecoderConfig = field(default_factory=DecoderConfig)
+
+    # ── loss 가중치 ──
+    contrastive_weight: float = 1.0    # contrastive loss 가중치
+    cls_weight: float = 1.0            # reward_enum 분류 loss 가중치
+    reg_weight: float = 0.1            # condition 회귀 loss 가중치
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
@@ -505,6 +524,7 @@ cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs
 cs.store(name="train_clip", node=CLIPTrainConfig)
+cs.store(name="train_clip_decoder_schema", node=CLIPDecoderTrainConfig)
 
 cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)

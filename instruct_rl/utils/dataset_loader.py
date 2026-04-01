@@ -18,11 +18,11 @@ logger = get_logger(__file__)
 
 # reward_enum → 사람이 읽을 수 있는 이름
 REWARD_ENUM_NAMES = {
-    1: "region",
-    2: "path_length",
-    3: "block",
-    4: "bat_amount",
-    5: "bat_direction",
+    0: "region",
+    1: "path_length",
+    2: "interactable",
+    3: "hazard",
+    4: "collectable",
 }
 
 
@@ -114,7 +114,7 @@ def _build_instruct(sample_list, config):
     for s in sample_list:
         conds = s.meta.get("conditions", {})
         row = []
-        for i in range(1, 6):
+        for i in range(0, 5):
             val = conds.get(i, conds.get(str(i), -1))
             row.append(float(val))
         row.extend([-1.0] * 4)

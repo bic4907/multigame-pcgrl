@@ -5,7 +5,8 @@ import jax
 import yaml
 from os.path import basename, dirname
 
-from conf.config import Config, EvoMapConfig, SweepConfig, EncoderConfig
+from conf.config import Config, EncoderConfig
+from conf.game_utils import parse_game_str
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
@@ -16,17 +17,6 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 
 DATASET_DIR = os.path.abspath(os.path.join(dirname(__file__), '..', "pcgrl_buffer"))
 
-
-def get_exp_dir_evo_map(config: EvoMapConfig):
-    exp_dir = os.path.join(
-        'saves_evo_map',
-        config.problem,
-        f'pop-{config.evo_pop_size}_' +
-        f'parents-{config.n_parents}_' +
-        f'mut-{config.mut_rate}_' +
-        f'{config.seed}_{config.exp_name}',
-    )
-    return exp_dir
 
 
 def is_default_hiddims(config: Config):
@@ -59,32 +49,15 @@ def get_exp_group(config):
         modality = ''.join(modality)
 
         config_dict = {
-            'enc': config.encoder.model,
-            'inst': config.instruct,
-            'exp': config.exp_name,
-            'es': config.encoder.output_dim,
+            'game': getattr(config, 'game', 'dg'),
             'md': modality,
-            'br': config.buffer_ratio,
-            'batch': config.batch_size,
-            'lr': config.lr,
+            'exp': config.exp_name,
         }
     else:
         config_dict = {
-            'enc': config.encoder.model,
-            'embed': config.embed_type,
-            'inst': config.instruct,
+            'game': getattr(config, 'game', 'dg'),
             'exp': config.exp_name,
-            'br': config.buffer_ratio,
-            'es': config.encoder.output_dim,
         }
-    #
-    # # RQ4 parameters
-    # if config.buffer_ratio != 1.0:
-    #     config_dict['bufratio'] = config.buffer_ratio
-    # if config.encoder.hidden_dim != 512:
-    #     config_dict['encdim'] = config.encoder.hidden_dim
-    # if config.encoder.num_layers != 1:
-    #     config_dict['enclay'] = config.encoder.num_layers
 
     exp_group = os.path.join(
         '_'.join([f'{key}-{value}' for key, value in config_dict.items()])
@@ -131,7 +104,13 @@ def init_config(config: Config):
     
     # For coord Channel(x,y)
     config.clip_input_channel = config.clip_input_channel + 2
-    
+
+    # ── game 약어 → include_* 자동 동기화 ──
+    if hasattr(config, 'game') and config.game:
+        includes = parse_game_str(config.game)
+        for key, val in includes.items():
+            setattr(config, key, val)
+
     config.exp_group = get_exp_group(config)
     config.exp_dir = get_exp_dir(config)
 
@@ -153,6 +132,12 @@ def init_clip_config(config: Config):
     if config.aug_type is not None and config.embed_type is not None and config.instruct is not None:
         config.instruct_csv = f'{config.aug_type}/{config.embed_type}/{config.instruct}'
 
+    # ── game 약어 → include_* 자동 동기화 ──
+    if hasattr(config, 'game') and config.game:
+        includes = parse_game_str(config.game)
+        for key, val in includes.items():
+            setattr(config, key, val)
+
     config.exp_group = get_exp_group(config)
     config.exp_dir = get_exp_dir(config)
 
@@ -165,18 +150,6 @@ def init_clip_config(config: Config):
     if config.model == 'seqnca':
         config.hidden_dims = config.hidden_dims[:1]
 
-    return config
-
-
-def init_config_evo_map(config: EvoMapConfig):
-    config.arf_size = (2 * config.map_width -
-                       1 if config.arf_size == -1 else config.arf_size)
-
-    config.vrf_size = (2 * config.map_width -
-                       1 if config.vrf_size == -1 else config.vrf_size)
-
-    config.n_gpus = jax.local_device_count()
-    config.exp_dir = get_exp_dir_evo_map(config)
     return config
 
 
@@ -249,13 +222,6 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
     return env, env_params
 
 
-def get_sweep_conf_path(cfg: SweepConfig):
-    conf_sweeps_dir = os.path.join('conf', 'sweeps')
-    # sweep_conf_path_json = os.path.join(conf_sweeps_dir, f'{cfg.name}.json')
-    sweep_conf_path_yaml = os.path.join(conf_sweeps_dir, f'{cfg.name}.yaml')
-    return sweep_conf_path_yaml
-
-
 def write_sweep_confs(_hypers: dict, eval_hypers: dict):
     conf_sweeps_dir = os.path.join('conf', 'sweeps')
     os.makedirs(conf_sweeps_dir, exist_ok=True)
@@ -267,14 +233,3 @@ def write_sweep_confs(_hypers: dict, eval_hypers: dict):
             f.write(yaml.dump(save_grid_hypers))
         # with open(os.path.join(conf_sweeps_dir, f'{name}.json'), 'w') as f:
         #     f.write(json.dumps(grid_hypers, indent=4))
-
-
-def load_sweep_hypers(cfg: SweepConfig):
-    sweep_conf_path = get_sweep_conf_path(cfg)
-    if os.path.exists(sweep_conf_path):
-        hypers = yaml.load(open(sweep_conf_path), Loader=yaml.FullLoader)
-        eval_hypers = hypers.pop('eval_hypers')
-    else:
-        raise FileNotFoundError(f"Could not find sweep config file {sweep_conf_path}")
-    return hypers, eval_hypers
-

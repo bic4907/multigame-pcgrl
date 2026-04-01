@@ -11,37 +11,14 @@ from transformers import (
     AutoTokenizer,
 )
 
-from conf.config import TrainLLMConfig
+# from conf.config import TrainLLMConfig
 
 
-def BERT(config: TrainLLMConfig):
+def BERT(config):
     model_name = f"bert-{config.model_size}-uncased"
     model = FlaxBertModel.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     return model, tokenizer
-
-
-def Roberta(config: TrainLLMConfig):
-    model_name = f"FacebookAI/roberta-{config.model_size}"
-    model = FlaxRobertaModel.from_pretrained(model_name)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    return model, tokenizer
-
-
-def Albert(config: TrainLLMConfig):
-    model_name = f"albert-{config.model_size}-v2"
-    model = FlaxAlbertModel.from_pretrained(model_name)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    return model, tokenizer
-
-
-def Electra(config: TrainLLMConfig):
-    model_name = f"google/electra-{config.model_size}-discriminator"
-    model = FlaxElectraModel.from_pretrained(model_name)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    return model, tokenizer
-
-
 
 
 def read_file(file_path: str) -> Any:

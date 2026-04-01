@@ -29,7 +29,7 @@ def create_scatter_plot(df, epoch, config, min_val=0, max_val=1,
     # generate Scatter plot
     _ = sns.scatterplot(
         data=df, x="ground_truth", y="prediction",
-        hue="reward_enum", palette="bright", alpha=0.5, ax=ax
+        hue="reward_id", palette="bright", alpha=0.5, ax=ax
     )
 
     # add Colorbar

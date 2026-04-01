@@ -1,6 +1,11 @@
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 from hydra.core.config_store import ConfigStore
 from dataclasses import dataclass, field
+
+from conf.game_utils import (                       # noqa: F401  — re-export
+    GAME_ABBR, GAME_ABBR_INV, ALL_GAMES,
+    parse_game_str, build_game_str,
+)
 
 @dataclass
 class Config:
@@ -25,6 +30,18 @@ class Config:
     DEBUG: bool = False
     exp_name: str = "def"
     seed: int = 0
+
+    # Game selection — 2글자 약어 조합 (dg=dungeon, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
+    # 예: "dg" (dungeon만), "dgdm" (dungeon+doom+doom2), "all" (전체)
+    game: str = "dg"
+
+    # include_* 필드는 game 문자열에서 자동 파싱됨 (하위 호환용으로 유지)
+    include_dungeon: bool = True
+    include_pokemon: bool = False
+    include_sokoban: bool = False
+    include_doom: bool = False
+    include_doom2: bool = False
+    include_zelda: bool = False
 
     problem: str = "dungeon3"
     representation: str = "turtle"
@@ -76,9 +93,6 @@ class Config:
     """ DO NOT USE. WILL BE OVERWRITTEN. """
     exp_dir: Optional[str] = None
     n_gpus: int = 1
-
-    # use hpc
-    use_hpc: bool = False
 
     # use prev state
     use_prev: bool = True
@@ -174,17 +188,6 @@ class DecoderConfig:
     output_dim: int = 1
 
 @dataclass
-class EvoMapConfig(Config):
-    n_generations: int = 100_000
-    evo_pop_size: int = 100
-    n_parents: int = 50
-    mut_rate: float = 0.3
-    render_freq: int = 10_000
-    log_freq: int = 1_000
-    callbacks: bool = True
-
-
-@dataclass
 class TrainConfig(Config):
     overwrite: bool = False
 
@@ -267,7 +270,6 @@ class CPCGRLConfig(TrainConfig):
     # wandb
     wandb_project: Optional[str] = "cpcgrl"
 
-
 @dataclass
 class VIPCGRLConfig(CPCGRLConfig):
     """Vision-Instructed PCGRL (VIPCGRL) config.
@@ -292,83 +294,6 @@ class VIPCGRLConfig(CPCGRLConfig):
 
     # wandb
     wandb_project: Optional[str] = "vipcgrl"
-
-
-@dataclass
-class DebugConfig(Config):
-    overwrite: bool = True
-
-    # Save a checkpoint after (at least) this many timesteps
-    ckpt_freq: int = int(1)
-    # Render after this many update steps
-    render_freq: int = 1000
-    n_render_eps: int = 3
-
-    # eval the model on pre-made eval freezie maps to see how it's doing
-    eval_freq: int = 1
-    n_eval_maps: int = 6
-    eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
-    # discount factor for regret value calculation is the same as GAMMA
-
-    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
-    NUM_UPDATES: Optional[int] = None
-    MINIBATCH_SIZE: Optional[int] = None
-    ###########################################################################
-
-    total_timesteps: int = int(1e6)
-    log_freq: int = 1
-
-
-class MultiAgentConfig(TrainConfig):
-    multiagent: bool = True
-    # lr: float = 3e-4
-    # update_epochs: int = 4
-    # num_steps: int = 521
-    # gamma: float = 0.99
-    # gae_lambda: float = 0.95
-    # clip_eps: float = 0.2
-    # scale_clip_eps: bool = False
-    # ent_coef: float = 0.0
-    # vf_coef: float = 0.5
-    # max_grad_norm: float = 0.25
-
-    model: str = "rnn"
-    representation: str = "turtle"
-    n_agents: int = 2
-    n_envs: int = 300
-    scale_clip_eps: bool = False
-    hidden_dims: Tuple[int, ...] = (512, -1)
-    empty_start: bool = True
-
-    # Save a checkpoint after (at least) this many ***update*** steps
-    ckpt_freq: int = 40
-    render_freq: int = 20
-
-    # WandB Params
-
-    WANDB_MODE: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
-    ENTITY: Optional[str] = None
-    PROJECT: str = 'pcgrl_embed_test'
-
-    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
-    _num_actors: int = -1
-    _minibatch_size: int = -1
-    _num_updates: int = -1
-    _exp_dir: Optional[str] = None
-    _ckpt_dir: Optional[str] = None
-    _vid_dir: Optional[str] = None
-    _numpy_dir: Optional[str] = None
-    ###########################################################################
-
-
-@dataclass
-class TrainAccelConfig(TrainConfig):
-    evo_freq: int = 10
-    evo_pop_size: int = 10
-    evo_mutate_prob: float = 0.1
-
-    instruct_freq: int = 1
-
 
 @dataclass
 class EvalConfig(TrainConfig):
@@ -404,151 +329,6 @@ class EvalConfig(TrainConfig):
     metrics_to_keep: Tuple[str] = ("mean_ep_reward",)
     flush: bool = True
 
-
-
-@dataclass
-class SweepConfig(EvalConfig, TrainConfig):
-    wandb_project: Optional[str] = 'sweep_pcgrl'
-
-
-
-@dataclass
-class EnjoyConfig(EvalConfig):
-    random_agent: bool = False
-    # How many episodes to render as gifs
-    n_eps: int = 5
-    eval_map_width: Optional[int] = None
-    render_stats: bool = True
-    n_enjoy_envs: int = 1
-    render_ims: bool = False
-
-
-@dataclass
-class EnjoyMultiAgentConfig(MultiAgentConfig, EnjoyConfig):
-    pass
-
-
-@dataclass
-class ProfileEnvConfig(Config):
-    N_PROFILE_STEPS: int = 5000
-    reevaluate: bool = False
-
-
-@dataclass
-class SweepConfig(EvalConfig, TrainConfig):
-    name: Optional[str] = None
-    mode: str = "train"
-    slurm: bool = True
-
-
-@dataclass
-class TrainLLMConfig(Config):
-    overwrite: bool = False
-
-    # Save a checkpoint after (at least) this many timesteps
-    ckpt_freq: int = int(5e6)
-    # Render after this many update steps
-    total_timesteps: int = int(5e7)
-
-    render_freq: int = 40
-    n_render_eps: int = 3
-
-    # eval the model on pre-made eval freezie maps to see how it's doing
-    eval_freq: int = 100
-    n_eval_maps: int = 6
-    eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
-    # discount factor for regret value calculation is the same as GAMMA
-
-    # Prompt
-
-    num_scenario: int = 1
-    start_scenario: int = 1
-    end_scenario: int = 2  # 1, 2, 3, 6, 9
-
-    train_ratio: float = 0.8
-    prompt_path: str = "instruct/scenario_prompt.json"
-
-    # Augmentation
-    typo_noise: bool = False
-    similar_words: bool = False
-    permutation: bool = False
-    use_ai: bool = False
-
-    # Hyper parameters
-    pretrained_model: str = "bert"  # bert, roberta, albert, electra
-    model_size: str = "base"  # small, base, large
-
-    epochs: int = 100
-    max_length: int = 128  # 32: num_scenario < 6, 64: 6 <= num_scenario < 10
-    batch_size: int = 32
-    instruct_csv: Optional[str] = None
-    offline: bool = True
-
-    # Encoder hyper parameters
-
-    hidden_dims: int = 512
-
-    num_layers: int = 1  # 1 ~ 3
-    output_dim: int = 512
-    num_heads: int = 8  # 2, 4, 8, 16, 32, 64 etc
-
-    encoding_type: str = 'mlp'  # mlp, sa (self-attention), mp(mean pool), mlp_vae
-
-    deterministic: bool = True
-    num_samples: int = 100
-
-    # decoder parameters
-    decoder_hidden_dims: int = 512
-    decoder_num_layers: int = 1
-    decoder_output_dim: int = 1
-    buffer_path: Optional[str] = "pcgrl_buffer/test_data.npz"
-
-    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
-    NUM_UPDATES: Optional[int] = None
-    MINIBATCH_SIZE: Optional[int] = None
-    ###########################################################################
-
-    # Eval rollout setting
-    random_agent: bool = False
-    eval_map_width: Optional[int] = 16
-    eval_max_board_scans: Optional[int] = 3
-    eval_randomize_map_shape: Optional[bool] = False
-    eval_seed: int = 0
-    n_eval_envs: int = 1
-    reevaluate: bool = True
-    n_eps: int = 2
-
-    # validation setting
-    reward_function_path: Optional[str] = None
-
-    # reward generation setting
-    bypass_reward_path: Optional[str] = None
-    bypass_train_path: Optional[str] = None
-
-    evaluator: str = "vit"  # 'vit', 'hr' (heuristic)
-
-    n_samples: int = 30
-
-    n_codegen_trials: int = 3
-    n_codefix_trials: int = 3
-
-@dataclass
-class CollectConfig(TrainConfig):
-    wandb_project: str = 'collect_traj'
-
-
-    traj_path: Optional[str] = None
-    traj_freq: int = 2  # Update basis
-    traj_max_envs: int = 3
-    traj_step_freq: int = 1  # Step basis
-
-    total_timesteps: int = int(2e7)
-
-    aug_type: str = "test"
-    embed_type: str = "test"
-    model: str = "conv"
-
-    nlp_input_dim: int = 0
 
 
 @dataclass
@@ -679,14 +459,6 @@ class CLIPTrainConfig(Config):
     overwrite: bool = False
     ckpt_freq: int = int(5)
 
-    # Game selection
-    include_dungeon: bool = True
-    include_pokemon: bool = False
-    include_sokoban: bool = False
-    include_doom: bool = False
-    include_doom2: bool = False
-    include_zelda: bool = False
-
     # Goal img path
     img_data_path: str = "./human_dataset"
     instruct: str = "scn-1_se-whole"
@@ -723,32 +495,16 @@ class CLIPEvalConfig(EvalConfig):
     wandb_project: str = 'eval_clip_pcgrl'
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
 
-
-
-
-
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
-cs.store(name="ma_config", node=MultiAgentConfig)
-cs.store(name="enjoy_ma_pcgrl", node=EnjoyMultiAgentConfig)
-cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
-cs.store(name="debug_pcgrl", node=DebugConfig)
-cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
-cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
-cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
-cs.store(name="sweep_pcgrl", node=SweepConfig)
-cs.store(name="collect_pcgrl", node=CollectConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs
 cs.store(name="train_clip", node=CLIPTrainConfig)
-
-# PCGRLLM Configs
-cs.store(name="train_pcgrllm", node=TrainLLMConfig)
 
 cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)

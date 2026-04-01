@@ -9,25 +9,14 @@ import yaml
 import imageio
 
 import wandb
-from conf.config import Config, EvoMapConfig, SweepConfig
+from conf.config import Config
+from conf.game_utils import parse_game_str
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, \
     gen_dummy_queued_state
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
 from models import ActorCritic, ActorCriticPCGRL, AutoEncoder, ConvForward, \
     ConvForward2, Dense, NCA, SeqNCA
-
-
-def get_exp_dir_evo_map(config: EvoMapConfig):
-    exp_dir = os.path.join(
-        'saves_evo_map',
-        config.problem,
-        f'pop-{config.evo_pop_size}_' +
-        f'parents-{config.n_parents}_' +
-        f'mut-{config.mut_rate}_' +
-        f'{config.seed}_{config.exp_name}',
-    )
-    return exp_dir
 
 
 def is_default_hiddims(config: Config):
@@ -37,11 +26,13 @@ def is_default_hiddims(config: Config):
 def get_exp_dir(config: Config):
     if config.env_name == 'PCGRL':
         ctrl_str = '_ctrl_' + '_'.join(config.ctrl_metrics) if len(config.ctrl_metrics) > 0 else ''
+        game_str = f'game-{config.game}_' if hasattr(config, 'game') and config.game else ''
         exp_dir = os.path.join(
             'saves',
             f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
             f'{config.activation}_w-{config.map_width}_' + \
             ('random-shape_' if config.randomize_map_shape else '') + \
+            f'{game_str}' +
             f'vrf-{config.vrf_size}_' + \
             (f'cp-{config.change_pct}_' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_' + \
@@ -80,6 +71,12 @@ def get_exp_dir(config: Config):
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
+    # ── game 약어 → include_* 자동 동기화 ──
+    if hasattr(config, 'game') and config.game:
+        includes = parse_game_str(config.game)
+        for key, val in includes.items():
+            setattr(config, key, val)
+
     if config.env_name == 'Candy':
         config.exp_dir = get_exp_dir(config)
         return config
@@ -109,17 +106,6 @@ def init_config(config: Config):
 
     return config
 
-
-def init_config_evo_map(config: EvoMapConfig):
-    config.arf_size = (2 * config.map_width -
-                       1 if config.arf_size == -1 else config.arf_size)
-
-    config.vrf_size = (2 * config.map_width -
-                       1 if config.vrf_size == -1 else config.vrf_size)
-
-    config.n_gpus = jax.local_device_count()
-    config.exp_dir = get_exp_dir_evo_map(config)
-    return config
 
 
 def get_ckpt_dir(config: Config):
@@ -256,12 +242,6 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
     return env, env_params
 
 
-def get_sweep_conf_path(cfg: SweepConfig):
-    conf_sweeps_dir = os.path.join('conf', 'sweeps')
-    # sweep_conf_path_json = os.path.join(conf_sweeps_dir, f'{cfg.name}.json')
-    sweep_conf_path_yaml = os.path.join(conf_sweeps_dir, f'{cfg.name}.yaml')
-    return sweep_conf_path_yaml
-
 
 def write_sweep_confs(_hypers: dict, eval_hypers: dict):
     conf_sweeps_dir = os.path.join('conf', 'sweeps')
@@ -274,18 +254,6 @@ def write_sweep_confs(_hypers: dict, eval_hypers: dict):
             f.write(yaml.dump(save_grid_hypers))
         # with open(os.path.join(conf_sweeps_dir, f'{name}.json'), 'w') as f:
         #     f.write(json.dumps(grid_hypers, indent=4))
-
-
-def load_sweep_hypers(cfg: SweepConfig):
-    sweep_conf_path = get_sweep_conf_path(cfg)
-    if os.path.exists(sweep_conf_path):
-        hypers = yaml.load(open(sweep_conf_path), Loader=yaml.FullLoader)
-        eval_hypers = hypers.pop('eval_hypers')
-    else:
-        raise FileNotFoundError(f"Could not find sweep config file {sweep_conf_path}")
-    return hypers, eval_hypers
-
-
 
 
 def make_sim_render_episode_single(config: Config, network, env: PCGRLEnv, env_params: PCGRLEnvParams, runner_state):

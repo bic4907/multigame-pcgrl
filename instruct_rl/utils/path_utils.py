@@ -7,7 +7,8 @@ from os.path import abspath, join
 
 from encoder.model import apply_encoder_model
 from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder
-from conf.config import Config, EvoMapConfig, SweepConfig, TrainConfig, EncoderConfig
+from conf.config import Config, TrainConfig, EncoderConfig
+from conf.game_utils import parse_game_str
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
@@ -17,18 +18,6 @@ from models import ActorCritic, ActorCriticPCGRL, AutoEncoder, ConvForward, Conv
 from instruct_rl.utils.log_utils import get_logger
 
 logger = get_logger(__file__)
-
-
-def get_exp_dir_evo_map(config: EvoMapConfig):
-    exp_dir = os.path.join(
-        'saves_evo_map',
-        config.problem,
-        f'pop-{config.evo_pop_size}_' +
-        f'parents-{config.n_parents}_' +
-        f'mut-{config.mut_rate}_' +
-        f'{config.seed}_{config.exp_name}',
-        )
-    return exp_dir
 
 
 def is_default_hiddims(config: Config):
@@ -83,6 +72,10 @@ def get_exp_group(config):
             'model': config.model,
             'exp': config.exp_name,
         }
+
+        # game 약어가 있으면 exp_group에 포함
+        if hasattr(config, 'game') and config.game:
+            config_dict['game'] = config.game
 
         enc_def_setting = EncoderConfig()
         tr_def_setting = TrainConfig()
@@ -175,6 +168,12 @@ def get_exp_dir(config):
 
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
+
+    # ── game 약어 → include_* 자동 동기화 ──
+    if hasattr(config, 'game') and config.game:
+        includes = parse_game_str(config.game)
+        for key, val in includes.items():
+            setattr(config, key, val)
 
     # ── MultiGameDataset 기반 CPCGRL / IPCGRL / VIPCGRL 모드 ─────────────
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:
@@ -363,19 +362,6 @@ def init_config(config: Config):
 
     return config
 
-
-def init_config_evo_map(config: EvoMapConfig):
-    config.arf_size = (2 * config.map_width -
-                       1 if config.arf_size == -1 else config.arf_size)
-
-    config.vrf_size = (2 * config.map_width -
-                       1 if config.vrf_size == -1 else config.vrf_size)
-
-    config.n_gpus = jax.local_device_count()
-    config.exp_dir = get_exp_dir_evo_map(config)
-    return config
-
-
 def get_ckpt_dir(config: Config):
     return os.path.join(config.exp_dir, 'ckpts')
 
@@ -387,10 +373,6 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
 
     elif 'PCGRL' in config.env_name:
         action_dim = env.rep.action_space.n
-        # First consider number of possible tiles
-        # action_dim = env.action_space(env_params).n
-        # action_dim = env.rep.per_tile_action_dim
-
     else:
         action_dim = env.num_actions
 
@@ -585,13 +567,6 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
         env = Candy(env_params)
 
     return env, env_params
-
-
-def get_sweep_conf_path(cfg: SweepConfig):
-    conf_sweeps_dir = os.path.join('conf', 'sweeps')
-    # sweep_conf_path_json = os.path.join(conf_sweeps_dir, f'{cfg.name}.json')
-    sweep_conf_path_yaml = os.path.join(conf_sweeps_dir, f'{cfg.name}.yaml')
-    return sweep_conf_path_yaml
 
 
 def write_sweep_confs(_hypers: dict, eval_hypers: dict):

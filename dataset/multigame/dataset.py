@@ -599,94 +599,112 @@ class MultiGameDataset:
 
     def _load_reward_annotations(self, annotations_dir: Path) -> None:
         """
-        reward_annotations 폴더에서 {game}_reward_annotations.csv를 읽어
-        각 (sample × reward_enum) 쌍을 독립 GameSample로 확장한다.
+        reward_annotations 폴더에서 CSV 파일을 읽어 해당 게임 샘플의 meta에
+        reward annotation 정보를 부착한다.
+        - {game}_reward_annotations.csv         : per-sample 실제 annotation
+        - {game}_reward_annotations_placeholder.csv : 게임 단위 더미 annotation
+            → conditions 접근 시 WARNING 로그 출력
+        reward_enum은 모든 게임 통일 1~5:
+          1=region / 2=path_length / 3=interactable / 4=hazard / 5=collectable
 
         CSV 포맷 (annotate.py 출력):
-          - sample_id  : _shorten_source_id() 결과 (doom/sokoban은 단축 형식)
-          - reward_enum: 0-indexed (0=region … 4=collectable)
-          - condition_i: reward_enum=i 인 행에 값 저장, 나머지는 공백
-
-        확장 결과 (N 샘플 × 5 enum → 5N GameSample):
-          sample.meta["reward_enum"]  = enum (CSV 값 그대로)
-          sample.meta["conditions"]   = {enum: value}  (해당 enum 값만)
+          - sample_id 컬럼: 실제 source_id (dungeon 키 예: "000000")
+          - reward_enum 컬럼: 0-indexed (0=region … 4=collectable) → +1 offset 적용
+          - condition 컬럼: 0-indexed (condition_0 … condition_4) → 1-indexed로 변환
         """
-        import dataclasses as _dc
-
-        def _shorten(source_id: str, game: str) -> str:
-            """annotate._shorten_source_id 와 동일한 변환 — CSV sample_id 대조용."""
-            if game in ("doom", "doom2"):
-                path_part, slice_idx = (
-                    source_id.rsplit("|", 1) if "|" in source_id else (source_id, "0")
-                )
-                p = Path(path_part)
-                version = "Doom2" if any("Doom2" in x for x in p.parts) else "Doom1"
-                return f"{version}_{p.stem}_{int(slice_idx):03d}"
-            if game == "sokoban":
-                path_part, lvl_idx = (
-                    source_id.rsplit("#", 1) if "#" in source_id else (source_id, "0")
-                )
-                p = Path(path_part)
-                difficulty = "hard" if any("hard" in x for x in p.parts) else "medium"
-                return f"{difficulty}_{p.stem}_{int(lvl_idx):03d}"
-            return source_id
-
-        # doom CSV는 doom + doom2 샘플을 모두 포함
-        _CSV_TO_GAMES: Dict[str, tuple] = {
-            "doom":    (GameTag.DOOM, "doom2"),
-            "zelda":   (GameTag.ZELDA,),
-            "sokoban": (GameTag.SOKOBAN,),
-            "pokemon": (GameTag.POKEMON,),
-            "dungeon": (GameTag.DUNGEON,),
-        }
-
-        for csv_game, sample_games in _CSV_TO_GAMES.items():
-            csv_path = annotations_dir / f"{csv_game}_reward_annotations.csv"
-            if not csv_path.exists():
-                continue
-
-            # sample_id → {reward_enum: value} 집계
-            sample_conds: Dict[str, Dict[int, float]] = {}
-            with open(csv_path, "r", encoding="utf-8") as f:
+        # ── dungeon: per-sample CSV ───────────────────────────────────────
+        dungeon_csv = annotations_dir / "dungeon_reward_annotations.csv"
+        if dungeon_csv.exists():
+            # sample_id가 dungeon source_id("000006") 형식으로 저장되어 있음
+            # 같은 sample_id에 대해 여러 reward_enum 행이 존재하므로 1:N 매핑
+            import dataclasses
+            annotation_map: Dict[str, List[Dict[str, Any]]] = {}
+            with open(dungeon_csv, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    sid = str(row["sample_id"])
-                    if sid not in sample_conds:
-                        sample_conds[sid] = {}
-                    r_enum = int(row["reward_enum"])
-                    for i in range(5):
-                        val = row.get(f"condition_{i}", "")
-                        if val not in ("", None):
-                            try:
-                                sample_conds[sid][r_enum] = float(val)
-                            except ValueError:
-                                pass
-
-            # 각 샘플을 enum별 복제본으로 확장 — 해당 게임만 처리
+                    sid = row["sample_id"]
+                    annotation_map.setdefault(sid, []).append(row)
+            attached = 0
             new_samples: List[GameSample] = []
-            expanded_count = 0
             for sample in self._samples:
-                if sample.game not in sample_games:
-                    new_samples.append(sample)
+                if sample.game != GameTag.DUNGEON:
                     continue
-                short_id = _shorten(sample.source_id, sample.game)
-                conds = sample_conds.get(short_id) or sample_conds.get(str(sample.source_id))
-                if conds is None:
-                    new_samples.append(sample)
+                ann_list = annotation_map.get(sample.source_id)
+                if ann_list is None:
                     continue
-                for enum, val in sorted(conds.items()):
-                    new_samples.append(_dc.replace(
-                        sample,
-                        meta={**sample.meta,
-                              "reward_enum": enum,
-                              "conditions":  {enum: val}},
-                    ))
-                expanded_count += 1
-            self._samples = new_samples
-
-            if expanded_count > 0:
-                logger.info("Reward annotations: expanded %d %s samples × %d enums",
-                            expanded_count, csv_game, len(next(iter(sample_conds.values()), {})))
+                for idx, ann in enumerate(ann_list):
+                    # 첫 번째 annotation은 원본 샘플에 부착
+                    if idx == 0:
+                        target = sample
+                    else:
+                        # 이후 annotation은 샘플을 복제하여 부착
+                        target = dataclasses.replace(
+                            sample,
+                            meta=dict(sample.meta),  # meta dict 독립 복사
+                        )
+                        new_samples.append(target)
+                    # CSV reward_enum은 0-indexed (0=region … 4=collectable) → 그대로 사용
+                    target.meta["reward_enum"] = int(ann["reward_enum"])
+                    target.meta["feature_name"] = ann["feature_name"]
+                    target.meta["sub_condition"] = ann["sub_condition"]
+                    conditions: Dict[int, float] = {}
+                    for i in range(0, 5):
+                        val = ann.get(f"condition_{i}", "")
+                        if val != "":
+                            conditions[i] = float(val)
+                    target.meta["conditions"] = conditions
+                    attached += 1
+            # 복제된 샘플들을 _samples에 추가
+            if new_samples:
+                self._samples.extend(new_samples)
+            if attached > 0:
+                logger.info("Reward annotations: attached to %d dungeon samples "
+                            "(%d original + %d duplicated)",
+                            attached, attached - len(new_samples), len(new_samples))
+        # ── 나머지 게임: *_placeholder.csv 읽어서 game-level 적용 ─────────
+        # 파일명에 _placeholder가 포함된 CSV를 자동 탐지
+        for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):
+            game_name = ph_csv.name.replace("_reward_annotations_placeholder.csv", "")
+            # CSV에서 feature 목록 파싱
+            ph_features: list[Dict[str, Any]] = []
+            with open(ph_csv, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    reward_enum = int(row["reward_enum"])
+                    conditions: Dict[int, float] = {}
+                    for i in range(1, 6):
+                        val = row.get(f"condition_{i}", "")
+                        if val != "":
+                            conditions[i] = float(val)
+                    ph_features.append({
+                        "reward_enum":  reward_enum,
+                        "feature_name": row["feature_name"],
+                        "sub_condition": row["sub_condition"],
+                        "conditions":   conditions,
+                    })
+            if not ph_features:
+                continue
+            # 모든 조건을 합친 dict (placeholder 전체를 한 번에)
+            all_conditions: Dict[int, float] = {}
+            for feat in ph_features:
+                all_conditions.update(feat["conditions"])
+            game_attached = 0
+            for sample in self._samples:
+                if sample.game != game_name:
+                    continue
+                # 기본 reward_enum = 첫 번째 feature
+                sample.meta["reward_enum"]  = ph_features[0]["reward_enum"]
+                sample.meta["feature_name"] = ph_features[0]["feature_name"]
+                sample.meta["sub_condition"] = ph_features[0]["sub_condition"]
+                sample.meta["conditions"] = _WarningConditionsDict(
+                    all_conditions,
+                    game=game_name,
+                    logger=logger,
+                )
+                game_attached += 1
+            if game_attached > 0:
+                logger.info("Reward annotations (placeholder): attached to %d %s samples",
+                            game_attached, game_name)
 
 
     def _apply_mapping(self, sample: GameSample) -> GameSample:
@@ -764,7 +782,7 @@ class MultiGameDataset:
 
     # ── reward annotation 기반 필터 ──────────────────────────────────────────
     def by_reward_enum(self, reward_enum: int) -> List[GameSample]:
-        """reward_enum 값으로 필터링 (0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable)."""
+        """reward_enum 값으로 필터링 (1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction)."""
         return [self._apply_mapping(s)
                 for s in self._samples
                 if s.meta.get("reward_enum") == reward_enum]

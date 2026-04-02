@@ -40,7 +40,7 @@ _CHAR_MAP: dict[str, int] = {
     " ": DoomTile.EMPTY,
     "X": DoomTile.WALL,
     ".": DoomTile.FLOOR,
-    ",": DoomTile.FLOOR,
+    ",": DoomTile.SPAWN,
     "E": DoomTile.ENEMY,
     "W": DoomTile.ITEM,
     "A": DoomTile.ITEM,

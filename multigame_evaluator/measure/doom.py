@@ -57,6 +57,7 @@ DoomWall = jnp.array([
 ], dtype=jnp.int32)
 
 DoomObject = jnp.array([
+    DoomTile.SPAWN,
     DoomTile.DOOR,
     DoomTile.DANGER,
 ], dtype=jnp.int32)

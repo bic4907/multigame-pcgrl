@@ -59,7 +59,7 @@ _GAME_CONFIG = {
         "mob":              doom_m.DoomMob,
         "item":             doom_m.DoomItem,
         "sub_cond_wall":    "wall+empty",
-        "sub_cond_object":  "door+danger",
+        "sub_cond_object":  "spawn+door+danger",
         "sub_cond_mob":     "enemy",
         "sub_cond_item":    "item",
     },
@@ -279,9 +279,9 @@ def _make_rows(
     enum_specs = [
         (0, "region",             "condition_0", 3, ""),
         (1, "path_length",        "condition_1", 4, ""),
-        (2, "interactable_count", "condition_2", 5, sc_object),
-        (3, "hazard_count",       "condition_3", 6, sc_mob),
-        (4, "collectable_count",  "condition_4", 7, sc_item),
+        (2, "interactable_count", "condition_2", 6, sc_object),
+        (3, "hazard_count",       "condition_3", 7, sc_mob),
+        (4, "collectable_count",  "condition_4", 8, sc_item),
     ]
 
     rows: List[dict] = []
@@ -293,7 +293,7 @@ def _make_rows(
             row: dict = {
                 "key":           f"{key:06d}",
                 "instruction":   instruction,
-                "level_id":      order_idx,
+                "level_id":      f"{order_idx:06d}",
                 "sample_id":     source_id,
                 "reward_enum":   reward_enum,
                 "feature_name":  feature_name,

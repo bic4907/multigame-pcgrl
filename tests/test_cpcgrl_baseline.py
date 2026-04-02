@@ -136,7 +136,7 @@ class TestCPCGRLDatasetLoading:
         assert train_inst.reward_i.shape[1] == 1
         # condition shape: (N, 9)
         assert train_inst.condition.ndim == 2
-        assert train_inst.condition.shape[1] == 9
+        assert train_inst.condition.shape[1] == 5
         # 모든 reward_enum 값이 0 (region)
         assert (train_inst.reward_i == 0).all()
 

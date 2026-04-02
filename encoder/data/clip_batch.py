@@ -125,10 +125,10 @@ class CLIPDatasetBuilder:
         reward_cond_list = []
         for s in samples:
             game_idx = self.game2idx.get(s.game, -1)  # Get game index
-            reward_enum = s.meta.get("reward_enum", None)
-            conditions = s.meta.get("conditions", {})  # e.g. {2: 40.0}
-            # Extract value from conditions dict (e.g., 40.0 from {2: 40.0})
-            condition_value = list(conditions.values())[0] if conditions else None
+            reward_enum = s.meta.get("reward_enum", 0)
+            conditions = s.meta.get("conditions", {})
+            # reward_enum에 해당하는 condition 값을 사용 (없으면 첫 번째 값 fallback)
+            condition_value = conditions.get(reward_enum, next(iter(conditions.values()), None))
             # Create tuple: (game_idx, reward_enum, condition_value)
             reward_cond_tuple = (game_idx, int(reward_enum), condition_value)
             reward_cond_list.append(reward_cond_tuple)
@@ -175,9 +175,9 @@ class CLIPDatasetBuilder:
         logger.info(f"Train: {is_train.sum()} samples, Val: {(~is_train).sum()} samples")
 
         # ── 디코더 학습용 타겟 ──
-        # reward_enum: 1-based → 0-indexed (0~5)
+        # reward_enum: 이미 0-indexed (0=region … 4=collectable)
         reward_enum_targets = np.array([
-            int(rc[1]) - 1 for rc in reward_cond_list   # 1-based → 0-indexed
+            int(rc[1]) for rc in reward_cond_list   # 0-indexed 그대로 사용
         ], dtype=np.int32)
         condition_targets_raw = np.array([
             float(rc[2]) if rc[2] is not None else 0.0

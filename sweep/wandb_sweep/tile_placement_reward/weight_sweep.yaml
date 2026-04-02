@@ -1,0 +1,27 @@
+program: train_cpcgrl.py
+method: grid
+metric:
+  goal: maximize
+  name: Train/ep_return
+parameters:
+  placement_w_amount:
+    values: [0.8, 1.0, 1.2]
+  placement_w_cluster:
+    values: [0.0, 0.05, 0.1]
+  placement_w_access:
+    values: [0.0, 0.1, 0.2]
+  placement_w_spread:
+    values: [0.0, 0.1, 0.2]
+  game:
+    value: 'dg'
+  dataset_reward_enum:
+    value: 2
+  n_envs:
+    values: [600]
+  overwrite:
+    value: true
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+  - "overwrite=true"

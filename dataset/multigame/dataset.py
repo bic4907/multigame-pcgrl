@@ -602,50 +602,78 @@ class MultiGameDataset:
         reward_annotations 폴더에서 CSV 파일을 읽어 해당 게임 샘플의 meta에
         reward annotation 정보를 부착한다.
         - {game}_reward_annotations.csv         : per-sample 실제 annotation
+            → 각 샘플을 reward 수만큼 복제하여 reward_enum별 샘플 생성
         - {game}_reward_annotations_placeholder.csv : 게임 단위 더미 annotation
             → conditions 접근 시 WARNING 로그 출력
-        reward_enum은 모든 게임 통일 1~5:
-          1=region / 2=path_length / 3=interactable / 4=hazard / 5=collectable
-
-        CSV 포맷 (annotate.py 출력):
-          - sample_id 컬럼: 실제 source_id (dungeon 키 예: "000000")
-          - reward_enum 컬럼: 0-indexed (0=region … 4=collectable) → +1 offset 적용
-          - condition 컬럼: 0-indexed (condition_0 … condition_4) → 1-indexed로 변환
         """
-        # ── dungeon: per-sample CSV ───────────────────────────────────────
-        dungeon_csv = annotations_dir / "dungeon_reward_annotations.csv"
-        if dungeon_csv.exists():
-            # key가 dungeon source_id("000006") 형식으로 저장되어 있음
-            annotation_map: Dict[str, Dict[str, Any]] = {}
-            with open(dungeon_csv, "r", encoding="utf-8") as f:
+        import dataclasses
+
+        # ── per-sample CSV가 있는 게임: key 순서 기반으로 샘플을 reward 수만큼 복제 ──
+        # CSV 구조: key 순서로 정렬 시 [reward0: sample0..N-1, reward1: sample0..N-1, ...]
+        for csv_path in sorted(annotations_dir.glob("*_reward_annotations.csv")):
+            game_name = csv_path.name.replace("_reward_annotations.csv", "")
+
+            # key 순서대로 모든 행 로드
+            all_rows: List[Dict[str, Any]] = []
+            with open(csv_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    annotation_map[row["key"]] = row
+                    all_rows.append(row)
+            all_rows.sort(key=lambda r: r["key"])
+
+            # 이 게임의 로드된 샘플 목록 (순서 유지)
+            game_samples = [s for s in self._samples if s.game == game_name]
+            n_samples = len(game_samples)
+            if n_samples == 0 or len(all_rows) == 0:
+                continue
+
+            # CSV 행 수 / 샘플 수 = reward 수
+            n_rewards = len(all_rows) // n_samples
+            if n_rewards == 0:
+                logger.warning("Reward annotations [%s]: CSV rows (%d) < samples (%d), skipped",
+                               game_name, len(all_rows), n_samples)
+                continue
+
+            # sample_index i, reward_block r → CSV row: all_rows[r * n_samples + i]
             attached = 0
-            for sample in self._samples:
-                if sample.game != GameTag.DUNGEON:
-                    continue
-                ann = annotation_map.get(sample.source_id)
-                if ann is None:
-                    continue
-                # CSV reward_enum은 0-indexed (0=region … 4=collectable) → 그대로 사용
-                sample.meta["reward_enum"] = int(ann["reward_enum"])
-                sample.meta["feature_name"] = ann["feature_name"]
-                sample.meta["sub_condition"] = ann["sub_condition"]
-                conditions: Dict[int, float] = {}
-                for i in range(0, 5):
-                    val = ann.get(f"condition_{i}", "")
-                    if val != "":
-                        conditions[i] = float(val)
-                sample.meta["conditions"] = conditions
-                attached += 1
+            new_samples: List[GameSample] = []
+            for i, sample in enumerate(game_samples):
+                for r in range(n_rewards):
+                    row_idx = r * n_samples + i
+                    if row_idx >= len(all_rows):
+                        break
+                    ann = all_rows[row_idx]
+                    if r == 0:
+                        target = sample
+                    else:
+                        target = dataclasses.replace(sample, meta=dict(sample.meta))
+                        new_samples.append(target)
+                    target.meta["key"] = ann["key"]
+                    target.meta["reward_enum"] = int(ann["reward_enum"])
+                    target.meta["feature_name"] = ann["feature_name"]
+                    target.meta["sub_condition"] = ann["sub_condition"]
+                    conditions: Dict[int, float] = {}
+                    for ci in range(0, 5):
+                        val = ann.get(f"condition_{ci}", "")
+                        if val != "":
+                            conditions[ci] = float(val)
+                    target.meta["conditions"] = conditions
+                    attached += 1
+
+            if new_samples:
+                self._samples.extend(new_samples)
             if attached > 0:
-                logger.info("Reward annotations: attached to %d dungeon samples", attached)
-        # ── 나머지 게임: *_placeholder.csv 읽어서 game-level 적용 ─────────
-        # 파일명에 _placeholder가 포함된 CSV를 자동 탐지
+                logger.info("Reward annotations [%s]: %d samples × %d rewards = %d attached "
+                            "(%d original + %d duplicated)",
+                            game_name, n_samples, n_rewards, attached,
+                            n_samples, len(new_samples))
+
+        # ── placeholder CSV: per-sample CSV가 없는 게임에만 적용 ──────────
         for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):
             game_name = ph_csv.name.replace("_reward_annotations_placeholder.csv", "")
-            # CSV에서 feature 목록 파싱
+            # per-sample CSV가 이미 있으면 스킵
+            if (annotations_dir / f"{game_name}_reward_annotations.csv").exists():
+                continue
             ph_features: list[Dict[str, Any]] = []
             with open(ph_csv, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -664,7 +692,6 @@ class MultiGameDataset:
                     })
             if not ph_features:
                 continue
-            # 모든 조건을 합친 dict (placeholder 전체를 한 번에)
             all_conditions: Dict[int, float] = {}
             for feat in ph_features:
                 all_conditions.update(feat["conditions"])
@@ -672,7 +699,6 @@ class MultiGameDataset:
             for sample in self._samples:
                 if sample.game != game_name:
                     continue
-                # 기본 reward_enum = 첫 번째 feature
                 sample.meta["reward_enum"]  = ph_features[0]["reward_enum"]
                 sample.meta["feature_name"] = ph_features[0]["feature_name"]
                 sample.meta["sub_condition"] = ph_features[0]["sub_condition"]

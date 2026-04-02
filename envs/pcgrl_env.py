@@ -442,7 +442,7 @@ class PCGRLEnv(Environment):
             obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=nlp_obs, input_ids=None,
                            attention_mask=None, pixel_values=None)
         elif self.vec_input_dim > 0:
-            vec_obs = jnp.zeros(8)
+            vec_obs = jnp.zeros(self.vec_input_dim)
             obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=vec_obs, input_ids=None, attention_mask=None, pixel_values=None)
         elif self.clip_input_channel > 0:
             nlp_obs = jnp.zeros(64)
@@ -581,7 +581,7 @@ class PCGRLEnv(Environment):
             nlp_obs = jnp.zeros((1, env_params.nlp_input_dim))
             return PCGRLObs(map_x, map_x, ctrl_x, nlp_obs, None, None, None)
         elif env_params.vec_input_dim > 0:
-            vec_obs = jnp.zeros((1, 8))
+            vec_obs = jnp.zeros((1, env_params.vec_input_dim))
             return PCGRLObs(map_x, map_x, ctrl_x, vec_obs, None, None, None)
         elif env_params.clip_input_channel > 0:
             nlp_obs = jnp.zeros((1, 64))

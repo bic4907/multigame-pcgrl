@@ -42,10 +42,10 @@ _DEFAULT_DUNGEON_ROOT = (
     Path(__file__).parent.parent.parent / "dungeon_level_dataset"
 )
 
-# dataset/annotation/legacy/dungeon_reward_annotations.csv
+# dataset/reward_annotations/legacy/dungeon_reward_annotations.csv
 _LEGACY_ANNOT_PATH = (
     Path(__file__).parent.parent.parent
-    / "annotation" / "legacy" / "dungeon_reward_annotations.csv"
+    / "reward_annotations" / "legacy" / "dungeon_reward_annotations.csv"
 )
 
 # ── 전처리 상수 ─────────────────────────────────────────────────────────────────

@@ -18,6 +18,10 @@ def get_reward_batch(
     prev_env_map: chex.Array,
     curr_env_map: chex.Array,
     map_size: chex.Array = 16,
+    placement_w_amount: float = 1.0,
+    placement_w_cluster: float = 0.0,
+    placement_w_access: float = 0.0,
+    placement_w_spread: float = 0.0,
 ) -> chex.Array:
     """Compute batch rewards by mapping indices to reward functions and executing them in parallel.
 
@@ -33,7 +37,6 @@ def get_reward_batch(
     """
     # List of reward functions
     reward_funcs = [
-        # 0: region
         lambda cond, prev_map, curr_map: get_region_reward(
             prev_map, curr_map, cond[0]
         ) * RewardWeight.REGION + RewardBias.REGION,
@@ -45,17 +48,23 @@ def get_reward_batch(
 
         # 2: interactive placement (개수 + cluster/access/spread)
         lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
-            prev_map, curr_map, cond[2], tile_name="interactive"
+            prev_map, curr_map, cond[2], tile_name="interactive",
+            w_amount=placement_w_amount, w_cluster=placement_w_cluster,
+            w_access=placement_w_access, w_spread=placement_w_spread,
         ) * RewardWeight.MONSTER,
 
         # 3: hazard placement
         lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
-            prev_map, curr_map, cond[3], tile_name="hazard"
+            prev_map, curr_map, cond[3], tile_name="hazard",
+            w_amount=placement_w_amount, w_cluster=placement_w_cluster,
+            w_access=placement_w_access, w_spread=placement_w_spread,
         ) * RewardWeight.MONSTER,
 
         # 4: collectable placement
         lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
-            prev_map, curr_map, cond[4], tile_name="collectable"
+            prev_map, curr_map, cond[4], tile_name="collectable",
+            w_amount=placement_w_amount, w_cluster=placement_w_cluster,
+            w_access=placement_w_access, w_spread=placement_w_spread,
         ) * RewardWeight.MONSTER,
     ]
 

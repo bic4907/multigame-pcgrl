@@ -149,11 +149,14 @@ class Dungeon3Problem(Problem):
 
     @partial(jax.jit, static_argnums=(0, 3))
     def get_cont_obs(self, env_map, condition, raw_obs: bool = False) -> jnp.array:
-        # Change the index number when the condition is changed
-        _condition = condition[:4]
+        """condition (5,) → observation (5,) 변환.
 
-        mask = jnp.not_equal(_condition, -1).astype(jnp.float32)[:4]
-        stats = jnp.full_like(_condition, -1).astype(jnp.float32)[:4]
+        condition 인덱스:
+          0=region, 1=path_length, 2=block, 3=bat_amount, 4=bat_direction
+        """
+        _condition = condition[:5]
+        mask = jnp.not_equal(_condition, -1).astype(jnp.float32)
+        stats = jnp.full(5, -1.0)
 
         # Start of diameter and longest path
         flood_regions_net = FloodRegions()
@@ -177,28 +180,13 @@ class Dungeon3Problem(Problem):
         n_bat = jnp.sum(env_map == Dungeon3Tiles.BAT)
         stats = stats.at[3].set(n_bat)
 
+        # condition[4] (bat_direction 등)도 수치로 그대로 사용
+        stats = stats.at[4].set(_condition[4])
 
-        # Type 1 (the others)
         if raw_obs is False:
             direction = jnp.sign(_condition - stats)
         else:
             direction = _condition
 
-        obs = jnp.where(mask == 1, direction, 0)[:4]
-
-        onehot_cond = condition[4:5]
-
-        def to_onehot(index, num_classes=4):
-            """convert index to num_classes size one-hot vector"""
-            return jnp.eye(num_classes)[index]
-
-        expanded_onehot = jax.lax.cond(
-            jnp.equal(onehot_cond[0], -1),
-            lambda _: jnp.zeros((4,)),
-            lambda _: to_onehot(onehot_cond[0].astype(jnp.int32)),
-            operand=None
-        )
-
-        obs = jnp.concatenate((obs, expanded_onehot), axis=-1)
-
+        obs = jnp.where(mask == 1, direction, 0.0)
         return obs

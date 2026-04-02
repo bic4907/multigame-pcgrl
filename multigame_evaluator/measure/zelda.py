@@ -13,12 +13,12 @@ Zelda 게임에 맞는 measure 함수 모음.
 5  START   - 플레이어 시작점 (Object)
 6  MOB     - 적 (Mob)
 7  OBJECT  - 아이템 / 오브젝트 (Item)
-8  HAZARD  - 위험 지형 (막힘)
+8  FLOOD   - 물/용암 위험 지형 (막힘, 구 HAZARD)
 
 분류
 --------------------------------------------------------------
 Empty   : FLOOR                  (통과 가능 지형)
-Wall    : EMPTY, WALL, HAZARD    (막힘)
+Wall    : EMPTY, WALL, FLOOD     (막힘)
 Object  : BLOCK, DOOR, START     (구조물)
 Mob     : MOB                    (적)
 Item    : OBJECT                 (획득 가능)
@@ -45,7 +45,7 @@ class ZeldaTile(IntEnum):
     START  = 5
     MOB    = 6
     OBJECT = 7
-    HAZARD = 8
+    FLOOD  = 8
 
 
 ZeldaEmpty = jnp.array([
@@ -55,7 +55,7 @@ ZeldaEmpty = jnp.array([
 ZeldaWall = jnp.array([
     ZeldaTile.EMPTY,
     ZeldaTile.WALL,
-    ZeldaTile.HAZARD,
+    ZeldaTile.FLOOD,
 ], dtype=jnp.int32)
 
 ZeldaObject = jnp.array([

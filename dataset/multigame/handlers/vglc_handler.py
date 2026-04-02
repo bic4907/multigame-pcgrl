@@ -133,7 +133,10 @@ class VGLCGameHandler(BaseGameHandler):
         array = self._preprocessor.transform(char_grid)
         array = enforce_top_left_16x16(array, game=self._game_tag, source_id=source_id)
         char_grid = enforce_char_grid_top_left_16x16(char_grid)
-        
+
+        if hasattr(self._preprocessor, 'postprocess_array'):
+            array = self._preprocessor.postprocess_array(array)
+
         sample = GameSample(
             game=self._game_tag,
             source_id=source_id,

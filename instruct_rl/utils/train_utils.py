@@ -153,7 +153,7 @@ def make_train(
         if encoder_params is not None:
             log_encoder_params_summary(encoder_params, config)
             runner_state = apply_encoder_params(runner_state, encoder_params, config)
-        else:
+        elif getattr(config, "use_clip", False) or getattr(config, "use_nlp", False):
             log_encoder_params_summary(encoder_params, config)
 
         multiple_handler = create_log_handler(
@@ -271,6 +271,10 @@ def make_train(
                         prev_env_state.env_state.env_map,
                         env_state.env_state.env_map,
                         map_size=config.map_width,
+                        placement_w_amount=config.placement_w_amount,
+                        placement_w_cluster=config.placement_w_cluster,
+                        placement_w_access=config.placement_w_access,
+                        placement_w_spread=config.placement_w_spread,
                     )
                     reward_batch = cond_reward_batch
                 elif train_inst is not None:
@@ -280,6 +284,10 @@ def make_train(
                         prev_env_state.env_state.env_map,
                         env_state.env_state.env_map,
                         map_size=config.map_width,
+                        placement_w_amount=config.placement_w_amount,
+                        placement_w_cluster=config.placement_w_cluster,
+                        placement_w_access=config.placement_w_access,
+                        placement_w_spread=config.placement_w_spread,
                     )
                     reward_batch = cond_reward_batch
                 else:
@@ -488,6 +496,10 @@ def make_train(
                             state.env_state.env_map,
                             next_state.env_state.env_map,
                             map_size=config.map_width,
+                            placement_w_amount=config.placement_w_amount,
+                            placement_w_cluster=config.placement_w_cluster,
+                            placement_w_access=config.placement_w_access,
+                            placement_w_spread=config.placement_w_spread,
                         )
                         reward_batch = cond_reward_batch
                     elif test_inst is not None:
@@ -497,6 +509,10 @@ def make_train(
                             state.env_state.env_map,
                             next_state.env_state.env_map,
                             map_size=config.map_width,
+                            placement_w_amount=config.placement_w_amount,
+                            placement_w_cluster=config.placement_w_cluster,
+                            placement_w_access=config.placement_w_access,
+                            placement_w_spread=config.placement_w_spread,
                         )
                         reward_batch = cond_reward_batch
                     else:
@@ -675,3 +691,6 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
             main_chunk(config, rng, exp_dir, inject_obs_fn=inject_obs_fn, inject_reward_fn=inject_reward_fn)
     else:
         main_chunk(config, rng, exp_dir, inject_obs_fn=inject_obs_fn, inject_reward_fn=inject_reward_fn)
+
+    if wandb.run:
+        wandb.finish()

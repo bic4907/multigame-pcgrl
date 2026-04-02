@@ -147,6 +147,12 @@ class Config:
     dataset_reward_enum: Optional[int] = None   # e.g. 0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable
     dataset_train_ratio: float = 0.95
 
+    # Multigame tile placement reward 가중치 (sweep 대상)
+    placement_w_amount: float = 0.4
+    placement_w_cluster: float = 0.2
+    placement_w_access: float = 0.2
+    placement_w_spread: float = 0.2
+
 @dataclass
 class CLIPConfig:
     freeze_text_enc: bool = True
@@ -220,13 +226,16 @@ class CPCGRLConfig(TrainConfig):
     dataset_game: Optional[str] = "dungeon"
     dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
+    # condition 값 기반 필터: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
+    # 여러 필터는 쉼표 구분: "enum_0_min_3_max_10,enum_2_max_50"
+    dataset_condition_filter: Optional[str] = None
 
     vec_cont: bool = True
     raw_obs: bool = True
     model: str = "contconv"
     use_nlp: bool = False
     use_clip: bool = False
-    vec_input_dim: Optional[int] = 9
+    vec_input_dim: Optional[int] = 5
     nlp_input_dim: int = 0
 
     instruct: Optional[str] = None

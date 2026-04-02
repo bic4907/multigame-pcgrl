@@ -147,6 +147,12 @@ class Config:
     dataset_reward_enum: Optional[int] = None   # e.g. 0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable
     dataset_train_ratio: float = 0.95
 
+    # Multigame tile placement reward 가중치 (sweep 대상)
+    placement_w_amount: float = 0.4
+    placement_w_cluster: float = 0.2
+    placement_w_access: float = 0.2
+    placement_w_spread: float = 0.2
+
 @dataclass
 class CLIPConfig:
     freeze_text_enc: bool = True

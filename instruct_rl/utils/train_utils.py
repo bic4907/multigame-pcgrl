@@ -153,7 +153,7 @@ def make_train(
         if encoder_params is not None:
             log_encoder_params_summary(encoder_params, config)
             runner_state = apply_encoder_params(runner_state, encoder_params, config)
-        else:
+        elif getattr(config, "use_clip", False) or getattr(config, "use_nlp", False):
             log_encoder_params_summary(encoder_params, config)
 
         multiple_handler = create_log_handler(

@@ -63,6 +63,14 @@ def load_dataset_instruct(config):
     # reward annotation이 있는 샘플만
     samples = [s for s in samples if "reward_enum" in s.meta and "conditions" in s.meta]
 
+    # condition 값 기반 필터링
+    cond_filter = getattr(config, "dataset_condition_filter", None)
+    if cond_filter:
+        filters = _parse_condition_filters(cond_filter)
+        before = len(samples)
+        samples = _apply_condition_filters(samples, filters)
+        logger.info(f"[CPCGRL] Condition filter '{cond_filter}': {before} → {len(samples)} samples")
+
     assert len(samples) > 0, (
         f"No samples found for game={config.dataset_game}, "
         f"reward_enum={config.dataset_reward_enum}. "
@@ -282,7 +290,7 @@ def _compute_clip_embeddings(sample_list, config):
 def _compute_bert_embeddings(sample_list, nlp_input_dim):
     """BERT를 사용하여 instruction 텍스트에서 임베딩을 계산한다.
 
-    instruction이 None인 샘플은 zeros 임베딩으로 대체한다.
+    instruction이 None인 샘플은 zeros 임베딩으로 대체된다.
     """
     import numpy as np
 
@@ -359,14 +367,17 @@ def _log_dataset_summary(config, samples):
     # condition 값 통계
     for re_val in sorted(re_counter.keys()):
         re_samples = [s for s in samples if s.meta["reward_enum"] == re_val]
-        cond_vals = set()
+        cond_vals = []
         for s in re_samples:
             conds = s.meta.get("conditions", {})
             val = conds.get(re_val, conds.get(str(re_val), None))
             if val is not None:
-                cond_vals.add(float(val))
+                cond_vals.append(float(val))
         if cond_vals:
-            logger.info(f"    → condition values: {sorted(cond_vals)}")
+            import numpy as _np
+            arr = _np.array(cond_vals)
+            logger.info(f"    → condition stats: min={arr.min():.1f}, max={arr.max():.1f}, "
+                        f"mean={arr.mean():.2f}, std={arr.std():.2f}, n_unique={len(set(cond_vals))}")
 
     logger.info(f"  Train Ratio    : {config.dataset_train_ratio}")
     logger.info("=" * 70)
@@ -381,4 +392,79 @@ def _log_split_summary(train_samples, test_samples, train_inst):
     logger.info(f"  Test  : {len(test_samples)} samples  {dict(sorted(test_re.items()))}")
     logger.info(f"  Instruct reward_i shape : {train_inst.reward_i.shape}")
     logger.info(f"  Instruct condition shape: {train_inst.condition.shape}")
+
+
+# ── Condition 필터 유틸 ────────────────────────────────────────────────────────
+
+import re as _re
+from dataclasses import dataclass as _dataclass
+from typing import Optional as _Optional, List as _List
+
+
+@_dataclass
+class _ConditionFilter:
+    """단일 condition 필터 조건."""
+    enum_idx: int                   # condition index (0~4)
+    min_val: _Optional[float] = None  # inclusive lower bound
+    max_val: _Optional[float] = None  # inclusive upper bound
+
+
+def _parse_condition_filters(filter_str: str) -> _List[_ConditionFilter]:
+    """필터 문자열을 파싱한다.
+
+    포맷 (쉼표로 여러 개 구분):
+        enum_{i}_min_{lo}_max_{hi}   — lo ≤ condition[i] ≤ hi
+        enum_{i}_min_{lo}            — lo ≤ condition[i]
+        enum_{i}_max_{hi}            — condition[i] ≤ hi
+
+    Examples
+    --------
+        "enum_0_min_3_max_10"        → condition[0] in [3, 10]
+        "enum_0_min_3_max_10,enum_2_max_50"  → 두 필터 AND
+    """
+    pattern = _re.compile(
+        r"enum_(\d+)"
+        r"(?:_min_([\d.]+))?"
+        r"(?:_max_([\d.]+))?"
+    )
+    filters = []
+    for token in filter_str.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        m = pattern.fullmatch(token)
+        if m is None:
+            raise ValueError(
+                f"Invalid condition filter: '{token}'. "
+                f"Expected format: enum_{{i}}_min_{{lo}}_max_{{hi}} "
+                f"(min/max are each optional but at least one required)"
+            )
+        idx = int(m.group(1))
+        min_val = float(m.group(2)) if m.group(2) is not None else None
+        max_val = float(m.group(3)) if m.group(3) is not None else None
+        if min_val is None and max_val is None:
+            raise ValueError(
+                f"Condition filter 'enum_{idx}' has neither min nor max — "
+                f"at least one bound is required."
+            )
+        filters.append(_ConditionFilter(enum_idx=idx, min_val=min_val, max_val=max_val))
+    return filters
+
+
+def _apply_condition_filters(samples, filters: _List[_ConditionFilter]):
+    """필터 리스트를 AND 조합으로 적용하여 샘플을 필터링한다."""
+    for f in filters:
+        def _keep(s, _f=f):
+            conds = s.meta.get("conditions", {})
+            val = conds.get(_f.enum_idx, conds.get(str(_f.enum_idx), None))
+            if val is None:
+                return False
+            val = float(val)
+            if _f.min_val is not None and val < _f.min_val:
+                return False
+            if _f.max_val is not None and val > _f.max_val:
+                return False
+            return True
+        samples = [s for s in samples if _keep(s)]
+    return samples
 

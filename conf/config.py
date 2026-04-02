@@ -226,6 +226,9 @@ class CPCGRLConfig(TrainConfig):
     dataset_game: Optional[str] = "dungeon"
     dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
+    # condition 값 기반 필터: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
+    # 여러 필터는 쉼표 구분: "enum_0_min_3_max_10,enum_2_max_50"
+    dataset_condition_filter: Optional[str] = None
 
     vec_cont: bool = True
     raw_obs: bool = True

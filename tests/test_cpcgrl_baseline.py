@@ -47,7 +47,7 @@ def _make_cpcgrl_config(**overrides):
         ckpt_freq=1,
         render_freq=-1,
         dataset_game="dungeon",
-        dataset_reward_enum=1,
+        dataset_reward_enum=0,
         exp_name="test_cpcgrl",
     )
     defaults.update(overrides)
@@ -78,7 +78,7 @@ class TestCPCGRLConfig:
         c = CPCGRLConfig()
         assert c.problem == "multigame"
         assert c.dataset_game == "dungeon"
-        assert c.dataset_reward_enum == 1
+        assert c.dataset_reward_enum == 0
         assert c.vec_cont is True
         assert c.raw_obs is True
         assert c.model == "contconv"
@@ -98,7 +98,7 @@ class TestCPCGRLConfig:
         assert c.exp_dir is not None
         assert "contconv" in c.exp_dir
         assert "game-dungeon" in c.exp_dir
-        assert "re-1" in c.exp_dir
+        assert "re-0" in c.exp_dir
         assert "s-99" in c.exp_dir
 
     def test_cpcgrl_forces_vec_cont(self):
@@ -137,8 +137,8 @@ class TestCPCGRLDatasetLoading:
         # condition shape: (N, 9)
         assert train_inst.condition.ndim == 2
         assert train_inst.condition.shape[1] == 9
-        # 모든 reward_enum 값이 1 (region)
-        assert (train_inst.reward_i == 1).all()
+        # 모든 reward_enum 값이 0 (region)
+        assert (train_inst.reward_i == 0).all()
 
     def test_load_dataset_different_reward_enum(self):
         """다른 reward_enum 으로도 로딩이 되는지 확인."""
@@ -146,13 +146,13 @@ class TestCPCGRLDatasetLoading:
 
         config = _make_cpcgrl_config(
             dataset_game="dungeon",
-            dataset_reward_enum=2,  # path_length
+            dataset_reward_enum=1,  # path_length
             seed=0,
         )
 
         train_inst, test_inst = load_dataset_instruct(config)
         assert train_inst is not None
-        assert (train_inst.reward_i == 2).all()
+        assert (train_inst.reward_i == 1).all()
 
     def test_instruct_condition_dtype(self, cpcgrl_config):
         """condition 이 float32, reward_i 가 int32 인지 확인."""

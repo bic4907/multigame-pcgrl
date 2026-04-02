@@ -126,13 +126,17 @@ class _ViewerHandler(BaseHTTPRequestHandler):
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
 
     def _serve_tile_image(self, req_path: str) -> None:
-        # Serve only files under dataset/tile_ims.
+        # Serve only files under dataset/tile_ims (subdirectories allowed).
         name = req_path[len("/tile_ims/"):].strip()
-        if not name or "/" in name or "\\" in name:
+        if not name:
             self.send_error(HTTPStatus.BAD_REQUEST, "Invalid tile image path")
             return
 
-        path = _TILE_IMS_DIR / name
+        path = (_TILE_IMS_DIR / name).resolve()
+        # path traversal 방지: tile_ims 디렉토리 밖으로 나가는 경로 차단
+        if not str(path).startswith(str(_TILE_IMS_DIR.resolve())):
+            self.send_error(HTTPStatus.BAD_REQUEST, "Invalid tile image path")
+            return
         if not path.exists() or not path.is_file():
             self.send_error(HTTPStatus.NOT_FOUND, "Tile image not found")
             return

@@ -143,10 +143,9 @@ class Config:
     instruct_csv: Optional[str] = None
 
     # MultiGameDataset-based filtering (for CPCGRL)
-    dataset_game: Optional[str] = None
-    dataset_reward_enum: Optional[int] = None
+    dataset_game: Optional[str] = None          # e.g. "dungeon", "pokemon", "doom"
+    dataset_reward_enum: Optional[int] = None   # e.g. 0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable
     dataset_train_ratio: float = 0.95
-
 
 @dataclass
 class CLIPConfig:
@@ -219,7 +218,7 @@ class TrainConfig(Config):
 class CPCGRLConfig(TrainConfig):
     problem: str = "multigame"
     dataset_game: Optional[str] = "dungeon"
-    dataset_reward_enum: Optional[int] = 1
+    dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
 
     vec_cont: bool = True

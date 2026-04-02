@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-dataset/annotate.py
-====================
-캐시에서 doom/zelda/sokoban/pokemon 맵을 읽어
+dataset/annotation/annotate.py
+================================
+캐시에서 doom/zelda/sokoban/pokemon/dungeon 맵을 읽어
 per-sample reward annotation CSV를 생성한다.
 
 Reward enum 정의:
@@ -14,9 +14,9 @@ Reward enum 정의:
   6 (IC)  item_count    - Item 그룹 타일 총 개수                    → condition_6
 
 Usage:
-  python dataset/annotate.py
-  python dataset/annotate.py --games doom zelda
-  python dataset/annotate.py --cache-dir dataset/multigame/cache/artifacts
+  python dataset/annotation/annotate.py
+  python dataset/annotation/annotate.py --games doom zelda dungeon
+  python dataset/annotation/annotate.py --cache-dir dataset/multigame/cache/artifacts
 """
 from __future__ import annotations
 
@@ -29,8 +29,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-# 프로젝트 루트를 경로에 추가 (dataset/ 한 단계 위)
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# 프로젝트 루트를 경로에 추가 (dataset/annotation/ 두 단계 위)
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import numpy as np
 import jax.numpy as jnp
@@ -39,11 +39,12 @@ from multigame_evaluator.measure import doom as doom_m
 from multigame_evaluator.measure import zelda as zelda_m
 from multigame_evaluator.measure import sokoban as sokoban_m
 from multigame_evaluator.measure import pokemon as pokemon_m
+from multigame_evaluator.measure import dungeon as dungeon_m
 
 # ── 경로 ─────────────────────────────────────────────────────────────────────────
-_HERE = Path(__file__).parent
-_CACHE_DIR = _HERE / "multigame" / "cache" / "artifacts"
-_ANNOT_DIR = _HERE / "reward_annotations"
+_HERE = Path(__file__).parent                              # dataset/annotation/
+_CACHE_DIR = _HERE.parent / "multigame" / "cache" / "artifacts"
+_ANNOT_DIR = _HERE                                         # CSV를 같은 폴더에 출력
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -98,12 +99,24 @@ _GAME_CONFIG = {
         "sub_cond_mob":     "",
         "sub_cond_item":    "object",
     },
+    "dungeon": {
+        "module":           dungeon_m,
+        "passible":         dungeon_m.DungeonPassible,
+        "wall":             dungeon_m.DungeonWall,
+        "object":           dungeon_m.DungeonObject,
+        "mob":              dungeon_m.DungeonMob,
+        "item":             dungeon_m.DungeonItem,
+        "sub_cond_wall":    "wall+border",
+        "sub_cond_object":  "",
+        "sub_cond_mob":     "bat",
+        "sub_cond_item":    "",
+    },
 }
 
 CSV_HEADER = [
     "key", "instruction", "level_id", "sample_id",
     "reward_enum", "feature_name", "sub_condition",
-    "condition_1", "condition_2", "condition_3", "condition_4", "condition_5", "condition_6",
+    "condition_0", "condition_1", "condition_2", "condition_3", "condition_4",
 ]
 
 
@@ -256,20 +269,19 @@ def _make_rows(
         computed.append((instruction, order_idx, source_id, rg, pl, wc, oc, mc, ic))
 
     # 2단계: reward_enum별 그룹으로 행 생성
-    sc_wall   = config["sub_cond_wall"]
     sc_object = config["sub_cond_object"]
     sc_mob    = config["sub_cond_mob"]
     sc_item   = config["sub_cond_item"]
 
     # (reward_enum, feature_name, cond_col, val_idx, sub_condition)
     # val_idx: computed 튜플에서의 인덱스 (3=rg, 4=pl, 5=wc, 6=oc, 7=mc, 8=ic)
+    # enum 순서: 1=region, 2=path_length, 3=interactable, 4=hazard, 5=collectable
     enum_specs = [
-        (1, "region",        "condition_1", 3, ""),
-        (2, "path_length",   "condition_2", 4, ""),
-        (3, "wall_count",    "condition_3", 5, sc_wall),
-        (4, "object_count",  "condition_4", 6, sc_object),
-        (5, "mob_count",     "condition_5", 7, sc_mob),
-        (6, "item_count",    "condition_6", 8, sc_item),
+        (0, "region",             "condition_0", 3, ""),
+        (1, "path_length",        "condition_1", 4, ""),
+        (2, "interactable_count", "condition_2", 5, sc_object),
+        (3, "hazard_count",       "condition_3", 6, sc_mob),
+        (4, "collectable_count",  "condition_4", 7, sc_item),
     ]
 
     rows: List[dict] = []
@@ -286,12 +298,11 @@ def _make_rows(
                 "reward_enum":   reward_enum,
                 "feature_name":  feature_name,
                 "sub_condition": sub_cond,
+                "condition_0":   "",
                 "condition_1":   "",
                 "condition_2":   "",
                 "condition_3":   "",
                 "condition_4":   "",
-                "condition_5":   "",
-                "condition_6":   "",
             }
             row[cond_col] = value
             rows.append(row)
@@ -333,12 +344,12 @@ def annotate_game(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Reward annotation CSV 생성 (doom / zelda / sokoban / pokemon)"
+        description="Reward annotation CSV 생성 (doom / zelda / sokoban / pokemon / dungeon)"
     )
     parser.add_argument(
         "--games", nargs="+",
-        default=["doom", "zelda", "sokoban", "pokemon"],
-        choices=["doom", "zelda", "sokoban", "pokemon"],
+        default=["doom", "zelda", "sokoban", "pokemon", "dungeon"],
+        choices=["doom", "zelda", "sokoban", "pokemon", "dungeon"],
         help="처리할 게임 목록 (기본: 전체)",
     )
     parser.add_argument(
@@ -354,14 +365,50 @@ def main() -> None:
     args = parser.parse_args()
 
     logger.info(f"캐시 로드: {args.cache_dir}")
-    all_samples = _load_cache(args.cache_dir)
-    if all_samples is None:
-        return
 
-    # 게임별 분류
+    # 게임별 최대 샘플 수 (viewer / MultiGameDataset 의 max_samples 와 일치)
+    _MAX_SAMPLES: Dict[str, int] = {
+        "doom":    1000,
+        "zelda":   1000,
+        "sokoban": 1000,
+        "pokemon": 1000,
+        "dungeon": 4000,
+    }
+
+    # 모든 서브디렉토리를 스캔하여 game 태그 기준으로 합산
+    # (doom/ + doom2/ 처럼 동일 game 태그가 여러 폴더에 분산된 경우 자동 합산)
     by_game: Dict[str, List[dict]] = {}
-    for s in all_samples:
-        by_game.setdefault(s["game"], []).append(s)
+    if args.cache_dir.is_dir():
+        for sub in sorted(args.cache_dir.iterdir()):
+            if not sub.is_dir():
+                continue
+            samples = _load_cache(sub)
+            if not samples:
+                continue
+            for s in samples:
+                g = s.get("game", "")
+                if g:
+                    by_game.setdefault(g, []).append(s)
+
+    if not by_game:
+        # 서브디렉토리 캐시 없음 → 통합 캐시 fallback
+        all_samples = _load_cache(args.cache_dir)
+        if all_samples is None:
+            logger.error("로드된 캐시 없음")
+            return
+        for s in all_samples:
+            by_game.setdefault(s.get("game", ""), []).append(s)
+
+    # max_samples 적용 (캐시에 초과분이 있을 경우 절단)
+    for g in list(by_game.keys()):
+        limit = _MAX_SAMPLES.get(g)
+        if limit is not None and len(by_game[g]) > limit:
+            by_game[g] = by_game[g][:limit]
+
+    logger.info(
+        "서브디렉토리 캐시 합산 결과: "
+        + ", ".join(f"{g}={len(v)}" for g, v in sorted(by_game.items()))
+    )
 
     logger.info(
         "게임별 샘플 수: "

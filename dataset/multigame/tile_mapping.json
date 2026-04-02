@@ -170,19 +170,22 @@
       "0": "UNKNOWN",
       "1": "FLOOR",
       "2": "WALL",
-      "3": "ENEMY"
+      "3": "ENEMY",
+      "4": "TREASURE"
     },
     "_tile_images": {
       "0": "empty.png",
       "1": "path_e.png",
       "2": "solid.png",
-      "3": "bat.png"
+      "3": "bat.png",
+      "4": "treasure.png"
     },
     "mapping": {
       "0": 0,
       "1": 0,
       "2": 1,
-      "3": 3
+      "3": 3,
+      "4": 4
     }
   },
   "pokemon": {
@@ -197,20 +200,22 @@
       "7": "FENCE",
       "8": "TREE",
       "9": "HOUSE",
+      "10": "GRASS",
       "99": "UNKNOWN"
     },
     "_tile_images": {
-      "0": "EMPTY",
-      "1": "WALL",
+      "0": "pokemon/wall.png",
+      "1": "pokemon/wall.png",
       "2": "pokemon/floor_0.png",
-      "3": "ENEMY",
+      "3": "bat.png",
       "4": "pokemon/pokeball.png",
       "5": "pokemon/door.png",
       "6": "pokemon/water.png",
       "7": "pokemon/fence.png",
       "8": "pokemon/tree.png",
-      "9": "pokemon/wall.png",
-      "99": "UNKNOWN"
+      "9": "pokemon/roof.png",
+      "10": "pokemon/floor_1.png",
+      "99": "pokemon/floor_0.png"
     },
     "mapping": {
       "0":  1,
@@ -223,6 +228,7 @@
       "7":  1,
       "8":  1,
       "9":  1,
+      "10": 0,
       "99": 0
     }
   },

@@ -119,6 +119,15 @@ CSV_HEADER = [
     "condition_0", "condition_1", "condition_2", "condition_3", "condition_4",
 ]
 
+# 게임별 key prefix (앞 2글자 약어)
+GAME_PREFIX: Dict[str, str] = {
+    "doom":    "dm",
+    "zelda":   "zl",
+    "sokoban": "sk",
+    "pokemon": "pk",
+    "dungeon": "dg",
+}
+
 
 # ── 캐시 로드 ─────────────────────────────────────────────────────────────────────
 
@@ -241,14 +250,15 @@ def _make_rows(
     samples: List[dict],
     game: str,
     config: dict,
-    key_start: int,
 ) -> List[dict]:
     """
     한 게임의 전체 샘플에 대해 5×N 행을 생성한다.
-    출력 순서: reward_enum 1 전체 → 2 전체 → … → 5 전체 (enum별 그룹화).
+    출력 순서: reward_enum 0 전체 → 1 전체 → … → 4 전체 (enum별 그룹화).
+    key / level_id 는 게임별 prefix + 게임 내 연속 번호 (reward_enum 바뀌어도 초기화 없음).
     """
+    prefix = GAME_PREFIX.get(game, game[:2])
+
     # 1단계: 전체 샘플 measure 계산
-    # 각 원소: (instruction, order_idx, source_id, rg, pl, wc, bc, bd)
     computed = []
     for order_idx, sample in enumerate(samples):
         env_map     = sample["array"]
@@ -274,8 +284,8 @@ def _make_rows(
     sc_item   = config["sub_cond_item"]
 
     # (reward_enum, feature_name, cond_col, val_idx, sub_condition)
-    # val_idx: computed 튜플에서의 인덱스 (3=rg, 4=pl, 5=wc, 6=oc, 7=mc, 8=ic)
-    # enum 순서: 1=region, 2=path_length, 3=interactable, 4=hazard, 5=collectable
+    # val_idx: computed 튜플에서의 인덱스 (3=rg, 4=pl, 6=oc, 7=mc, 8=ic)
+    # wc(5) 는 unified wall이므로 annotation에서 제외; oc/mc/ic 가 interactable/hazard/collectable
     enum_specs = [
         (0, "region",             "condition_0", 3, ""),
         (1, "path_length",        "condition_1", 4, ""),
@@ -285,15 +295,15 @@ def _make_rows(
     ]
 
     rows: List[dict] = []
-    key = key_start
+    row_n = 0  # 게임 내 연속 행 번호 (reward_enum 경계에서 초기화하지 않음)
 
     for reward_enum, feature_name, cond_col, val_idx, sub_cond in enum_specs:
         for instruction, order_idx, source_id, *vals in computed:
             value = vals[val_idx - 3]  # offset: idx 3 → vals[0]
             row: dict = {
-                "key":           f"{key:06d}",
+                "key":           f"{prefix}{row_n:06d}",
                 "instruction":   instruction,
-                "level_id":      f"{order_idx:06d}",
+                "level_id":      f"{row_n:06d}",
                 "sample_id":     source_id,
                 "reward_enum":   reward_enum,
                 "feature_name":  feature_name,
@@ -306,7 +316,7 @@ def _make_rows(
             }
             row[cond_col] = value
             rows.append(row)
-            key += 1
+            row_n += 1
 
     return rows
 
@@ -317,17 +327,16 @@ def annotate_game(
     game: str,
     samples: List[dict],
     out_dir: Path,
-    key_start: int = 0,
 ) -> int:
     """
     한 게임의 annotation CSV를 생성한다.
-    placeholder 파일을 대체하며, 기록한 row 수를 반환한다.
+    기록한 row 수를 반환한다.
     """
     config = _GAME_CONFIG[game]
     logger.info(f"\n=== {game.upper()} ({len(samples)} samples) ===")
 
     t0 = time.perf_counter()
-    rows = _make_rows(samples, game, config, key_start)
+    rows = _make_rows(samples, game, config)
     elapsed = time.perf_counter() - t0
 
     out_path = out_dir / f"{game}_reward_annotations.csv"
@@ -423,7 +432,7 @@ def main() -> None:
         if not samples:
             logger.warning(f"{game}: 캐시에 샘플 없음, 건너뜀")
             continue
-        n = annotate_game(game, samples, args.out_dir, key_start=total_rows)
+        n = annotate_game(game, samples, args.out_dir)
         total_rows += n
 
         # placeholder CSV 제거 (실제 annotation 파일이 생성됐으므로)

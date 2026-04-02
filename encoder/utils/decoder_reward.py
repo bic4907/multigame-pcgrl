@@ -43,12 +43,14 @@ def load_decoder(
     """
     from encoder.clip_model import get_cnnclip_decoder_encoder
 
+    # 체크포인트는 RL_training=False 로 학습되었으므로 동일한 모드로 module 생성
+    # → params tree 구조가 체크포인트와 일치
     module, _ = get_cnnclip_decoder_encoder(
         encoder_config,
         decoder_config=decoder_config,
         cond_norm_min=cond_norm_min,
         cond_norm_max=cond_norm_max,
-        RL_training=True,           # pretrained text params 불필요
+        RL_training=False,
     )
 
     # Dummy init to get pytree structure
@@ -75,12 +77,43 @@ def load_decoder(
         logger.warning(f"Decoder checkpoint path not found: {ckpt_dir}. Falling back to initialized decoder.")
         return module.apply, variables_template
 
-    restored = checkpoints.restore_checkpoint(
-        ckpt_dir, target=variables_template, prefix=""
-    )
-    logger.info(f"Decoder checkpoint loaded from {ckpt_dir}")
+    # 최신 step 디렉토리 탐색 (ckpt_dir 이 ckpts/ 레벨일 수 있음)
+    from glob import glob
+    from os.path import basename, join
+    step_dirs = [d for d in glob(join(ckpt_dir, '*')) if basename(d).isdigit()]
+    if step_dirs:
+        latest_step = max(step_dirs, key=lambda d: int(basename(d)))
+        restore_dir = latest_step
+    else:
+        restore_dir = ckpt_dir
 
-    return module.apply, restored
+    # ── target 기반 복원 ──
+    # train_clip_decoder 는 TrainState.create(params=variables) 로 저장하므로
+    # 체크포인트 = {"step": ..., "params": <variables>, "opt_state": ...}
+    # <variables> = {"params": {...}, "norm_stats": {...}}
+    # flax restore_checkpoint 에 target={"params": template} 을 넘기면
+    # 체크포인트의 "params" 필드를 template 구조로 매핑해 복원한다.
+    from flax.training.train_state import TrainState
+    import optax
+
+    dummy_state = TrainState.create(
+        apply_fn=module.apply,
+        params=variables_template,
+        tx=optax.identity(),  # optimizer는 불필요 (추론 전용)
+    )
+
+    restored_state = checkpoints.restore_checkpoint(
+        restore_dir, target=dummy_state, prefix=""
+    )
+    if restored_state is None:
+        logger.warning(f"Checkpoint restore returned None from {restore_dir}. Using initialized decoder.")
+        return module.apply, variables_template
+
+    variables = restored_state.params  # {"params": {...}, "norm_stats": {...}}
+    logger.info(f"Decoder checkpoint loaded from {restore_dir}")
+    logger.info(f"  variables keys: {list(variables.keys())}")
+
+    return module.apply, variables
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -99,7 +132,7 @@ def predict_reward_condition(
     Parameters
     ----------
     instruction_embedding : (n_envs, D)
-        instruction(text)에서 얻은 embedding.
+        사전학습된 CLIP encoder를 통과한 latent embedding (e.g. 64-dim).
     """
     n_envs = instruction_embedding.shape[0]
 

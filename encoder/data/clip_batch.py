@@ -34,6 +34,8 @@ class CLIPDataset:
     attention_masks: np.ndarray
     pixel_values: np.ndarray
     is_train: np.ndarray
+    reward_enum_targets: np.ndarray = None   # (N,) 0-indexed reward_enum
+    condition_targets: np.ndarray = None     # (N,) condition float value
 
 @dataclass
 class CLIPEmbedData:
@@ -48,6 +50,18 @@ class CLIPContrastiveBatch:
     attention_mask: np.ndarray
     pixel_values: np.ndarray
     duplicate_matrix: np.ndarray  # (B, B) matrix indicating positive pairs
+
+
+@dataclass
+class CLIPDecoderBatch:
+    """Contrastive + Decoder 학습용 배치."""
+    class_ids: np.ndarray
+    input_ids: np.ndarray
+    attention_mask: np.ndarray
+    pixel_values: np.ndarray
+    duplicate_matrix: np.ndarray     # (B, B)
+    reward_enum_target: np.ndarray   # (B,)  — 0-indexed reward_enum 클래스
+    condition_target: np.ndarray     # (B,)  — condition 값 (regression target)
 
 
 class CLIPDatasetBuilder:
@@ -85,7 +99,9 @@ class CLIPDatasetBuilder:
                 input_ids=np.array(self.preprocessed_dataset_dict["input_ids"]),
                 attention_masks=np.array(self.preprocessed_dataset_dict["attention_masks"]),
                 pixel_values=np.array(self.preprocessed_dataset_dict["pixel_values"]),
-                is_train=np.array(self.preprocessed_dataset_dict["is_train"])
+                is_train=np.array(self.preprocessed_dataset_dict["is_train"]),
+                reward_enum_targets=np.array(self.preprocessed_dataset_dict["reward_enum_targets"]),
+                condition_targets=np.array(self.preprocessed_dataset_dict["condition_targets"]),
             )
 
     def preprocess_paired_data(self):
@@ -158,6 +174,37 @@ class CLIPDatasetBuilder:
             is_train[perm[:n_train]] = True
         logger.info(f"Train: {is_train.sum()} samples, Val: {(~is_train).sum()} samples")
 
+        # ── 디코더 학습용 타겟 ──
+        # reward_enum: 1-based → 0-indexed (0~5)
+        reward_enum_targets = np.array([
+            int(rc[1]) - 1 for rc in reward_cond_list   # 1-based → 0-indexed
+        ], dtype=np.int32)
+        condition_targets_raw = np.array([
+            float(rc[2]) if rc[2] is not None else 0.0
+            for rc in reward_cond_list
+        ], dtype=np.float32)
+
+        # ── reward_enum별 min-max normalization → [0, 1] ──
+        unique_enums = sorted(set(reward_enum_targets))
+        cond_norm_min = {}   # {enum_idx: min_val}
+        cond_norm_max = {}   # {enum_idx: max_val}
+        condition_targets = condition_targets_raw.copy()
+
+        for eidx in unique_enums:
+            mask = (reward_enum_targets == eidx)
+            vals = condition_targets_raw[mask]
+            v_min, v_max = float(vals.min()), float(vals.max())
+            cond_norm_min[int(eidx)] = v_min
+            cond_norm_max[int(eidx)] = v_max
+            denom = v_max - v_min if v_max != v_min else 1.0
+            condition_targets[mask] = (vals - v_min) / denom
+
+        self.cond_norm_min = cond_norm_min
+        self.cond_norm_max = cond_norm_max
+        logger.info(f"Condition normalization (per reward_enum, 0-indexed):")
+        for eidx in unique_enums:
+            logger.info(f"  enum {eidx}: min={cond_norm_min[eidx]:.2f}, max={cond_norm_max[eidx]:.2f}")
+
         return {
             "game_type":            games_type,
             "class_ids":            class_ids,
@@ -167,6 +214,8 @@ class CLIPDatasetBuilder:
             "attention_masks":      inst_attention_masks,
             "pixel_values":         level_arrays,
             "is_train":             is_train,
+            "reward_enum_targets":  reward_enum_targets,
+            "condition_targets":    condition_targets,
         }
 
     
@@ -185,7 +234,9 @@ class CLIPDatasetBuilder:
             input_ids=self.dataset.input_ids[train_mask],
             attention_masks=self.dataset.attention_masks[train_mask],
             pixel_values=self.dataset.pixel_values[train_mask],
-            is_train=self.dataset.is_train[train_mask]
+            is_train=self.dataset.is_train[train_mask],
+            reward_enum_targets=self.dataset.reward_enum_targets[train_mask],
+            condition_targets=self.dataset.condition_targets[train_mask],
         )
         test_dataset = CLIPDataset(
             class_ids=self.dataset.class_ids[test_mask],
@@ -193,7 +244,9 @@ class CLIPDatasetBuilder:
             input_ids=self.dataset.input_ids[test_mask],
             attention_masks=self.dataset.attention_masks[test_mask],
             pixel_values=self.dataset.pixel_values[test_mask],
-            is_train=self.dataset.is_train[test_mask]
+            is_train=self.dataset.is_train[test_mask],
+            reward_enum_targets=self.dataset.reward_enum_targets[test_mask],
+            condition_targets=self.dataset.condition_targets[test_mask],
         )
 
         return train_dataset, test_dataset
@@ -205,6 +258,15 @@ class CLIPDatasetBuilder:
             dict: Mapping of class IDs to reward conditions.
         """
         return self.class_id2reward_cond
+
+    def get_condition_norm_stats(self):
+        """reward_enum별 condition 정규화 파라미터 반환.
+
+        Returns:
+            (cond_norm_min, cond_norm_max): 각각 {enum_idx(0-indexed): float} dict.
+            역변환: original = normalized * (max - min) + min
+        """
+        return self.cond_norm_min, self.cond_norm_max
 
 
 def create_clip_batch(dataset: CLIPDataset, batch_size: int, rng_key: jax.random.PRNGKey) -> CLIPContrastiveBatch:
@@ -247,6 +309,39 @@ def create_clip_batch(dataset: CLIPDataset, batch_size: int, rng_key: jax.random
 
 def create_clip_embedding_table(embed_queue, reward_df: pd.DataFrame):
     pass
+
+
+def create_clip_decoder_batch(dataset: CLIPDataset, batch_size: int, rng_key: jax.random.PRNGKey) -> CLIPDecoderBatch:
+    """Create batches for contrastive + decoder training."""
+    n_samples = len(dataset.input_ids)
+    shuffled_indices = jax.random.permutation(rng_key, n_samples)
+    shuffled_indices = np.array(shuffled_indices)
+
+    for start_idx in range(0, n_samples, batch_size):
+        end_idx = min(start_idx + batch_size, n_samples)
+        batch_indices = shuffled_indices[start_idx:end_idx]
+        if len(batch_indices) < batch_size:
+            needed = batch_size - len(batch_indices)
+            extra_indices = np.random.choice(n_samples, needed, replace=True)
+            batch_indices = np.concatenate([batch_indices, extra_indices])
+
+        class_ids = dataset.class_ids[batch_indices].squeeze()
+        input_ids = dataset.input_ids[batch_indices]
+        attention_mask = dataset.attention_masks[batch_indices]
+        pixel_values = dataset.pixel_values[batch_indices]
+        duplicate_matrix = np.equal.outer(class_ids, class_ids).astype(np.float32)
+        reward_enum_target = dataset.reward_enum_targets[batch_indices]
+        condition_target = dataset.condition_targets[batch_indices]
+
+        yield CLIPDecoderBatch(
+            class_ids=class_ids,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            pixel_values=pixel_values,
+            duplicate_matrix=duplicate_matrix,
+            reward_enum_target=reward_enum_target,
+            condition_target=condition_target,
+        )
 
 if __name__ == "__main__":
     rng_key = jax.random.PRNGKey(0)

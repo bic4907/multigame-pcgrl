@@ -449,8 +449,9 @@ def main(config: CLIPTrainConfig):
 
     make_train(config)(rng_key)
 
+    if wandb.run is not None:
+        wandb.finish()
 
 
 if __name__ == '__main__':
     main()
-    # wandb.finish()

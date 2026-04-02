@@ -182,13 +182,13 @@ def init_config(config: Config):
         config.instruct_csv = None
 
         if config.use_clip:
-            # ── VIPCGRL 모드: pretrained CLIP 임베딩을 입력으로 사용 ──
+            # ── VIPCGRL 모드: pretrained CLIP encoder의 latent embedding을 입력으로 사용 ──
             config.vec_cont = False
             config.use_nlp = False
             if config.encoder.model is None:
                 config.encoder.model = 'cnnclip'
             if config.nlp_input_dim <= 0:
-                config.nlp_input_dim = 512  # CLIP text feature dim
+                config.nlp_input_dim = config.encoder.output_dim  # encoder output dim (e.g. 64)
             config.vec_input_dim = config.nlp_input_dim
             config.use_sim_reward = True
             # dataset 기반 VIPCGRL: cnnclipconv/clipconv 가 이미 설정된 경우 유지

@@ -71,6 +71,7 @@ def make_train(
     test_inst: Optional[Instruct] = None,
     *,
     inject_obs_fn: Callable | None = None,
+    inject_reward_fn: Callable | None = None,
 ):
     """PPO 학습 함수를 생성한다.
 
@@ -78,6 +79,10 @@ def make_train(
     ----------
     inject_obs_fn : (last_obs, env_state, instruct_sample, config, env) -> last_obs
         각 모드별 obs 주입 로직. None 이면 obs 를 그대로 사용한다.
+    inject_reward_fn : (prev_env_state, curr_env_state, last_obs, curr_obs, instruct_sample, config, env)
+        -> (reward_i, condition)
+        reward_i/condition 을 외부에서 동적으로 주입하는 콜백.
+        반환 shape은 get_reward_batch 입력과 동일해야 한다.
     """
     config.NUM_UPDATES = config.total_timesteps // config.num_steps // config.n_envs
     config.MINIBATCH_SIZE = config.n_envs * config.num_steps // config.NUM_MINIBATCHES
@@ -250,7 +255,25 @@ def make_train(
                     rng_step, env_state, action, env_params
                 )
 
-                if train_inst is not None:
+                if inject_reward_fn is not None:
+                    pred_reward_i, pred_condition = inject_reward_fn(
+                        prev_env_state,
+                        env_state,
+                        last_obs,
+                        obsv,
+                        instruct_sample,
+                        config,
+                        env,
+                    )
+                    cond_reward_batch = get_reward_batch(
+                        pred_reward_i,
+                        pred_condition,
+                        prev_env_state.env_state.env_map,
+                        env_state.env_state.env_map,
+                        map_size=config.map_width,
+                    )
+                    reward_batch = cond_reward_batch
+                elif train_inst is not None:
                     cond_reward_batch = get_reward_batch(
                         instruct_sample.reward_i,
                         instruct_sample.condition,
@@ -451,7 +474,23 @@ def make_train(
                         rng_step, state, action, env_params
                     )
 
-                    if test_inst is not None:
+                    if inject_reward_fn is not None:
+                        cond_reward_batch = get_reward_batch(
+                            *inject_reward_fn(
+                                state,
+                                next_state,
+                                last_obs,
+                                obsv,
+                                instruct_sample,
+                                config,
+                                env,
+                            ),
+                            state.env_state.env_map,
+                            next_state.env_state.env_map,
+                            map_size=config.map_width,
+                        )
+                        reward_batch = cond_reward_batch
+                    elif test_inst is not None:
                         cond_reward_batch = get_reward_batch(
                             instruct_sample.reward_i,
                             instruct_sample.condition,
@@ -563,7 +602,7 @@ def make_train(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None):
+def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None, inject_reward_fn=None):
     """학습 1 chunk 실행."""
     checkpoint_manager, restored_ckpt, encoder_param = init_checkpointer(config)
 
@@ -585,6 +624,7 @@ def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None):
             config, restored_ckpt, checkpoint_manager, encoder_param,
             train_inst=train_inst, test_inst=test_inst,
             inject_obs_fn=inject_obs_fn,
+            inject_reward_fn=inject_reward_fn,
         )
     )
     out = train_jit(rng)
@@ -592,7 +632,7 @@ def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None):
     return out
 
 
-def main_entry(config, *, inject_obs_fn=None):
+def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
     """Hydra @main 에서 호출하는 공통 엔트리포인트."""
     from instruct_rl.utils.path_utils import init_config
 
@@ -632,7 +672,6 @@ def main_entry(config, *, inject_obs_fn=None):
         for i in range(n_chunks):
             config.total_timesteps = config.timestep_chunk_size + (i * config.timestep_chunk_size)
             logger.info(f"Running chunk {i + 1}/{n_chunks}")
-            main_chunk(config, rng, exp_dir, inject_obs_fn=inject_obs_fn)
+            main_chunk(config, rng, exp_dir, inject_obs_fn=inject_obs_fn, inject_reward_fn=inject_reward_fn)
     else:
-        main_chunk(config, rng, exp_dir, inject_obs_fn=inject_obs_fn)
-
+        main_chunk(config, rng, exp_dir, inject_obs_fn=inject_obs_fn, inject_reward_fn=inject_reward_fn)

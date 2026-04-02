@@ -1,4 +1,3 @@
-
 from transformers import FlaxCLIPModel, CLIPConfig
 from transformers.models.clip.modeling_clip import CLIPEncoder
 from transformers.models.clip.modeling_flax_clip import FlaxCLIPTextTransformer, FlaxCLIPVisionTransformer
@@ -192,6 +191,164 @@ class ContrastiveModule(nn.Module):
         return output_dict
 
 
+class RewardDecoder(nn.Module):
+    """Embedding → (reward_enum classification, condition regression) 디코더.
+
+    Architecture
+    ------------
+    Shared trunk (MLP) → 분기
+      ├─ Classification head (hidden → num_reward_classes)  : reward_enum 분류
+      └─ Regression head    (hidden → sigmoid → [0,1])      : 정규화된 condition 예측
+          → denorm 시 cond_min/cond_max 로 원래 스케일 복원
+
+    cond_norm_min / cond_norm_max 는 Flax state variable ("norm_stats" collection)
+    로 저장되어, 체크포인트에 함께 포함된다.  학습되지 않는 상수이다.
+
+    Parameters
+    ----------
+    num_reward_classes : int
+        reward_enum 종류 수 (예: 6).
+    hidden_dim : int
+        MLP hidden dimension.
+    num_layers : int
+        shared trunk hidden layer 수 (≥1).
+    dropout_rate : float
+        Dropout rate.
+    cond_norm_min_init : jnp.ndarray | None
+        (num_reward_classes,) — 초기화 시 전달하는 reward_enum별 condition min 값.
+    cond_norm_max_init : jnp.ndarray | None
+        (num_reward_classes,) — 초기화 시 전달하는 reward_enum별 condition max 값.
+    """
+    num_reward_classes: int = 6
+    hidden_dim: int = 128
+    num_layers: int = 2
+    dropout_rate: float = 0.1
+    cond_norm_min_init: jnp.ndarray = None
+    cond_norm_max_init: jnp.ndarray = None
+
+    @nn.compact
+    def __call__(self, embed: jnp.ndarray, training: bool = False):
+        """
+        Args:
+            embed: (B, D) — 인코더 임베딩 (L2-normalized).
+        Returns:
+            reward_logits:      (B, num_reward_classes) — reward_enum 분류 logits
+            condition_pred:     (B, num_reward_classes) — 정규화된 [0,1] condition 예측 (loss용)
+            condition_pred_raw: (B, num_reward_classes) — 원래 스케일 condition 예측 (추론용)
+        """
+        # ── Norm stats를 state variable로 등록 (학습 불가, 체크포인트에 저장) ──
+        _default_min = jnp.zeros(self.num_reward_classes) if self.cond_norm_min_init is None else self.cond_norm_min_init
+        _default_max = jnp.ones(self.num_reward_classes)  if self.cond_norm_max_init is None else self.cond_norm_max_init
+
+        cond_min = self.variable(
+            "norm_stats", "cond_norm_min",
+            lambda: _default_min,
+        ).value
+        cond_max = self.variable(
+            "norm_stats", "cond_norm_max",
+            lambda: _default_max,
+        ).value
+
+        # stop_gradient: 역전파에서 제외
+        cond_min = jax.lax.stop_gradient(cond_min)
+        cond_max = jax.lax.stop_gradient(cond_max)
+
+        # ── Shared trunk ──
+        x = embed
+        for _ in range(self.num_layers):
+            x = nn.Dense(self.hidden_dim)(x)
+            x = nn.gelu(x)
+            x = nn.LayerNorm()(x)
+            x = nn.Dropout(self.dropout_rate)(x, deterministic=not training)
+
+        # ── Classification head (reward_enum) ──
+        cls_h = nn.Dense(self.hidden_dim // 2, name="cls_hidden")(x)
+        cls_h = nn.gelu(cls_h)
+        reward_logits = nn.Dense(self.num_reward_classes, name="reward_cls_head")(cls_h)
+
+        # ── Regression head (condition value per reward_enum) ──
+        reg_h = nn.Dense(self.hidden_dim // 2, name="reg_hidden")(x)
+        reg_h = nn.gelu(reg_h)
+        reg_logits = nn.Dense(self.num_reward_classes, name="condition_reg_head")(reg_h)
+
+        # sigmoid → [0, 1] 정규화 공간 (loss는 이 값으로 계산)
+        condition_pred = jax.nn.sigmoid(reg_logits)
+
+        # 역변환 → 원래 스케일 (추론 시 사용)
+        scale = cond_max - cond_min                              # (num_classes,)
+        condition_pred_raw = condition_pred * scale + cond_min
+
+        return reward_logits, condition_pred, condition_pred_raw
+
+
+class ContrastiveDecoderModule(nn.Module):
+    """ContrastiveModule + RewardDecoder.
+
+    기존 contrastive 학습에 디코더 브랜치를 추가하여
+    embedding 으로부터 reward_enum과 condition을 예측한다.
+    """
+    encoders: Dict[str, nn.Module]
+    decoder: RewardDecoder
+    dropout_rate: float = 0.0
+
+    def setup(self):
+        self.text_state_temperature = self.param(
+            "text_state_temperature", nn.initializers.constant(jnp.log(0.07)), ()
+        )
+
+    def encode_text(
+            self, input_ids: jnp.ndarray, attention_mask: jnp.ndarray,
+            position_ids: jnp.ndarray, training: bool
+    ) -> jnp.ndarray:
+        x = self.encoders["text"](input_ids, attention_mask, position_ids)
+        x = x / (jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-6)
+        return x
+
+    def encode_state(
+            self, pixel_values: jnp.ndarray, training: bool
+    ) -> jnp.ndarray:
+        x = self.encoders["state"](pixel_values, training)
+        x = x / (jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-6)
+        return x
+
+    @nn.compact
+    def __call__(
+            self,
+            input_ids: jnp.ndarray = None,
+            attention_mask: jnp.ndarray = None,
+            pixel_values: jnp.ndarray = None,
+            mode: str = "text_state",
+            training: bool = False,
+    ):
+        output_dict = dict()
+        modes = mode.split("_")
+
+        if "state" in modes:
+            state_embed = self.encode_state(pixel_values, training)
+            output_dict["state_embed"] = state_embed
+            output_dict["text_state_temperature"] = self.text_state_temperature
+
+        if "text" in modes:
+            batch_size, seq_len = input_ids.shape
+            position_ids = jnp.arange(seq_len)[None, :].repeat(batch_size, axis=0)
+            text_embed = self.encode_text(input_ids, attention_mask, position_ids, training)
+            output_dict["text_embed"] = text_embed
+            output_dict["text_state_temperature"] = self.text_state_temperature
+
+        output_dict['text_state_temperature'] = self.text_state_temperature
+
+        # ── 디코더: state embedding 으로부터 reward_enum & condition 예측 ──
+        if "state" in modes:
+            reward_logits, condition_pred, condition_pred_raw = self.decoder(
+                output_dict["state_embed"], training=training
+            )
+            output_dict["reward_logits"] = reward_logits
+            output_dict["condition_pred"] = condition_pred              # [0,1] 정규화 (loss용)
+            output_dict["condition_pred_raw"] = condition_pred_raw      # 원래 스케일 (추론용)
+
+        return output_dict
+
+
 def get_clip_encoder(config: EncoderConfig, RL_training: bool=True):
     """
     Pretrained CLIP encoder with text and image encoders.
@@ -285,6 +442,65 @@ def get_cnnclip_encoder(config: EncoderConfig, RL_training: bool = True):
     )
 
     return encoder, pretrained_params
+
+
+def get_cnnclip_decoder_encoder(config: EncoderConfig, decoder_config=None,
+                                cond_norm_min=None, cond_norm_max=None,
+                                RL_training: bool = False):
+    """
+    CNN-based CLIP encoder + RewardDecoder.
+    ContrastiveDecoderModule을 반환한다.
+
+    Parameters
+    ----------
+    cond_norm_min : jnp.ndarray | None
+        (num_reward_classes,) — reward_enum별 condition min. 역변환용.
+    cond_norm_max : jnp.ndarray | None
+        (num_reward_classes,) — reward_enum별 condition max. 역변환용.
+    """
+    from conf.config import DecoderConfig as _DC
+    if decoder_config is None:
+        decoder_config = _DC()
+
+    state_encoder_def = CNNResMapEncoder(projection_dim=config.output_dim, drop_rate=config.dropout_rate)
+
+    pretrained_params = None
+
+    if RL_training:
+        clip_conf = CLIPConfig.from_pretrained("openai/clip-vit-base-patch32")
+        text_model = FlaxCLIPTextTransformer(clip_conf.text_config)
+    else:
+        pretrained_params = {}
+        clip = FlaxCLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+        clip, clip_variables = clip.module, {"params": clip.params}
+        text_model, text_model_vars = clip.bind(clip_variables).text_model.unbind()
+        pretrained_params["pretrained_text_encoder"] = text_model_vars["params"]
+        pretrained_params["pretrained_text_projection"] = clip_variables["params"]["text_projection"]
+
+    text_encoder_def = PretrainedTextEncoder(text_model, projection_dim=config.output_dim,
+                                             freeze_encoder=config.freeze_text_enc)
+
+    if config.state:
+        encoder_dict = dict(text=text_encoder_def, state=state_encoder_def)
+    else:
+        encoder_dict = dict(text=text_encoder_def)
+
+    decoder = RewardDecoder(
+        num_reward_classes=decoder_config.num_reward_classes,
+        hidden_dim=decoder_config.hidden_dim,
+        num_layers=decoder_config.num_layers,
+        dropout_rate=config.dropout_rate,
+        cond_norm_min_init=cond_norm_min,
+        cond_norm_max_init=cond_norm_max,
+    )
+
+    module = ContrastiveDecoderModule(
+        encoders=encoder_dict,
+        decoder=decoder,
+        dropout_rate=config.dropout_rate,
+    )
+
+    return module, pretrained_params
 
 
 if __name__ == "__main__":

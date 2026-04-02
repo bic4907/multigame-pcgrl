@@ -604,8 +604,8 @@ class MultiGameDataset:
         - {game}_reward_annotations.csv         : per-sample 실제 annotation
         - {game}_reward_annotations_placeholder.csv : 게임 단위 더미 annotation
             → conditions 접근 시 WARNING 로그 출력
-        reward_enum은 모든 게임 통일 1~5:
-          1=region / 2=path_length / 3=interactable / 4=hazard / 5=collectable
+        reward_enum은 모든 게임 통일 0~4:
+          0=region / 1=path_length / 2=interactable / 3=hazard / 4=collectable
 
         CSV 포맷 (annotate.py 출력):
           - sample_id 컬럼: 실제 source_id (dungeon 키 예: "000000")
@@ -782,7 +782,7 @@ class MultiGameDataset:
 
     # ── reward annotation 기반 필터 ──────────────────────────────────────────
     def by_reward_enum(self, reward_enum: int) -> List[GameSample]:
-        """reward_enum 값으로 필터링 (1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction)."""
+        """reward_enum 값으로 필터링 (0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable)."""
         return [self._apply_mapping(s)
                 for s in self._samples
                 if s.meta.get("reward_enum") == reward_enum]

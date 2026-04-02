@@ -673,6 +673,8 @@ class MultiGameDataset:
                 if conds is None:
                     continue
                 sample.meta["conditions"] = conds
+                # 가장 낮은 enum을 기본 reward_enum으로 설정 (backward compat.)
+                sample.meta["reward_enum"] = min(conds.keys())
                 attached += 1
 
             if attached > 0:

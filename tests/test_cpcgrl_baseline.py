@@ -113,7 +113,7 @@ class TestCPCGRLConfig:
         assert c.use_nlp is False
         assert c.use_clip is False
         assert c.nlp_input_dim == 0
-        assert c.vec_input_dim == 9
+        assert c.vec_input_dim == 5
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

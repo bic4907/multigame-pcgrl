@@ -232,7 +232,7 @@ class CPCGRLConfig(TrainConfig):
     model: str = "contconv"
     use_nlp: bool = False
     use_clip: bool = False
-    vec_input_dim: Optional[int] = 9
+    vec_input_dim: Optional[int] = 5
     nlp_input_dim: int = 0
 
     instruct: Optional[str] = None

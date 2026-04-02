@@ -217,7 +217,7 @@ def init_config(config: Config):
             # ── CPCGRL 모드: raw condition 벡터를 사용 ──
             config.vec_cont = True
             config.use_nlp = False
-            config.vec_input_dim = 9
+            config.vec_input_dim = 5
             config.nlp_input_dim = 0
             logger.info(f"[CPCGRL] dataset_game={config.dataset_game}, "
                         f"dataset_reward_enum={getattr(config, 'dataset_reward_enum', None)}")
@@ -242,7 +242,7 @@ def init_config(config: Config):
     if config.instruct_csv is not None:
         if hasattr(config, 'vec_cont') and config.vec_cont is True:
             config.use_nlp = False
-            config.vec_input_dim = 9
+            config.vec_input_dim = 5
             config.nlp_input_dim = 0
         elif hasattr(config, 'use_clip') and config.use_clip is True:
             config.use_nlp = False

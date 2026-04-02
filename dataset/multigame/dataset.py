@@ -600,17 +600,18 @@ class MultiGameDataset:
     def _load_reward_annotations(self, annotations_dir: Path) -> None:
         """
         reward_annotations 폴더에서 {game}_reward_annotations.csv를 읽어
-        per-sample conditions dict를 meta에 부착한다.
+        각 (sample × reward_enum) 쌍을 독립 GameSample로 확장한다.
 
         CSV 포맷 (annotate.py 출력):
           - sample_id  : _shorten_source_id() 결과 (doom/sokoban은 단축 형식)
           - reward_enum: 0-indexed (0=region … 4=collectable)
           - condition_i: reward_enum=i 인 행에 값 저장, 나머지는 공백
 
-        부착 결과:
-          sample.meta["conditions"] = {0: region, 1: pl, 2: inter, 3: haz, 4: coll}
-          (값 없는 항목은 키 자체가 없음)
+        확장 결과 (N 샘플 × 5 enum → 5N GameSample):
+          sample.meta["reward_enum"]  = enum (CSV 값 그대로)
+          sample.meta["conditions"]   = {enum: value}  (해당 enum 값만)
         """
+        import dataclasses as _dc
 
         def _shorten(source_id: str, game: str) -> str:
             """annotate._shorten_source_id 와 동일한 변환 — CSV sample_id 대조용."""
@@ -644,7 +645,7 @@ class MultiGameDataset:
             if not csv_path.exists():
                 continue
 
-            # sample_id → {reward_enum: value} 집계 (전 enum 행을 하나의 dict로)
+            # sample_id → {reward_enum: value} 집계
             sample_conds: Dict[str, Dict[int, float]] = {}
             with open(csv_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -661,25 +662,31 @@ class MultiGameDataset:
                             except ValueError:
                                 pass
 
-            attached = 0
+            # 각 샘플을 enum별 복제본으로 확장 — 해당 게임만 처리
+            new_samples: List[GameSample] = []
+            expanded_count = 0
             for sample in self._samples:
                 if sample.game not in sample_games:
+                    new_samples.append(sample)
                     continue
                 short_id = _shorten(sample.source_id, sample.game)
-                conds = sample_conds.get(short_id)
+                conds = sample_conds.get(short_id) or sample_conds.get(str(sample.source_id))
                 if conds is None:
-                    # dungeon source_id가 정수형 문자열인 경우 대비
-                    conds = sample_conds.get(str(sample.source_id))
-                if conds is None:
+                    new_samples.append(sample)
                     continue
-                sample.meta["conditions"] = conds
-                # 가장 낮은 enum을 기본 reward_enum으로 설정 (backward compat.)
-                sample.meta["reward_enum"] = min(conds.keys())
-                attached += 1
+                for enum, val in sorted(conds.items()):
+                    new_samples.append(_dc.replace(
+                        sample,
+                        meta={**sample.meta,
+                              "reward_enum": enum,
+                              "conditions":  {enum: val}},
+                    ))
+                expanded_count += 1
+            self._samples = new_samples
 
-            if attached > 0:
-                logger.info("Reward annotations: attached to %d %s samples",
-                            attached, csv_game)
+            if expanded_count > 0:
+                logger.info("Reward annotations: expanded %d %s samples × %d enums",
+                            expanded_count, csv_game, len(next(iter(sample_conds.values()), {})))
 
 
     def _apply_mapping(self, sample: GameSample) -> GameSample:
@@ -760,7 +767,7 @@ class MultiGameDataset:
         """reward_enum 값으로 필터링 (0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable)."""
         return [self._apply_mapping(s)
                 for s in self._samples
-                if reward_enum in s.meta.get("conditions", {})]
+                if s.meta.get("reward_enum") == reward_enum]
 
     def by_feature_name(self, feature_name: str) -> List[GameSample]:
         """feature_name으로 필터링 (region, path_length, block, bat_amount, bat_direction)."""
@@ -772,7 +779,7 @@ class MultiGameDataset:
         """reward annotation이 있는 샘플만 반환."""
         return [self._apply_mapping(s)
                 for s in self._samples
-                if "conditions" in s.meta]
+                if "reward_enum" in s.meta]
 
     # ── 집계 ────────────────────────────────────────────────────────────────────
     def group_by_game(self) -> Dict[str, List[GameSample]]:

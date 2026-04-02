@@ -56,13 +56,12 @@ def load_dataset_instruct(config):
     # 게임별 필터링
     samples = ds.by_game(config.dataset_game)
 
-    # reward_enum 필터링 — conditions dict에 해당 enum 값이 있는 샘플만
+    # reward_enum 필터링
     if config.dataset_reward_enum is not None:
-        samples = [s for s in samples
-                   if config.dataset_reward_enum in s.meta.get("conditions", {})]
+        samples = [s for s in samples if s.meta.get("reward_enum") == config.dataset_reward_enum]
 
     # reward annotation이 있는 샘플만
-    samples = [s for s in samples if "conditions" in s.meta]
+    samples = [s for s in samples if "reward_enum" in s.meta and "conditions" in s.meta]
 
     assert len(samples) > 0, (
         f"No samples found for game={config.dataset_game}, "
@@ -106,8 +105,10 @@ def _build_instruct(sample_list, config):
     """샘플 리스트에서 Instruct 객체를 빌드한다."""
     n = len(sample_list)
 
-    reward_enum = config.dataset_reward_enum if config.dataset_reward_enum is not None else 0
-    reward_i = jnp.full((len(sample_list), 1), reward_enum, dtype=jnp.int32)
+    reward_i_list = []
+    for s in sample_list:
+        reward_i_list.append([s.meta["reward_enum"]])
+    reward_i = jnp.array(reward_i_list, dtype=jnp.int32)
 
     condition_list = []
     for s in sample_list:
@@ -347,20 +348,26 @@ def _log_dataset_summary(config, samples):
     logger.info(f"  Total Samples  : {len(samples)}")
 
     # reward_enum별 분포
-    re_val = config.dataset_reward_enum
-    logger.info(f"    reward_enum={re_val} ({REWARD_ENUM_NAMES.get(re_val, '?')}): "
-                f"{len(samples)} samples")
+    re_counter = Counter(s.meta["reward_enum"] for s in samples)
+    for re_val in sorted(re_counter.keys()):
+        feat_names = set(
+            s.meta.get("feature_name", "?")
+            for s in samples if s.meta["reward_enum"] == re_val
+        )
+        logger.info(f"    reward_enum={re_val} ({REWARD_ENUM_NAMES.get(re_val, '?')}): "
+                     f"{re_counter[re_val]} samples, features={feat_names}")
 
     # condition 값 통계
-    if re_val is not None:
+    for re_val in sorted(re_counter.keys()):
+        re_samples = [s for s in samples if s.meta["reward_enum"] == re_val]
         cond_vals = set()
-        for s in samples:
-            val = s.meta.get("conditions", {}).get(re_val)
+        for s in re_samples:
+            conds = s.meta.get("conditions", {})
+            val = conds.get(re_val, conds.get(str(re_val), None))
             if val is not None:
                 cond_vals.add(float(val))
         if cond_vals:
-            logger.info(f"    → condition values (sample): min={min(cond_vals):.1f}"
-                        f"  max={max(cond_vals):.1f}  unique={len(cond_vals)}")
+            logger.info(f"    → condition values: {sorted(cond_vals)}")
 
     logger.info(f"  Train Ratio    : {config.dataset_train_ratio}")
     logger.info("=" * 70)
@@ -368,9 +375,11 @@ def _log_dataset_summary(config, samples):
 
 def _log_split_summary(train_samples, test_samples, train_inst):
     """Train/Test 분할 결과를 로거로 출력한다."""
+    train_re = Counter(s.meta["reward_enum"] for s in train_samples)
+    test_re = Counter(s.meta["reward_enum"] for s in test_samples)
     logger.info("[CPCGRL] Train/Test Split")
-    logger.info(f"  Train : {len(train_samples)} samples")
-    logger.info(f"  Test  : {len(test_samples)} samples")
+    logger.info(f"  Train : {len(train_samples)} samples  {dict(sorted(train_re.items()))}")
+    logger.info(f"  Test  : {len(test_samples)} samples  {dict(sorted(test_re.items()))}")
     logger.info(f"  Instruct reward_i shape : {train_inst.reward_i.shape}")
     logger.info(f"  Instruct condition shape: {train_inst.condition.shape}")
 

@@ -113,7 +113,7 @@ class TestCPCGRLConfig:
         assert c.use_nlp is False
         assert c.use_clip is False
         assert c.nlp_input_dim == 0
-        assert c.vec_input_dim == 9
+        assert c.vec_input_dim == 5
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -136,7 +136,7 @@ class TestCPCGRLDatasetLoading:
         assert train_inst.reward_i.shape[1] == 1
         # condition shape: (N, 9)
         assert train_inst.condition.ndim == 2
-        assert train_inst.condition.shape[1] == 9
+        assert train_inst.condition.shape[1] == 5
         # 모든 reward_enum 값이 0 (region)
         assert (train_inst.reward_i == 0).all()
 

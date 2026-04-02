@@ -117,7 +117,6 @@ def _build_instruct(sample_list, config):
         for i in range(0, 5):
             val = conds.get(i, conds.get(str(i), -1))
             row.append(float(val))
-        row.extend([-1.0] * 4)
         condition_list.append(row)
     condition = jnp.array(condition_list, dtype=jnp.float32)
 

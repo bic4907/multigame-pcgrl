@@ -202,7 +202,7 @@ class POKEMONPreprocessor(BasePreprocessor):
         grass_positions = np.argwhere(grass_mask)
 
         for pos in grass_positions:
-            if rng.random() < 0.2:  # 1/5 확률
+            if rng.random() < 0.1:  # 1/5 확률
                 result[pos[0], pos[1]] = POKEMONTile.ENEMY
 
         return result

@@ -398,7 +398,7 @@ class RewardConfig(Config):
     output_dim: int = 1
 
     figure_dir: str = "figures"
-    buffer_dir: str = "./pcgrl_buffer"
+    buffer_dir: str = "./dataset"
     n_buffer: int = -1
     train_ratio: float = 0.8
     n_epochs: int = 100
@@ -424,6 +424,12 @@ class RewardConfig(Config):
 @dataclass
 class RewardTrainConfig(RewardConfig):
     wandb_project: str = 'train_mlp_encoder'
+    wandb_key: Optional[str] = None
+
+    pretrained_model: str = "bert"
+    model_size: str = "base"
+
+    max_len: int = 77
 
     n_envs: int = 300
     ckpt_freq: int = 5

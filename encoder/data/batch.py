@@ -16,7 +16,7 @@ from conf.config import RewardTrainConfig
 
 from encoder.data import (get_unique_pair_indices, pairing_maps)
 from encoder.data.instruct_utils import apply_pretrained_model
-from evaluator import get_doom_fitness_batch, get_dungeon_fitness_batch, get_pokemon_fitness_batch, get_sokoban_fitness_batch, get_zelda_fitness_batch
+from evaluator import get_fitness_batch
 from dataset.multigame import MultiGameDataset
 
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()  # Add the environment variable ;LOG_LEVEL=DEBUG
@@ -106,7 +106,7 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
     whole_reward_enum_digits = []
     whole_condition_vecs = []
     for s in dataset_samples:
-        reward_e = int(s.meta.get("reward_enum", 1))
+        reward_e = int(s.meta.get("reward_enum", 0))
         conditions = s.meta.get("conditions", {})  # e.g. {2: 40.0}
 
         # reward_enum → digit 배열 (e.g. 2 → [2], 12 → [1, 2])
@@ -206,44 +206,12 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
             batch_curr_env_map = curr_env_map[start_idx:end_idx]
 
             # Select fitness function based on game type
-            if game == "doom":
-                batch_reward = get_doom_fitness_batch(
-                    batch_reward_enum,
-                    batch_condition,
-                    batch_curr_env_map,
-                    config.normal_weigth,
-                )
-            elif game == "dungeon":
-                batch_reward = get_dungeon_fitness_batch(
-                    batch_reward_enum,
-                    batch_condition,
-                    batch_curr_env_map,
-                    config.normal_weigth,
-                )
-            elif game == "pokemon":
-                batch_reward = get_pokemon_fitness_batch(
-                    batch_reward_enum,
-                    batch_condition,
-                    batch_curr_env_map,
-                    config.normal_weigth,
-                )
-            elif game == "sokoban":
-                batch_reward = get_sokoban_fitness_batch(
-                    batch_reward_enum,
-                    batch_condition,
-                    batch_curr_env_map,
-                    config.normal_weigth,
-                )
-            elif game == "zelda":
-                batch_reward = get_zelda_fitness_batch(
-                    batch_reward_enum,
-                    batch_condition,
-                    batch_curr_env_map,
-                    config.normal_weigth,
-                )
-            else:
-                logger.warning(f"Unknown game type: {game}. Available games: Doom, Dungeon, Pokemon, Sokoban, Zelda")
-                raise ValueError(f"Unsupported game type: {game}")
+            batch_reward = get_fitness_batch(
+                batch_reward_enum,
+                batch_condition,
+                batch_curr_env_map,
+                config.normal_weigth,
+            )
 
             # save
             recalculated_reward.append(batch_reward)

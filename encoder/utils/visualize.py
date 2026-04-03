@@ -20,7 +20,7 @@ def create_scatter_plot(df, epoch, config, min_val=0, max_val=1,
     """
 
     sns.set_theme(style="whitegrid")
-    fig, ax = plt.subplots(figsize=(6.4, 4.8))
+    fig, ax = plt.subplots(figsize=(8, 6))
 
     # color normalize
     norm = mcolors.Normalize(vmin=min_val, vmax=max_val)
@@ -30,7 +30,7 @@ def create_scatter_plot(df, epoch, config, min_val=0, max_val=1,
     # generate Scatter plot
     _ = sns.scatterplot(
         data=df, x="ground_truth", y="prediction",
-        hue="reward_id", palette="bright", alpha=0.5, ax=ax
+        hue="reward_enum", palette="bright", alpha=0.5, ax=ax
     )
 
     # add Colorbar
@@ -43,12 +43,17 @@ def create_scatter_plot(df, epoch, config, min_val=0, max_val=1,
     ax.set_ylabel("Prediction")
 
     ax.grid(True)
-    plt.tight_layout()
+
+    # Move legend outside plot area to avoid tight_layout issues
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
+
+    # Use subplots_adjust instead of tight_layout to avoid warnings
+    plt.subplots_adjust(right=0.85, left=0.1, top=0.95, bottom=0.1)
 
     # save
     os.makedirs(os.path.join(config.exp_dir, config.figure_dir), exist_ok=True)
     fig_path = os.path.join(config.exp_dir, config.figure_dir, f"scatter_epoch_{epoch}{postfix}.png")
-    plt.savefig(fig_path)
+    plt.savefig(fig_path, bbox_inches='tight', dpi=300)
     plt.close(fig)
 
     return fig_path
@@ -77,7 +82,7 @@ def create_embedding_figure(embed_queue, epoch, config, postfix="") -> str:
 
     # draw scatter plot
     sns.set_theme(style="whitegrid")
-    fig, ax = plt.subplots(figsize=(5.2, 4.2))
+    fig, ax = plt.subplots(figsize=(6.4, 5))
     sns.scatterplot(
         data=df, x="tsne_x", y="tsne_y",
         hue="reward_enum", palette="bright", alpha=0.9, ax=ax
@@ -85,13 +90,19 @@ def create_embedding_figure(embed_queue, epoch, config, postfix="") -> str:
 
     ax.set_xlabel("Projection X")
     ax.set_ylabel("Projection Y")
+
+    # Move legend outside plot area to avoid tight_layout issues
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
+
     ax.grid(True)
-    plt.tight_layout()
+
+    # Use subplots_adjust instead of tight_layout
+    plt.subplots_adjust(right=0.85, left=0.1, top=0.95, bottom=0.1)
 
     # save
     os.makedirs(os.path.join(config.exp_dir, config.figure_dir), exist_ok=True)
     fig_path = os.path.join(config.exp_dir, config.figure_dir, f"embed_epoch_{epoch}{postfix}.png")
-    plt.savefig(fig_path)
+    plt.savefig(fig_path, bbox_inches='tight', dpi=300)
     plt.close(fig)
 
     return fig_path

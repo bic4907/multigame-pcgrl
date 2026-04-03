@@ -27,13 +27,12 @@ def get_reward_batch(
 
     reward_i 는 다음 인덱스를 따른다.
 
-    0: none
-    1: region
-    2: path_length
-    3: interactive placement (multigame — 개수 + 배치품질)
-    4: hazard placement (multigame)
-    5: collectable placement (multigame)
-    6+: none
+    0: region
+    1: path_length
+    2: interactive placement (multigame — 개수 + 배치품질)
+    3: hazard placement (multigame)
+    4: collectable placement (multigame)
+    5+: none
     """
     # List of reward functions
     reward_funcs = [

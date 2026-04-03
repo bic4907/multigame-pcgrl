@@ -8,7 +8,7 @@ from ..measures import get_region
 def region_loss(
     env_map: chex.Array,
     cond: chex.Array,
-    passable_tiles: chex.Array,
+    passable_tiles: chex.Array = Dungeon3Passible,
 ) -> chex.Array:
     """
     Region loss function.

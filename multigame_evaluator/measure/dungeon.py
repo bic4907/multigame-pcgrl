@@ -9,16 +9,17 @@ Dungeon 게임에 맞는 measure 함수 모음.
 1  FLOOR    - 바닥 (통과 가능)
 2  WALL     - 벽 (막힘)
 3  ENEMY    - 박쥐 (Mob)
+4  TREASURE - 보물 (Collectable, 통과 가능)
 
 분류
 --------------------------------------------------------------
-Empty   : FLOOR                  (통과 가능 지형)
+Empty   : FLOOR, TREASURE        (통과 가능 지형)
 Wall    : WALL, UNKNOWN          (막힘)
 Object  : (없음)
 Mob     : ENEMY                  (박쥐)
-Item    : (없음)
+Item    : TREASURE               (보물)
 
-Passable (RG/PL): Empty
+Passable (RG/PL): Empty (FLOOR + TREASURE)
 """
 from enum import IntEnum
 
@@ -32,14 +33,16 @@ from evaluator.utils import init_flood_net
 
 
 class DungeonTile(IntEnum):
-    UNKNOWN = 0
-    FLOOR   = 1
-    WALL    = 2
-    ENEMY   = 3
+    UNKNOWN  = 0
+    FLOOR    = 1
+    WALL     = 2
+    ENEMY    = 3
+    TREASURE = 4
 
 
 DungeonEmpty = jnp.array([
     DungeonTile.FLOOR,
+    DungeonTile.TREASURE,
 ], dtype=jnp.int32)
 
 DungeonWall = jnp.array([
@@ -53,7 +56,9 @@ DungeonMob = jnp.array([
     DungeonTile.ENEMY,
 ], dtype=jnp.int32)
 
-DungeonItem = jnp.array([], dtype=jnp.int32)
+DungeonItem = jnp.array([
+    DungeonTile.TREASURE,
+], dtype=jnp.int32)
 
 DungeonPassible = DungeonEmpty
 

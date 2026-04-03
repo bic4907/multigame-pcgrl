@@ -63,6 +63,14 @@ def load_dataset_instruct(config):
     # reward annotation이 있는 샘플만
     samples = [s for s in samples if "reward_enum" in s.meta and "conditions" in s.meta]
 
+    # condition 값 기반 필터링
+    cond_filter = getattr(config, "dataset_condition_filter", None)
+    if cond_filter:
+        filters = _parse_condition_filters(cond_filter)
+        before = len(samples)
+        samples = _apply_condition_filters(samples, filters)
+        logger.info(f"[CPCGRL] Condition filter '{cond_filter}': {before} → {len(samples)} samples")
+
     assert len(samples) > 0, (
         f"No samples found for game={config.dataset_game}, "
         f"reward_enum={config.dataset_reward_enum}. "
@@ -117,13 +125,12 @@ def _build_instruct(sample_list, config):
         for i in range(0, 5):
             val = conds.get(i, conds.get(str(i), -1))
             row.append(float(val))
-        row.extend([-1.0] * 4)
         condition_list.append(row)
     condition = jnp.array(condition_list, dtype=jnp.float32)
 
     # ── 임베딩 계산 ──────────────────────────────────────────────────────
     if getattr(config, "use_clip", False) and config.nlp_input_dim > 0:
-        embedding = _compute_clip_embeddings(sample_list, config.nlp_input_dim)
+        embedding = _compute_clip_embeddings(sample_list, config)
     elif getattr(config, "use_nlp", False) and config.nlp_input_dim > 0:
         embedding = _compute_bert_embeddings(sample_list, config.nlp_input_dim)
     else:
@@ -139,24 +146,34 @@ def _build_instruct(sample_list, config):
     )
 
 
-def _compute_clip_embeddings(sample_list, nlp_input_dim):
-    """CLIP text encoder를 사용하여 instruction 텍스트에서 임베딩을 계산한다.
+def _compute_clip_embeddings(sample_list, config):
+    """사전학습된 CLIP encoder를 통해 instruction 텍스트 → latent embedding을 계산한다.
+
+    1) openai/clip-vit-base-patch32 로 토크나이즈
+    2) 사전학습된 ContrastiveModule 의 encode_text 를 사용하여
+       512-dim raw CLIP → output_dim (e.g. 64) latent space 로 projection
 
     instruction이 None인 샘플은 zeros 임베딩으로 대체한다.
     """
     import numpy as np
+    from glob import glob
+    from os.path import basename, join
+
+    nlp_input_dim = config.nlp_input_dim
+    encoder_config = config.encoder
 
     try:
-        from transformers import CLIPProcessor, FlaxCLIPModel
+        from transformers import CLIPProcessor
     except ImportError:
         logger.warning("transformers not installed — falling back to zero embeddings")
         return jnp.zeros((len(sample_list), nlp_input_dim), dtype=jnp.float32)
 
-    model_name = "openai/clip-vit-base-patch32"  # 512-dim
-    logger.info(f"Computing CLIP text embeddings with {model_name} for {len(sample_list)} samples")
+    # ── 1) 토크나이즈 ──────────────────────────────────────────────────────
+    model_name = "openai/clip-vit-base-patch32"
+    logger.info(f"Computing CLIP latent embeddings (output_dim={encoder_config.output_dim}) "
+                f"for {len(sample_list)} samples")
 
     processor = CLIPProcessor.from_pretrained(model_name)
-    model = FlaxCLIPModel.from_pretrained(model_name)
 
     texts = []
     has_text = []
@@ -168,14 +185,90 @@ def _compute_clip_embeddings(sample_list, nlp_input_dim):
             texts.append("")  # placeholder
             has_text.append(False)
 
-    # 배치 토크나이즈
     inputs = processor(
         text=texts, return_tensors="jax",
-        padding=True, truncation=True, max_length=77,
+        padding="max_length", truncation=True, max_length=encoder_config.token_max_len,
     )
-    # CLIP text encoder → text features
-    text_features = model.get_text_features(**inputs)
-    clip_embeddings = np.array(text_features)  # (N, 512)
+    input_ids = jnp.array(inputs["input_ids"])            # (N, token_max_len)
+    attention_mask = jnp.array(inputs["attention_mask"])   # (N, token_max_len)
+
+    # ── 2) 사전학습된 encoder 로드 ────────────────────────────────────────
+    from encoder.clip_model import get_cnnclip_encoder, get_cnnclip_decoder_encoder
+    from flax.training import checkpoints as flax_ckpts
+
+    # decoder 모드 (MGPCGRL) 인 경우 ContrastiveDecoderModule 사용
+    _use_decoder = getattr(config, "use_decoder_reward_shaping", False)
+    if _use_decoder:
+        from conf.config import DecoderConfig
+        decoder_cfg = DecoderConfig(
+            num_reward_classes=getattr(config, "decoder_reward_classes", 5)
+        )
+        module, _ = get_cnnclip_decoder_encoder(
+            encoder_config, decoder_config=decoder_cfg, RL_training=True,
+        )
+    else:
+        module, _ = get_cnnclip_encoder(encoder_config, RL_training=True)
+
+    # dummy init
+    rng = jax.random.PRNGKey(0)
+    dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
+    dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
+    dummy_pix = jnp.ones((1, 16, 16, 6), dtype=jnp.float32)
+    mode = "text_state" if encoder_config.state else "text"
+    variables = module.init(rng, dummy_ids, dummy_mask, dummy_pix, mode=mode, training=False)
+
+    # 체크포인트 복원
+    ckpt_path = encoder_config.ckpt_path
+    if ckpt_path is not None:
+        ckpt_subdirs = glob(join(ckpt_path, '*'))
+        ckpt_steps = sorted(
+            [int(basename(d)) for d in ckpt_subdirs if basename(d).isdigit()],
+            reverse=True,
+        )
+        if ckpt_steps:
+            ckpt_dir = join(ckpt_path, str(ckpt_steps[0]))
+            enc_state = flax_ckpts.restore_checkpoint(ckpt_dir, target=None, prefix="")
+            if enc_state is not None:
+                # train_clip 체크포인트는 TrainState 형태로 저장되므로
+                # {"step": ..., "params": {"params": {...}}, "opt_state": ...}
+                # module.apply 에는 {"params": {...}} 를 넘겨야 한다.
+                if "params" in enc_state and "params" in enc_state["params"]:
+                    variables = enc_state["params"]  # {"params": {encoders, temperature, ...}}
+                    logger.info(f"Encoder checkpoint loaded (TrainState format) from {ckpt_dir} (step {ckpt_steps[0]})")
+                else:
+                    variables = enc_state
+                    logger.info(f"Encoder checkpoint loaded from {ckpt_dir} (step {ckpt_steps[0]})")
+            else:
+                logger.warning(f"Checkpoint restore returned None from {ckpt_dir}")
+        else:
+            logger.warning(f"No checkpoint steps found in {ckpt_path}")
+    else:
+        logger.warning("encoder.ckpt_path is None — using randomly initialized encoder for text projection")
+
+    # ── 3) encode_text 로 latent embedding 계산 ───────────────────────────
+    @jax.jit
+    def _encode_text_batch(variables, input_ids, attention_mask):
+        return module.apply(
+            variables, input_ids, attention_mask, None,
+            mode="text", training=False,
+        )
+
+    # 배치 단위로 처리 (OOM 방지)
+    batch_size = 256
+    n = len(sample_list)
+    all_embeddings = []
+
+    for start in range(0, n, batch_size):
+        end = min(start + batch_size, n)
+        out = _encode_text_batch(
+            variables,
+            input_ids[start:end],
+            attention_mask[start:end],
+        )
+        text_embed = np.array(out["text_embed"])  # (batch, output_dim)
+        all_embeddings.append(text_embed)
+
+    clip_embeddings = np.concatenate(all_embeddings, axis=0)  # (N, output_dim)
 
     # instruction 없는 샘플은 zeros
     for i, ht in enumerate(has_text):
@@ -183,21 +276,21 @@ def _compute_clip_embeddings(sample_list, nlp_input_dim):
             clip_embeddings[i] = 0.0
 
     # nlp_input_dim에 맞게 패딩 또는 절삭
-    clip_dim = clip_embeddings.shape[1]
-    if nlp_input_dim > clip_dim:
-        pad_width = ((0, 0), (0, nlp_input_dim - clip_dim))
+    embed_dim = clip_embeddings.shape[1]
+    if nlp_input_dim > embed_dim:
+        pad_width = ((0, 0), (0, nlp_input_dim - embed_dim))
         clip_embeddings = np.pad(clip_embeddings, pad_width, mode="constant")
-    elif nlp_input_dim < clip_dim:
+    elif nlp_input_dim < embed_dim:
         clip_embeddings = clip_embeddings[:, :nlp_input_dim]
 
-    logger.info(f"CLIP embeddings shape: {clip_embeddings.shape}")
+    logger.info(f"CLIP latent embeddings shape: {clip_embeddings.shape}")
     return jnp.array(clip_embeddings, dtype=jnp.float32)
 
 
 def _compute_bert_embeddings(sample_list, nlp_input_dim):
     """BERT를 사용하여 instruction 텍스트에서 임베딩을 계산한다.
 
-    instruction이 None인 샘플은 zeros 임베딩으로 대체한다.
+    instruction이 None인 샘플은 zeros 임베딩으로 대체된다.
     """
     import numpy as np
 
@@ -274,14 +367,17 @@ def _log_dataset_summary(config, samples):
     # condition 값 통계
     for re_val in sorted(re_counter.keys()):
         re_samples = [s for s in samples if s.meta["reward_enum"] == re_val]
-        cond_vals = set()
+        cond_vals = []
         for s in re_samples:
             conds = s.meta.get("conditions", {})
             val = conds.get(re_val, conds.get(str(re_val), None))
             if val is not None:
-                cond_vals.add(float(val))
+                cond_vals.append(float(val))
         if cond_vals:
-            logger.info(f"    → condition values: {sorted(cond_vals)}")
+            import numpy as _np
+            arr = _np.array(cond_vals)
+            logger.info(f"    → condition stats: min={arr.min():.1f}, max={arr.max():.1f}, "
+                        f"mean={arr.mean():.2f}, std={arr.std():.2f}, n_unique={len(set(cond_vals))}")
 
     logger.info(f"  Train Ratio    : {config.dataset_train_ratio}")
     logger.info("=" * 70)
@@ -296,4 +392,79 @@ def _log_split_summary(train_samples, test_samples, train_inst):
     logger.info(f"  Test  : {len(test_samples)} samples  {dict(sorted(test_re.items()))}")
     logger.info(f"  Instruct reward_i shape : {train_inst.reward_i.shape}")
     logger.info(f"  Instruct condition shape: {train_inst.condition.shape}")
+
+
+# ── Condition 필터 유틸 ────────────────────────────────────────────────────────
+
+import re as _re
+from dataclasses import dataclass as _dataclass
+from typing import Optional as _Optional, List as _List
+
+
+@_dataclass
+class _ConditionFilter:
+    """단일 condition 필터 조건."""
+    enum_idx: int                   # condition index (0~4)
+    min_val: _Optional[float] = None  # inclusive lower bound
+    max_val: _Optional[float] = None  # inclusive upper bound
+
+
+def _parse_condition_filters(filter_str: str) -> _List[_ConditionFilter]:
+    """필터 문자열을 파싱한다.
+
+    포맷 (쉼표로 여러 개 구분):
+        enum_{i}_min_{lo}_max_{hi}   — lo ≤ condition[i] ≤ hi
+        enum_{i}_min_{lo}            — lo ≤ condition[i]
+        enum_{i}_max_{hi}            — condition[i] ≤ hi
+
+    Examples
+    --------
+        "enum_0_min_3_max_10"        → condition[0] in [3, 10]
+        "enum_0_min_3_max_10,enum_2_max_50"  → 두 필터 AND
+    """
+    pattern = _re.compile(
+        r"enum_(\d+)"
+        r"(?:_min_([\d.]+))?"
+        r"(?:_max_([\d.]+))?"
+    )
+    filters = []
+    for token in filter_str.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        m = pattern.fullmatch(token)
+        if m is None:
+            raise ValueError(
+                f"Invalid condition filter: '{token}'. "
+                f"Expected format: enum_{{i}}_min_{{lo}}_max_{{hi}} "
+                f"(min/max are each optional but at least one required)"
+            )
+        idx = int(m.group(1))
+        min_val = float(m.group(2)) if m.group(2) is not None else None
+        max_val = float(m.group(3)) if m.group(3) is not None else None
+        if min_val is None and max_val is None:
+            raise ValueError(
+                f"Condition filter 'enum_{idx}' has neither min nor max — "
+                f"at least one bound is required."
+            )
+        filters.append(_ConditionFilter(enum_idx=idx, min_val=min_val, max_val=max_val))
+    return filters
+
+
+def _apply_condition_filters(samples, filters: _List[_ConditionFilter]):
+    """필터 리스트를 AND 조합으로 적용하여 샘플을 필터링한다."""
+    for f in filters:
+        def _keep(s, _f=f):
+            conds = s.meta.get("conditions", {})
+            val = conds.get(_f.enum_idx, conds.get(str(_f.enum_idx), None))
+            if val is None:
+                return False
+            val = float(val)
+            if _f.min_val is not None and val < _f.min_val:
+                return False
+            if _f.max_val is not None and val > _f.max_val:
+                return False
+            return True
+        samples = [s for s in samples if _keep(s)]
+    return samples
 

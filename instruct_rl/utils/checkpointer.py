@@ -157,65 +157,21 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
     if config.encoder.ckpt_path is not None:
         logger.info(f"Restoring encoder checkpoint from {config.encoder.ckpt_path}")
 
-        # Convert to absolute path
-        config.encoder.ckpt_path = os.path.abspath(config.encoder.ckpt_path)
-
-        # Check if path exists
-        if not os.path.exists(config.encoder.ckpt_path):
-            logger.error(f"[ERROR] Encoder checkpoint path does not exist: {config.encoder.ckpt_path}")
-            raise FileNotFoundError(f"Encoder checkpoint path not found: {config.encoder.ckpt_path}")
-
-        # Strategy 1: Look for numeric subdirectories directly
         ckpt_subdirs = glob(join(config.encoder.ckpt_path, '*'))
-        if len(ckpt_subdirs) > 0:
-            logger.info(f"Contents: {[basename(cs) for cs in ckpt_subdirs[:10]]}")
 
         ckpt_steps = [int(basename(cs)) for cs in ckpt_subdirs if basename(cs).isdigit()]
 
-        # Strategy 2: If no numeric steps found, look for 'ckpts' subdirectory
-        if len(ckpt_steps) == 0:
-            logger.info("No numeric subdirectories found. Looking for 'ckpts' subdirectory...")
-            ckpts_dirs = [cs for cs in ckpt_subdirs if basename(cs) == 'ckpts']
+        assert len(ckpt_steps) > 0, (
+            "No checkpoint found in encoder checkpoint path. Set 'encoder.ckpt_path' to the paths ends with '**/ckpts'"
+        )
 
-            if len(ckpts_dirs) > 0:
-                ckpts_dir = ckpts_dirs[0]
-                logger.info(f"Found 'ckpts' directory at: {ckpts_dir}")
-                config.encoder.ckpt_path = ckpts_dir
-                ckpt_subdirs = glob(join(ckpts_dir, '*'))
-                ckpt_steps = [int(basename(cs)) for cs in ckpt_subdirs if basename(cs).isdigit()]
-            else:
-                # Strategy 3: Look recursively in subdirectories for 'ckpts' directory
-                logger.info("No 'ckpts' directory found. Searching recursively in subdirectories...")
-                for subdir in ckpt_subdirs:
-                    ckpts_subdir = join(subdir, 'ckpts')
-                    if os.path.exists(ckpts_subdir):
-                        logger.info(f"Found 'ckpts' directory in: {subdir}")
-                        config.encoder.ckpt_path = ckpts_subdir
-                        ckpt_subdirs = glob(join(ckpts_subdir, '*'))
-                        ckpt_steps = [int(basename(cs)) for cs in ckpt_subdirs if basename(cs).isdigit()]
-                        break
-
-        logger.info(f"Found checkpoint steps: {ckpt_steps}")
-
-        if len(ckpt_steps) == 0:
-            logger.error(f"[ERROR] No checkpoint found in encoder checkpoint path: {config.encoder.ckpt_path}")
-            for subdir in ckpt_subdirs[:20]:
-                logger.error(f"  - {basename(subdir)}")
-            raise AssertionError(
-                f"No checkpoint found in encoder checkpoint path. "
-                f"Current path: {config.encoder.ckpt_path}"
-            )
-
-        logger.info(f"Available checkpoint steps: {sorted(ckpt_steps)}")
+        logger.info(f"  Available checkpoint steps: {sorted(ckpt_steps)}")
 
         # Sort in decreasing order
         ckpt_steps.sort(reverse=True)
         enc_param = None
         for steps_prev_complete in ckpt_steps:
             ckpt_dir = os.path.join(config.encoder.ckpt_path, str(steps_prev_complete))
-            # Ensure absolute path for orbax
-            ckpt_dir = os.path.abspath(ckpt_dir)
-            logger.info(f"Attempting to load checkpoint from: {ckpt_dir}")
 
             try:
                 from flax.training import checkpoints
@@ -245,7 +201,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                     enc_param = get_encoder_params_recursive(enc_param, "encoder")
                     assert enc_param is not None, "Encoder not found in checkpoint"
 
-                # 로딩 성공 로그
+                # ── 로딩 성공 로그 ──
                 log_encoder_ckpt_loaded(enc_param, ckpt_dir, steps_prev_complete)
                 break
 
@@ -256,9 +212,8 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                 continue
 
         if enc_param is None:
-            logger.error(f"[ERROR] Failed to load any encoder checkpoint from {config.encoder.ckpt_path}")
+            logger.error(f"  ❌ Failed to load any encoder checkpoint from {config.encoder.ckpt_path}")
     else:
-        logger.info("[INFO] encoder.ckpt_path is None - no encoder checkpoint will be loaded")
         enc_param = None
 
     return checkpoint_manager, restored_ckpt, enc_param
@@ -344,7 +299,7 @@ def apply_encoder_params(runner_state, encoder_params, config):
 
 def log_encoder_ckpt_loaded(enc_param, ckpt_dir: str, step: int):
     """인코더 체크포인트 로딩 성공 시 요약 로그를 출력한다."""
-    logger.info(f"[OK] Encoder checkpoint loaded successfully (step={step})")
+    logger.info(f"  ✅ Encoder checkpoint loaded successfully (step={step})")
     logger.info(f"     ckpt_dir: {ckpt_dir}")
     if isinstance(enc_param, dict):
         from flax.traverse_util import flatten_dict
@@ -365,7 +320,7 @@ def log_encoder_params_summary(encoder_params, config):
     if encoder_params is not None:
         from flax.traverse_util import flatten_dict
         logger.info("=" * 80)
-        logger.info("[OK] Encoder checkpoint found - applying pretrained encoder params")
+        logger.info("✅ Encoder checkpoint found — applying pretrained encoder params")
         logger.info(f"   ckpt_path : {config.encoder.ckpt_path}")
         logger.info(f"   ckpt_name : {getattr(config.encoder, 'ckpt_name', None)}")
         logger.info(f"   encoder   : {config.encoder.model}")
@@ -389,7 +344,7 @@ def log_encoder_params_summary(encoder_params, config):
         logger.info("=" * 80)
     else:
         logger.info("=" * 80)
-        logger.info("[WARNING] No encoder checkpoint - encoder_params is None")
+        logger.info("⚠️  No encoder checkpoint — encoder_params is None")
         logger.info(f"   ckpt_path : {getattr(config.encoder, 'ckpt_path', None)}")
         logger.info(f"   ckpt_name : {getattr(config.encoder, 'ckpt_name', None)}")
         logger.info("=" * 80)

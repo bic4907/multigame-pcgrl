@@ -15,13 +15,14 @@ Pokemon 게임에 맞는 measure 함수 모음.
 7  FENCE   - 울타리 (Wall)
 8  TREE    - 나무 (Wall)
 9  HOUSE   - 건물 (Wall)
+10 GRASS   - 잔디 (Empty, FLOOR와 동일)
 
 분류
 --------------------------------------------------------------
-Empty   : FLOOR                  (통과 가능 지형)
+Empty   : FLOOR, GRASS           (통과 가능 지형)
 Wall    : TREE, HOUSE, FENCE     (막힘)
 Object  : SPAWN, WATER           (구조물)
-Mob     : (없음)
+Mob     : ENEMY                  (grass→monster 확률 변환)
 Item    : OBJECT                 (획득 가능)
 
 Passable (RG/PL): Empty + Item
@@ -48,10 +49,12 @@ class PokemonTile(IntEnum):
     FENCE  = 7
     TREE   = 8
     HOUSE  = 9
+    GRASS  = 10
 
 
 PokemonEmpty = jnp.array([
     PokemonTile.FLOOR,
+    PokemonTile.GRASS,
 ], dtype=jnp.int32)
 
 PokemonWall = jnp.array([
@@ -65,7 +68,9 @@ PokemonObject = jnp.array([
     PokemonTile.WATER,
 ], dtype=jnp.int32)
 
-PokemonMob = jnp.array([], dtype=jnp.int32)
+PokemonMob = jnp.array([
+    PokemonTile.ENEMY,
+], dtype=jnp.int32)
 
 PokemonItem = jnp.array([
     PokemonTile.OBJECT,

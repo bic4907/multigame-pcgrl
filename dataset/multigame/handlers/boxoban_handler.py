@@ -43,6 +43,7 @@ Diversity 필터링
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import warnings
 from pathlib import Path
@@ -280,6 +281,88 @@ def _diversity_sample(
     return chosen
 
 
+# ── 오브젝트 증강 ────────────────────────────────────────────────────────────────
+
+def _is_corner(array: np.ndarray, r: int, c: int) -> bool:
+    """
+    (r, c)가 구석인지 판단한다.
+    구석 = EMPTY 타일이면서 상하좌우 중 수직으로 인접한 두 방향이 모두 WALL인 경우.
+    경계 밖은 WALL로 간주한다.
+    """
+    H, W = array.shape
+
+    def is_wall(rr, cc):
+        if rr < 0 or rr >= H or cc < 0 or cc >= W:
+            return True
+        return array[rr, cc] == BoxobanTile.WALL
+
+    top    = is_wall(r - 1, c)
+    bottom = is_wall(r + 1, c)
+    left   = is_wall(r, c - 1)
+    right  = is_wall(r, c + 1)
+
+    return (top and left) or (top and right) or (bottom and left) or (bottom and right)
+
+
+def _placeable_positions(array: np.ndarray) -> np.ndarray:
+    """
+    OBJECT를 놓을 수 있는 위치를 반환한다.
+    조건: EMPTY 타일이고 구석이 아닌 위치.
+    """
+    candidates = []
+    for r, c in np.argwhere(array == BoxobanTile.EMPTY):
+        if not _is_corner(array, r, c):
+            candidates.append([r, c])
+    return np.array(candidates, dtype=np.int32) if candidates else np.empty((0, 2), dtype=np.int32)
+
+
+def _augment_objects(array: np.ndarray) -> np.ndarray:
+    """
+    Sokoban 맵의 오브젝트(box) 수를 확률적으로 증감한다.
+
+    - 40% : 변경 없음 (4개 유지)
+    - 20% : 랜덤 1개 제거 → 3개
+    - 20% : EMPTY(비구석) 위치에 1개 추가 → 5개
+    - 20% : EMPTY(비구석) 위치에 2개 추가 → 6개
+
+    시드는 배열 내용의 MD5 해시 → 동일 입력이면 항상 동일 결과.
+    """
+    seed = int.from_bytes(
+        hashlib.md5(array.tobytes()).digest()[:4], byteorder='big'
+    )
+    rng = np.random.default_rng(seed)
+
+    choice = rng.choice([0, 1, 2, 3], p=[0.4, 0.2, 0.2, 0.2])
+    result = array.copy()
+
+    if choice == 0:
+        # 변경 없음
+        return result
+
+    elif choice == 1:
+        # 1개 제거
+        obj_positions = np.argwhere(result == BoxobanTile.OBJECT)
+        if len(obj_positions) == 0:
+            return result
+        idx = rng.integers(len(obj_positions))
+        r, c = obj_positions[idx]
+        result[r, c] = BoxobanTile.EMPTY
+
+    else:
+        # 1개(choice==2) 또는 2개(choice==3) 추가
+        n_add = 1 if choice == 2 else 2
+        placeable = _placeable_positions(result)
+        if len(placeable) == 0:
+            return result
+        n_add = min(n_add, len(placeable))
+        chosen = rng.choice(len(placeable), size=n_add, replace=False)
+        for idx in chosen:
+            r, c = placeable[idx]
+            result[r, c] = BoxobanTile.OBJECT
+
+    return result
+
+
 # ── 핸들러 클래스 ────────────────────────────────────────────────────────────────
 
 class BoxobanHandler(BaseGameHandler):
@@ -369,6 +452,7 @@ class BoxobanHandler(BaseGameHandler):
                 if arr is None:
                     continue
                 processed = _fit_to_target(arr, _TARGET_SIZE)
+                processed = _augment_objects(processed)
                 source_id = f"{rel}#{lvl_idx}"
                 all_arrays.append(processed)
                 all_ids.append(source_id)

@@ -52,6 +52,7 @@ from .handlers.handler_config import HandlerConfig, get_default_config
 from . import tags as tag_utils
 from .cache_utils import (
     build_per_game_cache_key,
+    build_combined_doom_cache_key,
     load_game_samples_from_cache,
     save_game_samples_to_cache,
     load_any_game_cache,
@@ -134,18 +135,20 @@ class MultiGameDataset:
 
     def __init__(
         self,
+
         dungeon_root:     Path | str = _DEFAULT_DUNGEON_ROOT,
         pokemon_root:     Path | str = _DEFAULT_POKEMON_ROOT,
         sokoban_root:     Path | str = _DEFAULT_BOXOBAN_ROOT,
         doom_root:        Path | str = _DEFAULT_DOOM_ROOT,
         doom2_root:       Path | str = _DEFAULT_DOOM2_ROOT,
         zelda_root:       Path | str = _DEFAULT_ZELDA_ROOT,
+        N:                int = 0,
         include_dungeon:  bool = True,
         include_pokemon:  bool = True,
-        include_sokoban:  bool = False,
-        include_doom:     bool = False,
-        include_doom2:    bool = False,
-        include_zelda:    bool = False,
+        include_sokoban:  bool = True,
+        include_doom:     bool = True,
+        include_doom2:    bool = True,
+        include_zelda:    bool = True,
         use_cache:        bool = True,
         cache_dir:        Path | str | None = None,
         use_tile_mapping: bool = True,
@@ -193,10 +196,7 @@ class MultiGameDataset:
             _game_specs.append(("zelda", str(zelda_root), hc.get("zelda", {})))
         if include_pokemon:
             _game_specs.append(("pokemon", str(pokemon_root), hc.get("pokemon", {})))
-        if include_doom:
-            _game_specs.append(("doom", str(doom_root), hc.get("doom", {})))
-        if include_doom2:
-            _game_specs.append(("doom2", str(doom2_root), hc.get("doom", {})))
+        # doom/doom2는 통합 처리 (루프 후 별도 블록에서)
 
         # ── 게임별 로드 루프 ─────────────────────────────────────────────────
         for game, game_root, game_hc in _game_specs:
@@ -217,6 +217,12 @@ class MultiGameDataset:
             )
 
             if game_samples is not None:
+                # 캐시 저장 전 max_samples 적용
+                max_s = game_hc.get("max_samples") if isinstance(game_hc, dict) else getattr(game_hc, "max_samples", None)
+                if max_s is not None and len(game_samples) > max_s:
+                    game_samples = game_samples[:max_s]
+                # 캐시 저장 전 필터링 + 증강 적용 (viewer/annotate 모두 동일한 수를 보도록)
+                game_samples = self._postprocess_game_samples(game, game_samples, handler_config)
                 for s in game_samples:
                     s.order = len(self._samples)
                     self._samples.append(s)
@@ -241,19 +247,138 @@ class MultiGameDataset:
             # (4) 아무것도 없으면 경고만 출력
             logger.warning("%s: no source data and no cache — skipped", game)
 
-        # ── 글로벌 후처리 (캐시에 저장하지 않고 매번 런타임 적용) ──────────────
-        if self._handler_config.pokemon.enabled:
-            self._apply_pokemon_tileset_filtering()
-
-        if self._handler_config.pokemon.enabled:
-            self._apply_instruction_filtering()
-
-        if self._handler_config.augmentation.enabled:
-            self._augment_with_rotations_per_game()
+        # ── doom + doom2 통합 로드 (합산 max_samples=1000 적용 후 캐시 저장) ──
+        if include_doom or include_doom2:
+            doom_hc = hc.get("doom", {})
+            doom_cache_key = build_combined_doom_cache_key(
+                str(doom_root), str(doom2_root),
+                include_doom, include_doom2,
+                doom_hc,
+            )
+            doom_cached = load_game_samples_from_cache(cache_dir, "doom", doom_cache_key) if use_cache else None
+            if doom_cached is not None:
+                for s in doom_cached:
+                    s.order = len(self._samples)
+                    self._samples.append(s)
+            else:
+                doom_combined: List[GameSample] = []
+                if include_doom:
+                    raw = self._load_game_from_source("doom", str(doom_root), handler_config)
+                    if raw:
+                        doom_combined.extend(raw)
+                if include_doom2:
+                    raw = self._load_game_from_source("doom2", str(doom2_root), handler_config)
+                    if raw:
+                        doom_combined.extend(raw)
+                if doom_combined:
+                    max_s = doom_hc.get("max_samples") if isinstance(doom_hc, dict) else getattr(doom_hc, "max_samples", None)
+                    if max_s is not None and len(doom_combined) > max_s:
+                        doom_combined = doom_combined[:max_s]
+                    doom_combined = self._postprocess_game_samples("doom", doom_combined, handler_config)
+                    for s in doom_combined:
+                        s.order = len(self._samples)
+                        self._samples.append(s)
+                    if use_cache:
+                        save_game_samples_to_cache(cache_dir, "doom", doom_cache_key, doom_combined)
+                else:
+                    fallback = load_any_game_cache(cache_dir, "doom") if use_cache else None
+                    if fallback is not None:
+                        print(f"[MultiGameDataset] doom: artifact-only fallback ({len(fallback)} samples)")
+                        for s in fallback:
+                            s.order = len(self._samples)
+                            self._samples.append(s)
 
         if reward_annotations_dir is not None:
             self._load_reward_annotations(Path(reward_annotations_dir))
 
+        # ── N 샘플 서브샘플링 (게임별, 마스크 기반) ─────────────────────────
+        if N >= 1:
+            import random as _random
+            _total = len(self._samples)
+            _rng = _random.Random(42)
+            _mask = [False] * _total
+            # 게임별 인덱스를 삽입 순서 유지로 수집
+            _game_buckets: dict = {}
+            for i, s in enumerate(self._samples):
+                _game_buckets.setdefault(s.game, []).append(i)
+            for _game, _idxs in _game_buckets.items():
+                if len(_idxs) > N:
+                    _chosen = _rng.sample(_idxs, N)
+                    logger.info("N=%d per-game subsampling [%s]: %d → %d", N, _game, len(_idxs), N)
+                else:
+                    _chosen = _idxs
+                for i in _chosen:
+                    _mask[i] = True
+            self._samples = [s for s, m in zip(self._samples, _mask) if m]
+            if len(self._samples) < _total:
+                logger.info("N=%d per-game subsampling total: %d → %d samples", N, _total, len(self._samples))
+
+    def _postprocess_game_samples(
+        self, game: str, samples: List[GameSample], handler_config: HandlerConfig
+    ) -> List[GameSample]:
+        """
+        캐시 저장 전에 필터링과 증강을 적용한다.
+
+        적용 순서:
+        1. Pokemon 타일셋 필터링 (max_tile_count 초과 샘플 제거)
+        2. Instruction 단어 수 필터링 (min_instruction_words 미만 제거)
+        3. 회전 증강 (rotate_90 설정 시 90도 회전 사본 추가)
+        4. 증강 후 max_samples 재적용
+        """
+        # (1) Pokemon 타일셋 필터링
+        if game == "pokemon" and handler_config.pokemon.enabled:
+            max_tile_count = handler_config.pokemon.max_tile_count
+            before = len(samples)
+            samples = [
+                s for s in samples
+                if int(np.max(np.bincount(s.array.ravel().astype(int)))) < max_tile_count
+            ]
+            removed = before - len(samples)
+            if removed > 0:
+                print(f"[MultiGameDataset] POKEMON tileset filtering: {before} → {len(samples)} "
+                      f"({removed} removed, max_tile_count={max_tile_count})")
+
+        # (2) Instruction 단어 수 필터링
+        if handler_config.pokemon.enabled:
+            min_words = handler_config.pokemon.min_instruction_words
+            before = len(samples)
+            samples = [
+                s for s in samples
+                if s.instruction is None or len(s.instruction.split()) >= min_words
+            ]
+            removed = before - len(samples)
+            if removed > 0:
+                print(f"[MultiGameDataset] {game} instruction filtering: {before} → {len(samples)} "
+                      f"({removed} removed, min_words={min_words})")
+
+        # (3) 회전 증강
+        if handler_config.augmentation.enabled:
+            should_augment = (
+                (game == "pokemon" and handler_config.pokemon.rotate_90) or
+                (game == "dungeon" and handler_config.dungeon.rotate_90) or
+                (game in ("doom", "doom2") and handler_config.doom.rotate_90) or
+                (game == "zelda" and handler_config.zelda.rotate_90)
+            )
+            if should_augment:
+                rotated = [create_rotated_sample(s) for s in samples]
+                samples = samples + rotated
+                print(f"[MultiGameDataset] {game} augmentation: {len(rotated)} rotated samples added → {len(samples)} total")
+
+        # (4) 증강 후 max_samples 재적용
+        max_s: Optional[int] = None
+        if game == "pokemon":
+            max_s = handler_config.pokemon.max_samples
+        elif game in ("doom", "doom2"):
+            max_s = handler_config.doom.max_samples
+        elif game == "zelda":
+            max_s = handler_config.zelda.max_samples
+        elif game == "dungeon":
+            max_s = handler_config.dungeon.max_samples
+        if max_s is not None and len(samples) > max_s:
+            print(f"[MultiGameDataset] {game} post-augmentation limit: {len(samples)} → {max_s}")
+            samples = samples[:max_s]
+
+        return samples
 
     def _load_game_from_source(
         self, game: str, game_root: str, handler_config: HandlerConfig
@@ -332,28 +457,6 @@ class MultiGameDataset:
                 filtered.append(sample)
         return filtered
 
-    def _is_valid_sample(self, sample: GameSample) -> bool:
-        """
-        [Deprecated] 이 메서드는 더 이상 사용되지 않습니다.
-        필터링은 각 게임별 로드 시점에 수행됩니다.
-        """
-        pass
-
-    def _apply_instruction_filtering(self) -> None:
-        """
-        instruction 단어 수 기반 필터링을 적용한다.
-        (타일 비율 필터링은 각 게임별 로드 시 수행됨)
-
-        필터링 기준:
-        - instruction 단어 수 < min_instruction_words인 샘플 제외
-        """
-        original_count = len(self._samples)
-
-        # instruction이 있는 샘플만 필터링 (instruction이 없는 샘플은 유지)
-        self._samples = [
-            s for s in self._samples
-            if s.instruction is None or len(s.instruction.split()) >= self._handler_config.pokemon.min_instruction_words
-        ]
 
         filtered_count = original_count - len(self._samples)
         if filtered_count > 0:
@@ -440,12 +543,12 @@ class MultiGameDataset:
         # ── 증강 후 각 게임별 제한 (handler_config의 max_samples 참조) ────────────
         game_sample_counts = {}
         filtered_samples = []
-        
+
         for sample in self._samples:
             game = sample.game
             if game not in game_sample_counts:
                 game_sample_counts[game] = 0
-            
+
             # 각 게임의 handler_config에서 max_samples 가져오기
             max_samples = None
             if game == "pokemon":
@@ -457,20 +560,20 @@ class MultiGameDataset:
             elif game == "dungeon":
                 max_samples = self._handler_config.dungeon.max_samples
             # sokoban은 handler_config에 설정이 없으므로 제한하지 않음
-            
+
             # max_samples 제한 확인
             if max_samples is None or game_sample_counts[game] < max_samples:
                 filtered_samples.append(sample)
                 game_sample_counts[game] += 1
-        
+
         # 필터링된 샘플이 있으면 적용
         if len(filtered_samples) < len(self._samples):
             self._samples = filtered_samples
-            
+
             # order 재지정
             for i, sample in enumerate(self._samples):
                 sample.order = i
-            
+
             logger.info("Game-wise limit (per config): %d → %d samples",
                         original_count, len(self._samples))
             for game, count in sorted(game_sample_counts.items()):
@@ -484,7 +587,7 @@ class MultiGameDataset:
                     max_samples = self._handler_config.zelda.max_samples
                 elif game == "dungeon":
                     max_samples = self._handler_config.dungeon.max_samples
-                
+
                 if max_samples is not None:
                     limited_count = min(count, max_samples)
                     if limited_count < count:
@@ -499,43 +602,78 @@ class MultiGameDataset:
         reward_annotations 폴더에서 CSV 파일을 읽어 해당 게임 샘플의 meta에
         reward annotation 정보를 부착한다.
         - {game}_reward_annotations.csv         : per-sample 실제 annotation
+            → 각 샘플을 reward 수만큼 복제하여 reward_enum별 샘플 생성
         - {game}_reward_annotations_placeholder.csv : 게임 단위 더미 annotation
             → conditions 접근 시 WARNING 로그 출력
-        reward_enum은 모든 게임 통일 1~5:
-          1=region / 2=path_length / 3=block / 4=bat_amount / 5=bat_direction
         """
-        # ── dungeon: per-sample CSV ───────────────────────────────────────
-        dungeon_csv = annotations_dir / "dungeon_reward_annotations.csv"
-        if dungeon_csv.exists():
-            annotation_map: Dict[str, Dict[str, Any]] = {}
-            with open(dungeon_csv, "r", encoding="utf-8") as f:
+        import dataclasses
+
+        # ── per-sample CSV가 있는 게임: key 순서 기반으로 샘플을 reward 수만큼 복제 ──
+        # CSV 구조: key 순서로 정렬 시 [reward0: sample0..N-1, reward1: sample0..N-1, ...]
+        for csv_path in sorted(annotations_dir.glob("*_reward_annotations.csv")):
+            game_name = csv_path.name.replace("_reward_annotations.csv", "")
+
+            # key 순서대로 모든 행 로드
+            all_rows: List[Dict[str, Any]] = []
+            with open(csv_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    annotation_map[row["key"]] = row
+                    all_rows.append(row)
+            all_rows.sort(key=lambda r: r["key"])
+
+            # 이 게임의 로드된 샘플 목록 (순서 유지)
+            game_samples = [s for s in self._samples if s.game == game_name]
+            n_samples = len(game_samples)
+            if n_samples == 0 or len(all_rows) == 0:
+                continue
+
+            # CSV 행 수 / 샘플 수 = reward 수
+            n_rewards = len(all_rows) // n_samples
+            if n_rewards == 0:
+                logger.warning("Reward annotations [%s]: CSV rows (%d) < samples (%d), skipped",
+                               game_name, len(all_rows), n_samples)
+                continue
+
+            # sample_index i, reward_block r → CSV row: all_rows[r * n_samples + i]
             attached = 0
-            for sample in self._samples:
-                if sample.game != GameTag.DUNGEON:
-                    continue
-                ann = annotation_map.get(sample.source_id)
-                if ann is None:
-                    continue
-                sample.meta["reward_enum"] = int(ann["reward_enum"])
-                sample.meta["feature_name"] = ann["feature_name"]
-                sample.meta["sub_condition"] = ann["sub_condition"]
-                conditions: Dict[int, float] = {}
-                for i in range(1, 6):
-                    val = ann.get(f"condition_{i}", "")
-                    if val != "":
-                        conditions[i] = float(val)
-                sample.meta["conditions"] = conditions
-                attached += 1
+            new_samples: List[GameSample] = []
+            for i, sample in enumerate(game_samples):
+                for r in range(n_rewards):
+                    row_idx = r * n_samples + i
+                    if row_idx >= len(all_rows):
+                        break
+                    ann = all_rows[row_idx]
+                    if r == 0:
+                        target = sample
+                    else:
+                        target = dataclasses.replace(sample, meta=dict(sample.meta))
+                        new_samples.append(target)
+                    target.meta["key"] = ann["key"]
+                    target.meta["reward_enum"] = int(ann["reward_enum"])
+                    target.meta["feature_name"] = ann["feature_name"]
+                    target.meta["sub_condition"] = ann["sub_condition"]
+                    conditions: Dict[int, float] = {}
+                    for ci in range(0, 5):
+                        val = ann.get(f"condition_{ci}", "")
+                        if val != "":
+                            conditions[ci] = float(val)
+                    target.meta["conditions"] = conditions
+                    attached += 1
+
+            if new_samples:
+                self._samples.extend(new_samples)
             if attached > 0:
-                logger.info("Reward annotations: attached to %d dungeon samples", attached)
-        # ── 나머지 게임: *_placeholder.csv 읽어서 game-level 적용 ─────────
-        # 파일명에 _placeholder가 포함된 CSV를 자동 탐지
+                logger.info("Reward annotations [%s]: %d samples × %d rewards = %d attached "
+                            "(%d original + %d duplicated)",
+                            game_name, n_samples, n_rewards, attached,
+                            n_samples, len(new_samples))
+
+        # ── placeholder CSV: per-sample CSV가 없는 게임에만 적용 ──────────
         for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):
             game_name = ph_csv.name.replace("_reward_annotations_placeholder.csv", "")
-            # CSV에서 feature 목록 파싱
+            # per-sample CSV가 이미 있으면 스킵
+            if (annotations_dir / f"{game_name}_reward_annotations.csv").exists():
+                continue
             ph_features: list[Dict[str, Any]] = []
             with open(ph_csv, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -554,7 +692,6 @@ class MultiGameDataset:
                     })
             if not ph_features:
                 continue
-            # 모든 조건을 합친 dict (placeholder 전체를 한 번에)
             all_conditions: Dict[int, float] = {}
             for feat in ph_features:
                 all_conditions.update(feat["conditions"])
@@ -562,7 +699,6 @@ class MultiGameDataset:
             for sample in self._samples:
                 if sample.game != game_name:
                     continue
-                # 기본 reward_enum = 첫 번째 feature
                 sample.meta["reward_enum"]  = ph_features[0]["reward_enum"]
                 sample.meta["feature_name"] = ph_features[0]["feature_name"]
                 sample.meta["sub_condition"] = ph_features[0]["sub_condition"]
@@ -576,109 +712,6 @@ class MultiGameDataset:
                 logger.info("Reward annotations (placeholder): attached to %d %s samples",
                             game_attached, game_name)
 
-
-    def _load_reward_annotations(self, annotations_dir: Path) -> None:
-        """
-        reward_annotations 폴더에서 CSV 파일을 읽어 해당 게임 샘플의 meta에
-        reward annotation 정보를 부착한다.
-        - {game}_reward_annotations.csv         : per-sample 실제 annotation
-        - {game}_reward_annotations_placeholder.csv : 게임 단위 더미 annotation
-            → conditions 접근 시 WARNING 로그 출력
-        reward_enum은 모든 게임 통일 1~5:
-          1=region / 2=path_length / 3=block / 4=bat_amount / 5=bat_direction
-        """
-        # ── dungeon: per-sample CSV ───────────────────────────────────────
-        dungeon_csv = annotations_dir / "dungeon_reward_annotations.csv"
-        if dungeon_csv.exists():
-            annotation_map: Dict[str, Dict[str, Any]] = {}
-            with open(dungeon_csv, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    annotation_map[row["key"]] = row
-            attached = 0
-            for sample in self._samples:
-                if sample.game != GameTag.DUNGEON:
-                    continue
-                ann = annotation_map.get(sample.source_id)
-                if ann is None:
-                    continue
-                sample.meta["reward_enum"] = int(ann["reward_enum"])
-                sample.meta["feature_name"] = ann["feature_name"]
-                sample.meta["sub_condition"] = ann["sub_condition"]
-                conditions: Dict[int, float] = {}
-                for i in range(1, 6):
-                    val = ann.get(f"condition_{i}", "")
-                    if val != "":
-                        conditions[i] = float(val)
-                sample.meta["conditions"] = conditions
-                attached += 1
-            if attached > 0:
-                logger.info("Reward annotations: attached to %d dungeon samples", attached)
-        # ── 나머지 게임: *_placeholder.csv 읽어서 game-level 적용 ─────────
-        # 파일명에 _placeholder가 포함된 CSV를 자동 탐지
-        for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):
-            game_name = ph_csv.name.replace("_reward_annotations_placeholder.csv", "")
-            # CSV에서 feature 목록 파싱
-            ph_features: list[Dict[str, Any]] = []
-            with open(ph_csv, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    reward_enum = int(row["reward_enum"])
-                    conditions: Dict[int, float] = {}
-                    for i in range(1, 6):
-                        val = row.get(f"condition_{i}", "")
-                        if val != "":
-                            conditions[i] = float(val)
-                    ph_features.append({
-                        "reward_enum":  reward_enum,
-                        "feature_name": row["feature_name"],
-                        "sub_condition": row["sub_condition"],
-                        "conditions":   conditions,
-                    })
-            if not ph_features:
-                continue
-            # 모든 조건을 합친 dict (placeholder 전체를 한 번에)
-            all_conditions: Dict[int, float] = {}
-            for feat in ph_features:
-                all_conditions.update(feat["conditions"])
-            game_attached = 0
-            for sample in self._samples:
-                if sample.game != game_name:
-                    continue
-                # 기본 reward_enum = 첫 번째 feature
-                sample.meta["reward_enum"]  = ph_features[0]["reward_enum"]
-                sample.meta["feature_name"] = ph_features[0]["feature_name"]
-                sample.meta["sub_condition"] = ph_features[0]["sub_condition"]
-                sample.meta["conditions"] = _WarningConditionsDict(
-                    all_conditions,
-                    game=game_name,
-                    logger=logger,
-                )
-                game_attached += 1
-            if game_attached > 0:
-                logger.info("Reward annotations (placeholder): attached to %d %s samples",
-                            game_attached, game_name)
-
-
-    def apply_filtering(self, apply_filter: bool = True) -> None:
-        """
-        필터링 조건을 적용하여 _samples를 재필터링한다.
-
-        Note: 이 메서드는 instruction 단어 수 필터링만 수행합니다.
-        타일 비율 필터링은 각 게임별 로드 시점에 적용됩니다.
-
-        필터링 기준:
-        - instruction 단어 수 >= min_instruction_words
-
-        Parameters
-        ----------
-        apply_filter : bool
-            True이면 필터링 적용, False이면 원본 유지
-        """
-        if not apply_filter or not self._handler_config.pokemon.enabled:
-            return
-
-        self._apply_instruction_filtering()
 
     def _apply_mapping(self, sample: GameSample) -> GameSample:
         """

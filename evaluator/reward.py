@@ -4,10 +4,10 @@ import jax
 from jax import vmap
 import chex
 import jax.numpy as jnp
-from envs.probs.dungeon3 import Dungeon3Tiles
 
 
 from .rewards import *
+from .rewards.multigame_placement import get_multigame_tile_placement_reward
 from .weights import RewardWeight, RewardBias
 
 
@@ -18,44 +18,62 @@ def get_reward_batch(
     prev_env_map: chex.Array,
     curr_env_map: chex.Array,
     map_size: chex.Array = 16,
+    placement_w_amount: float = 1.0,
+    placement_w_cluster: float = 0.0,
+    placement_w_access: float = 0.0,
+    placement_w_spread: float = 0.0,
 ) -> chex.Array:
-    """
-    Compute batch rewards by mapping indices to reward functions and executing them in parallel.
+    """Compute batch rewards by mapping indices to reward functions and executing them in parallel.
 
-    Args:
-        reward_i: Array of indices mapping to functions in call_reward.
-        condition: Array of conditions corresponding to each reward calculation.
-        prev_env_map: Previous environment map.
-        curr_env_map: Current environment map.
+    reward_i 는 다음 인덱스를 따른다.
 
-    Returns:
-        rewards: Array of computed rewards.
+    0: none
+    1: region
+    2: path_length
+    3: interactive placement (multigame — 개수 + 배치품질)
+    4: hazard placement (multigame)
+    5: collectable placement (multigame)
+    6+: none
     """
     # List of reward functions
     reward_funcs = [
-        lambda cond, prev_map, curr_map: 0.0,  # 0
         lambda cond, prev_map, curr_map: get_region_reward(
             prev_map, curr_map, cond[0]
-        ) * RewardWeight.REGION + RewardBias.REGION,  # 1 (region)
+        ) * RewardWeight.REGION + RewardBias.REGION,
+
+        # 1: path length
         lambda cond, prev_map, curr_map: get_path_length_reward(
             prev_map, curr_map, cond[1]
-        ) * RewardWeight.PATH_LENGTH + RewardBias.PATH_LENGTH,  # 2 (diameter)
-        lambda cond, prev_map, curr_map: get_amount_reward(
-            prev_map, curr_map, cond[2], Dungeon3Tiles.WALL.value
-        ) * RewardWeight.WALL + RewardBias.WALL,  # 3 (block)
-        lambda cond, prev_map, curr_map: get_amount_reward(
-            prev_map, curr_map, cond[3], Dungeon3Tiles.BAT.value
-        ) * RewardWeight.MONSTER + RewardBias.MONSTER,  # 4 (bat_amount)
-        lambda cond, prev_map, curr_map: get_direction_reward(
-            prev_map, curr_map, cond[4], Dungeon3Tiles.BAT.value, rows=map_size, cols=map_size
-        ) * RewardWeight.DIRECTION + RewardBias.DIRECTION,  # 5 (bat_direction)
-        lambda cond, prev_map, curr_map: 0.0,
+        ) * RewardWeight.PATH_LENGTH + RewardBias.PATH_LENGTH,
+
+        # 2: interactive placement (개수 + cluster/access/spread)
+        lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
+            prev_map, curr_map, cond[2], tile_name="interactive",
+            w_amount=placement_w_amount, w_cluster=placement_w_cluster,
+            w_access=placement_w_access, w_spread=placement_w_spread,
+        ) * RewardWeight.MONSTER,
+
+        # 3: hazard placement
+        lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
+            prev_map, curr_map, cond[3], tile_name="hazard",
+            w_amount=placement_w_amount, w_cluster=placement_w_cluster,
+            w_access=placement_w_access, w_spread=placement_w_spread,
+        ) * RewardWeight.MONSTER,
+
+        # 4: collectable placement
+        lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
+            prev_map, curr_map, cond[4], tile_name="collectable",
+            w_amount=placement_w_amount, w_cluster=placement_w_cluster,
+            w_access=placement_w_access, w_spread=placement_w_spread,
+        ) * RewardWeight.MONSTER,
     ]
 
     # Map indices to functions using `switch`
     def compute_value(func_idx, cond_value, _prev_env_map, _curr_env_map):
         func_idx = func_idx.astype(jnp.int32)
-        reward_values = vmap(lambda idx: jax.lax.switch(idx, reward_funcs, cond_value, _prev_env_map, _curr_env_map))(func_idx)
+        reward_values = vmap(
+            lambda idx: jax.lax.switch(idx, reward_funcs, cond_value, _prev_env_map, _curr_env_map)
+        )(func_idx)
         return jnp.sum(reward_values)
 
     compute_reward_vmap = vmap(compute_value, in_axes=(0, 0, 0, 0))

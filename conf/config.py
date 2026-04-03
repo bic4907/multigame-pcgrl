@@ -140,13 +140,18 @@ class Config:
     embed_type: str = "bert"
 
     instruct: Optional[str] = None
-
     instruct_csv: Optional[str] = None
 
     # MultiGameDataset-based filtering (for CPCGRL)
     dataset_game: Optional[str] = None          # e.g. "dungeon", "pokemon", "doom"
     dataset_reward_enum: Optional[int] = None   # e.g. 0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable
     dataset_train_ratio: float = 0.95
+
+    # Multigame tile placement reward 가중치 (sweep 대상)
+    placement_w_amount: float = 0.4
+    placement_w_cluster: float = 0.2
+    placement_w_access: float = 0.2
+    placement_w_spread: float = 0.2
 
 @dataclass
 class CLIPConfig:
@@ -155,29 +160,26 @@ class CLIPConfig:
     use_map_array: bool = True
     token_max_len: int = 77
 
+
 @dataclass
 class EncoderConfig(CLIPConfig):
-    model: Optional[str] = None  # mlp, sa (self-attention), mp(mean pool), mlp_vae
+    model: Optional[str] = None
     state: bool = True
     mode: str = "text_state"
 
     deterministic: bool = True
-    num_layers: int = 2  # 1 ~ 3
+    num_layers: int = 2
     hidden_dim: int = 256
     output_dim: int = 64
 
     dropout_rate: float = 0.3
-
-    num_heads: int = 8  # 2, 4, 8, 16, 32, 64 etc
+    num_heads: int = 8
     buffer_ratio: float = 1
 
     ckpt_dir: str = "./encoder_ckpts"
     ckpt: Optional[str] = None
-    ckpt_name: Optional[str] = None  # pretrained_encoders/ 아래 이름 (e.g. "vipcgrl/default")
-
-    # DO NOT SET THIS
-    ckpt_path: str = "encoder_ckpts"
-
+    ckpt_name: Optional[str] = None
+    ckpt_path: Optional[str] = None
     trainable: bool = False
 
 
@@ -186,121 +188,99 @@ class DecoderConfig:
     hidden_dim: int = 128
     num_layers: int = 2
     output_dim: int = 1
+    num_reward_classes: int = 6
+
 
 @dataclass
 class TrainConfig(Config):
     overwrite: bool = False
-
-    # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(5e6)
-
-    # Render after this many update steps
     render_freq: int = 50
     n_render_eps: int = 3
-
-    # eval the model on pre-made eval freezie maps to see how it's doing
     eval_freq: int = 5
     n_eval_maps: int = 6
     eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
-    # discount factor for regret value calculation is the same as GAMMA
 
-    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     NUM_UPDATES: Optional[int] = None
     MINIBATCH_SIZE: Optional[int] = None
-    ###########################################################################
 
     agents: int = 1
     current_iteration: int = -1
-
     instruct_freq: int = 1
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     buffer_ratio: float = 1
 
-    # Cosine similarity reward options
-    use_sim_reward: bool = False    # use sim reward
-    only_sim_reward: bool = False   # use only sim reward(does not use env reward)
-
-    human_demo: bool = True        # use human demo for sim reward
+    use_sim_reward: bool = False
+    only_sim_reward: bool = False
+    human_demo: bool = True
     human_level: str = "human_20250630_213109"
     human_augment: bool = False
 
-    multimodal_condition: bool = False  # use multimodal condition
+    multimodal_condition: bool = False
     human_demo_path: str = './human_dataset'
 
 
 @dataclass
 class CPCGRLConfig(TrainConfig):
-    """Conditional PCGRL (CPCGRL) / Instructed PCGRL (IPCGRL) / Vision-Instructed PCGRL (VIPCGRL) config.
-
-    MultiGameDataset 기반으로 동작합니다.
-
-    - CPCGRL (기본): vec_cont=True, raw condition 벡터를 입력으로 사용.
-    - IPCGRL: use_nlp=True, BERT → MLP 인코더 피처를 입력으로 사용.
-    - VIPCGRL: use_clip=True, pretrained CLIP 임베딩을 입력으로 사용.
-    """
-    # ── CPCGRL 전용 기본값 ──────────────────────────────────
     problem: str = "multigame"
     dataset_game: Optional[str] = "dungeon"
     dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
+    # condition 값 기반 필터: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
+    # 여러 필터는 쉼표 구분: "enum_0_min_3_max_10,enum_2_max_50"
+    dataset_condition_filter: Optional[str] = None
 
-    # CPCGRL 모드 강제
     vec_cont: bool = True
     raw_obs: bool = True
     model: str = "contconv"
     use_nlp: bool = False
     use_clip: bool = False
-    vec_input_dim: Optional[int] = 9
+    vec_input_dim: Optional[int] = 5
     nlp_input_dim: int = 0
 
-    # instruct CSV 비활성화
     instruct: Optional[str] = None
     instruct_csv: Optional[str] = None
     aug_type: str = "sub_condition"
     embed_type: str = "bert"
 
-    # encoder 비활성화
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
-
-    # sim reward 비활성화 (CPCGRL은 condition reward만 사용)
     use_sim_reward: bool = False
     only_sim_reward: bool = False
     human_demo: bool = False
 
-    # wandb
     wandb_project: Optional[str] = "cpcgrl"
+
 
 @dataclass
 class VIPCGRLConfig(CPCGRLConfig):
-    """Vision-Instructed PCGRL (VIPCGRL) config.
-
-    pretrained CLIP 인코더 임베딩을 입력 피처로 사용한다.
-    encoder.ckpt_name 을 지정하면 pretrained_encoders/ 에서 체크포인트를 로드한다.
-    """
-    # VIPCGRL 모드
     use_clip: bool = True
     model: str = "cnnclipconv"
-
-    # CLIP encoder 기본값
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="cnnclip"))
 
-    # NLP 비활성화, CLIP text feature dim
     use_nlp: bool = False
     vec_cont: bool = False
-    nlp_input_dim: int = 512
+    nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
 
-    # sim reward 활성화
     use_sim_reward: bool = True
-
-    # wandb
     wandb_project: Optional[str] = "vipcgrl"
+
+
+@dataclass
+class MGPCGRLConfig(VIPCGRLConfig):
+    wandb_project: Optional[str] = "mgpcgrl"
+
+    # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
+    use_decoder_reward_shaping: bool = True
+    decoder_ckpt_path: Optional[str] = None
+    decoder_reward_classes: int = 5
+    dummy_decoder: bool = False
+
 
 @dataclass
 class EvalConfig(TrainConfig):
     reevaluate: bool = False
 
     random_agent: bool = False
-    # In how many bins to divide up each metric being evaluated
     n_bins: int = 10
     n_eval_envs: int = 10
     n_eps: int = 10
@@ -316,7 +296,7 @@ class EvalConfig(TrainConfig):
     eval_instruct_csv: Optional[str] = None
     eval_dir: Optional[str] = None
     eval_map_types: int = 5
-    eval_modality: str = "text"  # 'text', 'image'
+    eval_modality: str = "text"
     eval_human_demo_path: str = './human_dataset'
 
     diversity: bool = True
@@ -383,7 +363,6 @@ class BertConfig(Config):
 @dataclass
 class BertTrainConfig(BertConfig):
     wandb_project: str = 'embedding'
-    wandb_key: Optional[str] = None
 
     max_length: int = 128
 
@@ -419,7 +398,7 @@ class RewardConfig(Config):
     output_dim: int = 1
 
     figure_dir: str = "figures"
-    buffer_dir: str = "./dataset"
+    buffer_dir: str = "./pcgrl_buffer"
     n_buffer: int = -1
     train_ratio: float = 0.8
     n_epochs: int = 100
@@ -445,12 +424,6 @@ class RewardConfig(Config):
 @dataclass
 class RewardTrainConfig(RewardConfig):
     wandb_project: str = 'train_mlp_encoder'
-    wandb_key: Optional[str] = None
-
-    pretrained_model: str = "bert"
-    model_size: str = "base"
-
-    max_len: int = 77
 
     n_envs: int = 300
     ckpt_freq: int = 5
@@ -502,21 +475,39 @@ class CLIPEvalConfig(EvalConfig):
     wandb_project: str = 'eval_clip_pcgrl'
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
 
+@dataclass
+class CLIPDecoderTrainConfig(CLIPTrainConfig):
+    """CLIP Encoder + Reward Decoder 학습 Config.
+
+    기존 contrastive loss에 더해 디코더 브랜치를 추가하여
+    state embedding으로부터 reward_enum(분류)과 condition(회귀)을 예측한다.
+    """
+    wandb_project: str = 'train_clip_decoder'
+    dir_prefix: str = "clipdec-"
+
+    # ── 디코더 설정 ──
+    decoder: DecoderConfig = field(default_factory=DecoderConfig)
+
+    # ── loss 가중치 ──
+    contrastive_weight: float = 1.0    # contrastive loss 가중치
+    cls_weight: float = 1.0            # reward_enum 분류 loss 가중치
+    reg_weight: float = 0.1            # condition 회귀 loss 가중치
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
+cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs
 cs.store(name="train_clip", node=CLIPTrainConfig)
+cs.store(name="train_clip_decoder_schema", node=CLIPDecoderTrainConfig)
 
 cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)
 
 cs.store(name="train_reward", node=RewardTrainConfig)
-
-
 

@@ -1,0 +1,13 @@
+defaults:
+  - mgpcgrl
+  - _self_
+
+render_freq: -1
+
+encoder:
+  model: cnnclip
+
+hydra:
+  sweeper:
+    params: {}
+

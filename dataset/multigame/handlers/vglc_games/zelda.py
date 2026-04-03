@@ -17,7 +17,10 @@ The Legend of Zelda (TheVGLC) 전처리 핸들러.
 """
 from __future__ import annotations
 
+import hashlib
 from typing import List
+
+import numpy as np
 
 from ...base import BasePreprocessor, TileLegend
 
@@ -32,7 +35,7 @@ class ZeldaTile:
     START   = 5
     MOB     = 6
     OBJECT  = 7
-    HAZARD  = 8
+    FLOOD   = 8   # 물/용암 등 위험 지형 (구 HAZARD)
     UNKNOWN = 99
 
 
@@ -46,9 +49,9 @@ _CHAR_MAP: dict[str, int] = {
     "B": ZeldaTile.BLOCK,
     "S": ZeldaTile.START,
     "M": ZeldaTile.MOB,
-    "O": ZeldaTile.HAZARD,   # ELEMENT + FLOOR (LAVA/BLOCK, WATER/BLOCK)
-    "I": ZeldaTile.HAZARD,   # ELEMENT + BLOCK
-    "P": ZeldaTile.HAZARD,   # ELEMENT (LAVA, WATER)
+    "O": ZeldaTile.FLOOD,    # ELEMENT + FLOOR (LAVA/BLOCK, WATER/BLOCK)
+    "I": ZeldaTile.FLOOD,    # ELEMENT + BLOCK
+    "P": ZeldaTile.FLOOD,    # ELEMENT (LAVA, WATER)
     "o": ZeldaTile.OBJECT,
     "t": ZeldaTile.OBJECT,   # triforce
     "k": ZeldaTile.OBJECT,   # key
@@ -68,6 +71,7 @@ ZELDA_PALETTE: dict[int, tuple[int, int, int]] = {
     ZeldaTile.START:   (0,   200, 0),
     ZeldaTile.MOB:     (220, 50,  50),
     ZeldaTile.OBJECT:  (255, 215, 0),
+    ZeldaTile.FLOOD:   (50,  120, 220),  # 물/용암 – 파란색 계열
     ZeldaTile.UNKNOWN: (128, 0,   128),
 }
 
@@ -89,4 +93,41 @@ def make_legend() -> TileLegend:
 class ZeldaPreprocessor(BasePreprocessor):
     def char_to_int(self, char: str) -> int:
         return _CHAR_MAP.get(char, ZeldaTile.UNKNOWN)
+
+    def postprocess_array(self, array: np.ndarray) -> np.ndarray:
+        """
+        OBJECT 타일이 없는 맵에 한해, FLOOR 위치에 랜덤으로 OBJECT를 배치한다.
+
+        - OBJECT가 1개 이상이면 아무것도 하지 않음
+        - OBJECT가 0개이면 다음 확률로 추가 개수를 결정:
+            40% → 0개, 20% → 1개, 20% → 2개, 20% → 3개
+        - 배치 위치는 FLOOR 타일 중에서만 선택
+        - 시드는 맵 배열 내용의 MD5 해시 → 동일 입력이면 항상 동일 결과
+        """
+        if np.any(array == ZeldaTile.OBJECT):
+            return array
+
+        seed = int.from_bytes(
+            hashlib.md5(array.tobytes()).digest()[:4], byteorder='big'
+        )
+        rng = np.random.default_rng(seed)
+
+        # 40:20:20:20 확률로 추가 개수 결정
+        n = rng.choice([0, 1, 2, 3], p=[0.4, 0.2, 0.2, 0.2])
+        if n == 0:
+            return array
+
+        floor_positions = np.argwhere(array == ZeldaTile.FLOOR)
+        if len(floor_positions) == 0:
+            return array
+
+        n = min(n, len(floor_positions))
+        chosen_indices = rng.choice(len(floor_positions), size=n, replace=False)
+
+        result = array.copy()
+        for idx in chosen_indices:
+            r, c = floor_positions[idx]
+            result[r, c] = ZeldaTile.OBJECT
+
+        return result
 

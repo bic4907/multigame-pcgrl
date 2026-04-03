@@ -81,10 +81,10 @@ class TestVIPCGRLConfig:
         assert c.encoder.model == "cnnclip"
 
     def test_vipcgrl_nlp_input_dim(self):
-        """CLIP text feature 512 차원이 기본."""
+        """pretrained encoder output_dim (기본 64) 이 nlp_input_dim 으로 설정된다."""
         c = _make_vipcgrl_config()
-        assert c.nlp_input_dim == 512
-        assert c.vec_input_dim == 512
+        assert c.nlp_input_dim == c.encoder.output_dim
+        assert c.vec_input_dim == c.encoder.output_dim
 
     def test_vipcgrl_enables_sim_reward(self):
         """VIPCGRL 은 use_sim_reward=True 여야 한다."""
@@ -121,9 +121,9 @@ class TestVIPCGRLDatasetLoading:
 
         assert train_inst is not None
         assert test_inst is not None
-        # embedding shape: (N, 512)
+        # embedding shape: (N, encoder.output_dim)
         assert train_inst.embedding.ndim == 2
-        assert train_inst.embedding.shape[1] == 512
+        assert train_inst.embedding.shape[1] == vipcgrl_config.encoder.output_dim
         # instruction 이 있는 dungeon 샘플이므로 일부 embedding 은 non-zero
         assert not jnp.allclose(train_inst.embedding, 0.0)
 
@@ -134,13 +134,6 @@ class TestVIPCGRLDatasetLoading:
 
         train_inst, _ = load_dataset_instruct(vipcgrl_config)
         assert train_inst.embedding.dtype == jnp.float32
-
-    def test_clip_embedding_differs_from_bert(self, vipcgrl_config):
-        """CLIP 임베딩 차원(512)이 BERT(768)와 다른지 확인."""
-        from instruct_rl.utils.dataset_loader import load_dataset_instruct
-
-        train_inst, _ = load_dataset_instruct(vipcgrl_config)
-        assert train_inst.embedding.shape[1] == 512  # CLIP, not BERT 768
 
     def test_condition_still_present(self, vipcgrl_config):
         """VIPCGRL 에서도 condition, reward_i 는 여전히 존재해야 한다."""

@@ -154,6 +154,9 @@ class Config:
     placement_w_access: float = 0.2
     placement_w_spread: float = 0.2
 
+    # Special tile (interactive/hazard/collectable) 존재 패널티 가중치
+    special_tile_penalty_weight: float = 0.01
+
 @dataclass
 class CLIPConfig:
     freeze_text_enc: bool = True

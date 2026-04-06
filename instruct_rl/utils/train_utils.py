@@ -275,6 +275,7 @@ def make_train(
                         placement_w_cluster=config.placement_w_cluster,
                         placement_w_access=config.placement_w_access,
                         placement_w_spread=config.placement_w_spread,
+                        special_tile_penalty_weight=config.special_tile_penalty_weight,
                     )
                     reward_batch = cond_reward_batch
                 elif train_inst is not None:
@@ -288,6 +289,7 @@ def make_train(
                         placement_w_cluster=config.placement_w_cluster,
                         placement_w_access=config.placement_w_access,
                         placement_w_spread=config.placement_w_spread,
+                        special_tile_penalty_weight=config.special_tile_penalty_weight,
                     )
                     reward_batch = cond_reward_batch
                 else:
@@ -500,6 +502,7 @@ def make_train(
                             placement_w_cluster=config.placement_w_cluster,
                             placement_w_access=config.placement_w_access,
                             placement_w_spread=config.placement_w_spread,
+                            special_tile_penalty_weight=config.special_tile_penalty_weight,
                         )
                         reward_batch = cond_reward_batch
                     elif test_inst is not None:
@@ -513,6 +516,7 @@ def make_train(
                             placement_w_cluster=config.placement_w_cluster,
                             placement_w_access=config.placement_w_access,
                             placement_w_spread=config.placement_w_spread,
+                            special_tile_penalty_weight=config.special_tile_penalty_weight,
                         )
                         reward_batch = cond_reward_batch
                     else:

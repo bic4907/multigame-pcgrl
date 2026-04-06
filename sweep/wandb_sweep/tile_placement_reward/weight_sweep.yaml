@@ -6,12 +6,10 @@ metric:
 parameters:
   placement_w_amount:
     values: [0.8, 1.0, 1.2]
-  placement_w_cluster:
-    values: [0.0, 0.05, 0.1]
-  placement_w_access:
-    values: [0.0, 0.1, 0.2]
   placement_w_spread:
-    values: [0.0, 0.1, 0.2]
+    values: [0.0, 0.3, 0.6]
+  special_tile_penalty_weight:
+    values: [0.0, 0.3, 0.6]
   game:
     value: 'dg'
   dataset_reward_enum:
@@ -22,6 +20,10 @@ parameters:
     value: true
   random_exp_name:
     value: true
+  total_timesteps:
+    value: 30000000
+
+
 command:
   - ${interpreter}
   - ${program}

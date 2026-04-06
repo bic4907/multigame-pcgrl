@@ -23,6 +23,7 @@ def get_reward_batch(
     placement_w_cluster: float = 0.0,
     placement_w_access: float = 0.0,
     placement_w_spread: float = 0.0,
+    special_tile_penalty_weight: float = 0.01,
 ) -> chex.Array:
     """Compute batch rewards by mapping indices to reward functions and executing them in parallel.
 
@@ -80,7 +81,9 @@ def get_reward_batch(
     rewards = compute_reward_vmap(reward_i, condition, prev_env_map, curr_env_map)
 
     # special tile (interactive/hazard/collectable) 존재 자체에 소량 패널티 (delta)
-    special_penalty = vmap(get_special_tile_penalty)(prev_env_map, curr_env_map)  # (batch,)
+    special_penalty = vmap(
+        lambda p, c: get_special_tile_penalty(p, c, weight=special_tile_penalty_weight)
+    )(prev_env_map, curr_env_map)  # (batch,)
     rewards = rewards - special_penalty
 
     # clip

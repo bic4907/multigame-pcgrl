@@ -27,49 +27,44 @@ def get_reward_batch(
 
     reward_i 는 다음 인덱스를 따른다.
 
-    0: none
-    1: region
-    2: path_length
-    3: interactive placement (multigame — 개수 + 배치품질)
-    4: hazard placement (multigame)
-    5: collectable placement (multigame)
-    6+: none
+    0: region
+    1: path_length
+    2: interactive placement (multigame — 개수 + 배치품질)
+    3: hazard placement (multigame)
+    4: collectable placement (multigame)
     """
     # List of reward functions
     reward_funcs = [
-        # 1: region
+        # 0: region
         lambda cond, prev_map, curr_map: get_region_reward(
             prev_map, curr_map, cond[0]
         ) * RewardWeight.REGION + RewardBias.REGION,
 
-        # 2: path length
+        # 1: path length
         lambda cond, prev_map, curr_map: get_path_length_reward(
             prev_map, curr_map, cond[1]
         ) * RewardWeight.PATH_LENGTH + RewardBias.PATH_LENGTH,
 
-        # 3: interactive placement (개수 + cluster/access/spread)
+        # 2: interactive placement (개수 + cluster/access/spread + 설치패널티)
         lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
             prev_map, curr_map, cond[2], tile_name="interactive",
             w_amount=placement_w_amount, w_cluster=placement_w_cluster,
             w_access=placement_w_access, w_spread=placement_w_spread,
         ) * RewardWeight.MONSTER,
 
-        # 4: hazard placement
+        # 3: hazard placement
         lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
             prev_map, curr_map, cond[3], tile_name="hazard",
             w_amount=placement_w_amount, w_cluster=placement_w_cluster,
             w_access=placement_w_access, w_spread=placement_w_spread,
         ) * RewardWeight.MONSTER,
 
-        # 5: collectable placement
+        # 4: collectable placement
         lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
             prev_map, curr_map, cond[4], tile_name="collectable",
             w_amount=placement_w_amount, w_cluster=placement_w_cluster,
             w_access=placement_w_access, w_spread=placement_w_spread,
         ) * RewardWeight.MONSTER,
-
-        # 6+: no-op
-        lambda cond, prev_map, curr_map: 0.0,
     ]
 
     # Map indices to functions using `switch`

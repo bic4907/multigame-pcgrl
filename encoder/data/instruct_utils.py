@@ -5,9 +5,6 @@ import json
 from copy import deepcopy
 from transformers import (
     FlaxBertModel,
-    FlaxRobertaModel,
-    FlaxAlbertModel,
-    FlaxElectraModel,
     AutoTokenizer,
 )
 

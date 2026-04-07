@@ -316,8 +316,6 @@ def get_multigame_tile_placement_reward(
     cond: chex.Array,
     tile_name: str = "interactive",
     w_amount: float = 0.4,
-    w_cluster: float = 0.2,
-    w_access: float = 0.2,
     w_spread: float = 0.2,
     max_items: int = 32,
 ) -> chex.Array:
@@ -329,8 +327,6 @@ def get_multigame_tile_placement_reward(
     cond : scalar — 목표 타일 개수.
     tile_name : "interactive", "hazard", "collectable".
     w_amount  : 개수 조건 달성 가중치.
-    w_cluster : 반복 배치 패널티 가중치.
-    w_access  : 접근성 보상 가중치.
     w_spread  : 분산 보상 가중치.
     max_items : spread 계산용 고정 배열 크기.
 
@@ -343,18 +339,6 @@ def get_multigame_tile_placement_reward(
     # ── amount ──
     amount_reward = _tile_amount_diff(prev_env_map, curr_env_map, tile_val, cond)
 
-    # ── cluster (낮을수록 좋음 → prev − curr) ──
-    cluster_reward = (
-        _cluster_penalty_tile(prev_env_map, tile_val)
-        - _cluster_penalty_tile(curr_env_map, tile_val)
-    )
-
-    # ── access (높을수록 좋음 → curr − prev) ──
-    access_reward = (
-        _accessibility_bonus_tile(curr_env_map, tile_val)
-        - _accessibility_bonus_tile(prev_env_map, tile_val)
-    )
-
     # ── spread (높을수록 좋음 → curr − prev) ──
     spread_reward = (
         _spread_bonus_tile(curr_env_map, tile_val, max_items)
@@ -363,8 +347,6 @@ def get_multigame_tile_placement_reward(
 
     reward = (
         w_amount  * amount_reward  +
-        w_cluster * cluster_reward +
-        w_access  * access_reward  +
         w_spread  * spread_reward
     )
     return reward.astype(float)

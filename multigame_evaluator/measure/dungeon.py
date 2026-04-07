@@ -3,23 +3,23 @@ multigame_evaluator/measure/dungeon.py
 =======================================
 Dungeon 게임에 맞는 measure 함수 모음.
 
-타일 정의 (dataset/multigame/handlers/dungeon_handler.py 기준)
+타일 정의 (tile_mapping.json 기준)
 --------------------------------------------------------------
-0  UNKNOWN  - 패딩/경계 (막힘)
-1  FLOOR    - 바닥 (통과 가능)
-2  WALL     - 벽 (막힘)
-3  ENEMY    - 박쥐 (Mob)
-4  TREASURE - 보물 (Collectable, 통과 가능)
+0  UNKNOWN  - 패딩/경계      → unified 0 (empty)
+1  FLOOR    - 바닥           → unified 0 (empty)
+2  WALL     - 벽             → unified 1 (wall)
+3  ENEMY    - 박쥐 (Mob)     → unified 3 (hazard)
+4  TREASURE - 보물           → unified 4 (collectable)
 
-분류
+분류 (unified category 기준)
 --------------------------------------------------------------
-Empty   : FLOOR, TREASURE        (통과 가능 지형)
-Wall    : WALL, UNKNOWN          (막힘)
-Object  : (없음)
-Mob     : ENEMY                  (박쥐)
-Item    : TREASURE               (보물)
+Empty       : UNKNOWN, FLOOR             (unified 0)
+Wall        : WALL                       (unified 1)
+Interactable: (없음)                     (unified 2)
+Hazard      : ENEMY                      (unified 3)
+Collectable : TREASURE                   (unified 4)
 
-Passable (RG/PL): Empty (FLOOR + TREASURE)
+Passable (RG/PL): Empty + Hazard + Collectable
 """
 from enum import IntEnum
 
@@ -41,26 +41,25 @@ class DungeonTile(IntEnum):
 
 
 DungeonEmpty = jnp.array([
+    DungeonTile.UNKNOWN,
     DungeonTile.FLOOR,
-    DungeonTile.TREASURE,
 ], dtype=jnp.int32)
 
 DungeonWall = jnp.array([
     DungeonTile.WALL,
-    DungeonTile.UNKNOWN,
 ], dtype=jnp.int32)
 
-DungeonObject = jnp.array([], dtype=jnp.int32)
+DungeonInteractable = jnp.array([], dtype=jnp.int32)
 
-DungeonMob = jnp.array([
+DungeonHazard = jnp.array([
     DungeonTile.ENEMY,
 ], dtype=jnp.int32)
 
-DungeonItem = jnp.array([
+DungeonCollectable = jnp.array([
     DungeonTile.TREASURE,
 ], dtype=jnp.int32)
 
-DungeonPassible = DungeonEmpty
+DungeonPassible = jnp.concatenate([DungeonEmpty, DungeonHazard, DungeonCollectable])
 
 
 def get_amount(

@@ -177,7 +177,7 @@ class EncoderConfig(CLIPConfig):
     buffer_ratio: float = 1
 
     ckpt_dir: str = "./encoder_ckpts"
-    ckpt: Optional[str] = None
+    ckpt: str = "./encoder_ckpts"
     ckpt_name: Optional[str] = None
     ckpt_path: Optional[str] = None
     trainable: bool = False

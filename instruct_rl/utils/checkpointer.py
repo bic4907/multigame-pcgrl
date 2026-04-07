@@ -344,7 +344,7 @@ def log_encoder_params_summary(encoder_params, config):
         logger.info("=" * 80)
     else:
         logger.info("=" * 80)
-        logger.info("⚠️  No encoder checkpoint — encoder_params is None")
+        logger.info("[WARNING] No encoder checkpoint — encoder_params is None")
         logger.info(f"   ckpt_path : {getattr(config.encoder, 'ckpt_path', None)}")
         logger.info(f"   ckpt_name : {getattr(config.encoder, 'ckpt_name', None)}")
         logger.info("=" * 80)

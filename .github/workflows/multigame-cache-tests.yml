@@ -14,6 +14,7 @@ name: dataset validation
       - "train_cpcgrl.py"
       - "train_ipcgrl.py"
       - "train_vipcgrl.py"
+      - "train_mg_pcgrl.py"
       - ".github/workflows/multigame-cache-tests.yml"
   pull_request:
     paths:
@@ -28,6 +29,7 @@ name: dataset validation
       - "train_cpcgrl.py"
       - "train_ipcgrl.py"
       - "train_vipcgrl.py"
+      - "train_mg_pcgrl.py"
       - ".github/workflows/multigame-cache-tests.yml"
   workflow_dispatch:
 
@@ -294,3 +296,46 @@ jobs:
         run: |
           python -m pytest tests/test_vipcgrl_checkpoint.py -v -s
 
+  mgpcgrl-checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            "jax[cpu]==0.4.35" \
+            "jaxlib==0.4.35" \
+            flax \
+            "optax==0.2.4" \
+            "chex==0.1.87" \
+            "distrax==0.1.1" \
+            "gymnax==0.0.8" \
+            hydra-core \
+            "orbax-checkpoint==0.6.4" \
+            tensorboardX \
+            wandb \
+            "transformers<5" \
+            scikit-learn \
+            imageio \
+            numpy pillow pytest pandas
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run MGPCGRL checkpoint pipeline test
+        env:
+          WANDB_MODE: disabled
+          JAX_PLATFORMS: cpu
+        run: |
+          python -m pytest tests/test_mgpcgrl_checkpoint.py -v -s

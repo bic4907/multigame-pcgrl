@@ -46,7 +46,7 @@ def get_reward_batch(
             prev_map, curr_map, cond[1]
         ) * RewardWeight.PATH_LENGTH + RewardBias.PATH_LENGTH,
 
-        # 2: interactive placement (개수 + cluster/access/spread + 설치패널티)
+        # 2: interactive placement (개수 + cluster/access/spread)
         lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
             prev_map, curr_map, cond[2], tile_name="interactive",
             w_amount=placement_w_amount, w_cluster=placement_w_cluster,

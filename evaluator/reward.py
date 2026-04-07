@@ -8,6 +8,7 @@ import jax.numpy as jnp
 
 from .rewards import *
 from .rewards.multigame_placement import get_multigame_tile_placement_reward
+from .rewards.special_tile_penalty import get_special_tile_penalty
 from .weights import RewardWeight, RewardBias
 
 
@@ -27,16 +28,15 @@ def get_reward_batch(
 
     reward_i 는 다음 인덱스를 따른다.
 
-    0: none
-    1: region
-    2: path_length
-    3: interactive placement (multigame — 개수 + 배치품질)
-    4: hazard placement (multigame)
-    5: collectable placement (multigame)
-    6+: none
+    0: region
+    1: path_length
+    2: interactive placement (multigame — 개수 + 배치품질)
+    3: hazard placement (multigame)
+    4: collectable placement (multigame)
     """
     # List of reward functions
     reward_funcs = [
+        # 0: region
         lambda cond, prev_map, curr_map: get_region_reward(
             prev_map, curr_map, cond[0]
         ) * RewardWeight.REGION + RewardBias.REGION,
@@ -78,6 +78,10 @@ def get_reward_batch(
 
     compute_reward_vmap = vmap(compute_value, in_axes=(0, 0, 0, 0))
     rewards = compute_reward_vmap(reward_i, condition, prev_env_map, curr_env_map)
+
+    # special tile (interactive/hazard/collectable) 존재 자체에 소량 패널티 (delta)
+    special_penalty = vmap(get_special_tile_penalty)(prev_env_map, curr_env_map)  # (batch,)
+    rewards = rewards - special_penalty
 
     # clip
     rewards = jnp.clip(rewards, -2, 2)

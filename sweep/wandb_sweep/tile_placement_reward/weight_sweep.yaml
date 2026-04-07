@@ -4,16 +4,14 @@ metric:
   goal: maximize
   name: Train/ep_return
 parameters:
-  placement_w_amount:
-    values: [0.8, 1.0, 1.2]
-  placement_w_spread:
-    values: [0.0, 0.3, 0.6]
   special_tile_penalty_weight:
-    values: [0.0, 0.3, 0.6]
+    values: [0.35, 0.4, 0.45, 0.5]
   game:
     value: 'dg'
   dataset_reward_enum:
-    value: 2
+    value: 3
+  dataset_condition_filter:
+    value: "enum_3_min_20_max_23"
   n_envs:
     values: [600]
   overwrite:
@@ -21,7 +19,7 @@ parameters:
   random_exp_name:
     value: true
   total_timesteps:
-    value: 30000000
+    value: 15000000
 
 
 command:

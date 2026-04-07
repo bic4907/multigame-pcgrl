@@ -740,42 +740,67 @@ def main() -> None:
         annot_dir=args.annot_dir, force=args.force,
     )
 
-    jsonl_path = build_jsonl(
-        games=args.games, enums=args.enums,
-        annot_dir=args.annot_dir, cache_by_game=cache_by_game,
-        system_prompt=system_prompt, force=args.force, limit=args.limit,
-    )
-    if jsonl_path is None:
+    # enum(task)별로 배치를 분리하여 제출
+    _ENUM_NAMES = {
+        0: "region", 1: "path_length", 2: "interactable_count",
+        3: "hazard_count", 4: "collectable_count",
+    }
+
+    submitted_batches: List[Tuple[str, int]] = []  # (batch_id, enum)
+
+    for enum in args.enums:
+        enum_name = _ENUM_NAMES.get(enum, str(enum))
+        logger.info(f"\n── enum {enum} ({enum_name}) ──")
+
+        jsonl_path = build_jsonl(
+            games=args.games, enums=[enum],
+            annot_dir=args.annot_dir, cache_by_game=cache_by_game,
+            system_prompt=system_prompt, force=args.force,
+            limit=args.limit,
+        )
+        if jsonl_path is None:
+            logger.info(f"  enum {enum}: 생성할 요청 없음, 건너뜀")
+            continue
+
+        n_requests = sum(1 for _ in jsonl_path.open(encoding="utf-8"))
+        batch_id = submit_batch(jsonl_path, args.games, [enum], n_requests)
+        submitted_batches.append((batch_id, enum))
+
+    if not submitted_batches:
+        logger.info("제출된 배치 없음")
         return
 
-    # 행 수 파악
-    n_requests = sum(1 for _ in jsonl_path.open(encoding="utf-8"))
-
-    batch_id = submit_batch(jsonl_path, args.games, args.enums, n_requests)
-
     if args.run:
-        logger.info(f"완료 대기 중 (interval={args.poll_interval}s) …")
-        while True:
+        logger.info(f"\n완료 대기 중 (interval={args.poll_interval}s) …")
+        pending = list(submitted_batches)
+        total_updated = 0
+        while pending:
             time.sleep(args.poll_interval)
-            info   = check_batch_status(batch_id)
-            status = info["status"]
-            counts = info["request_counts"]
-            logger.info(f"  {batch_id}: {status}  "
-                        f"{counts['completed']}/{counts['total']} completed")
-            if status == "completed":
-                results = retrieve_batch_results(batch_id)
-                n = update_csvs(results, args.annot_dir, args.games)
-                logger.info(f"총 {n}개 행 업데이트 완료")
-                break
-            if status in ("failed", "expired", "cancelled"):
-                logger.error(f"배치 실패/만료/취소: {status}")
-                break
+            still_pending = []
+            for batch_id, enum in pending:
+                info   = check_batch_status(batch_id)
+                status = info["status"]
+                counts = info["request_counts"]
+                logger.info(f"  [{_ENUM_NAMES.get(enum, enum)}] {batch_id}: {status}  "
+                            f"{counts['completed']}/{counts['total']} completed")
+                if status == "completed":
+                    results = retrieve_batch_results(batch_id)
+                    n = update_csvs(results, args.annot_dir, args.games)
+                    total_updated += n
+                elif status in ("failed", "expired", "cancelled"):
+                    logger.error(f"  [{_ENUM_NAMES.get(enum, enum)}] 배치 실패/만료/취소: {status}")
+                else:
+                    still_pending.append((batch_id, enum))
+            pending = still_pending
+        logger.info(f"총 {total_updated}개 행 업데이트 완료")
     else:
-        logger.info(
-            f"\n배치 제출 완료. 결과 조회:\n"
-            f"  python dataset/reward_annotations/generate_instructions.py "
-            f"--retrieve {batch_id} --games {' '.join(args.games)}"
-        )
+        logger.info("\n배치 제출 완료. 결과 조회:")
+        for batch_id, enum in submitted_batches:
+            logger.info(
+                f"  [{_ENUM_NAMES.get(enum, enum)}] "
+                f"python dataset/reward_annotations/generate_instructions.py "
+                f"--retrieve {batch_id} --games {' '.join(args.games)}"
+            )
 
 
 if __name__ == "__main__":

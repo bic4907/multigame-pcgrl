@@ -321,6 +321,7 @@ class CollectBufferConfig(CPCGRLConfig):
     실험 폴더의 buffer/ 디렉토리에 .npz 파일로 저장한다.
     """
     wandb_project: str = 'collect_buffer'
+    dir_prefix: str = "buffer-"
 
     # ── 버퍼 수집 파라미터 ──
     buffer_max_samples: int = 10_000       # 수집할 최대 transition 수

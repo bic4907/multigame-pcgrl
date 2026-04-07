@@ -10,7 +10,7 @@ logging.getLogger("dataset.multigame").addHandler(logging.NullHandler())
 from .base import GameSample, GameTag, TileLegend, BaseGameHandler, BasePreprocessor
 from .dataset import MultiGameDataset
 from .handlers import VGLCHandler, VGLCGameHandler, DungeonHandler, ZeldaHandler
-from . import tags, render, tile_utils
+from . import tags, render, tile_utils, stats
 from .tile_utils import (
     UNIFIED_CATEGORIES,
     CATEGORY_COLORS,
@@ -26,6 +26,7 @@ from .tile_utils import (
     game_mapping_info,
     game_mapping_rows,
 )
+from .stats import compute_dataset_stats, compute_game_stats, print_dataset_stats
 
 __all__ = [
     "MultiGameDataset",
@@ -41,6 +42,7 @@ __all__ = [
     "tags",
     "render",
     "tile_utils",
+    "stats",
     # tile_utils shortcuts
     "UNIFIED_CATEGORIES",
     "CATEGORY_COLORS",
@@ -55,4 +57,8 @@ __all__ = [
     "render_unified_rgb",
     "game_mapping_info",
     "game_mapping_rows",
+    # stats shortcuts
+    "compute_dataset_stats",
+    "compute_game_stats",
+    "print_dataset_stats",
 ]

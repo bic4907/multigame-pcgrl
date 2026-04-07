@@ -1,4 +1,5 @@
 import os
+import uuid
 import gymnax
 import jax
 from glob import glob
@@ -168,6 +169,11 @@ def get_exp_dir(config):
 
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
+
+    # ── random_expname: exp_name 을 UUID 기반으로 랜덤 결정 ──
+    if getattr(config, 'random_exp_name', False):
+        config.exp_name = uuid.uuid4().hex[:8]
+        logger.info(f"[random_exp_name] exp_name randomly set to: {config.exp_name}")
 
     # ── game 약어 → include_* 자동 동기화 ──
     if hasattr(config, 'game') and config.game:

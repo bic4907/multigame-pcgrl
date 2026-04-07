@@ -201,7 +201,7 @@ class MultiGameDataset:
         # ── 게임별 로드 루프 ─────────────────────────────────────────────────
         for game, game_root, game_hc in _game_specs:
             cache_key = build_per_game_cache_key(game, game_root, game_hc)
-
+            logger.info("[%s] cache key: %s", game, cache_key[:12])
             # (1) per-game 캐시 히트 시도
             if use_cache:
                 cached = load_game_samples_from_cache(cache_dir, game, cache_key)
@@ -255,6 +255,8 @@ class MultiGameDataset:
                 include_doom, include_doom2,
                 doom_hc,
             )
+            logger.info("[doom] cache key: %s", doom_cache_key[:12])
+            print(f"[MultiGameDataset] doom cache key: {doom_cache_key[:12]}")
             doom_cached = load_game_samples_from_cache(cache_dir, "doom", doom_cache_key) if use_cache else None
             if doom_cached is not None:
                 for s in doom_cached:

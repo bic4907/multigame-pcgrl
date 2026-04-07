@@ -36,12 +36,6 @@ def apply_pretrained_model(config):
 
     if config.pretrained_model == "bert":
         model, tokenizer = BERT(config)
-    elif config.pretrained_model == "roberta":
-        model, tokenizer = Roberta(config)
-    elif config.pretrained_model == "albert":
-        model, tokenizer = Albert(config)
-    elif config.pretrained_model == "electra":
-        model, tokenizer = Electra(config)
     else:
         raise ValueError(f"Model {config.pretrained_model} not supported")
     return model, tokenizer

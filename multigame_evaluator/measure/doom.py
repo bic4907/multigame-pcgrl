@@ -3,26 +3,28 @@ multigame_evaluator/measure/doom.py
 ====================================
 Doom 게임에 맞는 measure 함수 모음.
 
-타일 정의 (dataset/multigame/handlers/vglc_games/doom.py 기준)
+타일 정의 (tile_mapping.json 기준)
 --------------------------------------------------------------
-0  EMPTY   - 빈 공간/경계 (막힘)
-1  WALL    - 벽 (막힘)
-2  FLOOR   - 바닥 (통과 가능)
-3  ENEMY   - 적 (Mob)
-4  SPAWN   - 스폰 포인트 / 출구 (통과 가능)
-5  ITEM    - 아이템 (통과 가능)
-6  DANGER  - 위험 오브젝트 (Object)
-7  DOOR    - 문 (Object)
+0  EMPTY   - 빈 공간/경계     → unified 1 (wall)
+1  WALL    - 벽               → unified 1 (wall)
+2  FLOOR   - 바닥             → unified 0 (empty)
+3  ENEMY   - 적               → unified 3 (hazard)
+4  SPAWN   - 스폰/출구        → unified 2 (interactive)
+5  ITEM    - 아이템           → unified 4 (collectable)
+6  DANGER  - 위험 오브젝트    → unified 2 (interactive)
+7  DOOR    - 문               → unified 2 (interactive)
+8  STAIR   - 계단             → unified 0 (empty)
+99 UNKNOWN - 미정의 fallback  → unified 0 (empty)
 
-분류
+분류 (unified category 기준)
 --------------------------------------------------------------
-Empty   : FLOOR, SPAWN           (통과 가능 지형)
-Wall    : WALL, EMPTY            (막힘)
-Object  : DOOR, DANGER           (구조물)
-Mob     : ENEMY                  (적)
-Item    : ITEM                   (획득 가능)
+Empty       : FLOOR, STAIR, UNKNOWN      (unified 0)
+Wall        : EMPTY, WALL                (unified 1)
+Interactable: SPAWN, DANGER, DOOR        (unified 2)
+Hazard      : ENEMY                      (unified 3)
+Collectable : ITEM                       (unified 4)
 
-Passable (RG/PL): Empty + Item
+Passable (RG/PL): Empty + Hazard + Collectable
 """
 from enum import IntEnum
 
@@ -36,41 +38,44 @@ from evaluator.utils import init_flood_net
 
 
 class DoomTile(IntEnum):
-    EMPTY  = 0
-    WALL   = 1
-    FLOOR  = 2
-    ENEMY  = 3
-    SPAWN  = 4
-    ITEM   = 5
-    DANGER = 6
-    DOOR   = 7
+    EMPTY   = 0
+    WALL    = 1
+    FLOOR   = 2
+    ENEMY   = 3
+    SPAWN   = 4
+    ITEM    = 5
+    DANGER  = 6
+    DOOR    = 7
+    STAIR   = 8
+    UNKNOWN = 99
 
 
 DoomEmpty = jnp.array([
     DoomTile.FLOOR,
-    DoomTile.SPAWN,
+    DoomTile.STAIR,
+    DoomTile.UNKNOWN,
 ], dtype=jnp.int32)
 
 DoomWall = jnp.array([
-    DoomTile.WALL,
     DoomTile.EMPTY,
+    DoomTile.WALL,
 ], dtype=jnp.int32)
 
-DoomObject = jnp.array([
+DoomInteractable = jnp.array([
     DoomTile.SPAWN,
-    DoomTile.DOOR,
     DoomTile.DANGER,
+    DoomTile.DOOR,
 ], dtype=jnp.int32)
 
-DoomMob = jnp.array([
+DoomHazard = jnp.array([
     DoomTile.ENEMY,
 ], dtype=jnp.int32)
 
-DoomItem = jnp.array([
+DoomCollectable = jnp.array([
     DoomTile.ITEM,
 ], dtype=jnp.int32)
 
-DoomPassible = jnp.concatenate([DoomEmpty, DoomItem])
+DoomPassible = jnp.concatenate([DoomEmpty, DoomHazard, DoomCollectable])
 
 
 def get_amount(

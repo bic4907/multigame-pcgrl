@@ -128,21 +128,22 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
 
     pretrained_model, tokenizer = apply_pretrained_model(config)
 
-    with jax.disable_jit():
+    bert_batch_size = getattr(config, 'bert_batch_size', 64)
+    all_cls_embeddings = []
+    for i in range(0, len(whole_language_inst_list), bert_batch_size):
+        batch_texts = whole_language_inst_list[i:i + bert_batch_size]
         encoded_inputs = tokenizer(
-            whole_language_inst_list,
-            return_tensors="jax",
+            batch_texts,
+            return_tensors="np",
             padding="max_length",
             max_length=config.max_len,
             truncation=True,
         )
-
         encoded_outputs = pretrained_model(**encoded_inputs).last_hidden_state
+        cls_embedding = np.asarray(jax.device_get(encoded_outputs[:, 0, :]))  # [batch, hidden_size]
+        all_cls_embeddings.append(cls_embedding)
 
-        embedding_outputs = encoded_outputs[:, 0, :]     # Take the [CLS] token output (shape: [num_samples, hidden_size])
-
-    # Convert JAX output to NumPy
-    embedding_outputs = np.array(embedding_outputs)
+    embedding_outputs = np.concatenate(all_cls_embeddings, axis=0)  # [num_samples, hidden_size]
 
     dataset = None
     for game in unique_games:

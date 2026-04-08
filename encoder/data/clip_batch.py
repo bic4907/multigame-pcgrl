@@ -114,6 +114,17 @@ class CLIPDatasetBuilder:
         game_ids = np.array([game2idx[g] for g in games_type])  # (N,)
         logger.info(f"Detected {len(unique_games)} unique games: {game2idx}")
 
+        # Filter out samples with None instruction
+        n_before = len(samples)
+        missing_games = sorted(set(s.game for s in samples if s.instruction is None))
+        samples = [s for s in samples if s.instruction is not None]
+        n_filtered = n_before - len(samples)
+        if n_filtered > 0:
+            logger.warning(
+                f"Filtered out {n_filtered}/{n_before} samples with instruction=None (games: {missing_games}). "
+                f"Check instruction_uni column in reward_annotations CSV."
+            )
+
         # Extract level arrays and language instructions
         level_arrays = jnp.stack([s.array for s in samples], 0)  # (N, 16, 16)
         level_arrays = map2onehot_batch(level_arrays)

@@ -28,7 +28,7 @@ from instruct_rl.utils.logger import get_wandb_name
 from encoder.utils.path import (get_ckpt_dir, init_config)
 from encoder.data import create_dataset, split_dataset, create_batches, EmbedData, create_embedding_table
 
-from conf.config import BertTrainConfig
+from conf.config import RewardConfig
 
 from encoder.model import apply_model
 from encoder.utils.visualize import create_scatter_plot, create_embedding_figure
@@ -103,7 +103,7 @@ def train_step(train_state: TrainState, X_batch, y_batch, rng, lr_rate_fn, is_tr
     return train_state, (loss, mean_mse_loss, mean_kl_loss), predictions, embed
 
 
-def make_train(config: BertTrainConfig):
+def make_train(config: RewardConfig):
     def train(rng):
         dataset = MultiGameDataset(include_dungeon=True,
                                    include_sokoban=False,
@@ -147,7 +147,7 @@ def make_train(config: BertTrainConfig):
                 train_y_gt, train_y_pd, train_reward_id = list(), list(), list()
 
                 # Training Loop
-                for X_batch, y_batch, reward_id, reward_enum, instruct in create_batches(train_set, config.batch_size, augment=True):
+                for X_batch, y_batch, reward_id, reward_enum, instruct in create_batches(train_set, config.batch_size):
                     X_batch = jax.device_put(X_batch)
                     y_batch = jax.device_put(y_batch)
 
@@ -306,7 +306,7 @@ def make_train(config: BertTrainConfig):
     return lambda rng: train(rng)
 
 
-def get_train_state(config: BertTrainConfig, rng: jax.random.PRNGKey):
+def get_train_state(config: RewardConfig, rng: jax.random.PRNGKey):
     lr_schedular = create_learning_rate_fn(config, config.lr, config.steps_per_epoch)
 
     def create_train_state(model, rng, num_samples, buffer=None):
@@ -332,13 +332,9 @@ def save_checkpoint(config, state, step):
 
 
 @hydra.main(version_base=None, config_path='./conf', config_name='train_reward')
-def main(config: BertTrainConfig):
-    if config.encoder.model is None:
-        config.encoder.model = 'mlp'
-
-    config.aug_type = 'test' if config.aug_type is None else config.aug_type
-    config.embed_type = 'bert' if config.embed_type is None else config.embed_type
-    config.instruct = 'scn-1_se-whole' if config.instruct is None else config.instruct
+def main(config: RewardConfig):
+    config.encoder.model = 'mlp'
+    config.use_nlp = True
 
     config = init_config(config)
 

@@ -303,8 +303,6 @@ def init_config(config: Config):
 
                 conditions = {
                     'embed_type': f'enc-{config.encoder.model}',
-                    'embed_size': f'es-{config.encoder.output_dim}',
-                    'buffer_ratio': f'br-{config.buffer_ratio}',
                 }
 
                 if config.encoder.model in ['cnnclip', 'clip']:

@@ -53,6 +53,12 @@ def get_exp_group(config):
             'md': modality,
             'exp': config.exp_name,
         }
+    elif config.encoder.model == 'mlp':
+        config_dict = {
+            'game': getattr(config, 'game', 'dg'),
+            'enc': 'mlp',
+            'exp': config.exp_name,
+        }
     else:
         config_dict = {
             'game': getattr(config, 'game', 'dg'),

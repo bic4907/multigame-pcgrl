@@ -15,9 +15,9 @@ from os.path import abspath, join, dirname
 from conf.config import RewardTrainConfig
 
 from encoder.data import (get_unique_pair_indices, pairing_maps)
-from encoder.data.instruct_utils import apply_pretrained_model
 from evaluator import get_fitness_batch
 from dataset.multigame import MultiGameDataset
+from instruct_rl.utils.dataset_loader import _build_instruct
 
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()  # Add the environment variable ;LOG_LEVEL=DEBUG
 logger = logging.getLogger(basename(__file__))
@@ -33,7 +33,6 @@ class Dataset:
     curr_env_map: np.ndarray
     instruct: np.ndarray
     embedding: np.ndarray
-    augmentable: np.ndarray
 
 
 @dataclass
@@ -44,7 +43,7 @@ class EmbedData:
     embedding: np.ndarray
 
 
-def create_batches(dataset: Dataset, batch_size: int, augment: bool = False):
+def create_batches(dataset: Dataset, batch_size: int):
     num_samples = len(dataset.curr_env_map)
     indices = np.arange(num_samples)
     np.random.shuffle(indices)
@@ -55,25 +54,10 @@ def create_batches(dataset: Dataset, batch_size: int, augment: bool = False):
 
         curr = dataset.curr_env_map[batch_indices]
         embed = dataset.embedding[batch_indices]
-        augmentable = dataset.augmentable[batch_indices]
 
         reward_id = dataset.reward_id[batch_indices]
         reward_enum = dataset.reward_enum[batch_indices]
         instruct = dataset.instruct[batch_indices]
-
-        if augment:
-            # Only augment data where augmentable == True (1)
-            augment_mask = augmentable.astype(bool)
-
-            k = np.random.choice([0, 1, 2, 3])  # Number of 90-degree rotations
-
-            curr[augment_mask] = np.rot90(curr[augment_mask], k=k, axes=(1, 2))
-
-            if np.random.rand() > 0.5:
-                curr[augment_mask] = np.flip(curr[augment_mask], axis=1)
-
-            if np.random.rand() > 0.5:
-                curr[augment_mask] = np.flip(curr[augment_mask], axis=2)
 
         # Convert env_map to one-hot encoding: (batch_size, 16, 16) → (batch_size, 16, 16, 4)
         # Handle tile values: clamp to valid range [0, 3] for Dungeon3Tiles
@@ -97,53 +81,24 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
     game_ids = np.array([game2idx[game] for game in games_type])
     logger.info(f"Detected {len(unique_games)} unique games: {game2idx}")
 
+    whole_inst = _build_instruct(sample_list=dataset_samples, config=config)
+
     # dataset_samples 순서 기반 reward_id (0, 1, 2, ...)
     sample_reward_id = np.arange(len(dataset_samples))
 
     whole_language_inst_list = [s.instruction for s in dataset_samples]
 
-    N_CONDITION_COLS = 5
     whole_reward_enum_digits = []
-    whole_condition_vecs = []
     for s in dataset_samples:
         reward_e = int(s.meta.get("reward_enum", 0))
-        conditions = s.meta.get("conditions", {})  # e.g. {2: 40.0}
 
         # reward_enum → digit 배열 (e.g. 2 → [2], 12 → [1, 2])
         whole_reward_enum_digits.append([int(d) for d in str(reward_e)])
-
-        # conditions dict → 전체 조건 벡터 (1-based key → 0-based index)
-        cond_arr = np.zeros(N_CONDITION_COLS, dtype=np.float32)
-        for col_key, val in conditions.items():
-            arr_idx = int(col_key) - 1
-            if 0 <= arr_idx < N_CONDITION_COLS:
-                cond_arr[arr_idx] = float(val)
-        whole_condition_vecs.append(cond_arr)
 
     max_re_len = max(len(x) for x in whole_reward_enum_digits)
     whole_reward_enum = np.array(
         [x + [0] * (max_re_len - len(x)) for x in whole_reward_enum_digits]
     )  # (n_samples, max_re_len)
-    whole_condition = np.array(whole_condition_vecs)  # (n_samples, N_CONDITION_COLS)
-
-    pretrained_model, tokenizer = apply_pretrained_model(config)
-
-    bert_batch_size = getattr(config, 'bert_batch_size', 64)
-    all_cls_embeddings = []
-    for i in range(0, len(whole_language_inst_list), bert_batch_size):
-        batch_texts = whole_language_inst_list[i:i + bert_batch_size]
-        encoded_inputs = tokenizer(
-            batch_texts,
-            return_tensors="np",
-            padding="max_length",
-            max_length=config.max_len,
-            truncation=True,
-        )
-        encoded_outputs = pretrained_model(**encoded_inputs).last_hidden_state
-        cls_embedding = np.asarray(jax.device_get(encoded_outputs[:, 0, :]))  # [batch, hidden_size]
-        all_cls_embeddings.append(cls_embedding)
-
-    embedding_outputs = np.concatenate(all_cls_embeddings, axis=0)  # [num_samples, hidden_size]
 
     dataset = None
     for game in unique_games:
@@ -166,9 +121,9 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
         game_idxes = np.where(game_ids == game2idx[game])[0]
         instruct = np.array(whole_language_inst_list)[game_idxes]
         reward_enum = np.array(whole_reward_enum)[game_idxes]
-        embedding = embedding_outputs[game_idxes]
-        reward_id = sample_reward_id[game_idxes]
-        condition = np.array(whole_condition)[game_idxes]
+        embedding = whole_inst.embedding[game_idxes]
+        reward_id = whole_inst.reward_i[game_idxes].reshape(-1)
+        condition = whole_inst.condition[game_idxes]
 
         sample_size = curr_env_map.shape[0]
 
@@ -183,9 +138,6 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
         reward_enum = np.tile(reward_enum, (repeat_count, 1))[:sample_size]
         # condition:  (n_game_samples, N_CONDITION_COLS) → tile → (sample_size, N_CONDITION_COLS)
         condition = np.tile(condition, (repeat_count, 1))[:sample_size]
-
-        # if reward_enum is 5, it is not augmentable
-        augmentable = np.where(np.any(reward_enum == 5, axis=1), 0, 1)
 
         logging.info(f"Loaded {sample_size:,} samples")
 
@@ -227,7 +179,6 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
             dataset.reward.expend(reward)
             dataset.instruct.expend(instruct)
             dataset.embedding.expend(embedding)
-            dataset.augmentable.expend(augmentable)
         else:
             dataset = Dataset(reward_id=reward_id,
                               reward_enum=reward_enum,
@@ -235,7 +186,6 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
                               curr_env_map=curr_env_map,
                               instruct=instruct,
                               embedding=embedding,
-                              augmentable=augmentable
                               )
         del reward_enum, reward_id, reward, embedding, curr_env_map
 
@@ -268,7 +218,6 @@ def split_dataset(database: Dataset, train_ratio: float = 0.8):
         curr_env_map=database.curr_env_map[train_indices],
         instruct=database.instruct[train_indices],
         embedding=database.embedding[train_indices],
-        augmentable=database.augmentable[train_indices]
     )
 
     # Test Dataset
@@ -279,7 +228,6 @@ def split_dataset(database: Dataset, train_ratio: float = 0.8):
         curr_env_map=database.curr_env_map[test_indices],
         instruct=database.instruct[test_indices],
         embedding=database.embedding[test_indices],
-        augmentable=database.augmentable[test_indices]
     )
 
     return train_dataset, test_dataset

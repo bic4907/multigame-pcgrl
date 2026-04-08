@@ -660,6 +660,10 @@ class MultiGameDataset:
                         if val != "":
                             conditions[ci] = float(val)
                     target.meta["conditions"] = conditions
+                    # Copy instruction from CSV to sample (instruction_uni preferred, fallback to instruction_raw)
+                    instr = ann.get("instruction_raw")
+                    if instr and instr.strip():
+                        target.instruction = instr.strip()
                     attached += 1
 
             if new_samples:

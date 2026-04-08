@@ -740,31 +740,33 @@ def main() -> None:
         annot_dir=args.annot_dir, force=args.force,
     )
 
-    # enum(task)별로 배치를 분리하여 제출
+    # game × enum 조합별로 배치를 분리하여 제출
     _ENUM_NAMES = {
         0: "region", 1: "path_length", 2: "interactable_count",
         3: "hazard_count", 4: "collectable_count",
     }
 
-    submitted_batches: List[Tuple[str, int]] = []  # (batch_id, enum)
+    submitted_batches: List[Tuple[str, str]] = []  # (batch_id, game)
 
-    for enum in args.enums:
-        enum_name = _ENUM_NAMES.get(enum, str(enum))
-        logger.info(f"\n── enum {enum} ({enum_name}) ──")
+    for game in args.games:
+        logger.info(f"\n── {game} ──")
 
-        jsonl_path = build_jsonl(
-            games=args.games, enums=[enum],
-            annot_dir=args.annot_dir, cache_by_game=cache_by_game,
-            system_prompt=system_prompt, force=args.force,
-            limit=args.limit,
-        )
-        if jsonl_path is None:
-            logger.info(f"  enum {enum}: 생성할 요청 없음, 건너뜀")
-            continue
+        try:
+            jsonl_path = build_jsonl(
+                games=[game], enums=args.enums,
+                annot_dir=args.annot_dir, cache_by_game=cache_by_game,
+                system_prompt=system_prompt, force=args.force,
+                limit=args.limit,
+            )
+            if jsonl_path is None:
+                logger.info(f"  {game}: 생성할 요청 없음, 건너뜀")
+                continue
 
-        n_requests = sum(1 for _ in jsonl_path.open(encoding="utf-8"))
-        batch_id = submit_batch(jsonl_path, args.games, [enum], n_requests)
-        submitted_batches.append((batch_id, enum))
+            n_requests = sum(1 for _ in jsonl_path.open(encoding="utf-8"))
+            batch_id = submit_batch(jsonl_path, [game], args.enums, n_requests)
+            submitted_batches.append((batch_id, game))
+        except Exception as e:
+            logger.error(f"  {game}: 제출 실패 → {e}, 건너뜀")
 
     if not submitted_batches:
         logger.info("제출된 배치 없음")
@@ -777,29 +779,32 @@ def main() -> None:
         while pending:
             time.sleep(args.poll_interval)
             still_pending = []
-            for batch_id, enum in pending:
+            for batch_id, game in pending:
                 info   = check_batch_status(batch_id)
                 status = info["status"]
                 counts = info["request_counts"]
-                logger.info(f"  [{_ENUM_NAMES.get(enum, enum)}] {batch_id}: {status}  "
+                logger.info(f"  [{game}] {batch_id}: {status}  "
                             f"{counts['completed']}/{counts['total']} completed")
                 if status == "completed":
-                    results = retrieve_batch_results(batch_id)
-                    n = update_csvs(results, args.annot_dir, args.games)
-                    total_updated += n
+                    try:
+                        results = retrieve_batch_results(batch_id)
+                        n = update_csvs(results, args.annot_dir, [game])
+                        total_updated += n
+                    except Exception as e:
+                        logger.error(f"  [{game}] 결과 조회/업데이트 실패 → {e}, 건너뜀")
                 elif status in ("failed", "expired", "cancelled"):
-                    logger.error(f"  [{_ENUM_NAMES.get(enum, enum)}] 배치 실패/만료/취소: {status}")
+                    logger.error(f"  [{game}] 배치 실패/만료/취소: {status}")
                 else:
-                    still_pending.append((batch_id, enum))
+                    still_pending.append((batch_id, game))
             pending = still_pending
         logger.info(f"총 {total_updated}개 행 업데이트 완료")
     else:
         logger.info("\n배치 제출 완료. 결과 조회:")
-        for batch_id, enum in submitted_batches:
+        for batch_id, game in submitted_batches:
             logger.info(
-                f"  [{_ENUM_NAMES.get(enum, enum)}] "
+                f"  [{game}] "
                 f"python dataset/reward_annotations/generate_instructions.py "
-                f"--retrieve {batch_id} --games {' '.join(args.games)}"
+                f"--retrieve {batch_id} --games {game}"
             )
 
 

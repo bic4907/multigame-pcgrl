@@ -72,8 +72,9 @@ _BATCH_LOG   = _BATCH_DIR / "batch_log.csv"          # 단일 배치 추적 CSV
 _SYSTEM_PROMPT_FILE = _HERE / "system_prompt.txt"
 
 # ── 모델 설정 ─────────────────────────────────────────────────────────────────────
-MODEL      = "gpt-5.4-mini"
-MAX_TOKENS = 300
+MODEL       = "gpt-5.4-mini"
+MAX_TOKENS  = 300
+TEMPERATURE = 1.2
 
 # ── 배치 로그 CSV 헤더 ────────────────────────────────────────────────────────────
 _LOG_HEADER = ["batch_id", "jsonl_file", "games", "enums",
@@ -280,6 +281,7 @@ def build_batch_request(
         "url": "/v1/responses",
         "body": {
             "model": MODEL,
+            "temperature": TEMPERATURE,
             "instructions": system_prompt,
             "input": [
                 {

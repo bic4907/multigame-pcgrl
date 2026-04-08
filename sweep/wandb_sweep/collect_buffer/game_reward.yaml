@@ -9,7 +9,7 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0, 1, 2, 3]
+    values: [0]
   n_envs:
     values: [600]
   overwrite:

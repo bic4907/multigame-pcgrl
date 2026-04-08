@@ -256,7 +256,6 @@ class MultiGameDataset:
                 doom_hc,
             )
             logger.info("[doom] cache key: %s", doom_cache_key[:12])
-            print(f"[MultiGameDataset] doom cache key: {doom_cache_key[:12]}")
             doom_cached = load_game_samples_from_cache(cache_dir, "doom", doom_cache_key) if use_cache else None
             if doom_cached is not None:
                 for s in doom_cached:
@@ -285,7 +284,7 @@ class MultiGameDataset:
                 else:
                     fallback = load_any_game_cache(cache_dir, "doom") if use_cache else None
                     if fallback is not None:
-                        print(f"[MultiGameDataset] doom: artifact-only fallback ({len(fallback)} samples)")
+                        logger.info("doom: artifact-only fallback (%d samples from existing cache)", len(fallback))
                         for s in fallback:
                             s.order = len(self._samples)
                             self._samples.append(s)
@@ -337,8 +336,8 @@ class MultiGameDataset:
             ]
             removed = before - len(samples)
             if removed > 0:
-                print(f"[MultiGameDataset] POKEMON tileset filtering: {before} → {len(samples)} "
-                      f"({removed} removed, max_tile_count={max_tile_count})")
+                logger.info("POKEMON tileset filtering: %d → %d (%d removed, max_tile_count=%d)",
+                            before, len(samples), removed, max_tile_count)
 
         # (2) Instruction 단어 수 필터링
         if handler_config.pokemon.enabled:
@@ -350,8 +349,8 @@ class MultiGameDataset:
             ]
             removed = before - len(samples)
             if removed > 0:
-                print(f"[MultiGameDataset] {game} instruction filtering: {before} → {len(samples)} "
-                      f"({removed} removed, min_words={min_words})")
+                logger.info("%s instruction filtering: %d → %d (%d removed, min_words=%d)",
+                            game, before, len(samples), removed, min_words)
 
         # (3) 회전 증강
         if handler_config.augmentation.enabled:
@@ -364,7 +363,8 @@ class MultiGameDataset:
             if should_augment:
                 rotated = [create_rotated_sample(s) for s in samples]
                 samples = samples + rotated
-                print(f"[MultiGameDataset] {game} augmentation: {len(rotated)} rotated samples added → {len(samples)} total")
+                logger.info("%s augmentation: %d rotated samples added → %d total",
+                            game, len(rotated), len(samples))
 
         # (4) 증강 후 max_samples 재적용
         max_s: Optional[int] = None
@@ -377,7 +377,7 @@ class MultiGameDataset:
         elif game == "dungeon":
             max_s = handler_config.dungeon.max_samples
         if max_s is not None and len(samples) > max_s:
-            print(f"[MultiGameDataset] {game} post-augmentation limit: {len(samples)} → {max_s}")
+            logger.info("%s post-augmentation limit: %d → %d", game, len(samples), max_s)
             samples = samples[:max_s]
 
         return samples
@@ -660,6 +660,10 @@ class MultiGameDataset:
                         if val != "":
                             conditions[ci] = float(val)
                     target.meta["conditions"] = conditions
+                    # Copy instruction from CSV to sample (instruction_uni preferred, fallback to instruction_raw)
+                    instr = ann.get("instruction_raw")
+                    if instr and instr.strip():
+                        target.instruction = instr.strip()
                     attached += 1
 
             if new_samples:

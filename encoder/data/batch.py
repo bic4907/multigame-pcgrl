@@ -277,7 +277,7 @@ def split_dataset(database: Dataset, train_ratio: float = 0.8):
         reward_enum=database.reward_enum[test_indices],
         reward=database.reward[test_indices],
         curr_env_map=database.curr_env_map[test_indices],
-        instruct=database.instruct[train_indices],
+        instruct=database.instruct[test_indices],
         embedding=database.embedding[test_indices],
         augmentable=database.augmentable[test_indices]
     )

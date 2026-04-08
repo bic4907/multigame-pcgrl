@@ -142,21 +142,23 @@ class MultiGameDataset:
         doom_root:        Path | str = _DEFAULT_DOOM_ROOT,
         doom2_root:       Path | str = _DEFAULT_DOOM2_ROOT,
         zelda_root:       Path | str = _DEFAULT_ZELDA_ROOT,
-        N:                int = 0,
-        include_dungeon:  bool = True,
-        include_pokemon:  bool = True,
-        include_sokoban:  bool = True,
-        include_doom:     bool = True,
-        include_doom2:    bool = True,
-        include_zelda:    bool = True,
-        use_cache:        bool = True,
-        cache_dir:        Path | str | None = None,
-        use_tile_mapping: bool = True,
-        handler_config:   Optional[HandlerConfig] = None,
+        N:                    int = 0,
+        include_dungeon:      bool = True,
+        include_pokemon:      bool = True,
+        include_sokoban:      bool = True,
+        include_doom:         bool = True,
+        include_doom2:        bool = True,
+        include_zelda:        bool = True,
+        use_cache:            bool = True,
+        cache_dir:            Path | str | None = None,
+        use_tile_mapping:     bool = True,
+        handler_config:       Optional[HandlerConfig] = None,
         reward_annotations_dir: Path | str | None = _DEFAULT_REWARD_ANNOTATIONS_DIR,
+        max_samples_per_game: int = 0,
+        max_samples_seed:     int = 42,
         # 하위 호환: 구 파라미터명 지원
-        boxoban_root:     Path | str | None = None,
-        include_boxoban:  bool | None = None,
+        boxoban_root:         Path | str | None = None,
+        include_boxoban:      bool | None = None,
     ) -> None:
         self.use_tile_mapping: bool = use_tile_mapping
 
@@ -256,7 +258,6 @@ class MultiGameDataset:
                 doom_hc,
             )
             logger.info("[doom] cache key: %s", doom_cache_key[:12])
-            print(f"[MultiGameDataset] doom cache key: {doom_cache_key[:12]}")
             doom_cached = load_game_samples_from_cache(cache_dir, "doom", doom_cache_key) if use_cache else None
             if doom_cached is not None:
                 for s in doom_cached:
@@ -285,13 +286,39 @@ class MultiGameDataset:
                 else:
                     fallback = load_any_game_cache(cache_dir, "doom") if use_cache else None
                     if fallback is not None:
-                        print(f"[MultiGameDataset] doom: artifact-only fallback ({len(fallback)} samples)")
+                        logger.info("doom: artifact-only fallback (%d samples from existing cache)", len(fallback))
                         for s in fallback:
                             s.order = len(self._samples)
                             self._samples.append(s)
 
         if reward_annotations_dir is not None:
             self._load_reward_annotations(Path(reward_annotations_dir))
+
+        # ── 게임별 베이스 샘플 수 제한 (source_id 기준, annotation 복제 이후) ──
+        # source_id 단위로 선택하므로 모든 reward_enum 복제본이 함께 유지됨
+        if max_samples_per_game >= 1:
+            import random as _random
+            _rng = _random.Random(max_samples_seed)
+            _sid_buckets: dict = {}  # game → {source_id → [index]}
+            for i, s in enumerate(self._samples):
+                _sid_buckets.setdefault(s.game, {}).setdefault(s.source_id, []).append(i)
+            _keep: set = set()
+            for _game, _sid_map in sorted(_sid_buckets.items()):
+                source_ids = sorted(_sid_map.keys())
+                if len(source_ids) > max_samples_per_game:
+                    chosen = _rng.sample(source_ids, max_samples_per_game)
+                    logger.info("max_samples_per_game=%d [%s]: %d → %d unique samples (seed=%d)",
+                                max_samples_per_game, _game, len(source_ids), max_samples_per_game, max_samples_seed)
+                    for sid in chosen:
+                        _keep.update(_sid_map[sid])
+                else:
+                    for idxs in _sid_map.values():
+                        _keep.update(idxs)
+            _before = len(self._samples)
+            self._samples = [s for i, s in enumerate(self._samples) if i in _keep]
+            if len(self._samples) < _before:
+                logger.info("max_samples_per_game=%d: total %d → %d samples",
+                            max_samples_per_game, _before, len(self._samples))
 
         # ── N 샘플 서브샘플링 (게임별, 마스크 기반) ─────────────────────────
         if N >= 1:
@@ -337,8 +364,8 @@ class MultiGameDataset:
             ]
             removed = before - len(samples)
             if removed > 0:
-                print(f"[MultiGameDataset] POKEMON tileset filtering: {before} → {len(samples)} "
-                      f"({removed} removed, max_tile_count={max_tile_count})")
+                logger.info("POKEMON tileset filtering: %d → %d (%d removed, max_tile_count=%d)",
+                            before, len(samples), removed, max_tile_count)
 
         # (2) Instruction 단어 수 필터링
         if handler_config.pokemon.enabled:
@@ -350,8 +377,8 @@ class MultiGameDataset:
             ]
             removed = before - len(samples)
             if removed > 0:
-                print(f"[MultiGameDataset] {game} instruction filtering: {before} → {len(samples)} "
-                      f"({removed} removed, min_words={min_words})")
+                logger.info("%s instruction filtering: %d → %d (%d removed, min_words=%d)",
+                            game, before, len(samples), removed, min_words)
 
         # (3) 회전 증강
         if handler_config.augmentation.enabled:
@@ -364,7 +391,8 @@ class MultiGameDataset:
             if should_augment:
                 rotated = [create_rotated_sample(s) for s in samples]
                 samples = samples + rotated
-                print(f"[MultiGameDataset] {game} augmentation: {len(rotated)} rotated samples added → {len(samples)} total")
+                logger.info("%s augmentation: %d rotated samples added → %d total",
+                            game, len(rotated), len(samples))
 
         # (4) 증강 후 max_samples 재적용
         max_s: Optional[int] = None
@@ -377,7 +405,7 @@ class MultiGameDataset:
         elif game == "dungeon":
             max_s = handler_config.dungeon.max_samples
         if max_s is not None and len(samples) > max_s:
-            print(f"[MultiGameDataset] {game} post-augmentation limit: {len(samples)} → {max_s}")
+            logger.info("%s post-augmentation limit: %d → %d", game, len(samples), max_s)
             samples = samples[:max_s]
 
         return samples
@@ -660,6 +688,9 @@ class MultiGameDataset:
                         if val != "":
                             conditions[ci] = float(val)
                     target.meta["conditions"] = conditions
+                    # instruction_uni를 직접 읽음 ("None" 또는 빈 값이면 None 처리)
+                    instr = ann.get("instruction_uni", "").strip()
+                    target.instruction = instr if instr and instr != "None" else None
                     attached += 1
 
             if new_samples:

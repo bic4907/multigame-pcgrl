@@ -12,8 +12,8 @@ Multigame 아이템 배치 품질 기반 reward.
    → 일직선/뭉침 방지.
 
 2. **접근성 보상 (accessibility bonus)**
-   아이템 인접 4방향 중 통행 가능 타일(EMPTY, INTERACTIVE, HAZARD, COLLECTABLE)
-   이 1개 이상이면 보상. 사방이 WALL/BORDER 로 막힌 곳은 보상 0.
+   아이템 인접 4방향 중 통행 가능 타일(EMPTY, HAZARD, COLLECTABLE)
+   이 1개 이상이면 보상. 사방이 WALL/BORDER/INTERACTIVE 로 막힌 곳은 보상 0.
    → 도달 불가능한 곳에 아이템 배치 방지.
 
 3. **분산 보상 (spread bonus)**
@@ -21,9 +21,7 @@ Multigame 아이템 배치 품질 기반 reward.
    거리가 클수록 골고루 퍼져 있다는 뜻.
    → 한 곳에 몰리지 않도록 유도.
 
-최종 reward = w_cluster * cluster_reward
-            + w_access  * accessibility_reward
-            + w_spread  * spread_reward
+최종 reward = w_spread * spread_reward
 
 모두 JAX jit/vmap 호환.
 """
@@ -41,10 +39,9 @@ _ITEM_TILES = jnp.array([
     MultigameTiles.COLLECTABLE,
 ], dtype=jnp.int32)
 
-# 통행 가능 타일: EMPTY + 아이템 타일들
+# 통행 가능 타일: EMPTY + HAZARD + COLLECTABLE (INTERACTIVE 제외)
 _PASSABLE_TILES = jnp.array([
     MultigameTiles.EMPTY,
-    MultigameTiles.INTERACTIVE,
     MultigameTiles.HAZARD,
     MultigameTiles.COLLECTABLE,
 ], dtype=jnp.int32)
@@ -164,9 +161,7 @@ def _spread_bonus(env_map: chex.Array, max_items: int = 32) -> jnp.ndarray:
 def get_multigame_placement_reward(
     prev_env_map: chex.Array,
     curr_env_map: chex.Array,
-    w_cluster: float = 0.3,
-    w_access: float = 0.4,
-    w_spread: float = 0.3,
+    w_spread: float = 1.0,
     max_items: int = 32,
 ) -> chex.Array:
     """이전 맵 대비 아이템 배치 품질 개선량.
@@ -175,10 +170,6 @@ def get_multigame_placement_reward(
     ----------
     prev_env_map, curr_env_map : chex.Array
         (H, W) 정수 맵.
-    w_cluster : float
-        반복 배치 패널티 가중치. 클수록 뭉침에 민감.
-    w_access : float
-        접근성 보상 가중치. 클수록 막힌 곳 배치에 민감.
     w_spread : float
         분산 보상 가중치. 클수록 쏠림에 민감.
     max_items : int
@@ -189,29 +180,15 @@ def get_multigame_placement_reward(
     chex.Array : scalar reward (양수 = 개선).
     """
     # ── prev 점수 ──
-    prev_cluster = _cluster_penalty(prev_env_map)
-    prev_access  = _accessibility_bonus(prev_env_map)
     prev_spread  = _spread_bonus(prev_env_map, max_items)
 
     # ── curr 점수 ──
-    curr_cluster = _cluster_penalty(curr_env_map)
-    curr_access  = _accessibility_bonus(curr_env_map)
     curr_spread  = _spread_bonus(curr_env_map, max_items)
-
-    # cluster: 낮을수록 좋음 → prev - curr (줄었으면 양수)
-    cluster_reward = (prev_cluster - curr_cluster)
-
-    # access: 높을수록 좋음 → curr - prev (늘었으면 양수)
-    access_reward = (curr_access - prev_access)
 
     # spread: 높을수록 좋음 → curr - prev
     spread_reward = (curr_spread - prev_spread)
 
-    reward = (
-        w_cluster * cluster_reward +
-        w_access  * access_reward  +
-        w_spread  * spread_reward
-    )
+    reward = w_spread * spread_reward
     return reward.astype(float)
 
 

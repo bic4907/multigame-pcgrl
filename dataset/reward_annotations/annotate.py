@@ -52,69 +52,69 @@ logger = logging.getLogger(__name__)
 # ── 게임별 tile 설정 ─────────────────────────────────────────────────────────────
 _GAME_CONFIG = {
     "doom": {
-        "module":           doom_m,
-        "passible":         doom_m.DoomPassible,
-        "wall":             doom_m.DoomWall,
-        "object":           doom_m.DoomObject,
-        "mob":              doom_m.DoomMob,
-        "item":             doom_m.DoomItem,
-        "sub_cond_wall":    "wall+empty",
-        "sub_cond_object":  "spawn+door+danger",
-        "sub_cond_mob":     "enemy",
-        "sub_cond_item":    "item",
+        "module":                doom_m,
+        "passible":              doom_m.DoomPassible,
+        "wall":                  doom_m.DoomWall,
+        "interactable":          doom_m.DoomInteractable,
+        "hazard":                doom_m.DoomHazard,
+        "collectable":           doom_m.DoomCollectable,
+        "sub_cond_wall":         "wall+empty",
+        "sub_cond_interactable": "spawn+door+danger",
+        "sub_cond_hazard":       "enemy",
+        "sub_cond_collectable":  "item",
     },
     "zelda": {
-        "module":           zelda_m,
-        "passible":         zelda_m.ZeldaPassible,
-        "wall":             zelda_m.ZeldaWall,
-        "object":           zelda_m.ZeldaObject,
-        "mob":              zelda_m.ZeldaMob,
-        "item":             zelda_m.ZeldaItem,
-        "sub_cond_wall":    "wall+hazard+empty",
-        "sub_cond_object":  "block+door+start",
-        "sub_cond_mob":     "mob",
-        "sub_cond_item":    "object",
+        "module":                zelda_m,
+        "passible":              zelda_m.ZeldaPassible,
+        "wall":                  zelda_m.ZeldaWall,
+        "interactable":          zelda_m.ZeldaInteractable,
+        "hazard":                zelda_m.ZeldaHazard,
+        "collectable":           zelda_m.ZeldaCollectable,
+        "sub_cond_wall":         "wall+flood+empty",
+        "sub_cond_interactable": "door+block+start",
+        "sub_cond_hazard":       "mob",
+        "sub_cond_collectable":  "object",
     },
     "sokoban": {
-        "module":           sokoban_m,
-        "passible":         sokoban_m.SokobanPassible,
-        "wall":             sokoban_m.SokobanWall,
-        "object":           sokoban_m.SokobanObject,
-        "mob":              sokoban_m.SokobanMob,
-        "item":             sokoban_m.SokobanItem,
-        "sub_cond_wall":    "wall",
-        "sub_cond_object":  "box",
-        "sub_cond_mob":     "",
-        "sub_cond_item":    "",
+        "module":                sokoban_m,
+        "passible":              sokoban_m.SokobanPassible,
+        "wall":                  sokoban_m.SokobanWall,
+        "interactable":          sokoban_m.SokobanInteractable,
+        "hazard":                sokoban_m.SokobanHazard,
+        "collectable":           sokoban_m.SokobanCollectable,
+        "sub_cond_wall":         "wall",
+        "sub_cond_interactable": "box",
+        "sub_cond_hazard":       "",
+        "sub_cond_collectable":  "",
     },
     "pokemon": {
-        "module":           pokemon_m,
-        "passible":         pokemon_m.PokemonPassible,
-        "wall":             pokemon_m.PokemonWall,
-        "object":           pokemon_m.PokemonObject,
-        "mob":              pokemon_m.PokemonMob,
-        "item":             pokemon_m.PokemonItem,
-        "sub_cond_wall":    "tree+house+fence",
-        "sub_cond_object":  "spawn+water",
-        "sub_cond_mob":     "",
-        "sub_cond_item":    "object",
+        "module":                pokemon_m,
+        "passible":              pokemon_m.PokemonPassible,
+        "wall":                  pokemon_m.PokemonWall,
+        "interactable":          pokemon_m.PokemonInteractable,
+        "hazard":                pokemon_m.PokemonHazard,
+        "collectable":           pokemon_m.PokemonCollectable,
+        "sub_cond_wall":         "empty+wall+fence+tree+house",
+        "sub_cond_interactable": "spawn+water",
+        "sub_cond_hazard":       "enemy",
+        "sub_cond_collectable":  "object",
     },
     "dungeon": {
-        "module":           dungeon_m,
-        "passible":         dungeon_m.DungeonPassible,
-        "wall":             dungeon_m.DungeonWall,
-        "object":           dungeon_m.DungeonObject,
-        "mob":              dungeon_m.DungeonMob,
-        "item":             dungeon_m.DungeonItem,
-        "sub_cond_wall":    "wall+border",
-        "sub_cond_object":  "",
-        "sub_cond_mob":     "bat",
-        "sub_cond_item":    "",
+        "module":                dungeon_m,
+        "passible":              dungeon_m.DungeonPassible,
+        "wall":                  dungeon_m.DungeonWall,
+        "interactable":          dungeon_m.DungeonInteractable,
+        "hazard":                dungeon_m.DungeonHazard,
+        "collectable":           dungeon_m.DungeonCollectable,
+        "sub_cond_wall":         "wall",
+        "sub_cond_interactable": "",
+        "sub_cond_hazard":       "enemy",
+        "sub_cond_collectable":  "treasure",
     },
 }
 
 CSV_HEADER = [
-    "key", "instruction", "level_id", "sample_id",
+    "key", "instruction_raw", "instruction_uni", "level_id", "sample_id",
     "reward_enum", "feature_name", "sub_condition",
     "condition_0", "condition_1", "condition_2", "condition_3", "condition_4",
 ]
@@ -217,31 +217,31 @@ def _compute_measures(
 
     Returns
     -------
-    (rg, pl, wc, oc, mc, ic)
-      rg : region count          (passable = Empty + Item)
-      pl : path length           (passable = Empty + Item)
-      wc : wall tile count
-      oc : object tile count
-      mc : mob tile count
-      ic : item tile count
+    (rg, pl, wc, ic_inter, ic_hazard, ic_coll)
+      rg        : region count               (passable = Empty + Collectable)
+      pl        : path length                (passable = Empty + Collectable)
+      wc        : wall tile count
+      ic_inter  : interactable tile count    (unified 2)
+      ic_hazard : hazard tile count          (unified 3)
+      ic_coll   : collectable tile count     (unified 4)
     """
-    module     = config["module"]
-    passible   = config["passible"]
-    wall_ids   = config["wall"]
-    object_ids = config["object"]
-    mob_ids    = config["mob"]
-    item_ids   = config["item"]
+    module           = config["module"]
+    passible         = config["passible"]
+    wall_ids         = config["wall"]
+    interactable_ids = config["interactable"]
+    hazard_ids       = config["hazard"]
+    collectable_ids  = config["collectable"]
 
     jmap = jnp.array(env_map)
 
-    rg = float(module.get_region(jmap, passible))
-    pl = float(module.get_path_length(jmap, passible))
-    wc = _tile_count(env_map, wall_ids)
-    oc = _tile_count(env_map, object_ids)
-    mc = _tile_count(env_map, mob_ids)
-    ic = _tile_count(env_map, item_ids)
+    rg       = float(module.get_region(jmap, passible))
+    pl       = float(module.get_path_length(jmap, passible))
+    wc       = _tile_count(env_map, wall_ids)
+    ic_inter = _tile_count(env_map, interactable_ids)
+    ic_haz   = _tile_count(env_map, hazard_ids)
+    ic_coll  = _tile_count(env_map, collectable_ids)
 
-    return rg, pl, wc, oc, mc, ic
+    return rg, pl, wc, ic_inter, ic_haz, ic_coll
 
 
 # ── 행 생성 ───────────────────────────────────────────────────────────────────────
@@ -279,9 +279,9 @@ def _make_rows(
         computed.append((instruction, order_idx, source_id, rg, pl, wc, oc, mc, ic))
 
     # 2단계: reward_enum별 그룹으로 행 생성
-    sc_object = config["sub_cond_object"]
-    sc_mob    = config["sub_cond_mob"]
-    sc_item   = config["sub_cond_item"]
+    sc_object = config["sub_cond_interactable"]
+    sc_mob    = config["sub_cond_hazard"]
+    sc_item   = config["sub_cond_collectable"]
 
     # (reward_enum, feature_name, cond_col, val_idx, sub_condition)
     # val_idx: computed 튜플에서의 인덱스 (3=rg, 4=pl, 6=oc, 7=mc, 8=ic)
@@ -301,9 +301,10 @@ def _make_rows(
         for instruction, order_idx, source_id, *vals in computed:
             value = vals[val_idx - 3]  # offset: idx 3 → vals[0]
             row: dict = {
-                "key":           f"{prefix}{row_n:06d}",
-                "instruction":   instruction,
-                "level_id":      f"{row_n:06d}",
+                "key":            f"{prefix}{row_n:06d}",
+                "instruction_raw": "",
+                "instruction_uni": "",
+                "level_id":       f"{row_n:06d}",
                 "sample_id":     source_id,
                 "reward_enum":   reward_enum,
                 "feature_name":  feature_name,

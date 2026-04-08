@@ -6,10 +6,6 @@ metric:
 parameters:
   placement_w_amount:
     values: [0.8, 1.0, 1.2]
-  placement_w_cluster:
-    values: [0.0, 0.05, 0.1]
-  placement_w_access:
-    values: [0.0, 0.1, 0.2]
   placement_w_spread:
     values: [0.0, 0.1, 0.2]
   game:

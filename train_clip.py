@@ -189,6 +189,7 @@ def make_train(config: CLIPTrainConfig):
                     attention_masks=ds.attention_masks[:n],
                     pixel_values=ds.pixel_values[:n],
                     is_train=ds.is_train[:n],
+                    quantized_condition_targets=ds.quantized_condition_targets[:n] if ds.quantized_condition_targets is not None else None,
                 )
             train_clip_dataset = _slice_dataset(train_clip_dataset, n)
             test_clip_dataset = _slice_dataset(test_clip_dataset, n)

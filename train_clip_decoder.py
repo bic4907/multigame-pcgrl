@@ -341,6 +341,7 @@ def make_train(config: CLIPDecoderTrainConfig):
                     is_train=ds.is_train[:n],
                     reward_enum_targets=ds.reward_enum_targets[:n],
                     condition_targets=ds.condition_targets[:n],
+                    quantized_condition_targets=ds.quantized_condition_targets[:n] if ds.quantized_condition_targets is not None else None,
                 )
             train_clip_dataset = _slice_dataset(train_clip_dataset, n)
             test_clip_dataset = _slice_dataset(test_clip_dataset, n)

@@ -199,14 +199,13 @@ def train_step(
 #  Training Loop
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# reward_enum 이름 매핑 (1-based)
+# reward_enum 이름 매핑 (0-based: CSV reward_enum은 0-indexed)
 _REWARD_ENUM_NAMES = {
-    1: "region",
-    2: "path_length",
-    3: "interactable_count",
-    4: "hazard_count",
-    5: "collectable_count",
-    6: "item_count",
+    0: "region",
+    1: "path_length",
+    2: "interactable_count",
+    3: "hazard_count",
+    4: "collectable_count",
 }
 
 
@@ -276,8 +275,8 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
     # 전체 요약
     all_enums = set(enum_stats.keys())
     logger.info(f"  Total games: {len(game_enum_stats)},  "
-                f"Unique reward_enums (1-based): {sorted(all_enums)},  "
-                f"num_reward_classes should be >= {max(all_enums) if all_enums else 0}")
+                f"Unique reward_enums (0-based): {sorted(all_enums)},  "
+                f"num_reward_classes should be >= {max(all_enums) + 1 if all_enums else 0}")
     logger.info("=" * 80)
     logger.info("  ※ Condition values will be min-max normalized per reward_enum to [0, 1]")
     logger.info("=" * 80)
@@ -320,7 +319,7 @@ def make_train(config: CLIPDecoderTrainConfig):
         logger.info("  Per-reward_enum condition normalization applied:")
         logger.info(f"  {'enum(0idx)':>10}  {'name':<22} {'raw_min':>10}  {'raw_max':>10}  {'→ normalized':>12}")
         for eidx in sorted(cond_norm_min.keys()):
-            name = _REWARD_ENUM_NAMES.get(eidx + 1, f"unknown_{eidx+1}")
+            name = _REWARD_ENUM_NAMES.get(eidx, f"unknown_{eidx}")
             r_min, r_max = cond_norm_min[eidx], cond_norm_max[eidx]
             logger.info(f"  {eidx:>10}  {name:<22} {r_min:>10.2f}  {r_max:>10.2f}  {'[0.0, 1.0]':>12}")
         logger.info("")
@@ -506,15 +505,15 @@ def make_train(config: CLIPDecoderTrainConfig):
                     val_per_enum_count += metrics["per_enum_count"]
 
                     # scatter plot 버퍼 누적
-                    reward_enum_1based = np.array(jax.device_get(batch.reward_enum_target)) + 1
+                    reward_enum_0based = np.array(jax.device_get(batch.reward_enum_target))
                     pred_raw = np.array(jax.device_get(metrics["per_sample_cond_raw"]))
                     target_norm = np.array(jax.device_get(batch.condition_target))
-                    target_raw = target_norm * (norm_max_arr[reward_enum_1based - 1] - norm_min_arr[reward_enum_1based - 1]) + norm_min_arr[reward_enum_1based - 1]
+                    target_raw = target_norm * (norm_max_arr[reward_enum_0based] - norm_min_arr[reward_enum_0based]) + norm_min_arr[reward_enum_0based]
                     games = [class_id2game_name.get(int(cid), "unknown") for cid in np.array(jax.device_get(batch.class_ids))]
 
                     val_true_raw_buf.append(np.array(target_raw))
                     val_pred_raw_buf.append(pred_raw)
-                    val_enum_buf.append(reward_enum_1based)
+                    val_enum_buf.append(reward_enum_0based)
                     val_game_buf.extend(games)
 
                     pbar.update(1)
@@ -597,7 +596,7 @@ def make_train(config: CLIPDecoderTrainConfig):
                 scatter_paths = _create_condition_scatter_plots(
                     true_raw=all_true_raw,
                     pred_raw=all_pred_raw,
-                    reward_enum_1based=all_enum,
+                    reward_enum_0based=all_enum,
                     game_names=val_game_buf,
                     num_reward_classes=num_cls,
                     epoch=epoch,
@@ -605,7 +604,7 @@ def make_train(config: CLIPDecoderTrainConfig):
                 )
                 if wandb.run is not None:
                     wandb.log({
-                        **{f"val_scatter/enum_{i+1}": wandb.Image(p) for i, p in enumerate(scatter_paths)}
+                        **{f"val_scatter/enum_{i}": wandb.Image(p) for i, p in enumerate(scatter_paths)}
                     })
 
     return lambda rng_key: train(rng_key)
@@ -734,7 +733,7 @@ def main(config: CLIPDecoderTrainConfig):
 def _create_condition_scatter_plots(
     true_raw: np.ndarray,
     pred_raw: np.ndarray,
-    reward_enum_1based: np.ndarray,
+    reward_enum_0based: np.ndarray,
     game_names: list,
     num_reward_classes: int,
     epoch: int,
@@ -746,8 +745,8 @@ def _create_condition_scatter_plots(
     uniq_games = sorted(set(game_names))
     game2color = palette_for_games(game_names)
 
-    for enum_id in range(1, num_reward_classes + 1):
-        mask = reward_enum_1based == enum_id
+    for enum_id in range(num_reward_classes):
+        mask = reward_enum_0based == enum_id
         x = true_raw[mask]
         y = pred_raw[mask]
         g = np.array(game_names)[mask] if len(game_names) > 0 else np.array([])

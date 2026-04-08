@@ -80,11 +80,23 @@ class DatasetViewerBackend:
             return
         
         self._games: List[str] = self._dataset.available_games()
-        self._counts: Dict[str, int] = self._dataset.count_by_game()
-        
+
         # Pre-filter and cache raw samples per game (once at init)
+        # 뷰어에서는 맵이 한 번씩만 표시되도록 source_id 기준 중복 제거
         for game in self._games:
-            self._raw_samples_by_game[game] = self._dataset.by_game(game)
+            all_samples = self._dataset.by_game(game)
+            seen: set = set()
+            deduped: List[GameSample] = []
+            for s in all_samples:
+                if s.source_id not in seen:
+                    seen.add(s.source_id)
+                    deduped.append(s)
+            self._raw_samples_by_game[game] = deduped
+
+        self._counts: Dict[str, int] = {
+            game: len(samples)
+            for game, samples in self._raw_samples_by_game.items()
+        }
         
         print(f"[DatasetViewerBackend] Games: {self._games}", flush=True)
         print(f"[DatasetViewerBackend] Samples: {self._counts}", flush=True)

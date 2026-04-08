@@ -175,9 +175,9 @@ class CLIPDatasetBuilder:
         logger.info(f"Train: {is_train.sum()} samples, Val: {(~is_train).sum()} samples")
 
         # ── 디코더 학습용 타겟 ──
-        # reward_enum: 1-based → 0-indexed (0~5)
+        # reward_enum: 이미 0-indexed (0=region … 4=collectable)
         reward_enum_targets = np.array([
-            int(rc[1]) - 1 for rc in reward_cond_list   # 1-based → 0-indexed
+            int(rc[1]) for rc in reward_cond_list   # 0-indexed 그대로 사용
         ], dtype=np.int32)
         condition_targets_raw = np.array([
             float(rc[2]) if rc[2] is not None else 0.0

@@ -12,8 +12,8 @@ Multigame 아이템 배치 품질 기반 reward.
    → 일직선/뭉침 방지.
 
 2. **접근성 보상 (accessibility bonus)**
-   아이템 인접 4방향 중 통행 가능 타일(EMPTY, INTERACTIVE, HAZARD, COLLECTABLE)
-   이 1개 이상이면 보상. 사방이 WALL/BORDER 로 막힌 곳은 보상 0.
+   아이템 인접 4방향 중 통행 가능 타일(EMPTY, HAZARD, COLLECTABLE)
+   이 1개 이상이면 보상. 사방이 WALL/BORDER/INTERACTIVE 로 막힌 곳은 보상 0.
    → 도달 불가능한 곳에 아이템 배치 방지.
 
 3. **분산 보상 (spread bonus)**
@@ -39,10 +39,9 @@ _ITEM_TILES = jnp.array([
     MultigameTiles.COLLECTABLE,
 ], dtype=jnp.int32)
 
-# 통행 가능 타일: EMPTY + 아이템 타일들
+# 통행 가능 타일: EMPTY + HAZARD + COLLECTABLE (INTERACTIVE 제외)
 _PASSABLE_TILES = jnp.array([
     MultigameTiles.EMPTY,
-    MultigameTiles.INTERACTIVE,
     MultigameTiles.HAZARD,
     MultigameTiles.COLLECTABLE,
 ], dtype=jnp.int32)

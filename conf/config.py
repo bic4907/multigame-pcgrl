@@ -29,6 +29,7 @@ class Config:
     ANNEAL_LR: bool = False
     DEBUG: bool = False
     exp_name: str = "def"
+    random_exp_name: bool = False
     seed: int = 0
 
     # Game selection — 2글자 약어 조합 (dg=dungeon, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)

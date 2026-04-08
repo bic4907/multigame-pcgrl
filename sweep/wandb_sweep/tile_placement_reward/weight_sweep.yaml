@@ -16,6 +16,8 @@ parameters:
     values: [600]
   overwrite:
     value: true
+  random_exp_name:
+    value: true
 command:
   - ${interpreter}
   - ${program}

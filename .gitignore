@@ -52,3 +52,6 @@ tests/render_samples/
 pretrained_encoders/*
 !pretrained_encoders/vipcgrl_sample/
 pretrained_encoders/vipcgrl_sample/.DS_Store
+
+# LLM API 배치
+dataset/reward_annotations/batches/*

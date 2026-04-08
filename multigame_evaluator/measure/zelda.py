@@ -3,27 +3,28 @@ multigame_evaluator/measure/zelda.py
 =====================================
 Zelda 게임에 맞는 measure 함수 모음.
 
-타일 정의 (dataset/multigame/handlers/vglc_games/zelda.py 기준)
+타일 정의 (tile_mapping.json 기준)
 --------------------------------------------------------------
-0  EMPTY   - 빈 공간/경계 (막힘)
-1  WALL    - 벽 (막힘)
-2  FLOOR   - 바닥 (통과 가능)
-3  DOOR    - 문 (Object)
-4  BLOCK   - 장애물 블록 (Object)
-5  START   - 플레이어 시작점 (Object)
-6  MOB     - 적 (Mob)
-7  OBJECT  - 아이템 / 오브젝트 (Item)
-8  FLOOD   - 물/용암 위험 지형 (막힘, 구 HAZARD)
+0  EMPTY   - 빈 공간/경계    → unified 1 (wall)
+1  WALL    - 벽              → unified 1 (wall)
+2  FLOOR   - 바닥            → unified 0 (empty)
+3  DOOR    - 문              → unified 2 (interactive)
+4  BLOCK   - 장애물 블록     → unified 2 (interactive)
+5  START   - 플레이어 시작점 → unified 2 (interactive)
+6  MOB     - 적              → unified 3 (hazard)
+7  OBJECT  - 아이템/오브젝트 → unified 4 (collectable)
+8  FLOOD   - 물/용암 위험    → unified 1 (wall)
+99 UNKNOWN - 미정의 fallback → unified 0 (empty)
 
-분류
+분류 (unified category 기준)
 --------------------------------------------------------------
-Empty   : FLOOR                  (통과 가능 지형)
-Wall    : EMPTY, WALL, FLOOD     (막힘)
-Object  : BLOCK, DOOR, START     (구조물)
-Mob     : MOB                    (적)
-Item    : OBJECT                 (획득 가능)
+Empty       : FLOOR, UNKNOWN             (unified 0)
+Wall        : EMPTY, WALL, FLOOD         (unified 1)
+Interactable: DOOR, BLOCK, START         (unified 2)
+Hazard      : MOB                        (unified 3)
+Collectable : OBJECT                     (unified 4)
 
-Passable (RG/PL): Empty + Item
+Passable (RG/PL): Empty + Hazard + Collectable
 """
 from enum import IntEnum
 
@@ -37,19 +38,21 @@ from evaluator.utils import init_flood_net
 
 
 class ZeldaTile(IntEnum):
-    EMPTY  = 0
-    WALL   = 1
-    FLOOR  = 2
-    DOOR   = 3
-    BLOCK  = 4
-    START  = 5
-    MOB    = 6
-    OBJECT = 7
-    FLOOD  = 8
+    EMPTY   = 0
+    WALL    = 1
+    FLOOR   = 2
+    DOOR    = 3
+    BLOCK   = 4
+    START   = 5
+    MOB     = 6
+    OBJECT  = 7
+    FLOOD   = 8
+    UNKNOWN = 99
 
 
 ZeldaEmpty = jnp.array([
     ZeldaTile.FLOOR,
+    ZeldaTile.UNKNOWN,
 ], dtype=jnp.int32)
 
 ZeldaWall = jnp.array([
@@ -58,23 +61,21 @@ ZeldaWall = jnp.array([
     ZeldaTile.FLOOD,
 ], dtype=jnp.int32)
 
-ZeldaObject = jnp.array([
-    ZeldaTile.BLOCK,
+ZeldaInteractable = jnp.array([
     ZeldaTile.DOOR,
+    ZeldaTile.BLOCK,
     ZeldaTile.START,
 ], dtype=jnp.int32)
 
-ZeldaMob = jnp.array([
+ZeldaHazard = jnp.array([
     ZeldaTile.MOB,
 ], dtype=jnp.int32)
 
-ZeldaItem = jnp.array([
+ZeldaCollectable = jnp.array([
     ZeldaTile.OBJECT,
 ], dtype=jnp.int32)
 
-ZeldaPassible = jnp.concatenate([ZeldaEmpty, ZeldaItem])
-
-
+ZeldaPassible = jnp.concatenate([ZeldaEmpty, ZeldaHazard, ZeldaCollectable])
 
 
 def get_amount(

@@ -6,6 +6,8 @@ defaults:
   - train_clip_decoder_schema
   - _self_
 
+encoder:
+  model: cnnclip
 
 # 디코더 설정
 decoder:

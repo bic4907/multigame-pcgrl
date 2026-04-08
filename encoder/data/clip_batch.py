@@ -169,15 +169,16 @@ class CLIPDatasetBuilder:
         self.class_id2reward_cond = {v: k for k, v in quantized_rc2class_id.items()}
 
         # ── 양자화 요약 로그 ──
-        from collections import Counter
-        _bin_unique = Counter()
+        from collections import defaultdict
+        _game_bins = defaultdict(dict)  # {game_name: {enum: n_bins}}
         for (g_idx, re, q_bin) in set(quantized_reward_cond_list):
-            _bin_unique[(g_idx, re)] += 1
+            g_name = self.idx2game.get(g_idx, "?")
+            _game_bins[g_name][re] = _game_bins[g_name].get(re, 0) + 1
         logger.info(f"Condition quantization: {len(set(reward_cond_list))} raw → "
                      f"{len(unique_quantized_rc)} quantized classes")
-        for (g_idx, re), n_bins in sorted(_bin_unique.items()):
-            g_name = self.idx2game.get(g_idx, "?")
-            logger.info(f"  {g_name}/enum{re}: {n_bins} bins")
+        for g_name in sorted(_game_bins):
+            parts = [f"e{re}:{nb}" for re, nb in sorted(_game_bins[g_name].items())]
+            logger.info(f"  {g_name}: {', '.join(parts)}")
 
         # Keep reward_cond as structured data
         reward_cond = np.array([

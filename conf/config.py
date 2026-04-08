@@ -149,12 +149,6 @@ class Config:
     dataset_train_ratio: float = 0.95
 
     # Multigame tile placement reward 가중치 (sweep 대상)
-    placement_w_amount: float = 0.4
-    placement_w_cluster: float = 0.2
-    placement_w_access: float = 0.2
-    placement_w_spread: float = 0.2
-
-    # Multigame tile placement reward 가중치 (sweep 대상)
     placement_w_amount: float = 1.0
     placement_w_spread: float = 0.1
 

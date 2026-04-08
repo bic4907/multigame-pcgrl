@@ -55,7 +55,8 @@ from dataset.multigame.tile_utils import to_unified, CATEGORY_COLORS, UNIFIED_CA
 from instruction_config import (
     CUSTOM_THRESHOLDS,
     RAW_TILE_COLORS, RAW_TILE_NAMES, RAW_TILE_DESCS,
-    FEATURE_TILE_DESCS, GAME_DESCRIPTIONS, FEATURE_DESCRIPTIONS,
+    FEATURE_TILE_DESCS, FEATURE_COUNT_TILE_IDS,
+    GAME_DESCRIPTIONS, FEATURE_DESCRIPTIONS,
     UNIFIED_COLOR_DESCS, FEATURE_ZONE_LABELS,
 )
 
@@ -144,6 +145,9 @@ def render_unified_png(array: np.ndarray, game: str, tile_size: int = 16) -> byt
 
 # ── 유저 프롬프트 빌더 ────────────────────────────────────────────────────────────
 
+_COUNT_FEATURES = {"interactable_count", "hazard_count", "collectable_count"}
+
+
 def build_user_prompt(
     game: str,
     feature_name: str,
@@ -151,6 +155,7 @@ def build_user_prompt(
     sub_condition: str,
     thresholds: Optional[List[float]],
     zone_label: str,
+    array: Optional[np.ndarray] = None,
 ) -> str:
     lines: List[str] = []
 
@@ -186,6 +191,16 @@ def build_user_prompt(
         lines.append(f"  ID={tid}  {name:10s}  color=RGB({r},{g},{b})  — {desc}")
     raw_desc = FEATURE_TILE_DESCS.get(game, {}).get(feature_name, ("", ""))[0]
     lines.append(f"Count basis: {raw_desc if raw_desc else sub_condition}")
+
+    # count feature(enum 2,3,4): per raw tile count 삽입
+    if feature_name in _COUNT_FEATURES and array is not None:
+        tile_ids = FEATURE_COUNT_TILE_IDS.get(game, {}).get(feature_name, [])
+        if tile_ids:
+            count_parts = [
+                f"{tile_names.get(tid, str(tid))}={int(np.sum(array == tid))}"
+                for tid in tile_ids
+            ]
+            lines.append(f"Per-tile counts (for instruction_raw): {', '.join(count_parts)}")
     lines.append("")
 
     lines.append("## Image 2 — Unified Map (unified category colors)")
@@ -205,16 +220,35 @@ def build_user_prompt(
     lines.append("")
 
     lines.append("## Task")
-    if thresholds is not None:
+    if feature_name in _COUNT_FEATURES:
+        if thresholds is not None:
+            lines.append(
+                f"Write one short sentence describing this map's {feature_name} ({zone_label})."
+            )
+        else:
+            lines.append(
+                f"Write one short sentence describing this map's {feature_name} based on what you see."
+            )
         lines.append(
-            f"Write one short sentence describing this map's {feature_name} ({zone_label}). "
-            "No numbers. instruction_raw uses raw tile names; instruction_uni uses unified category names."
+            "- instruction_raw: use game-specific tile names; "
+            "you may reference the per-tile counts above."
         )
+        lines.append(
+            "- instruction_uni: use unified category names (empty/wall/interactive/hazard/collectable) only; "
+            "do NOT reference specific tile names or per-tile counts — describe only the overall intensity level."
+        )
+        lines.append("No numbers in either sentence.")
     else:
-        lines.append(
-            f"Write one short sentence describing this map's {feature_name} based on what you see. "
-            "No numbers. instruction_raw uses raw tile names; instruction_uni uses unified category names."
-        )
+        if thresholds is not None:
+            lines.append(
+                f"Write one short sentence describing this map's {feature_name} ({zone_label}). "
+                "No numbers. instruction_raw uses raw tile names; instruction_uni uses unified category names."
+            )
+        else:
+            lines.append(
+                f"Write one short sentence describing this map's {feature_name} based on what you see. "
+                "No numbers. instruction_raw uses raw tile names; instruction_uni uses unified category names."
+            )
 
     return "\n".join(lines)
 
@@ -236,7 +270,8 @@ def build_batch_request(
     raw_b64 = base64.b64encode(render_raw_png(array, game)).decode()
     uni_b64 = base64.b64encode(render_unified_png(array, game)).decode()
     user_text = build_user_prompt(
-        game, feature_name, condition_value, sub_condition, thresholds, zone_label
+        game, feature_name, condition_value, sub_condition, thresholds, zone_label,
+        array=array,
     )
 
     return {

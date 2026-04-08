@@ -458,6 +458,8 @@ class CLIPTrainConfig(Config):
     
     steps_per_epoch: Optional[int] = None
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+    max_samples_per_game: int = 1000   # 게임별 베이스 샘플 상한 (0=무제한)
+    max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     
     # overwrite

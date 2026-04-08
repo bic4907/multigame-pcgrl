@@ -15,7 +15,7 @@ parameters:
   overwrite:
     value: true
   exp_name:
-    value: 'cb'
+    value: 'def'
 command:
   - ${interpreter}
   - ${program}

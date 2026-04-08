@@ -272,8 +272,6 @@ def make_train(
                         env_state.env_state.env_map,
                         map_size=config.map_width,
                         placement_w_amount=config.placement_w_amount,
-                        placement_w_cluster=config.placement_w_cluster,
-                        placement_w_access=config.placement_w_access,
                         placement_w_spread=config.placement_w_spread,
                     )
                     reward_batch = cond_reward_batch
@@ -285,8 +283,6 @@ def make_train(
                         env_state.env_state.env_map,
                         map_size=config.map_width,
                         placement_w_amount=config.placement_w_amount,
-                        placement_w_cluster=config.placement_w_cluster,
-                        placement_w_access=config.placement_w_access,
                         placement_w_spread=config.placement_w_spread,
                     )
                     reward_batch = cond_reward_batch
@@ -497,8 +493,6 @@ def make_train(
                             next_state.env_state.env_map,
                             map_size=config.map_width,
                             placement_w_amount=config.placement_w_amount,
-                            placement_w_cluster=config.placement_w_cluster,
-                            placement_w_access=config.placement_w_access,
                             placement_w_spread=config.placement_w_spread,
                         )
                         reward_batch = cond_reward_batch
@@ -510,8 +504,6 @@ def make_train(
                             next_state.env_state.env_map,
                             map_size=config.map_width,
                             placement_w_amount=config.placement_w_amount,
-                            placement_w_cluster=config.placement_w_cluster,
-                            placement_w_access=config.placement_w_access,
                             placement_w_spread=config.placement_w_spread,
                         )
                         reward_batch = cond_reward_batch

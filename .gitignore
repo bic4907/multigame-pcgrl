@@ -55,3 +55,6 @@ pretrained_encoders/vipcgrl_sample/.DS_Store
 
 # LLM API 배치
 dataset/reward_annotations/batches/*
+
+#실수로 덮어쓰는거 방지
+CLAUDE.md

@@ -142,21 +142,23 @@ class MultiGameDataset:
         doom_root:        Path | str = _DEFAULT_DOOM_ROOT,
         doom2_root:       Path | str = _DEFAULT_DOOM2_ROOT,
         zelda_root:       Path | str = _DEFAULT_ZELDA_ROOT,
-        N:                int = 0,
-        include_dungeon:  bool = True,
-        include_pokemon:  bool = True,
-        include_sokoban:  bool = True,
-        include_doom:     bool = True,
-        include_doom2:    bool = True,
-        include_zelda:    bool = True,
-        use_cache:        bool = True,
-        cache_dir:        Path | str | None = None,
-        use_tile_mapping: bool = True,
-        handler_config:   Optional[HandlerConfig] = None,
+        N:                    int = 0,
+        include_dungeon:      bool = True,
+        include_pokemon:      bool = True,
+        include_sokoban:      bool = True,
+        include_doom:         bool = True,
+        include_doom2:        bool = True,
+        include_zelda:        bool = True,
+        use_cache:            bool = True,
+        cache_dir:            Path | str | None = None,
+        use_tile_mapping:     bool = True,
+        handler_config:       Optional[HandlerConfig] = None,
         reward_annotations_dir: Path | str | None = _DEFAULT_REWARD_ANNOTATIONS_DIR,
+        max_samples_per_game: int = 0,
+        max_samples_seed:     int = 42,
         # 하위 호환: 구 파라미터명 지원
-        boxoban_root:     Path | str | None = None,
-        include_boxoban:  bool | None = None,
+        boxoban_root:         Path | str | None = None,
+        include_boxoban:      bool | None = None,
     ) -> None:
         self.use_tile_mapping: bool = use_tile_mapping
 
@@ -291,6 +293,32 @@ class MultiGameDataset:
 
         if reward_annotations_dir is not None:
             self._load_reward_annotations(Path(reward_annotations_dir))
+
+        # ── 게임별 베이스 샘플 수 제한 (source_id 기준, annotation 복제 이후) ──
+        # source_id 단위로 선택하므로 모든 reward_enum 복제본이 함께 유지됨
+        if max_samples_per_game >= 1:
+            import random as _random
+            _rng = _random.Random(max_samples_seed)
+            _sid_buckets: dict = {}  # game → {source_id → [index]}
+            for i, s in enumerate(self._samples):
+                _sid_buckets.setdefault(s.game, {}).setdefault(s.source_id, []).append(i)
+            _keep: set = set()
+            for _game, _sid_map in sorted(_sid_buckets.items()):
+                source_ids = sorted(_sid_map.keys())
+                if len(source_ids) > max_samples_per_game:
+                    chosen = _rng.sample(source_ids, max_samples_per_game)
+                    logger.info("max_samples_per_game=%d [%s]: %d → %d unique samples (seed=%d)",
+                                max_samples_per_game, _game, len(source_ids), max_samples_per_game, max_samples_seed)
+                    for sid in chosen:
+                        _keep.update(_sid_map[sid])
+                else:
+                    for idxs in _sid_map.values():
+                        _keep.update(idxs)
+            _before = len(self._samples)
+            self._samples = [s for i, s in enumerate(self._samples) if i in _keep]
+            if len(self._samples) < _before:
+                logger.info("max_samples_per_game=%d: total %d → %d samples",
+                            max_samples_per_game, _before, len(self._samples))
 
         # ── N 샘플 서브샘플링 (게임별, 마스크 기반) ─────────────────────────
         if N >= 1:
@@ -660,10 +688,9 @@ class MultiGameDataset:
                         if val != "":
                             conditions[ci] = float(val)
                     target.meta["conditions"] = conditions
-                    # Copy instruction from CSV to sample (instruction_uni preferred, fallback to instruction_raw)
-                    instr = ann.get("instruction_raw")
-                    if instr and instr.strip():
-                        target.instruction = instr.strip()
+                    # instruction_uni를 직접 읽음 ("None" 또는 빈 값이면 None 처리)
+                    instr = ann.get("instruction_uni", "").strip()
+                    target.instruction = instr if instr and instr != "None" else None
                     attached += 1
 
             if new_samples:

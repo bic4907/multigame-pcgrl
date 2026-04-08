@@ -107,23 +107,20 @@ class CLIPDatasetBuilder:
     def preprocess_paired_data(self):
         samples = self.paired_data._samples
 
-        # Extract game types and create mapping to integer IDs
+        # Filter out samples with None instruction (count logged after train/val split)
+        n_before = len(samples)
+        dropped_combos = sorted(set(
+            (s.game, s.meta.get("reward_enum"))
+            for s in samples if s.instruction is None
+        ))
+        samples = [s for s in samples if s.instruction is not None]
+
+        # Extract game types and create mapping to integer IDs (필터 이후 기준)
         games_type = [s.game for s in samples]  # N is the number of samples
         unique_games = sorted(set(games_type))
         game2idx = {game: idx for idx, game in enumerate(unique_games)}
         game_ids = np.array([game2idx[g] for g in games_type])  # (N,)
         logger.info(f"Detected {len(unique_games)} unique games: {game2idx}")
-
-        # Filter out samples with None instruction
-        n_before = len(samples)
-        missing_games = sorted(set(s.game for s in samples if s.instruction is None))
-        samples = [s for s in samples if s.instruction is not None]
-        n_filtered = n_before - len(samples)
-        if n_filtered > 0:
-            logger.warning(
-                f"Filtered out {n_filtered}/{n_before} samples with instruction=None (games: {missing_games}). "
-                f"Check instruction_uni column in reward_annotations CSV."
-            )
 
         # Extract level arrays and language instructions
         level_arrays = jnp.stack([s.array for s in samples], 0)  # (N, 16, 16)
@@ -183,6 +180,12 @@ class CLIPDatasetBuilder:
             n_train = max(1, int(len(idx_of_game) * self.train_ratio))
             perm = np.array(jax.random.permutation(subkey, idx_of_game))
             is_train[perm[:n_train]] = True
+        n_filtered = n_before - len(samples)
+        if n_filtered > 0:
+            logger.info(
+                f"Filtered out {n_filtered}/{n_before} samples with invalid reward. "
+                f"(game, reward_enum): {dropped_combos}"
+            )
         logger.info(f"Train: {is_train.sum()} samples, Val: {(~is_train).sum()} samples")
 
         # ── 디코더 학습용 타겟 ──

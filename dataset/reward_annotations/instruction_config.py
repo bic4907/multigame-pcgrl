@@ -175,13 +175,14 @@ RAW_TILE_DESCS: Dict[str, Dict[int, str]] = {
 }
 
 # ── Feature별 타일 설명: feature_name → (raw 설명, unified 설명) ──────────────────
+# passable 기준: Empty + Hazard + Collectable (Interactive 제외)
 FEATURE_TILE_DESCS: Dict[str, Dict[str, Tuple[str, str]]] = {
     "doom": {
-        "region":             ("passable tiles: FLOOR, SPAWN, ITEM",
-                               "passable categories: empty, interactive, collectable"),
-        "path_length":        ("passable tiles: FLOOR, SPAWN, ITEM",
-                               "passable categories: empty, interactive, collectable"),
-        "interactable_count": ("tiles counted: SPAWN + DOOR + DANGER",
+        "region":             ("passable tiles: FLOOR, STAIR, ENEMY, ITEM",
+                               "passable categories: empty, hazard, collectable"),
+        "path_length":        ("passable tiles: FLOOR, STAIR, ENEMY, ITEM",
+                               "passable categories: empty, hazard, collectable"),
+        "interactable_count": ("tiles counted: SPAWN, DANGER, DOOR",
                                "category counted: interactive"),
         "hazard_count":       ("tiles counted: ENEMY",
                                "category counted: hazard"),
@@ -189,11 +190,11 @@ FEATURE_TILE_DESCS: Dict[str, Dict[str, Tuple[str, str]]] = {
                                "category counted: collectable"),
     },
     "zelda": {
-        "region":             ("passable tiles: FLOOR, OBJECT",
-                               "passable categories: empty, collectable"),
-        "path_length":        ("passable tiles: FLOOR, OBJECT",
-                               "passable categories: empty, collectable"),
-        "interactable_count": ("tiles counted: BLOCK + DOOR + START",
+        "region":             ("passable tiles: FLOOR, MOB, OBJECT",
+                               "passable categories: empty, hazard, collectable"),
+        "path_length":        ("passable tiles: FLOOR, MOB, OBJECT",
+                               "passable categories: empty, hazard, collectable"),
+        "interactable_count": ("tiles counted: DOOR, BLOCK, START",
                                "category counted: interactive"),
         "hazard_count":       ("tiles counted: MOB",
                                "category counted: hazard"),
@@ -213,11 +214,11 @@ FEATURE_TILE_DESCS: Dict[str, Dict[str, Tuple[str, str]]] = {
                                "category counted: collectable (N/A for Sokoban)"),
     },
     "pokemon": {
-        "region":             ("passable tiles: FLOOR, GRASS, OBJECT",
-                               "passable categories: empty, collectable"),
-        "path_length":        ("passable tiles: FLOOR, GRASS, OBJECT",
-                               "passable categories: empty, collectable"),
-        "interactable_count": ("tiles counted: SPAWN + WATER",
+        "region":             ("passable tiles: FLOOR, GRASS, ENEMY, OBJECT",
+                               "passable categories: empty, hazard, collectable"),
+        "path_length":        ("passable tiles: FLOOR, GRASS, ENEMY, OBJECT",
+                               "passable categories: empty, hazard, collectable"),
+        "interactable_count": ("tiles counted: SPAWN, WATER",
                                "category counted: interactive"),
         "hazard_count":       ("tiles counted: ENEMY",
                                "category counted: hazard"),
@@ -225,16 +226,47 @@ FEATURE_TILE_DESCS: Dict[str, Dict[str, Tuple[str, str]]] = {
                                "category counted: collectable"),
     },
     "dungeon": {
-        "region":             ("passable tiles: FLOOR, TREASURE",
-                               "passable categories: empty, collectable"),
-        "path_length":        ("passable tiles: FLOOR, TREASURE",
-                               "passable categories: empty, collectable"),
+        "region":             ("passable tiles: FLOOR, ENEMY, TREASURE",
+                               "passable categories: empty, hazard, collectable"),
+        "path_length":        ("passable tiles: FLOOR, ENEMY, TREASURE",
+                               "passable categories: empty, hazard, collectable"),
         "interactable_count": ("tiles counted: (none — Dungeon has no interactable tiles)",
                                "category counted: interactive (N/A for Dungeon)"),
         "hazard_count":       ("tiles counted: ENEMY",
                                "category counted: hazard"),
         "collectable_count":  ("tiles counted: TREASURE",
                                "category counted: collectable"),
+    },
+}
+
+# ── Count feature(enum 2,3,4) 별 raw tile ID 목록 ────────────────────────────────
+# instruction_raw 생성 시 per-tile count 계산에 사용.
+# tile ID는 tile_mapping.json / measure/*.py 기준.
+FEATURE_COUNT_TILE_IDS: Dict[str, Dict[str, List[int]]] = {
+    "doom": {
+        "interactable_count": [4, 6, 7],   # SPAWN, DANGER, DOOR
+        "hazard_count":       [3],           # ENEMY
+        "collectable_count":  [5],           # ITEM
+    },
+    "zelda": {
+        "interactable_count": [3, 4, 5],    # DOOR, BLOCK, START
+        "hazard_count":       [6],           # MOB
+        "collectable_count":  [7],           # OBJECT
+    },
+    "sokoban": {
+        "interactable_count": [4],           # BOX
+        "hazard_count":       [],            # (없음)
+        "collectable_count":  [],            # (없음)
+    },
+    "pokemon": {
+        "interactable_count": [5, 6],        # SPAWN, WATER
+        "hazard_count":       [3],           # ENEMY
+        "collectable_count":  [4],           # OBJECT
+    },
+    "dungeon": {
+        "interactable_count": [],            # (없음)
+        "hazard_count":       [3],           # ENEMY
+        "collectable_count":  [4],           # TREASURE
     },
 }
 

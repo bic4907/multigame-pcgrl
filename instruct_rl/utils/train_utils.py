@@ -273,6 +273,7 @@ def make_train(
                         map_size=config.map_width,
                         placement_w_amount=config.placement_w_amount,
                         placement_w_spread=config.placement_w_spread,
+                        special_tile_penalty_weight=config.special_tile_penalty_weight,
                     )
                     reward_batch = cond_reward_batch
                 elif train_inst is not None:
@@ -284,6 +285,7 @@ def make_train(
                         map_size=config.map_width,
                         placement_w_amount=config.placement_w_amount,
                         placement_w_spread=config.placement_w_spread,
+                        special_tile_penalty_weight=config.special_tile_penalty_weight,
                     )
                     reward_batch = cond_reward_batch
                 else:
@@ -494,6 +496,7 @@ def make_train(
                             map_size=config.map_width,
                             placement_w_amount=config.placement_w_amount,
                             placement_w_spread=config.placement_w_spread,
+                            special_tile_penalty_weight=config.special_tile_penalty_weight,
                         )
                         reward_batch = cond_reward_batch
                     elif test_inst is not None:
@@ -505,6 +508,7 @@ def make_train(
                             map_size=config.map_width,
                             placement_w_amount=config.placement_w_amount,
                             placement_w_spread=config.placement_w_spread,
+                            special_tile_penalty_weight=config.special_tile_penalty_weight,
                         )
                         reward_batch = cond_reward_batch
                     else:

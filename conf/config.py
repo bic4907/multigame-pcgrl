@@ -154,6 +154,13 @@ class Config:
     placement_w_access: float = 0.2
     placement_w_spread: float = 0.2
 
+    # Multigame tile placement reward 가중치 (sweep 대상)
+    placement_w_amount: float = 1.0
+    placement_w_spread: float = 0.1
+
+    # Special tile (interactive/hazard/collectable) 존재 패널티 가중치
+    special_tile_penalty_weight: float = 0.3
+
 @dataclass
 class CLIPConfig:
     freeze_text_enc: bool = True
@@ -178,7 +185,7 @@ class EncoderConfig(CLIPConfig):
     buffer_ratio: float = 1
 
     ckpt_dir: str = "./encoder_ckpts"
-    ckpt: str = "./encoder_ckpts"
+    ckpt: Optional[str] = None
     ckpt_name: Optional[str] = None
     ckpt_path: Optional[str] = None
     trainable: bool = False
@@ -466,6 +473,8 @@ class CLIPTrainConfig(Config):
     
     steps_per_epoch: Optional[int] = None
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+    max_samples_per_game: int = 1000   # 게임별 베이스 샘플 상한 (0=무제한)
+    max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     
     # overwrite

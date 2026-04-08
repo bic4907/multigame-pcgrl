@@ -55,7 +55,8 @@ from dataset.multigame.tile_utils import to_unified, CATEGORY_COLORS, UNIFIED_CA
 from instruction_config import (
     CUSTOM_THRESHOLDS,
     RAW_TILE_COLORS, RAW_TILE_NAMES, RAW_TILE_DESCS,
-    FEATURE_TILE_DESCS, GAME_DESCRIPTIONS, FEATURE_DESCRIPTIONS,
+    FEATURE_TILE_DESCS, FEATURE_COUNT_TILE_IDS,
+    GAME_DESCRIPTIONS, FEATURE_DESCRIPTIONS,
     UNIFIED_COLOR_DESCS, FEATURE_ZONE_LABELS,
 )
 
@@ -144,6 +145,9 @@ def render_unified_png(array: np.ndarray, game: str, tile_size: int = 16) -> byt
 
 # ── 유저 프롬프트 빌더 ────────────────────────────────────────────────────────────
 
+_COUNT_FEATURES = {"interactable_count", "hazard_count", "collectable_count"}
+
+
 def build_user_prompt(
     game: str,
     feature_name: str,
@@ -151,6 +155,7 @@ def build_user_prompt(
     sub_condition: str,
     thresholds: Optional[List[float]],
     zone_label: str,
+    array: Optional[np.ndarray] = None,
 ) -> str:
     lines: List[str] = []
 
@@ -186,6 +191,16 @@ def build_user_prompt(
         lines.append(f"  ID={tid}  {name:10s}  color=RGB({r},{g},{b})  — {desc}")
     raw_desc = FEATURE_TILE_DESCS.get(game, {}).get(feature_name, ("", ""))[0]
     lines.append(f"Count basis: {raw_desc if raw_desc else sub_condition}")
+
+    # count feature(enum 2,3,4): per raw tile count 삽입
+    if feature_name in _COUNT_FEATURES and array is not None:
+        tile_ids = FEATURE_COUNT_TILE_IDS.get(game, {}).get(feature_name, [])
+        if tile_ids:
+            count_parts = [
+                f"{tile_names.get(tid, str(tid))}={int(np.sum(array == tid))}"
+                for tid in tile_ids
+            ]
+            lines.append(f"Per-tile counts (for instruction_raw): {', '.join(count_parts)}")
     lines.append("")
 
     lines.append("## Image 2 — Unified Map (unified category colors)")
@@ -205,16 +220,35 @@ def build_user_prompt(
     lines.append("")
 
     lines.append("## Task")
-    if thresholds is not None:
+    if feature_name in _COUNT_FEATURES:
+        if thresholds is not None:
+            lines.append(
+                f"Write one short sentence describing this map's {feature_name} ({zone_label})."
+            )
+        else:
+            lines.append(
+                f"Write one short sentence describing this map's {feature_name} based on what you see."
+            )
         lines.append(
-            f"Write one short sentence describing this map's {feature_name} ({zone_label}). "
-            "No numbers. instruction_raw uses raw tile names; instruction_uni uses unified category names."
+            "- instruction_raw: use game-specific tile names; "
+            "you may reference the per-tile counts above."
         )
+        lines.append(
+            "- instruction_uni: use unified category names (empty/wall/interactive/hazard/collectable) only; "
+            "do NOT reference specific tile names or per-tile counts — describe only the overall intensity level."
+        )
+        lines.append("No numbers in either sentence.")
     else:
-        lines.append(
-            f"Write one short sentence describing this map's {feature_name} based on what you see. "
-            "No numbers. instruction_raw uses raw tile names; instruction_uni uses unified category names."
-        )
+        if thresholds is not None:
+            lines.append(
+                f"Write one short sentence describing this map's {feature_name} ({zone_label}). "
+                "No numbers. instruction_raw uses raw tile names; instruction_uni uses unified category names."
+            )
+        else:
+            lines.append(
+                f"Write one short sentence describing this map's {feature_name} based on what you see. "
+                "No numbers. instruction_raw uses raw tile names; instruction_uni uses unified category names."
+            )
 
     return "\n".join(lines)
 
@@ -236,7 +270,8 @@ def build_batch_request(
     raw_b64 = base64.b64encode(render_raw_png(array, game)).decode()
     uni_b64 = base64.b64encode(render_unified_png(array, game)).decode()
     user_text = build_user_prompt(
-        game, feature_name, condition_value, sub_condition, thresholds, zone_label
+        game, feature_name, condition_value, sub_condition, thresholds, zone_label,
+        array=array,
     )
 
     return {
@@ -740,42 +775,72 @@ def main() -> None:
         annot_dir=args.annot_dir, force=args.force,
     )
 
-    jsonl_path = build_jsonl(
-        games=args.games, enums=args.enums,
-        annot_dir=args.annot_dir, cache_by_game=cache_by_game,
-        system_prompt=system_prompt, force=args.force, limit=args.limit,
-    )
-    if jsonl_path is None:
+    # game × enum 조합별로 배치를 분리하여 제출
+    _ENUM_NAMES = {
+        0: "region", 1: "path_length", 2: "interactable_count",
+        3: "hazard_count", 4: "collectable_count",
+    }
+
+    submitted_batches: List[Tuple[str, str]] = []  # (batch_id, game)
+
+    for game in args.games:
+        logger.info(f"\n── {game} ──")
+
+        try:
+            jsonl_path = build_jsonl(
+                games=[game], enums=args.enums,
+                annot_dir=args.annot_dir, cache_by_game=cache_by_game,
+                system_prompt=system_prompt, force=args.force,
+                limit=args.limit,
+            )
+            if jsonl_path is None:
+                logger.info(f"  {game}: 생성할 요청 없음, 건너뜀")
+                continue
+
+            n_requests = sum(1 for _ in jsonl_path.open(encoding="utf-8"))
+            batch_id = submit_batch(jsonl_path, [game], args.enums, n_requests)
+            submitted_batches.append((batch_id, game))
+        except Exception as e:
+            logger.error(f"  {game}: 제출 실패 → {e}, 건너뜀")
+
+    if not submitted_batches:
+        logger.info("제출된 배치 없음")
         return
 
-    # 행 수 파악
-    n_requests = sum(1 for _ in jsonl_path.open(encoding="utf-8"))
-
-    batch_id = submit_batch(jsonl_path, args.games, args.enums, n_requests)
-
     if args.run:
-        logger.info(f"완료 대기 중 (interval={args.poll_interval}s) …")
-        while True:
+        logger.info(f"\n완료 대기 중 (interval={args.poll_interval}s) …")
+        pending = list(submitted_batches)
+        total_updated = 0
+        while pending:
             time.sleep(args.poll_interval)
-            info   = check_batch_status(batch_id)
-            status = info["status"]
-            counts = info["request_counts"]
-            logger.info(f"  {batch_id}: {status}  "
-                        f"{counts['completed']}/{counts['total']} completed")
-            if status == "completed":
-                results = retrieve_batch_results(batch_id)
-                n = update_csvs(results, args.annot_dir, args.games)
-                logger.info(f"총 {n}개 행 업데이트 완료")
-                break
-            if status in ("failed", "expired", "cancelled"):
-                logger.error(f"배치 실패/만료/취소: {status}")
-                break
+            still_pending = []
+            for batch_id, game in pending:
+                info   = check_batch_status(batch_id)
+                status = info["status"]
+                counts = info["request_counts"]
+                logger.info(f"  [{game}] {batch_id}: {status}  "
+                            f"{counts['completed']}/{counts['total']} completed")
+                if status == "completed":
+                    try:
+                        results = retrieve_batch_results(batch_id)
+                        n = update_csvs(results, args.annot_dir, [game])
+                        total_updated += n
+                    except Exception as e:
+                        logger.error(f"  [{game}] 결과 조회/업데이트 실패 → {e}, 건너뜀")
+                elif status in ("failed", "expired", "cancelled"):
+                    logger.error(f"  [{game}] 배치 실패/만료/취소: {status}")
+                else:
+                    still_pending.append((batch_id, game))
+            pending = still_pending
+        logger.info(f"총 {total_updated}개 행 업데이트 완료")
     else:
-        logger.info(
-            f"\n배치 제출 완료. 결과 조회:\n"
-            f"  python dataset/reward_annotations/generate_instructions.py "
-            f"--retrieve {batch_id} --games {' '.join(args.games)}"
-        )
+        logger.info("\n배치 제출 완료. 결과 조회:")
+        for batch_id, game in submitted_batches:
+            logger.info(
+                f"  [{game}] "
+                f"python dataset/reward_annotations/generate_instructions.py "
+                f"--retrieve {batch_id} --games {game}"
+            )
 
 
 if __name__ == "__main__":

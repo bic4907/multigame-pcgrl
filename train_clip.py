@@ -159,6 +159,8 @@ def make_train(config: CLIPTrainConfig):
             include_doom=config.include_doom,
             include_doom2=config.include_doom2,
             include_zelda=config.include_zelda,
+            max_samples_per_game=config.max_samples_per_game,
+            max_samples_seed=config.max_samples_seed,
         )
 
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")

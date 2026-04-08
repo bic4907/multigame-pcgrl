@@ -77,7 +77,7 @@ def create_embedding_figure(embed_queue, epoch, config, postfix="") -> str:
 
     # draw scatter plot
     sns.set_theme(style="whitegrid")
-    fig, ax = plt.subplots(figsize=(6.4, 5))
+    fig, ax = plt.subplots(figsize=(5.2, 4.2))
     sns.scatterplot(
         data=df, x="tsne_x", y="tsne_y",
         hue="reward_enum", palette="bright", alpha=0.9, ax=ax

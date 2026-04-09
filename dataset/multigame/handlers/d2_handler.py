@@ -269,6 +269,12 @@ class D2Handler(BaseGameHandler):
         npz_path  = self._root / npz_name
         meta_path = self._root / meta_name
 
+        logger.warning(
+            "[D2] Legacy dungeon dataset loaded. "
+            "Only 3 reward enums available: 0(region), 1(path_length), 3(hazard/bat). "
+            "Enums 2(interactable) and 4(collectable) are NOT supported."
+        )
+
         if not npz_path.exists():
             raise FileNotFoundError(f"NPZ not found: {npz_path}")
         if not meta_path.exists():

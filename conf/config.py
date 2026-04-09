@@ -191,7 +191,7 @@ class DecoderConfig:
     hidden_dim: int = 128
     num_layers: int = 2
     output_dim: int = 1
-    num_reward_classes: int = 6
+    num_reward_classes: int = 5
 
 
 @dataclass

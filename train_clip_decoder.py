@@ -199,13 +199,14 @@ def train_step(
 #  Training Loop
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# reward_enum 이름 매핑 (0-based: CSV reward_enum은 0-indexed)
+# reward_enum 이름 매핑 (0-based, 글로벌 5개 클래스)
+# d2/legacy: 0(region), 1(path_length), 3(hazard/bat) 만 사용
 _REWARD_ENUM_NAMES = {
     0: "region",
     1: "path_length",
-    2: "interactable_count",
-    3: "hazard_count",
-    4: "collectable_count",
+    2: "interactable",
+    3: "hazard",
+    4: "collectable",
 }
 
 

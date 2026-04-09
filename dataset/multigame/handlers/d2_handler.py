@@ -7,12 +7,13 @@ dungeon_level_dataset의 동일한 npz + metadata.csv를 로드하되,
 game_tag = "d2" 로 태깅한다.
 
 - 원본 metadata.csv의 instruction을 그대로 사용 (game-specific 텍스트)
-- reward_enum, conditions는 instruction 키워드에서 유도:
+- reward_enum, conditions는 instruction 키워드에서 유도 (글로벌 5-class 체계):
     0: region      → 수량 4단계 (few/moderate/multi/many)
     1: path_length → 길이 4단계 (nano·micro/short/balanced/long)
-    2: block       → 밀도 4단계 (few/some/dense/high-density)
-    3: bat         → 수량 4단계 (few/moderate/many/directional)
-- condition_value는 이미 quantized된 0, 1, 2, 3 (추가 양자화 불필요)
+    3: hazard(bat) → 수량 4단계 (few/moderate/many/directional)
+    ※ 2(interactable), 4(collectable)는 legacy에 없어 사용하지 않음
+    ※ block 카테고리는 legacy에서 제거됨
+- condition_value는 CSV 기반 실제 값 (e.g., 5, 15, 25, 35)
 
 타일 매핑은 dungeon과 동일:
   0: padding / unknown
@@ -49,14 +50,14 @@ logger = logging.getLogger(__name__)
 
 
 # ── instruction → (reward_enum, feature_name) 분류 ───────────────────────────
-# "region" 키워드를 포함하더라도 bat 관련이면 bat으로 분류해야 하므로
-# bat 키워드를 먼저 검사한다.
+# 글로벌 reward_enum 체계: 0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable
+# legacy d2 사용: 0(region), 1(path_length), 3(hazard/bat) — block/interactable/collectable 없음
 _SLUG_CATEGORY_RULES: List[Tuple[str, int, str]] = [
     # (keyword, reward_enum, feature_name)  — 우선순위 순서
     ("path",   1, "path_length"),
-    ("block",  2, "block"),
-    ("bat",    3, "bat_amount"),
+    ("bat",    3, "hazard"),       # bat → 글로벌 enum 3 (hazard)
     ("region", 0, "region"),
+    # block은 legacy에서 제거 → _classify_slug 에서 -1 반환 → 샘플 제외
 ]
 
 
@@ -77,8 +78,7 @@ def _classify_slug(slug: str) -> Tuple[int, str]:
 #
 # enum=0 (region): few/sparse → moderate/some → multi/balanced → many/numerous
 # enum=1 (path):   nano/micro/minimal → short/brief → balanced/moderate → long/extended
-# enum=2 (block):  few/sparse/minimal → some/moderate → dense/numerous → high-density/packed
-# enum=3 (bat):    few/small → moderate(some/several/five/multi) → many/dense/swarm → directional
+# enum=3 (hazard/bat): few/small → moderate(some/several/five/multi) → many/dense/swarm → directional
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _REGION_BIN_RULES: List[Tuple[List[str], int]] = [
@@ -134,8 +134,8 @@ _BAT_BIN_RULES: List[Tuple[List[str], int]] = [
 _ENUM_BIN_RULES: Dict[int, List[Tuple[List[str], int]]] = {
     0: _REGION_BIN_RULES,
     1: _PATH_BIN_RULES,
-    2: _BLOCK_BIN_RULES,
-    3: _BAT_BIN_RULES,
+    # 2(interactable): legacy에 없음
+    3: _BAT_BIN_RULES,   # hazard/bat → 글로벌 enum 3
 }
 
 
@@ -143,26 +143,41 @@ def _load_bin_to_condition_mapping() -> Dict[int, List[float]]:
     """
     dungeon_instruction_reward_mapping.csv에서 bin → 실제 condition 값 매핑을 로드한다.
 
-    CSV의 reward_enum은 1-based, D2Handler의 reward_enum은 0-based이므로 변환한다.
-    Returns: {d2_enum_0based: [cond_bin0, cond_bin1, cond_bin2, cond_bin3]}
+    CSV reward_enum (1-based) → 글로벌 enum (0-based) 변환:
+      CSV 1 (region)  → global 0
+      CSV 2 (path)    → global 1
+      CSV 3 (block)   → SKIP (legacy에 없음)
+      CSV 4 (bat)     → global 3 (hazard)
+
+    Returns: {global_enum_0based: [cond_bin0, cond_bin1, cond_bin2, cond_bin3]}
     """
     csv_path = Path(__file__).parent.parent / "annotations" / "dungeon_lagacy" / "dungeon_instruction_reward_mapping.csv"
     if not csv_path.exists():
         logger.warning("dungeon_instruction_reward_mapping.csv not found: %s", csv_path)
         return {}
 
+    # CSV 1-based enum → 글로벌 0-based enum
+    _CSV_TO_GLOBAL = {
+        1: 0,   # region
+        2: 1,   # path_length
+        # 3: block → skip
+        4: 3,   # bat_amount → hazard
+    }
+
     import csv as csv_mod
     enum_conds: Dict[int, set] = {}
     with open(csv_path, encoding="utf-8") as f:
         for row in csv_mod.DictReader(f):
             csv_enum = int(row["reward_enum"])   # 1-based in CSV
+            global_enum = _CSV_TO_GLOBAL.get(csv_enum)
+            if global_enum is None:
+                continue  # block 등 legacy에 없는 카테고리 스킵
             cond = float(row["condition"])
-            enum_conds.setdefault(csv_enum, set()).add(cond)
+            enum_conds.setdefault(global_enum, set()).add(cond)
 
     mapping: Dict[int, List[float]] = {}
-    for csv_enum, conds in enum_conds.items():
-        d2_enum = csv_enum - 1  # CSV 1-based → D2 0-based
-        mapping[d2_enum] = sorted(conds)  # bin 0→smallest, 3→largest
+    for global_enum, conds in enum_conds.items():
+        mapping[global_enum] = sorted(conds)  # bin 0→smallest, 3→largest
 
     logger.info("D2 bin→condition mapping loaded: %s",
                 {k: v for k, v in sorted(mapping.items())})
@@ -233,11 +248,9 @@ class D2Handler(BaseGameHandler):
     dungeon_level_dataset의 npz + metadata를 로드하되,
     game_tag="d2"로 태깅하여 기존 dungeon과 독립적으로 관리한다.
 
-    DungeonHandler와 달리 legacy annotation 기반 전처리 필터를 적용하지 않고,
-    원본 metadata의 모든 유효 샘플(ndim==2)을 그대로 로드한다.
-
-    reward_enum과 conditions는 instruction 키워드에서 유도되며,
-    condition_value는 이미 4단계로 quantized된 값 (0, 1, 2, 3)이다.
+    글로벌 5-class 체계에서 legacy는 3개 enum만 사용:
+      0(region), 1(path_length), 3(hazard/bat)
+    block 카테고리 샘플은 자동 제외된다.
 
     Parameters
     ----------
@@ -303,6 +316,17 @@ class D2Handler(BaseGameHandler):
     def list_entries(self) -> List[str]:
         """npz key 목록 반환."""
         return [m.key for m in self._metas]
+
+    def __iter__(self):
+        """block 등 legacy에 없는 카테고리(reward_enum=-1) 샘플을 제외하고 이터레이션."""
+        order = 0
+        for m in self._metas:
+            re, _ = _classify_slug(m.instruction_slug)
+            if re < 0:
+                continue  # block 등 미지원 카테고리 → 스킵
+            sample = self.load_sample(m.key, order=order)
+            order += 1
+            yield sample
 
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
         """npz key → GameSample 반환."""

@@ -654,18 +654,18 @@ class MultiGameDataset:
         """
         import dataclasses
 
-        # ── per-sample CSV가 있는 게임: key 순서 기반으로 샘플을 reward 수만큼 복제 ──
-        # CSV 구조: key 순서로 정렬 시 [reward0: sample0..N-1, reward1: sample0..N-1, ...]
+        # ── per-sample CSV가 있는 게임: sample_id 기반 매칭으로 reward annotation 부착 ──
+        # CSV의 sample_id를 기준으로 로드된 샘플과 매칭하고,
+        # reward_enum별로 샘플을 복제한다.
         for csv_path in sorted(annotations_dir.glob("*_reward_annotations.csv")):
             game_name = csv_path.name.replace("_reward_annotations.csv", "")
 
-            # key 순서대로 모든 행 로드
+            # CSV 로드
             all_rows: List[Dict[str, Any]] = []
             with open(csv_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     all_rows.append(row)
-            all_rows.sort(key=lambda r: r["key"])
 
             # 이 게임의 로드된 샘플 목록 (순서 유지)
             game_samples = [s for s in self._samples if s.game == game_name]
@@ -673,27 +673,55 @@ class MultiGameDataset:
             if n_samples == 0 or len(all_rows) == 0:
                 continue
 
-            # CSV 행 수 / 샘플 수 = reward 수
-            n_rewards = len(all_rows) // n_samples
-            if n_rewards == 0:
-                logger.warning("Reward annotations [%s]: CSV rows (%d) < samples (%d), skipped",
-                               game_name, len(all_rows), n_samples)
-                continue
+            # ── sample_id 기반 매칭: CSV를 (sample_id, reward_enum) 그룹으로 분류 ──
+            from collections import defaultdict
+            # sample_id → [row, row, ...]  (reward_enum별 행)
+            sid_to_rows: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+            for row in all_rows:
+                sid = row.get("sample_id", "")
+                sid_to_rows[sid].append(row)
 
-            # sample_index i, reward_block r → CSV row: all_rows[r * n_samples + i]
+            # 로드된 샘플의 source_id에서 sample_id 추출 (npz key → 숫자 부분)
+            # source_id 형태: "level_000000" 또는 "000000" 등
+            def _extract_sample_id(source_id: str) -> str:
+                """source_id에서 숫자 부분을 추출하여 sample_id 형식으로 변환."""
+                import re
+                m = re.search(r'(\d+)$', source_id)
+                if m:
+                    return m.group(1).lstrip('0') or '0'
+                return source_id
+
+            # sample_id → game_sample index 매핑
+            sid_to_sample_idx: Dict[str, int] = {}
+            for i, sample in enumerate(game_samples):
+                sid = _extract_sample_id(sample.source_id)
+                sid_to_sample_idx[sid] = i
+
+            # unique reward_enum 수 (annotation 기준)
+            unique_enums = sorted(set(int(r["reward_enum"]) for r in all_rows))
+            n_rewards = len(unique_enums)
+
             attached = 0
             new_samples: List[GameSample] = []
-            for i, sample in enumerate(game_samples):
-                for r in range(n_rewards):
-                    row_idx = r * n_samples + i
-                    if row_idx >= len(all_rows):
-                        break
-                    ann = all_rows[row_idx]
-                    if r == 0:
+            matched_sids = set()
+
+            for sid, rows in sid_to_rows.items():
+                # CSV sample_id → 로드된 샘플 매칭
+                sid_norm = sid.lstrip('0') or '0'
+                sample_idx = sid_to_sample_idx.get(sid_norm)
+                if sample_idx is None:
+                    continue
+
+                sample = game_samples[sample_idx]
+                matched_sids.add(sid_norm)
+
+                for r_idx, ann in enumerate(sorted(rows, key=lambda r: int(r["reward_enum"]))):
+                    if r_idx == 0:
                         target = sample
                     else:
                         target = dataclasses.replace(sample, meta=dict(sample.meta))
                         new_samples.append(target)
+
                     target.meta["key"] = ann["key"]
                     target.meta["reward_enum"] = int(ann["reward_enum"])
                     target.meta["feature_name"] = ann["feature_name"]
@@ -711,11 +739,17 @@ class MultiGameDataset:
 
             if new_samples:
                 self._samples.extend(new_samples)
+            n_matched = len(matched_sids)
+            n_unmatched = n_samples - n_matched
             if attached > 0:
-                logger.info("Reward annotations [%s]: %d samples × %d rewards = %d attached "
+                logger.info("Reward annotations [%s]: %d/%d samples matched × %d enums%s = %d attached "
                             "(%d original + %d duplicated)",
-                            game_name, n_samples, n_rewards, attached,
-                            n_samples, len(new_samples))
+                            game_name, n_matched, n_samples, n_rewards,
+                            f" {unique_enums}" if n_rewards <= 10 else "",
+                            attached, n_matched, len(new_samples))
+            if n_unmatched > 0:
+                logger.info("Reward annotations [%s]: %d samples had no annotation (no matching sample_id in CSV)",
+                            game_name, n_unmatched)
 
         # ── placeholder CSV: per-sample CSV가 없는 게임에만 적용 ──────────
         for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):

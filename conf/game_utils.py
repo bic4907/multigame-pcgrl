@@ -61,7 +61,7 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
      'include_zelda': False}
 
     >>> parse_game_str("all")
-    {'include_dungeon': True, 'include_d2': True, 'include_pokemon': True,
+    {'include_dungeon': True, 'include_d2': False, 'include_pokemon': True,
      'include_sokoban': True, 'include_doom': True, 'include_doom2': True,
      'include_zelda': True}
     """
@@ -70,9 +70,11 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
     if not game_str:
         return includes
 
-    # 특수값: all
+    # 특수값: all (d2는 legacy/디버깅용이므로 제외 — 명시적으로 'd2' 지정 필요)
     if game_str.lower() == "all":
-        return {k: True for k in includes}
+        includes = {k: True for k in includes}
+        includes["include_d2"] = False
+        return includes
 
     # 2글자씩 파싱
     for i in range(0, len(game_str), 2):

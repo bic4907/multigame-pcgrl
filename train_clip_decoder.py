@@ -90,7 +90,18 @@ def train_step(
         a2b_top1_accuracy = jnp.mean(jnp.max(a2b_logps, axis=1) == jnp.max(a2b_pos_logps, axis=1))
         b2a_top1_accuracy = jnp.mean(jnp.max(b2a_logps, axis=0) == jnp.max(b2a_pos_logps, axis=0))
 
-        return a2b_loss, b2a_loss, a2b_correct_pr, b2a_correct_pr, a2b_top1_accuracy, b2a_top1_accuracy
+        # ── Top-3 Accuracy ──
+        a2b_top3_idx = jnp.argsort(a2b_logps, axis=1)[:, -3:]          # (B, 3)
+        a2b_top3_pos = jnp.take_along_axis(batch.duplicate_matrix, a2b_top3_idx, axis=1)
+        a2b_top3_accuracy = jnp.mean(jnp.any(a2b_top3_pos > 0, axis=1).astype(jnp.float32))
+
+        b2a_top3_idx = jnp.argsort(b2a_logps, axis=0)[-3:, :]          # (3, B)
+        b2a_top3_pos = jnp.take_along_axis(batch.duplicate_matrix, b2a_top3_idx, axis=0)
+        b2a_top3_accuracy = jnp.mean(jnp.any(b2a_top3_pos > 0, axis=0).astype(jnp.float32))
+
+        return (a2b_loss, b2a_loss, a2b_correct_pr, b2a_correct_pr,
+                a2b_top1_accuracy, b2a_top1_accuracy,
+                a2b_top3_accuracy, b2a_top3_accuracy)
 
     def loss_fn(params):
         outputs = train_state.apply_fn(
@@ -110,7 +121,8 @@ def train_step(
 
         # ── (1) Contrastive Loss ──
         temperature = jnp.clip(text_state_temperature, jnp.log(0.01), jnp.log(100))
-        s2t_loss, t2s_loss, s2t_pr, t2s_pr, s2t_top1, t2s_top1 = \
+        (s2t_loss, t2s_loss, s2t_pr, t2s_pr,
+         s2t_top1, t2s_top1, s2t_top3, t2s_top3) = \
             pairwise_contrastive_loss_accuracy(state_embed, text_embed, temperature)
 
         contrastive_loss = state_mask * (s2t_loss + t2s_loss) / 2.0
@@ -123,6 +135,7 @@ def train_step(
         )
         reward_pred = jnp.argmax(reward_logits, axis=-1)
         reward_accuracy = jnp.mean(reward_pred == reward_target)
+
 
         # ── (3) Decoder: condition regression loss (Huber / Smooth L1) ──
         condition_pred = outputs["condition_pred"]    # (B, num_classes) — [0,1] 정규화
@@ -173,6 +186,8 @@ def train_step(
             "text2state_correct_pr": t2s_pr * state_mask,
             "state2text_top1_accuracy": s2t_top1 * state_mask,
             "text2state_top1_accuracy": t2s_top1 * state_mask,
+            "state2text_top3_accuracy": s2t_top3 * state_mask,
+            "text2state_top3_accuracy": t2s_top3 * state_mask,
             "cls_loss": cls_loss,
             "reward_accuracy": reward_accuracy,
             "reg_loss": reg_loss,
@@ -393,6 +408,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             train_metrics = {k: jnp.zeros(()) for k in [
                 "state2text_correct_pr", "text2state_correct_pr",
                 "state2text_top1_accuracy", "text2state_top1_accuracy",
+                "state2text_top3_accuracy", "text2state_top3_accuracy",
                 "text_state_temperature", "reward_accuracy",
                 "condition_mae_norm",
             ]}
@@ -448,6 +464,8 @@ def make_train(config: CLIPDecoderTrainConfig):
                     train_metrics["text2state_correct_pr"] += metrics["text2state_correct_pr"]
                     train_metrics["state2text_top1_accuracy"] += metrics["state2text_top1_accuracy"]
                     train_metrics["text2state_top1_accuracy"] += metrics["text2state_top1_accuracy"]
+                    train_metrics["state2text_top3_accuracy"] += metrics["state2text_top3_accuracy"]
+                    train_metrics["text2state_top3_accuracy"] += metrics["text2state_top3_accuracy"]
                     train_metrics["text_state_temperature"] += metrics["text_state_temperature"]
                     train_metrics["reward_accuracy"] += metrics["reward_accuracy"]
                     train_metrics["condition_mae_norm"] += metrics["condition_mae_norm"]
@@ -501,6 +519,8 @@ def make_train(config: CLIPDecoderTrainConfig):
                     val_metrics["text2state_correct_pr"] += metrics["text2state_correct_pr"]
                     val_metrics["state2text_top1_accuracy"] += metrics["state2text_top1_accuracy"]
                     val_metrics["text2state_top1_accuracy"] += metrics["text2state_top1_accuracy"]
+                    val_metrics["state2text_top3_accuracy"] += metrics["state2text_top3_accuracy"]
+                    val_metrics["text2state_top3_accuracy"] += metrics["text2state_top3_accuracy"]
                     val_metrics["text_state_temperature"] += metrics["text_state_temperature"]
                     val_metrics["reward_accuracy"] += metrics["reward_accuracy"]
                     val_metrics["condition_mae_norm"] += metrics["condition_mae_norm"]
@@ -568,6 +588,8 @@ def make_train(config: CLIPDecoderTrainConfig):
                     "train(contrastive)/text2state_correct_pr": train_metrics["text2state_correct_pr"],
                     "train(contrastive)/state2text_top1_accuracy": train_metrics["state2text_top1_accuracy"],
                     "train(contrastive)/text2state_top1_accuracy": train_metrics["text2state_top1_accuracy"],
+                    "train(contrastive)/state2text_top3_accuracy": train_metrics["state2text_top3_accuracy"],
+                    "train(contrastive)/text2state_top3_accuracy": train_metrics["text2state_top3_accuracy"],
 
                     "val(contrastive)/loss": val_losses["contrastive"],
                     "val(contrastive)/state2text_loss": val_losses["state2text"],
@@ -576,6 +598,8 @@ def make_train(config: CLIPDecoderTrainConfig):
                     "val(contrastive)/text2state_correct_pr": val_metrics["text2state_correct_pr"],
                     "val(contrastive)/state2text_top1_accuracy": val_metrics["state2text_top1_accuracy"],
                     "val(contrastive)/text2state_top1_accuracy": val_metrics["text2state_top1_accuracy"],
+                    "val(contrastive)/state2text_top3_accuracy": val_metrics["state2text_top3_accuracy"],
+                    "val(contrastive)/text2state_top3_accuracy": val_metrics["text2state_top3_accuracy"],
 
                     # Decoder - classification
                     "train(decoder)/cls_loss": train_losses["cls"],

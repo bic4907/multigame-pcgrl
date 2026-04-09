@@ -44,6 +44,7 @@ import numpy as np
 from .base import GameSample, GameTag
 from .handlers.dungeon_handler import DungeonHandler, _DEFAULT_DUNGEON_ROOT
 from .handlers.d2_handler import D2Handler, _DEFAULT_D2_ROOT
+from .handlers.d3_handler import D3Handler, _DEFAULT_D3_ROOT
 from .handlers.boxoban_handler import BoxobanHandler, _DEFAULT_BOXOBAN_ROOT
 from .handlers.pokemon_handler import POKEMONHandler, _DEFAULT_POKEMON_ROOT
 from .handlers.doom_handler import DoomHandler, _DEFAULT_DOOM_ROOT, _DEFAULT_DOOM2_ROOT
@@ -126,6 +127,7 @@ class MultiGameDataset:
     doom_root        : doom_levels 루트 경로
     include_dungeon  : Dungeon 데이터셋 포함 여부
     include_d2       : D2 (Dungeon Legacy) 데이터셋 포함 여부
+    include_d3       : D3 (Dungeon + unified instruction) 데이터셋 포함 여부
     include_pokemon  : POKEMON 데이터셋 포함 여부
     include_sokoban  : Sokoban 데이터셋 포함 여부
     include_doom     : DOOM 데이터셋 포함 여부
@@ -141,6 +143,7 @@ class MultiGameDataset:
 
         dungeon_root:     Path | str = _DEFAULT_DUNGEON_ROOT,
         d2_root:          Path | str = _DEFAULT_D2_ROOT,
+        d3_root:          Path | str = _DEFAULT_D3_ROOT,
         pokemon_root:     Path | str = _DEFAULT_POKEMON_ROOT,
         sokoban_root:     Path | str = _DEFAULT_BOXOBAN_ROOT,
         doom_root:        Path | str = _DEFAULT_DOOM_ROOT,
@@ -149,6 +152,7 @@ class MultiGameDataset:
         N:                    int = 0,
         include_dungeon:      bool = True,
         include_d2:           bool = False,
+        include_d3:           bool = False,
         include_pokemon:      bool = True,
         include_sokoban:      bool = True,
         include_doom:         bool = True,
@@ -180,6 +184,7 @@ class MultiGameDataset:
         self._samples: List[GameSample] = []
         self._dungeon_handler: Optional[DungeonHandler] = None
         self._d2_handler: Optional[D2Handler] = None
+        self._d3_handler: Optional[D3Handler] = None
         self._pokemon_handler: Optional[POKEMONHandler] = None
         self._sokoban_handler: Optional[BoxobanHandler] = None
         self._doom_handler: Optional[DoomHandler] = None
@@ -200,6 +205,8 @@ class MultiGameDataset:
             _game_specs.append(("dungeon", str(dungeon_root), hc.get("dungeon", {})))
         if include_d2:
             _game_specs.append(("d2", str(d2_root), hc.get("d2", {})))
+        if include_d3:
+            _game_specs.append(("d3", str(d3_root), hc.get("d3", {})))
         if include_sokoban:
             _game_specs.append(("sokoban", str(sokoban_root), hc.get("sokoban", {})))
         if include_zelda:
@@ -440,6 +447,12 @@ class MultiGameDataset:
                 self._d2_handler = D2Handler(root=game_root)
                 for sample in self._d2_handler:
                     samples.append(sample)
+
+            elif game == "d3":
+                self._d3_handler = D3Handler(root=game_root)
+                for sample in self._d3_handler:
+                    samples.append(sample)
+
 
             elif game == "sokoban":
                 self._sokoban_handler = BoxobanHandler(root=game_root)
@@ -701,6 +714,31 @@ class MultiGameDataset:
             unique_enums = sorted(set(int(r["reward_enum"]) for r in all_rows))
             n_rewards = len(unique_enums)
 
+            # ── reward_enum별 condition 다양성 검사: unique condition ≤ 1이면 스킵 ──
+            _enum_cond_uniq: Dict[int, set] = defaultdict(set)
+            for row in all_rows:
+                re = int(row["reward_enum"])
+                # condition_{re} 컬럼에서 값 추출
+                cval = row.get(f"condition_{re}", "")
+                if cval != "":
+                    _enum_cond_uniq[re].add(float(cval))
+            _degenerate_enums = {e for e, vs in _enum_cond_uniq.items() if len(vs) <= 1}
+            if _degenerate_enums:
+                n_before_deg = len(all_rows)
+                all_rows = [r for r in all_rows if int(r["reward_enum"]) not in _degenerate_enums]
+                # sid_to_rows 재구성
+                sid_to_rows = defaultdict(list)
+                for row in all_rows:
+                    sid = row.get("sample_id", "")
+                    sid_to_rows[sid].append(row)
+                unique_enums = [e for e in unique_enums if e not in _degenerate_enums]
+                n_rewards = len(unique_enums)
+                logger.info("Reward annotations [%s]: skipped degenerate enums %s "
+                            "(unique condition ≤ 1) → %d/%d rows removed",
+                            game_name, sorted(_degenerate_enums),
+                            n_before_deg - len(all_rows), n_before_deg)
+
+
             attached = 0
             new_samples: List[GameSample] = []
             matched_sids = set()
@@ -750,6 +788,7 @@ class MultiGameDataset:
             if n_unmatched > 0:
                 logger.info("Reward annotations [%s]: %d samples had no annotation (no matching sample_id in CSV)",
                             game_name, n_unmatched)
+
 
         # ── placeholder CSV: per-sample CSV가 없는 게임에만 적용 ──────────
         for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):

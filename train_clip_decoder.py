@@ -305,6 +305,7 @@ def make_train(config: CLIPDecoderTrainConfig):
         dataset = MultiGameDataset(
             include_dungeon=config.include_dungeon,
             include_d2=config.include_d2,
+            include_d3=config.include_d3,
             include_pokemon=config.include_pokemon,
             include_sokoban=config.include_sokoban,
             include_doom=config.include_doom,

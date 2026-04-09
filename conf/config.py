@@ -32,13 +32,14 @@ class Config:
     random_exp_name: bool = False
     seed: int = 0
 
-    # Game selection — 2글자 약어 조합 (dg=dungeon, d2=dungeon legacy, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
+    # Game selection — 2글자 약어 조합 (dg=dungeon, d2=dungeon legacy, d3=dungeon+uni, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
     # 예: "dg" (dungeon만), "dgdm" (dungeon+doom+doom2), "all" (전체)
     game: str = "dg"
 
     # include_* 필드는 game 문자열에서 자동 파싱됨 (하위 호환용으로 유지)
     include_dungeon: bool = True
     include_d2: bool = False
+    include_d3: bool = False
     include_pokemon: bool = False
     include_sokoban: bool = False
     include_doom: bool = False

@@ -29,6 +29,7 @@ class GameTag:
     MEGA_MAN    = "mega_man"
     DUNGEON     = "dungeon"
     D2          = "d2"
+    D3          = "d3"
     BOXOBAN     = "boxoban"
     SOKOBAN     = "sokoban"
     POKEMON     = "pokemon"

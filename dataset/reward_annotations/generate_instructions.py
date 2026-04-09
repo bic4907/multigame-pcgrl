@@ -35,6 +35,7 @@ import io
 import json
 import logging
 import os
+import random
 import sys
 import time
 from datetime import datetime, timezone
@@ -57,7 +58,7 @@ from instruction_config import (
     RAW_TILE_COLORS, RAW_TILE_NAMES, RAW_TILE_DESCS,
     FEATURE_TILE_DESCS, FEATURE_COUNT_TILE_IDS,
     GAME_DESCRIPTIONS, FEATURE_DESCRIPTIONS,
-    UNIFIED_COLOR_DESCS, FEATURE_ZONE_LABELS,
+    UNIFIED_COLOR_DESCS, FEATURE_ZONE_LABELS, VOCAB_SETS,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -74,7 +75,7 @@ _SYSTEM_PROMPT_FILE = _HERE / "system_prompt.txt"
 # ── 모델 설정 ─────────────────────────────────────────────────────────────────────
 MODEL       = "gpt-5.4-mini"
 MAX_TOKENS  = 300
-TEMPERATURE = 1.2
+TEMPERATURE = 2.0
 
 # ── 배치 로그 CSV 헤더 ────────────────────────────────────────────────────────────
 _LOG_HEADER = ["batch_id", "jsonl_file", "games", "enums",
@@ -156,26 +157,36 @@ def build_user_prompt(
     sub_condition: str,
     thresholds: Optional[List[float]],
     zone_label: str,
-    array: Optional[np.ndarray] = None,
 ) -> str:
     lines: List[str] = []
 
     lines.append(f"## Game\n{GAME_DESCRIPTIONS.get(game, game)}\n")
 
+    # zone_label → 0-based index for vocab lookup, 1-based for display
+    zone_idx_0: Optional[int] = None
+    zone_display: Optional[str] = None
+    if thresholds is not None:
+        feat_zones = FEATURE_ZONE_LABELS.get(feature_name, [])
+        try:
+            zone_idx_0 = feat_zones.index(zone_label)        # 0-based
+            zone_display = f"intensity level {zone_idx_0 + 1}/4"
+        except ValueError:
+            pass
+
     lines.append("## Condition")
     lines.append(f"- Feature: {feature_name}")
     lines.append(f"- Description: {FEATURE_DESCRIPTIONS.get(feature_name, feature_name)}")
-    if thresholds is not None:
-        lines.append(f"- Intensity level: {zone_label}")
+    if zone_display is not None:
+        lines.append(f"- Intensity level: {zone_display} (scale: 1=lowest → 4=highest)")
+    elif thresholds is not None:
+        lines.append("- Intensity level: N/A (threshold not defined for this combination)")
     else:
         lines.append("- Intensity level: N/A (threshold not defined for this combination)")
     lines.append("")
 
     if thresholds is not None:
-        feat_zones = FEATURE_ZONE_LABELS.get(feature_name, ["very few", "somewhat few", "somewhat many", "very many"])
         lines.append("## Intensity Reference")
-        lines.append(f"The measured intensity for this map falls in the '{zone_label}' category.")
-        lines.append(f"Intensity scale (low → high): {' / '.join(feat_zones)}")
+        lines.append(f"The measured intensity for this map is {zone_display} on a 4-point scale (1=lowest, 4=highest).")
         lines.append("")
     else:
         lines.append("## Intensity Reference\nNo threshold defined — describe based on what you observe in the map.\n")
@@ -193,15 +204,6 @@ def build_user_prompt(
     raw_desc = FEATURE_TILE_DESCS.get(game, {}).get(feature_name, ("", ""))[0]
     lines.append(f"Count basis: {raw_desc if raw_desc else sub_condition}")
 
-    # count feature(enum 2,3,4): per raw tile count 삽입
-    if feature_name in _COUNT_FEATURES and array is not None:
-        tile_ids = FEATURE_COUNT_TILE_IDS.get(game, {}).get(feature_name, [])
-        if tile_ids:
-            count_parts = [
-                f"{tile_names.get(tid, str(tid))}={int(np.sum(array == tid))}"
-                for tid in tile_ids
-            ]
-            lines.append(f"Per-tile counts (for instruction_raw): {', '.join(count_parts)}")
     lines.append("")
 
     lines.append("## Image 2 — Unified Map (unified category colors)")
@@ -220,29 +222,41 @@ def build_user_prompt(
     lines.append(f"Count basis: {uni_desc}")
     lines.append("")
 
+    # 어휘 세트: feature × level
+    vocab_hint = ""
+    if zone_idx_0 is not None:
+        vocab_list = VOCAB_SETS.get(feature_name, [])
+        if zone_idx_0 < len(vocab_list):
+            word = random.choice(vocab_list[zone_idx_0])
+            vocab_hint = (
+                f"Suggested vocabulary (feel free to use variations or different expressions): "
+                f"{repr(word)}"
+            )
+
     lines.append("## Task")
     if feature_name in _COUNT_FEATURES:
-        if thresholds is not None:
+        if zone_display is not None:
             lines.append(
-                f"Write one short sentence describing this map's {feature_name} ({zone_label})."
+                f"Write one short sentence describing this map's {feature_name} ({zone_display})."
             )
         else:
             lines.append(
                 f"Write one short sentence describing this map's {feature_name} based on what you see."
             )
+        if vocab_hint:
+            lines.append(vocab_hint)
         lines.append(
-            "- instruction_raw: use game-specific tile names; "
-            "you may reference the per-tile counts above."
+            "- instruction_raw: use game-specific tile names to describe the intensity."
         )
         lines.append(
             "- instruction_uni: use unified category names (empty/wall/interactive/hazard/collectable) only; "
-            "do NOT reference specific tile names or per-tile counts — describe only the overall intensity level."
+            "do NOT reference specific tile names — describe only the overall intensity level."
         )
-        lines.append("No numbers in either sentence.")
+        lines.append("Neither sentence should contain any numbers or measured values.")
     else:
-        if thresholds is not None:
+        if zone_display is not None:
             lines.append(
-                f"Write one short sentence describing this map's {feature_name} ({zone_label}). "
+                f"Write one short sentence describing this map's {feature_name} ({zone_display}). "
                 "No numbers. instruction_raw uses raw tile names; instruction_uni uses unified category names."
             )
         else:
@@ -250,6 +264,8 @@ def build_user_prompt(
                 f"Write one short sentence describing this map's {feature_name} based on what you see. "
                 "No numbers. instruction_raw uses raw tile names; instruction_uni uses unified category names."
             )
+        if vocab_hint:
+            lines.append(vocab_hint)
 
     return "\n".join(lines)
 
@@ -272,7 +288,6 @@ def build_batch_request(
     uni_b64 = base64.b64encode(render_unified_png(array, game)).decode()
     user_text = build_user_prompt(
         game, feature_name, condition_value, sub_condition, thresholds, zone_label,
-        array=array,
     )
 
     return {

@@ -236,10 +236,13 @@ class DungeonHandler(BaseGameHandler):
         # 1차: ndim!=2 맵 제거 (형식 이상 맵, RuntimeWarning 발생원)
         all_keys = [k for k in all_keys if self._archive[k].ndim == 2]
 
-        # 2차: legacy annotation 기반 필터 (RG, BD, 4000개 절단)
-        kept_keys = _apply_preprocess_filter(all_keys)
 
-        for key in kept_keys:
+        keys=all_keys
+        # 2차: legacy annotation 기반 필터 (RG, BD, 4000개 절단)
+        # 이 라인 주석처리하면 dungeon 맵 자르는것 비활성화
+        #keys = _apply_preprocess_filter(all_keys)
+
+        for key in keys:
             m = raw_metas[key]
             self._metas.append(m)
             self._key_to_meta[key] = m
@@ -265,7 +268,8 @@ class DungeonHandler(BaseGameHandler):
             game=GameTag.DUNGEON,
             source_id=source_id,
         )
-        array = _place_treasure(array, source_id)
+        #주석처리시 treasure 배치하는 argumetation 비활성화
+        #array = _place_treasure(array, source_id)
         return GameSample(
             game=GameTag.DUNGEON,
             source_id=source_id,

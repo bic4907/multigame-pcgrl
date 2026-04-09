@@ -352,8 +352,8 @@ class ZeldaHandler(BaseGameHandler):
                 # 3) 16×16 가운데 정렬 (상하좌우 1칸 WALL 패딩)
                 padded = _center_pad_to_16x16(squared)
 
-                # 4) OBJECT가 없는 맵에 확률적으로 OBJECT 배치 (결정적)
-                padded = self._preprocessor.postprocess_array(padded)
+                # 이 코드 주석처리하면 zelda arguement 비활성화
+                # padded = self._preprocessor.postprocess_array(padded)
 
                 source_id = f"{fname}_r{ry}_c{rx}"
                 base_meta = {

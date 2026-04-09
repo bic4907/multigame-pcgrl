@@ -216,7 +216,9 @@ class POKEMONPreprocessor(BasePreprocessor):
         """POKEMON one-hot 맵 -> GameSample 변환."""
         map_10x10 = self.transform_pokemon_onehot(onehot_map)
         array = self.pad_to_16x16(map_10x10)
-        array = self.apply_grass_to_monster(array)
+
+        #이 라인 주석처리하면 포켓몬 arguement 비활성화
+        # array = self.apply_grass_to_monster(array)
 
         array = enforce_top_left_16x16(
             array,

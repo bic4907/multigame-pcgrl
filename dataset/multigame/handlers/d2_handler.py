@@ -346,7 +346,8 @@ class D2Handler(BaseGameHandler):
             game=GameTag.D2,
             source_id=source_id,
         )
-        array = _place_treasure(array, source_id)
+        # 주석처리시 treasure 배치하는 argumetation 비활성화
+        # array = _place_treasure(array, source_id)
 
         # reward_enum & condition: instruction 키워드 기반 quantized bin (0~3)
         reward_enum, feature_name = _classify_slug(m.instruction_slug)

@@ -190,6 +190,29 @@
       "4": 4
     }
   },
+  "d2": {
+    "_tile_names": {
+      "0": "UNKNOWN",
+      "1": "FLOOR",
+      "2": "WALL",
+      "3": "ENEMY",
+      "4": "TREASURE"
+    },
+    "_tile_images": {
+      "0": "empty.png",
+      "1": "path_e.png",
+      "2": "solid.png",
+      "3": "bat.png",
+      "4": "treasure.png"
+    },
+    "mapping": {
+      "0": 0,
+      "1": 0,
+      "2": 1,
+      "3": 3,
+      "4": 4
+    }
+  },
   "pokemon": {
     "_tile_names": {
       "0": "EMPTY",

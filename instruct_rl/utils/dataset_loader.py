@@ -45,6 +45,7 @@ def load_dataset_instruct(config):
 
     ds = MultiGameDataset(
         include_dungeon=(config.dataset_game == 'dungeon'),
+        include_d2=(config.dataset_game == 'd2'),
         include_pokemon=(config.dataset_game == 'pokemon'),
         include_sokoban=(config.dataset_game == 'sokoban'),
         include_doom=(config.dataset_game == 'doom'),

@@ -143,13 +143,19 @@ class CLIPDatasetBuilder:
             condition_value = conditions.get(reward_enum, next(iter(conditions.values()), None))
 
             # ── CUSTOM_THRESHOLDS 기반 condition 양자화 ──
+            # d2: metadata instruction이 이미 quantized condition을 인코딩하므로
+            #     CUSTOM_THRESHOLDS 양자화를 적용하지 않고,
+            #     condition_value 자체를 bin으로 사용 (같은 값 = 같은 class).
             feature_name = s.meta.get("feature_name", "")
-            threshold_key = f"{s.game}_{feature_name}"
-            thresholds = CUSTOM_THRESHOLDS.get(threshold_key)
-            if thresholds is not None and condition_value is not None:
-                quantized_bin = int(np.digitize(condition_value, thresholds))  # 0, 1, 2, 3
+            if s.game == "d2":
+                quantized_bin = condition_value if condition_value is not None else 0
             else:
-                quantized_bin = 0  # threshold 없는 조합은 단일 bin
+                threshold_key = f"{s.game}_{feature_name}"
+                thresholds = CUSTOM_THRESHOLDS.get(threshold_key)
+                if thresholds is not None and condition_value is not None:
+                    quantized_bin = int(np.digitize(condition_value, thresholds))  # 0, 1, 2, 3
+                else:
+                    quantized_bin = 0  # threshold 없는 조합은 단일 bin
 
             reward_cond_tuple = (game_idx, int(reward_enum), condition_value)
             reward_cond_list.append(reward_cond_tuple)

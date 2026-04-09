@@ -43,6 +43,7 @@ import numpy as np
 
 from .base import GameSample, GameTag
 from .handlers.dungeon_handler import DungeonHandler, _DEFAULT_DUNGEON_ROOT
+from .handlers.d2_handler import D2Handler, _DEFAULT_D2_ROOT
 from .handlers.boxoban_handler import BoxobanHandler, _DEFAULT_BOXOBAN_ROOT
 from .handlers.pokemon_handler import POKEMONHandler, _DEFAULT_POKEMON_ROOT
 from .handlers.doom_handler import DoomHandler, _DEFAULT_DOOM_ROOT, _DEFAULT_DOOM2_ROOT
@@ -114,15 +115,17 @@ class _WarningConditionsDict(dict):
 
 class MultiGameDataset:
     """
-    Dungeon + Sokoban(Boxoban) + POKEMON + DOOM 통합 데이터셋 클래스.
+    Dungeon + D2(Dungeon Legacy) + Sokoban(Boxoban) + POKEMON + DOOM 통합 데이터셋 클래스.
 
     Parameters
     ----------
     dungeon_root     : dungeon_level_dataset 루트 경로
+    d2_root          : d2 (dungeon legacy) 루트 경로 (dungeon과 동일 npz 사용)
     pokemon_root     : Five-Dollar-Model 루트 경로
     sokoban_root     : boxoban_levels 루트 경로
     doom_root        : doom_levels 루트 경로
     include_dungeon  : Dungeon 데이터셋 포함 여부
+    include_d2       : D2 (Dungeon Legacy) 데이터셋 포함 여부
     include_pokemon  : POKEMON 데이터셋 포함 여부
     include_sokoban  : Sokoban 데이터셋 포함 여부
     include_doom     : DOOM 데이터셋 포함 여부
@@ -137,6 +140,7 @@ class MultiGameDataset:
         self,
 
         dungeon_root:     Path | str = _DEFAULT_DUNGEON_ROOT,
+        d2_root:          Path | str = _DEFAULT_D2_ROOT,
         pokemon_root:     Path | str = _DEFAULT_POKEMON_ROOT,
         sokoban_root:     Path | str = _DEFAULT_BOXOBAN_ROOT,
         doom_root:        Path | str = _DEFAULT_DOOM_ROOT,
@@ -144,6 +148,7 @@ class MultiGameDataset:
         zelda_root:       Path | str = _DEFAULT_ZELDA_ROOT,
         N:                    int = 0,
         include_dungeon:      bool = True,
+        include_d2:           bool = False,
         include_pokemon:      bool = True,
         include_sokoban:      bool = True,
         include_doom:         bool = True,
@@ -174,6 +179,7 @@ class MultiGameDataset:
 
         self._samples: List[GameSample] = []
         self._dungeon_handler: Optional[DungeonHandler] = None
+        self._d2_handler: Optional[D2Handler] = None
         self._pokemon_handler: Optional[POKEMONHandler] = None
         self._sokoban_handler: Optional[BoxobanHandler] = None
         self._doom_handler: Optional[DoomHandler] = None
@@ -192,6 +198,8 @@ class MultiGameDataset:
         _game_specs = []
         if include_dungeon:
             _game_specs.append(("dungeon", str(dungeon_root), hc.get("dungeon", {})))
+        if include_d2:
+            _game_specs.append(("d2", str(d2_root), hc.get("d2", {})))
         if include_sokoban:
             _game_specs.append(("sokoban", str(sokoban_root), hc.get("sokoban", {})))
         if include_zelda:
@@ -385,6 +393,7 @@ class MultiGameDataset:
             should_augment = (
                 (game == "pokemon" and handler_config.pokemon.rotate_90) or
                 (game == "dungeon" and handler_config.dungeon.rotate_90) or
+                (game == "d2" and handler_config.d2.rotate_90) or
                 (game in ("doom", "doom2") and handler_config.doom.rotate_90) or
                 (game == "zelda" and handler_config.zelda.rotate_90)
             )
@@ -404,6 +413,8 @@ class MultiGameDataset:
             max_s = handler_config.zelda.max_samples
         elif game == "dungeon":
             max_s = handler_config.dungeon.max_samples
+        elif game == "d2":
+            max_s = handler_config.d2.max_samples
         if max_s is not None and len(samples) > max_s:
             logger.info("%s post-augmentation limit: %d → %d", game, len(samples), max_s)
             samples = samples[:max_s]
@@ -423,6 +434,11 @@ class MultiGameDataset:
             if game == "dungeon":
                 self._dungeon_handler = DungeonHandler(root=game_root)
                 for sample in self._dungeon_handler:
+                    samples.append(sample)
+
+            elif game == "d2":
+                self._d2_handler = D2Handler(root=game_root)
+                for sample in self._d2_handler:
                     samples.append(sample)
 
             elif game == "sokoban":
@@ -960,7 +976,7 @@ class MultiGameDataset:
 
     def available_games(self) -> List[str]:
         """등록된 게임 목록 반환."""
-        return [GameTag.DUNGEON, GameTag.SOKOBAN, GameTag.DOOM, GameTag.POKEMON, GameTag.ZELDA]
+        return [GameTag.DUNGEON, GameTag.D2, GameTag.SOKOBAN, GameTag.DOOM, GameTag.POKEMON, GameTag.ZELDA]
 
     def sample(
         self,

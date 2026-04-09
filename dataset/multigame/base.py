@@ -28,6 +28,7 @@ class GameTag:
     DOOM        = "doom"
     MEGA_MAN    = "mega_man"
     DUNGEON     = "dungeon"
+    D2          = "d2"
     BOXOBAN     = "boxoban"
     SOKOBAN     = "sokoban"
     POKEMON     = "pokemon"

@@ -77,7 +77,16 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
             jnp.max(b2a_logps, axis=0) == jnp.max(b2a_pos_logps, axis=0)
         )
 
-        return a2b_loss, b2a_loss, a2b_correct_pr, b2a_correct_pr, a2b_top1_accuracy, b2a_top1_accuracy
+        # top-3 accuracy: top-3 예측 중 하나라도 positive class에 속하면 정답
+        a2b_top3_idx = jnp.argsort(a2b_logps, axis=1)[:, -3:]  # (B, 3)
+        a2b_top3_hit = jnp.any(batch.duplicate_matrix[jnp.arange(a2b_logps.shape[0])[:, None], a2b_top3_idx] > 0, axis=1)
+        a2b_top3_accuracy = jnp.mean(a2b_top3_hit)
+
+        b2a_top3_idx = jnp.argsort(b2a_logps, axis=0)[-3:, :]  # (3, B)
+        b2a_top3_hit = jnp.any(batch.duplicate_matrix[b2a_top3_idx, jnp.arange(b2a_logps.shape[1])[None, :]] > 0, axis=0)
+        b2a_top3_accuracy = jnp.mean(b2a_top3_hit)
+
+        return a2b_loss, b2a_loss, a2b_correct_pr, b2a_correct_pr, a2b_top1_accuracy, b2a_top1_accuracy, a2b_top3_accuracy, b2a_top3_accuracy
 
     def loss_fn(params):
         #Get the model outputs
@@ -117,7 +126,7 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
         # compute losses and metrics for all directions
         for name, (a, b, masking, temperature) in embed_pairs.items():
             temperature = jnp.clip(temperature, jnp.log(0.01), jnp.log(100))
-            a2b_loss, b2a_loss, a2b_pr, b2a_pr, a2b_top1, b2a_top1 = pairwise_contrastive_loss_accuracy(
+            a2b_loss, b2a_loss, a2b_pr, b2a_pr, a2b_top1, b2a_top1, a2b_top3, b2a_top3 = pairwise_contrastive_loss_accuracy(
                 a, b, temperature)
 
             total_loss += masking * (a2b_loss + b2a_loss)
@@ -132,6 +141,9 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
 
             metrics[f"{name}_top1_accuracy"] = a2b_top1 * masking
             metrics[f"{name_b}2{name_a}_top1_accuracy"] = b2a_top1 * masking
+
+            metrics[f"{name}_top3_accuracy"] = a2b_top3 * masking
+            metrics[f"{name_b}2{name_a}_top3_accuracy"] = b2a_top3 * masking
 
         # final average loss over 6 directions
         loss = total_loss / total_pair_count
@@ -154,6 +166,7 @@ def make_train(config: CLIPTrainConfig):
         rng_key, subkey = jax.random.split(rng_key)
         dataset = MultiGameDataset(
             include_dungeon=config.include_dungeon,
+            include_d2=config.include_d2,
             include_pokemon=config.include_pokemon,
             include_sokoban=config.include_sokoban,
             include_doom=config.include_doom,
@@ -232,6 +245,8 @@ def make_train(config: CLIPTrainConfig):
                 "text2state_correct_pr": jnp.zeros(()),
                 "state2text_top1_accuracy": jnp.zeros(()),
                 "text2state_top1_accuracy": jnp.zeros(()),
+                "state2text_top3_accuracy": jnp.zeros(()),
+                "text2state_top3_accuracy": jnp.zeros(()),
                 "text_state_temperature": jnp.zeros(()),
             }
             val_losses = deepcopy(train_losses)
@@ -269,6 +284,8 @@ def make_train(config: CLIPTrainConfig):
                     train_metrics["text2state_correct_pr"] += metrics["text2state_correct_pr"]
                     train_metrics["state2text_top1_accuracy"] += metrics["state2text_top1_accuracy"]
                     train_metrics["text2state_top1_accuracy"] += metrics["text2state_top1_accuracy"]
+                    train_metrics["state2text_top3_accuracy"] += metrics["state2text_top3_accuracy"]
+                    train_metrics["text2state_top3_accuracy"] += metrics["text2state_top3_accuracy"]
 
                     train_metrics["text_state_temperature"] += metrics["text_state_temperature"]
 
@@ -308,6 +325,8 @@ def make_train(config: CLIPTrainConfig):
                     val_metrics["text2state_correct_pr"] += metrics["text2state_correct_pr"]
                     val_metrics["state2text_top1_accuracy"] += metrics["state2text_top1_accuracy"]
                     val_metrics["text2state_top1_accuracy"] += metrics["text2state_top1_accuracy"]
+                    val_metrics["state2text_top3_accuracy"] += metrics["state2text_top3_accuracy"]
+                    val_metrics["text2state_top3_accuracy"] += metrics["text2state_top3_accuracy"]
 
                     pbar.update(1)  # update Progress bar
                     pbar.set_postfix({"Train Loss": train_losses['total'], "Val Loss": val_losses['total'] / i})
@@ -342,6 +361,8 @@ def make_train(config: CLIPTrainConfig):
                     "train(text-state)/text2state_correct_pr": train_metrics["text2state_correct_pr"],
                     "train(text-state)/state2text_top1_accuracy": train_metrics["state2text_top1_accuracy"],
                     "train(text-state)/text2state_top1_accuracy": train_metrics["text2state_top1_accuracy"],
+                    "train(text-state)/state2text_top3_accuracy": train_metrics["state2text_top3_accuracy"],
+                    "train(text-state)/text2state_top3_accuracy": train_metrics["text2state_top3_accuracy"],
                     
                     "total/val_loss": val_losses["total"],
                     
@@ -351,7 +372,9 @@ def make_train(config: CLIPTrainConfig):
                     "val(text-state)/text2state_correct_pr": val_metrics["text2state_correct_pr"],
                     "val(text-state)/state2text_top1_accuracy": val_metrics["state2text_top1_accuracy"],
                     "val(text-state)/text2state_top1_accuracy": val_metrics["text2state_top1_accuracy"],
-                    
+                    "val(text-state)/state2text_top3_accuracy": val_metrics["state2text_top3_accuracy"],
+                    "val(text-state)/text2state_top3_accuracy": val_metrics["text2state_top3_accuracy"],
+
                     "total/epoch": epoch,
                     "total/lr": lr_schedular(train_state.step),
                     **aux_dict

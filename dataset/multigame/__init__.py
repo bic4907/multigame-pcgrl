@@ -9,7 +9,7 @@ logging.getLogger("dataset.multigame").addHandler(logging.NullHandler())
 
 from .base import GameSample, GameTag, TileLegend, BaseGameHandler, BasePreprocessor
 from .dataset import MultiGameDataset
-from .handlers import VGLCHandler, VGLCGameHandler, DungeonHandler, ZeldaHandler
+from .handlers import VGLCHandler, VGLCGameHandler, DungeonHandler, D2Handler, ZeldaHandler
 from . import tags, render, tile_utils
 from .tile_utils import (
     UNIFIED_CATEGORIES,
@@ -37,6 +37,7 @@ __all__ = [
     "VGLCHandler",
     "VGLCGameHandler",
     "DungeonHandler",
+    "D2Handler",
     "ZeldaHandler",
     "tags",
     "render",

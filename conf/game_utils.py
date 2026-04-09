@@ -5,6 +5,7 @@ conf/game_utils.py
 
 약어 규칙 (2글자):
     dg = dungeon
+    d2 = d2  (dungeon legacy)
     pk = pokemon
     sk = sokoban
     dm = doom  (doom + doom2 동시 활성화)
@@ -22,6 +23,7 @@ from typing import Dict, List
 # dm 은 doom + doom2 를 동시에 가리킨다.
 GAME_ABBR: Dict[str, List[str]] = {
     "dg": ["dungeon"],
+    "d2": ["d2"],
     "pk": ["pokemon"],
     "sk": ["sokoban"],
     "dm": ["doom", "doom2"],
@@ -29,7 +31,7 @@ GAME_ABBR: Dict[str, List[str]] = {
 }
 
 # 전체 게임 이름 목록 (include_* 필드 기준)
-ALL_GAMES: List[str] = ["dungeon", "pokemon", "sokoban", "doom", "doom2", "zelda"]
+ALL_GAMES: List[str] = ["dungeon", "d2", "pokemon", "sokoban", "doom", "doom2", "zelda"]
 
 # 역방향 매핑 (full name → abbr)  doom, doom2 → dm
 GAME_ABBR_INV: Dict[str, str] = {}
@@ -54,12 +56,14 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
     Examples
     --------
     >>> parse_game_str("dgdm")
-    {'include_dungeon': True, 'include_pokemon': False, 'include_sokoban': False,
-     'include_doom': True, 'include_doom2': True, 'include_zelda': False}
+    {'include_dungeon': True, 'include_d2': False, 'include_pokemon': False,
+     'include_sokoban': False, 'include_doom': True, 'include_doom2': True,
+     'include_zelda': False}
 
     >>> parse_game_str("all")
-    {'include_dungeon': True, 'include_pokemon': True, 'include_sokoban': True,
-     'include_doom': True, 'include_doom2': True, 'include_zelda': True}
+    {'include_dungeon': True, 'include_d2': True, 'include_pokemon': True,
+     'include_sokoban': True, 'include_doom': True, 'include_doom2': True,
+     'include_zelda': True}
     """
     includes = {f"include_{name}": False for name in ALL_GAMES}
 
@@ -86,6 +90,7 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
 
 def build_game_str(
     include_dungeon: bool = False,
+    include_d2: bool = False,
     include_pokemon: bool = False,
     include_sokoban: bool = False,
     include_doom: bool = False,
@@ -99,6 +104,8 @@ def build_game_str(
     parts: List[str] = []
     if include_dungeon:
         parts.append("dg")
+    if include_d2:
+        parts.append("d2")
     if include_pokemon:
         parts.append("pk")
     if include_sokoban:

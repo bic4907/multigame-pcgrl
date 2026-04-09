@@ -30,6 +30,7 @@ _PROJECT_ROOT: Path = _HERE.parent.parent
 # ── 게임별 핸들러 파일 매핑 ──────────────────────────────────────────────────
 GAME_HANDLER_FILES: Dict[str, List[str]] = {
     "dungeon": ["handlers/dungeon_handler.py"],
+    "d2":      ["handlers/d2_handler.py"],
     "sokoban": ["handlers/boxoban_handler.py"],
     "zelda":   ["handlers/zelda_handler.py", "handlers/vglc_handler.py"],
     "pokemon": ["handlers/pokemon_handler.py"],

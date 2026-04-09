@@ -21,6 +21,7 @@ from .handlers.dungeon_handler import DUNGEON_PALETTE
 _ALL_PALETTES: Dict[str, Dict[int, Tuple[int, int, int]]] = {
     **PALETTES,
     "dungeon": DUNGEON_PALETTE,
+    "d2": DUNGEON_PALETTE,
 }
 
 _DEFAULT_UNKNOWN_COLOR = (255, 0, 255)   # 매핑 없을 때 마젠타

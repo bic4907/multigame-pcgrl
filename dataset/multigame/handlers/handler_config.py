@@ -73,6 +73,13 @@ class DungeonConfig:
 
 
 @dataclass
+class D2Config:
+    """Dungeon Legacy (d2) 설정"""
+    rotate_90: bool = False  # 시계방향 90도 회전 증강
+    max_samples: int = 10000
+
+
+@dataclass
 class POKEMONConfig:
     """Five-Dollar-Model (POKEMON) 게임 설정"""
     rotate_90: bool = True  # 시계방향 90도 회전 증강
@@ -94,6 +101,7 @@ class HandlerConfig:
     kid_icarus: KidIcarusConfig = field(default_factory=KidIcarusConfig)
     mega_man: MegaManConfig = field(default_factory=MegaManConfig)
     dungeon: DungeonConfig = field(default_factory=DungeonConfig)
+    d2: D2Config = field(default_factory=D2Config)
     pokemon: POKEMONConfig = field(default_factory=POKEMONConfig)
     doom: DoomConfig = field(default_factory=DoomConfig)
     
@@ -107,6 +115,7 @@ class HandlerConfig:
             'kid_icarus': asdict(self.kid_icarus),
             'mega_man': asdict(self.mega_man),
             'dungeon': asdict(self.dungeon),
+            'd2': asdict(self.d2),
             'pokemon': asdict(self.pokemon),
             'doom': asdict(self.doom),
         }

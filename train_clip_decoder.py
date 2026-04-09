@@ -234,23 +234,24 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
     logger.info("=" * 80)
 
     # ── reward_enum별 전체 통계 ──
-    logger.info(f"  {'enum':>5}  {'name':<22} {'count':>6}  {'min':>10}  {'max':>10}  {'mean':>10}  {'std':>10}")
-    logger.info(f"  {'-'*5}  {'-'*22} {'-'*6}  {'-'*10}  {'-'*10}  {'-'*10}  {'-'*10}")
+    logger.info(f"  {'enum':>5}  {'name':<22} {'count':>6}  {'unique':>6}  {'min':>10}  {'max':>10}  {'mean':>10}  {'std':>10}")
+    logger.info(f"  {'-'*5}  {'-'*22} {'-'*6}  {'-'*6}  {'-'*10}  {'-'*10}  {'-'*10}  {'-'*10}")
 
     for re_id in sorted(enum_stats.keys()):
         vals = enum_stats[re_id]
         valid_vals = [v for v in vals if v is not None]
         name = _REWARD_ENUM_NAMES.get(re_id, f"unknown_{re_id}")
         count = len(vals)
+        n_unique = len(set(valid_vals))
 
         if valid_vals:
             v_min = min(valid_vals)
             v_max = max(valid_vals)
             v_mean = sum(valid_vals) / len(valid_vals)
             v_std = (sum((v - v_mean) ** 2 for v in valid_vals) / len(valid_vals)) ** 0.5
-            logger.info(f"  {re_id:>5}  {name:<22} {count:>6}  {v_min:>10.2f}  {v_max:>10.2f}  {v_mean:>10.2f}  {v_std:>10.2f}")
+            logger.info(f"  {re_id:>5}  {name:<22} {count:>6}  {n_unique:>6}  {v_min:>10.2f}  {v_max:>10.2f}  {v_mean:>10.2f}  {v_std:>10.2f}")
         else:
-            logger.info(f"  {re_id:>5}  {name:<22} {count:>6}  {'N/A':>10}  {'N/A':>10}  {'N/A':>10}  {'N/A':>10}")
+            logger.info(f"  {re_id:>5}  {name:<22} {count:>6}  {n_unique:>6}  {'N/A':>10}  {'N/A':>10}  {'N/A':>10}  {'N/A':>10}")
 
     logger.info("")
 
@@ -266,6 +267,7 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
             if valid_vals:
                 logger.info(f"    enum {re_id} ({name}): "
                             f"n={len(vals)}, "
+                            f"unique={len(set(valid_vals))}, "
                             f"range=[{min(valid_vals):.2f}, {max(valid_vals):.2f}], "
                             f"mean={sum(valid_vals)/len(valid_vals):.2f}")
             else:
@@ -286,6 +288,7 @@ def make_train(config: CLIPDecoderTrainConfig):
         rng_key, subkey = jax.random.split(rng_key)
         dataset = MultiGameDataset(
             include_dungeon=config.include_dungeon,
+            include_d2=config.include_d2,
             include_pokemon=config.include_pokemon,
             include_sokoban=config.include_sokoban,
             include_doom=config.include_doom,

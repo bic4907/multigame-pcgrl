@@ -1,0 +1,129 @@
+instruction,reward_enum,condition
+A small cluster of small regions.,1,5
+A few small regions are present.,1,5
+Sparse small regions are scattered.,1,5
+The map contains a few small regions.,1,5
+A small cluster of large regions.,1,5
+A few large regions are present.,1,5
+Sparse large regions are scattered.,1,5
+The map contains a few large regions.,1,5
+Some small regions are grouped together.,1,15
+A moderate amount of small regions exist.,1,15
+The map has some small regions.,1,15
+Small regions appear in small clusters.,1,15
+Some large regions are grouped together.,1,15
+A moderate amount of large regions exist.,1,15
+The map has some large regions.,1,15
+Large regions appear in small clusters.,1,15
+Several small regions are scattered.,1,25
+A multi-region cluster of small rooms is formed.,1,25
+Small regions show balanced distribution.,1,25
+The map contains multiple placed small regions.,1,25
+Several large regions are scattered.,1,25
+A multi-region cluster of large rooms is formed.,1,25
+Large regions show balanced distribution.,1,25
+The map contains multiple placed large regions.,1,25
+Numerous small regions populate the map.,1,35
+A large number of small regions exist.,1,35
+Many small regions dominate the map.,1,35
+Small regions appear everywhere across the map.,1,35
+Numerous large regions populate the map.,1,35
+A large number of large regions exist.,1,35
+Many large regions dominate the map.,1,35
+Large regions appear everywhere across the map.,1,35
+Micro path length using a narrow corridor.,2,10
+Nano length and narrow path ideal for quick traversal.,2,10
+Minimal narrow path requiring almost no movement.,2,10
+The narrow path is extremely short and direct.,2,10
+Micro path length using a wide corridor.,2,10
+Nano and wide path ideal for quick traversal.,2,10
+Minimal wide path requiring almost no movement.,2,10
+The wide path is extremely short and direct.,2,10
+Short path length with a narrow design.,2,20
+Brief and compact narrow path layout.,2,20
+The narrow path remains concise and effective.,2,20
+"A short, narrow path length appears.",2,20
+Short path length with a wide design.,2,20
+Brief and compact wide path layout.,2,20
+The wide path remains concise and effective.,2,20
+"A short, wide path length appears.",2,20
+Moderate path length along a narrow path.,2,40
+Reasonable narrow path offering balance.,2,40
+A medium-length narrow path appears on the map.,2,40
+A balanced path length with narrow characteristics is created.,2,40
+Moderate path length along a wide path.,2,40
+Reasonable wide path offering balance.,2,40
+A medium-length wide path appears on the map.,2,40
+A balanced path length with wide characteristics is created.,2,40
+Prolonged path length using a narrow layout.,2,60
+Extended narrow path requiring significant movement.,2,60
+The narrow path is long and challenging.,2,60
+Long and narrow path fills the map.,2,60
+Prolonged path length using a wide layout.,2,60
+Extended wide path requiring significant movement.,2,60
+The wide path is long and challenging.,2,60
+Long and wide path fills the map.,2,60
+Sparse and decentralized blocks occupy the map.,3,40
+Few decentralized blocks appear in a light layout.,3,40
+Minimal decentralized block placement is observed.,3,40
+The decentralized blocks are scattered.,3,40
+Sparse and centralized blocks occupy the map.,3,40
+Few centralized blocks appear in a light layout.,3,40
+Minimal centralized block placement is observed.,3,40
+The centralized blocks are scattered.,3,40
+Some decentralized blocks form a balanced pattern.,3,80
+decentralized blocks appear with moderate density.,3,80
+Blocks are placed decentralized with spacing.,3,80
+A number of decentralized blocks is spread out.,3,80
+Some centralized blocks form a balanced pattern.,3,80
+Centralized blocks appear with moderate density.,3,80
+Blocks are placed centralized with spacing.,3,80
+A number of centralized blocks is spread out.,3,80
+Dense decentralized blocks fill the area.,3,120
+Numerous decentralized blocks create complex obstacles.,3,120
+Substantial decentralized block usage observed.,3,120
+The decentralized blocks create dense barriers.,3,120
+Dense centralized blocks fill the area.,3,120
+Numerous centralized blocks create complex obstacles.,3,120
+Substantial centralized block usage observed.,3,120
+The centralized blocks create dense barriers.,3,120
+High-density decentralized blocks dominate the map.,3,160
+Packed decentralized blocks hinder movement.,3,160
+Block overcrowding is observed in the decentralized layout.,3,160
+Movement is restricted due to dense decentralized blocks.,3,160
+High-density centralized blocks dominate the map.,3,160
+Packed centralized blocks hinder movement.,3,160
+Block overcrowding is observed in the centralized layout.,3,160
+Movement is restricted due to dense centralized blocks.,3,160
+A few scattered bats appear.,4,10
+Small scattered bat group spotted.,4,10
+A cluster of five scattered bats forms.,4,10
+Few scattered bats are scattered.,4,10
+A few clustered bats appear.,4,10
+Small clustered bat group spotted.,4,10
+A cluster of five clustered bats forms.,4,10
+Few clustered bats are scattered.,4,10
+Some scattered bats spawn throughout.,4,40
+Scattered scattered bats roam the area.,4,40
+Scattered bats are spread.,4,40
+The map contains several scattered bats.,4,40
+Some clustered bats spawn throughout.,4,40
+Scattered clustered bats roam the area.,4,40
+Clustered bats are spread.,4,40
+The map contains several clustered bats.,4,40
+Several scattered bats gather together.,4,70
+A dense group of scattered bats appears.,4,70
+A multi-bat scattered group is seen.,4,70
+Scattered bats form multiple clusters.,4,70
+Several clustered bats gather together.,4,70
+A dense group of clustered bats appears.,4,70
+A multi-bat clustered group is seen.,4,70
+Clustered bats form multiple clusters.,4,70
+Many scattered bats flood the map.,4,100
+A bat swarm of scattered units emerges.,4,100
+Large scattered bat group dominates the area.,4,100
+A number of scattered bats appear.,4,100
+Many clustered bats flood the map.,4,100
+A bat swarm of clustered units emerges.,4,100
+Large clustered bat group dominates the area.,4,100
+A number of clustered bats appear.,4,100

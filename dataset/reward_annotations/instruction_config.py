@@ -317,50 +317,34 @@ VOCAB_SETS: Dict[str, List[List[str]]] = {
     "region": [
         # level 0 — very few
         [
-            "continuous",
-            "unified",
+            "rare",
+            "few"
             "sparse",
-            "barely divided",
-            "minimal",
-            "connected",
-            "low separation",
-            "few",
+            "marginal",
         ],
 
         # level 1 — somewhat few
         [
-            "lightly divided",
-            "loosely segmented",
-            "limited",
-            "slight separation",
             "some",
-            "modest",
-            "light fragmentation",
-            "sparse",
+            "limited",
+            "slight",
+            "little",
         ],
 
-        # level 2 — somewhat many
+        # level 2 — moderate / somewhat many
         [
-            "segmented",
-            "moderately divided",
-            "noticeable",
-            "fair separation",
             "moderate",
-            "several",
-            "fragmented",
+            "reasonable",
             "decent",
+            "suitable",
         ],
 
         # level 3 — very many
         [
-            "highly segmented",
-            "heavily divided",
-            "abundant",
-            "dense",
-            "strong separation",
             "many",
             "numerous",
-            "high fragmentation",
+            "plentiful",
+            "abundant",
         ],
     ],
 
@@ -368,49 +352,33 @@ VOCAB_SETS: Dict[str, List[List[str]]] = {
         # level 0 — very short
         [
             "tiny",
+            "nano",
             "minimal",
-            "compressed",
-            "very compact",
-            "very small",
-            "stubby",
-            "cramped",
-            "brief",
+            "micro",
         ],
 
         # level 1 — somewhat short
         [
-            "compact",
-            "limited",
-            "small-scale",
-            "restricted",
-            "condensed",
             "short",
-            "trim",
-            "modest",
+            "limited",
+            "restricted",
+            "condenced",
         ],
 
         # level 2 — somewhat long
         [
             "moderate",
-            "extended",
-            "spacious",
-            "roomy",
-            "long",
-            "mid-scale",
-            "sizable",
-            "stretched",
+            "reasonable",
+            "medium",
+            "balanced",
         ],
 
         # level 3 — very long
         [
-            "expansive",
-            "sprawling",
-            "vast",
-            "far-reaching",
-            "large-scale",
-            "sweeping",
-            "lengthy",
-            "broad",
+            "long",
+            "large",
+            "lengthly",
+            "extensive"
         ],
     ]
 }
@@ -419,38 +387,26 @@ VOCAB_SETS: Dict[str, List[List[str]]] = {
 _COUNT_VOCAB: List[List[str]] = [
     # level 0 — very few
     [
-        "rarely",
-        "barely any",
-        "almost none",
-        "scarce",
+        "rare",
+        "few"
         "sparse",
-        "hardly any",
-        "negligible",
-        "near absent",
+        "marginal",
     ],
 
     # level 1 — somewhat few
     [
-        "few",
         "some",
         "limited",
         "slight",
-        "low",
-        "sparse",
-        "small amount",
-        "light presence",
+        "little",
     ],
 
     # level 2 — moderate / somewhat many
     [
         "moderate",
-        "fair",
-        "noticeable",
+        "reasonable",
         "decent",
-        "ample",
-        "mid-level",
-        "solid amount",
-        "regular amount",
+        "suitable",
     ],
 
     # level 3 — very many
@@ -459,10 +415,6 @@ _COUNT_VOCAB: List[List[str]] = [
         "numerous",
         "plentiful",
         "abundant",
-        "high",
-        "strong presence",
-        "widely present",
-        "large amount",
     ],
 ]
 

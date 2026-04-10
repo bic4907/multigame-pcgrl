@@ -213,7 +213,8 @@ class D3Handler(BaseGameHandler):
             game=GameTag.D3,
             source_id=source_id,
         )
-        array = _place_treasure(array, source_id)
+        # 주석처리시 treasure 배치하는 argumetation 비활성화
+        # array = _place_treasure(array, source_id)
 
         # reward_enum & condition: d2 (legacy) 방식
         reward_enum, feature_name = _classify_slug(m.instruction_slug)

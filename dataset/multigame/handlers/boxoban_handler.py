@@ -318,6 +318,7 @@ def _placeable_positions(array: np.ndarray) -> np.ndarray:
 
 def _augment_objects(array: np.ndarray) -> np.ndarray:
     """
+    SOKOBAN ARGUEMENT
     Sokoban 맵의 오브젝트(box) 수를 확률적으로 증감한다.
 
     - 40% : 변경 없음 (4개 유지)
@@ -452,7 +453,10 @@ class BoxobanHandler(BaseGameHandler):
                 if arr is None:
                     continue
                 processed = _fit_to_target(arr, _TARGET_SIZE)
-                processed = _augment_objects(processed)
+
+                #이 라인 주석처리하면 sokoban arguement 비활성화
+                #processed = _augment_objects(processed)
+
                 source_id = f"{rel}#{lvl_idx}"
                 all_arrays.append(processed)
                 all_ids.append(source_id)

@@ -175,7 +175,8 @@ def build_user_prompt(
 
     lines.append("## Condition")
     lines.append(f"- Feature: {feature_name}")
-    lines.append(f"- Description: {FEATURE_DESCRIPTIONS.get(feature_name, feature_name)}")
+    if feature_name != "region":
+        lines.append(f"- Description: {FEATURE_DESCRIPTIONS.get(feature_name, feature_name)}")
     if zone_display is not None:
         lines.append(f"- Intensity level: {zone_display} (scale: 1=lowest → 4=highest)")
     elif thresholds is not None:
@@ -201,25 +202,40 @@ def build_user_prompt(
         desc = tile_descs.get(tid, "")
         r, g, b = tile_colors.get(tid, (128, 0, 128))
         lines.append(f"  ID={tid}  {name:10s}  color=RGB({r},{g},{b})  — {desc}")
-    raw_desc = FEATURE_TILE_DESCS.get(game, {}).get(feature_name, ("", ""))[0]
-    lines.append(f"Count basis: {raw_desc if raw_desc else sub_condition}")
+    if feature_name != "region":
+        raw_desc = FEATURE_TILE_DESCS.get(game, {}).get(feature_name, ("", ""))[0]
+        lines.append(f"Count basis: {raw_desc if raw_desc else sub_condition}")
 
     lines.append("")
 
     lines.append("## Image 2 — Unified Map (unified category colors)")
-    cat_info = {
-        0: ("empty",       "background / void / walkable space"),
-        1: ("wall",        "solid impassable obstacle"),
-        2: ("interactive", "interactable tiles (doors, objects, spawns)"),
-        3: ("hazard",      "enemy / damaging entity"),
-        4: ("collectable", "collectible item / pickup"),
-    }
-    lines.append("Tile legend:")
-    for cid, (cname, cdesc) in cat_info.items():
-        color_str = UNIFIED_COLOR_DESCS.get(cid, "")
-        lines.append(f"  ID={cid}  {cname:14s}  {color_str}  — {cdesc}")
-    uni_desc = FEATURE_TILE_DESCS.get(game, {}).get(feature_name, ("", ""))[1]
-    lines.append(f"Count basis: {uni_desc}")
+    if feature_name == "region":
+        region_cat_info = {
+            0: ("passable", "walkable area (any non-wall tile)"),
+            1: ("wall",     "impassable barrier"),
+        }
+        region_color_descs = {
+            0: UNIFIED_COLOR_DESCS.get(0, ""),
+            1: UNIFIED_COLOR_DESCS.get(1, ""),
+        }
+        lines.append("Tile legend (passable vs. wall only — focus on connected areas):")
+        for cid, (cname, cdesc) in region_cat_info.items():
+            color_str = region_color_descs.get(cid, "")
+            lines.append(f"  {cname:10s}  {color_str}  — {cdesc}")
+    else:
+        cat_info = {
+            0: ("empty",       "background / void / walkable space"),
+            1: ("wall",        "solid impassable obstacle"),
+            2: ("interactive", "interactable tiles (doors, objects, spawns)"),
+            3: ("hazard",      "enemy / damaging entity"),
+            4: ("collectable", "collectible item / pickup"),
+        }
+        lines.append("Tile legend:")
+        for cid, (cname, cdesc) in cat_info.items():
+            color_str = UNIFIED_COLOR_DESCS.get(cid, "")
+            lines.append(f"  ID={cid}  {cname:14s}  {color_str}  — {cdesc}")
+        uni_desc = FEATURE_TILE_DESCS.get(game, {}).get(feature_name, ("", ""))[1]
+        lines.append(f"Count basis: {uni_desc}")
     lines.append("")
 
     # 어휘 세트: feature × level

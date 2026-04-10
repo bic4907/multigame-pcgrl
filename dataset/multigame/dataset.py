@@ -45,6 +45,7 @@ from .base import GameSample, GameTag
 from .handlers.dungeon_handler import DungeonHandler, _DEFAULT_DUNGEON_ROOT
 from .handlers.d2_handler import D2Handler, _DEFAULT_D2_ROOT
 from .handlers.d3_handler import D3Handler, _DEFAULT_D3_ROOT
+from .handlers.d5_handler import D5Handler, _DEFAULT_D5_ROOT
 from .handlers.boxoban_handler import BoxobanHandler, _DEFAULT_BOXOBAN_ROOT
 from .handlers.pokemon_handler import POKEMONHandler, _DEFAULT_POKEMON_ROOT
 from .handlers.doom_handler import DoomHandler, _DEFAULT_DOOM_ROOT, _DEFAULT_DOOM2_ROOT
@@ -144,6 +145,7 @@ class MultiGameDataset:
         dungeon_root:     Path | str = _DEFAULT_DUNGEON_ROOT,
         d2_root:          Path | str = _DEFAULT_D2_ROOT,
         d3_root:          Path | str = _DEFAULT_D3_ROOT,
+        d5_root:          Path | str = _DEFAULT_D5_ROOT,
         pokemon_root:     Path | str = _DEFAULT_POKEMON_ROOT,
         sokoban_root:     Path | str = _DEFAULT_BOXOBAN_ROOT,
         doom_root:        Path | str = _DEFAULT_DOOM_ROOT,
@@ -153,6 +155,7 @@ class MultiGameDataset:
         include_dungeon:      bool = True,
         include_d2:           bool = False,
         include_d3:           bool = False,
+        include_d5:           bool = False,
         include_pokemon:      bool = True,
         include_sokoban:      bool = True,
         include_doom:         bool = True,
@@ -185,6 +188,7 @@ class MultiGameDataset:
         self._dungeon_handler: Optional[DungeonHandler] = None
         self._d2_handler: Optional[D2Handler] = None
         self._d3_handler: Optional[D3Handler] = None
+        self._d5_handler: Optional[D5Handler] = None
         self._pokemon_handler: Optional[POKEMONHandler] = None
         self._sokoban_handler: Optional[BoxobanHandler] = None
         self._doom_handler: Optional[DoomHandler] = None
@@ -207,6 +211,8 @@ class MultiGameDataset:
             _game_specs.append(("d2", str(d2_root), hc.get("d2", {})))
         if include_d3:
             _game_specs.append(("d3", str(d3_root), hc.get("d3", {})))
+        if include_d5:
+            _game_specs.append(("d5", str(d5_root), hc.get("d5", {})))
         if include_sokoban:
             _game_specs.append(("sokoban", str(sokoban_root), hc.get("sokoban", {})))
         if include_zelda:
@@ -453,6 +459,10 @@ class MultiGameDataset:
                 for sample in self._d3_handler:
                     samples.append(sample)
 
+            elif game == "d5":
+                self._d5_handler = D5Handler(root=game_root)
+                for sample in self._d5_handler:
+                    samples.append(sample)
 
             elif game == "sokoban":
                 self._sokoban_handler = BoxobanHandler(root=game_root)

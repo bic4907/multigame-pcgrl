@@ -147,7 +147,7 @@ class CLIPDatasetBuilder:
             #     CUSTOM_THRESHOLDS 양자화를 적용하지 않고,
             #     condition_value 자체를 bin으로 사용 (같은 값 = 같은 class).
             feature_name = s.meta.get("feature_name", "")
-            if s.game == "d2":
+            if s.game in ("d2", "d5"):
                 quantized_bin = condition_value if condition_value is not None else 0
             else:
                 threshold_key = f"{s.game}_{feature_name}"

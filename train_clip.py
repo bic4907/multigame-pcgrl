@@ -168,6 +168,7 @@ def make_train(config: CLIPTrainConfig):
             include_dungeon=config.include_dungeon,
             include_d2=config.include_d2,
             include_d3=config.include_d3,
+            include_d5=config.include_d5,
             include_pokemon=config.include_pokemon,
             include_sokoban=config.include_sokoban,
             include_doom=config.include_doom,

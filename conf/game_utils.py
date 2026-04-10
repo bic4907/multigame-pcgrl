@@ -26,6 +26,7 @@ GAME_ABBR: Dict[str, List[str]] = {
     "dg": ["dungeon"],
     "d2": ["d2"],
     "d3": ["d3"],
+    "d5": ["d5"],
     "pk": ["pokemon"],
     "sk": ["sokoban"],
     "dm": ["doom", "doom2"],
@@ -33,7 +34,7 @@ GAME_ABBR: Dict[str, List[str]] = {
 }
 
 # 전체 게임 이름 목록 (include_* 필드 기준)
-ALL_GAMES: List[str] = ["dungeon", "d2", "d3", "pokemon", "sokoban", "doom", "doom2", "zelda"]
+ALL_GAMES: List[str] = ["dungeon", "d2", "d3", "d5", "pokemon", "sokoban", "doom", "doom2", "zelda"]
 
 # 역방향 매핑 (full name → abbr)  doom, doom2 → dm
 GAME_ABBR_INV: Dict[str, str] = {}
@@ -72,11 +73,12 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
     if not game_str:
         return includes
 
-    # 특수값: all (d2/d3는 legacy/디버깅용이므로 제외 — 명시적으로 'd2'/'d3' 지정 필요)
+    # 특수값: all (d2/d3/d5는 legacy/디버깅용이므로 제외 — 명시적으로 'd2'/'d3'/'d5' 지정 필요)
     if game_str.lower() == "all":
         includes = {k: True for k in includes}
         includes["include_d2"] = False
         includes["include_d3"] = False
+        includes["include_d5"] = False
         return includes
 
     # 2글자씩 파싱
@@ -97,6 +99,7 @@ def build_game_str(
     include_dungeon: bool = False,
     include_d2: bool = False,
     include_d3: bool = False,
+    include_d5: bool = False,
     include_pokemon: bool = False,
     include_sokoban: bool = False,
     include_doom: bool = False,
@@ -114,6 +117,8 @@ def build_game_str(
         parts.append("d2")
     if include_d3:
         parts.append("d3")
+    if include_d5:
+        parts.append("d5")
     if include_pokemon:
         parts.append("pk")
     if include_sokoban:

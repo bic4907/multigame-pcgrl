@@ -40,6 +40,7 @@ class Config:
     include_dungeon: bool = True
     include_d2: bool = False
     include_d3: bool = False
+    include_d5: bool = False
     include_pokemon: bool = False
     include_sokoban: bool = False
     include_doom: bool = False

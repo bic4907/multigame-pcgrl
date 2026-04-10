@@ -30,6 +30,7 @@ class GameTag:
     DUNGEON     = "dungeon"
     D2          = "d2"
     D3          = "d3"
+    D5          = "d5"
     BOXOBAN     = "boxoban"
     SOKOBAN     = "sokoban"
     POKEMON     = "pokemon"

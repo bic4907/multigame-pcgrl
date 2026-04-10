@@ -15,18 +15,17 @@ dungeon_level_dataset 핸들러.
 2  : wall   (원본 값 2)
 3  : enemy  (원본 값 3)
 
-전처리 필터 (캐시 저장 전 적용, legacy annotation 기준)
+전처리 필터 (캐시 저장 전 적용)
 ---------------------------------------------
-1. RG(region, reward_enum==1) 값이 25 또는 35인 샘플 제거
-2. BD(bat_direction, reward_enum==5) 샘플을 instruction별로 절반 제거
-   (key 오름차순 정렬 후 앞 절반 유지 → 재현 가능)
-3. 전체 4000개로 절단
+1. ndim!=2 맵 제거 (형식 이상 맵)
+2. feature 기반 필터: region / path_length / bat_amount 만 유지
+   (block, bat_direction 카테고리는 퀄리티 문제로 제외)
 """
 from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -42,15 +41,43 @@ _DEFAULT_DUNGEON_ROOT = (
     Path(__file__).parent.parent.parent / "dungeon_level_dataset"
 )
 
-# dataset/reward_annotations/legacy/dungeon_reward_annotations.csv
-_LEGACY_ANNOT_PATH = (
-    Path(__file__).parent.parent.parent
-    / "reward_annotations" / "legacy" / "dungeon_reward_annotations.csv"
+# ── feature 분류 ─────────────────────────────────────────────────────────────────
+# instruction_slug 키워드로 feature 카테고리를 추론한다.
+# 5개 카테고리: region / path_length / bat_amount / block / bat_direction
+#   → 이 중 퀄리티가 좋은 region / path_length / bat_amount 만 로드한다.
+_DIRECTION_KEYWORDS: tuple[str, ...] = (
+    "linear", "radial", "north", "south", "east", "west",
+    "top", "bottom", "left", "right",
 )
 
-# ── 전처리 상수 ─────────────────────────────────────────────────────────────────
-_EXCLUDE_RG: frozenset[int] = frozenset({25, 35})
-_TARGET_COUNT: int = 4_000
+_ALLOWED_FEATURES: frozenset[str] = frozenset({
+    "region",
+    "path_length",
+    "bat_amount",
+})
+
+
+def _classify_feature(slug: str) -> str:
+    """instruction_slug 로부터 feature 카테고리를 추론한다.
+
+    Returns
+    -------
+    'region' | 'path_length' | 'bat_amount' | 'block' | 'bat_direction' | 'unknown'
+    """
+    has_bat = "bat" in slug
+    has_direction = any(kw in slug for kw in _DIRECTION_KEYWORDS)
+
+    if has_bat and has_direction:
+        return "bat_direction"
+    if "block" in slug or "centralized" in slug or "decentralized" in slug:
+        return "block"
+    if has_bat:
+        return "bat_amount"
+    if "path" in slug:
+        return "path_length"
+    if "region" in slug:
+        return "region"
+    return "unknown"
 
 
 # ── 타일 상수 ────────────────────────────────────────────────────────────────────
@@ -99,67 +126,6 @@ def _make_legend() -> TileLegend:
         "2": ["solid", "wall"],
         "3": ["enemy", "damaging"],
     })
-
-
-def _apply_preprocess_filter(all_keys: List[str]) -> List[str]:
-    """
-    legacy annotation CSV 를 읽어 전처리 필터 후 남길 key 목록을 반환한다.
-
-    필터 적용 순서
-    --------------
-    1. reward_enum==1 (RG) 이면서 condition_1 in _EXCLUDE_RG 인 샘플 제거
-    2. reward_enum==5 (BD) 샘플을 instruction 별로 절반 유지
-       (key 오름차순 정렬 후 앞 절반 → 재현 가능)
-    3. 전체 _TARGET_COUNT 개로 절단 (원래 순서 유지)
-
-    annotation CSV 가 없으면 all_keys 를 그대로 반환한다.
-    """
-    if not _LEGACY_ANNOT_PATH.exists():
-        return all_keys
-
-    annot: dict[str, dict] = {}
-    with open(_LEGACY_ANNOT_PATH, newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            annot[row["key"]] = row
-
-    keep_set: set[str] = set()
-    bd_by_instruction: dict[str, List[str]] = {}
-
-    for key in all_keys:
-        row = annot.get(key)
-        if row is None:
-            # annotation 에 없는 샘플은 그대로 유지
-            keep_set.add(key)
-            continue
-
-        reward_enum = row.get("reward_enum", "")
-        cond1_raw   = row.get("condition_1", "")
-
-        if reward_enum == "1":
-            # RG 값이 제외 대상이면 스킵
-            try:
-                rg = int(float(cond1_raw))
-            except (ValueError, TypeError):
-                rg = -1
-            if rg in _EXCLUDE_RG:
-                continue
-
-        if reward_enum == "5":
-            # BD 샘플은 instruction 별로 그룹화해서 나중에 처리
-            instr = row.get("instruction", "")
-            bd_by_instruction.setdefault(instr, []).append(key)
-        else:
-            keep_set.add(key)
-
-    # BD: instruction 별로 정렬 후 앞 절반만 유지
-    for instr in sorted(bd_by_instruction):
-        group = sorted(bd_by_instruction[instr])   # key 오름차순 → 재현 가능
-        half = max(1, len(group) // 2)
-        keep_set.update(group[:half])
-
-    # 원래 순서 유지 후 절단
-    filtered = [k for k in all_keys if k in keep_set]
-    return filtered[:_TARGET_COUNT]
 
 
 # ── 메타 dataclass (경량) ────────────────────────────────────────────────────────
@@ -230,14 +196,17 @@ class DungeonHandler(BaseGameHandler):
                 )
                 raw_metas[m.key] = m
 
-        # 전처리 필터 적용 (캐시 저장 전)
+        # 전처리 필터 적용
         all_keys = [m.key for m in sorted(raw_metas.values(), key=lambda m: m.index)]
 
-        # 1차: ndim!=2 맵 제거 (형식 이상 맵, RuntimeWarning 발생원)
+        # 1차: ndim!=2 맵 제거 (형식 이상 맵)
         all_keys = [k for k in all_keys if self._archive[k].ndim == 2]
 
-        # 2차: legacy annotation 기반 필터 (RG, BD, 4000개 절단)
-        kept_keys = _apply_preprocess_filter(all_keys)
+        # 2차: feature 기반 필터 (region / path_length / bat_amount 만 유지)
+        kept_keys = [
+            k for k in all_keys
+            if _classify_feature(raw_metas[k].instruction_slug) in _ALLOWED_FEATURES
+        ]
 
         for key in kept_keys:
             m = raw_metas[key]
@@ -265,7 +234,7 @@ class DungeonHandler(BaseGameHandler):
             game=GameTag.DUNGEON,
             source_id=source_id,
         )
-        array = _place_treasure(array, source_id)
+        # array = _place_treasure(array, source_id)
         return GameSample(
             game=GameTag.DUNGEON,
             source_id=source_id,

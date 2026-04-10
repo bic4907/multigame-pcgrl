@@ -75,32 +75,73 @@ _TREASURE_BIN_EDGES = [
 # bin → 대표 condition 값 (다른 enum의 CSV 기반 값과 동일한 패턴)
 _COLLECTABLE_BIN_TO_CONDITION: List[float] = [2.0, 4.0, 6.0, 8.0]
 
-_COLLECTABLE_INSTRUCTIONS: Dict[int, List[str]] = {
-    0: [
-        "A few treasures are scattered on the dungeon floor.",
-        "Sparse treasure placement with minimal pickups.",
-        "The dungeon contains a few collectables.",
-        "Minimal treasure can be found in this level.",
-    ],
-    1: [
-        "Some treasures are placed around the dungeon.",
-        "A moderate amount of treasure is hidden on the floor.",
-        "Several collectables are spread across the map.",
-        "The dungeon holds a decent number of treasures.",
-    ],
-    2: [
-        "Numerous treasures are scattered throughout the dungeon.",
-        "The floor is dotted with several collectables.",
-        "A generous amount of treasure awaits the player.",
-        "Multiple treasures are placed across the level.",
-    ],
-    3: [
-        "Many treasures fill the dungeon floor.",
-        "Treasures are abundantly spread across the map.",
-        "The dungeon is rich with collectables everywhere.",
-        "A large number of treasures dominate the floor tiles.",
-    ],
-}
+# reward_annotations CSV 에서 collectable instruction 을 로드하기 위한 경로
+_DEFAULT_REWARD_ANNOTATIONS_CSV = (
+    Path(__file__).parent.parent.parent
+    / "reward_annotations"
+    / "dungeon_reward_annotations.csv"
+)
+
+
+def _condition4_to_bin(cond: float) -> int:
+    """CSV condition_4 연속 값(0~9) → 4-bin (0~3) 매핑.
+
+    _TREASURE_BIN_EDGES 와 동일한 경계를 사용:
+        condition_4 ≤ 2  → bin 0  (few)
+        condition_4 ≤ 4  → bin 1  (some)
+        condition_4 ≤ 6  → bin 2  (several)
+        condition_4 > 6  → bin 3  (many)
+    """
+    for edge, bv in _TREASURE_BIN_EDGES:
+        if cond <= edge:
+            return bv
+    return 3
+
+
+def _load_collectable_instructions(
+    csv_path: Path | str = _DEFAULT_REWARD_ANNOTATIONS_CSV,
+) -> Dict[int, List[str]]:
+    """dungeon_reward_annotations.csv 에서 reward_enum=4 (collectable) 행을 읽어
+    bin → instruction_uni 리스트 dict 를 반환한다.
+
+    CSV 의 condition_4 연속 값을 ``_condition4_to_bin`` 으로 4-bin 으로 변환하고,
+    각 bin 에 해당하는 ``instruction_uni`` 텍스트를 중복 제거(unique) 하여 수집한다.
+    """
+    csv_path = Path(csv_path)
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"Reward annotations CSV not found: {csv_path}"
+        )
+
+    from collections import defaultdict
+
+    bin_instructions: Dict[int, List[str]] = defaultdict(list)
+    seen: Dict[int, set] = defaultdict(set)
+
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if row["reward_enum"] != "4":
+                continue
+            cond = float(row["condition_4"])
+            bv = _condition4_to_bin(cond)
+            instr = row["instruction_uni"]
+            if instr not in seen[bv]:
+                seen[bv].add(instr)
+                bin_instructions[bv].append(instr)
+
+    # 모든 bin 에 최소 1 개 instruction 이 있는지 검증
+    for b in range(4):
+        if not bin_instructions[b]:
+            raise ValueError(
+                f"No collectable instructions found for bin {b} "
+                f"in {csv_path}"
+            )
+
+    logger.info(
+        "Loaded collectable instructions from CSV: %s",
+        {b: len(v) for b, v in sorted(bin_instructions.items())},
+    )
+    return dict(bin_instructions)
 
 
 def _treasure_bin(count: int) -> int:
@@ -111,10 +152,21 @@ def _treasure_bin(count: int) -> int:
     return 3
 
 
-def _collectable_instruction(count: int, rng: np.random.RandomState) -> str:
-    """treasure 개수에 맞는 instruction 텍스트 생성."""
+def _collectable_instruction(
+    count: int,
+    rng: np.random.RandomState,
+    instructions: Dict[int, List[str]],
+) -> str:
+    """treasure 개수에 맞는 instruction 텍스트 생성.
+
+    Parameters
+    ----------
+    count        : 배치된 treasure 타일 개수
+    rng          : 랜덤 상태 (재현성)
+    instructions : bin → instruction 텍스트 리스트 (CSV 에서 로드)
+    """
     bv = _treasure_bin(count)
-    templates = _COLLECTABLE_INSTRUCTIONS[bv]
+    templates = instructions[bv]
     return templates[rng.randint(0, len(templates))]
 
 
@@ -187,6 +239,9 @@ class D5Handler(BaseGameHandler):
             self._metas.append(m)
             self._key_to_meta[m.key] = m
 
+        # ── collectable instructions 로드 (CSV 기반) ────────────────────────
+        self._collectable_instructions = _load_collectable_instructions()
+
         # ── collectable 샘플 선택 ────────────────────────────────────────────
         # 전체 키 중 랜덤으로 collectable_count 개 선택
         # _place_treasure 로 보물 배치 후 개수>0 인 것만 유지
@@ -209,7 +264,9 @@ class D5Handler(BaseGameHandler):
             if t_count == 0:
                 continue  # treasure 0 개 → collectable 에 부적합
             t_bin = _treasure_bin(t_count)
-            instr = _collectable_instruction(t_count, instr_rng)
+            instr = _collectable_instruction(
+                t_count, instr_rng, self._collectable_instructions,
+            )
             self._collectable_keys[key] = (t_count, t_bin, instr)
 
         # 통계 로그

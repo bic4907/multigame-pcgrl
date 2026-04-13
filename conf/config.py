@@ -400,8 +400,8 @@ class RewardConfig(Config):
     output_dim: int = 1
 
     figure_dir: str = "figures"
-    buffer_dir: str = "./pcgrl_buffer"
-    n_buffer: int = -1
+    buffer_dir: str = "./dataset"
+    buffer_raio: float = 1.0
     train_ratio: float = 0.8
     n_epochs: int = 100
 
@@ -423,9 +423,19 @@ class RewardConfig(Config):
     steps_per_epoch: Optional[int] = None
     warmup_epochs: int = 10  # set 10% of the total timesteps
 
+    max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+    max_samples_per_game: int = 1000  # 게임별 베이스 샘플 상한 (0=무제한)
+    max_samples_seed: int = 42  # max_samples_per_game 서브샘플링 시드
+
 @dataclass
 class RewardTrainConfig(RewardConfig):
     wandb_project: str = 'train_mlp_encoder'
+    wandb_key: Optional[str] = None
+
+    pretrained_model: str = "bert"
+    model_size: str = "base"
+
+    max_len: int = 77
 
     n_envs: int = 300
     ckpt_freq: int = 5

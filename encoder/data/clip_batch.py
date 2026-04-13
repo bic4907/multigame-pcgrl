@@ -71,6 +71,7 @@ class CLIPDatasetBuilder:
                  rng_key:jax.random.PRNGKey,
                  train_ratio:float=0.8,
                  max_len:int=77,
+                 max_samples: int = None,
                  ):
         self.processor = processor
         self.paired_data = paired_data
@@ -78,6 +79,7 @@ class CLIPDatasetBuilder:
 
         self.max_len = max_len
         self.train_ratio = train_ratio
+        self.max_samples = max_samples
 
         # Create game_name to index mapping
         unique_games = sorted(set([s.game for s in self.paired_data._samples]))
@@ -106,6 +108,12 @@ class CLIPDatasetBuilder:
 
     def preprocess_paired_data(self):
         samples = self.paired_data._samples
+
+        # ── max_samples: dry-run용 — 토큰화/전처리 전에 샘플 수를 제한 ──
+        if self.max_samples is not None and len(samples) > self.max_samples:
+            logger.info(f"[dry-run] max_samples={self.max_samples}: "
+                        f"samples {len(samples)} → {self.max_samples}")
+            samples = samples[:self.max_samples]
 
         # Filter out samples with None instruction (count logged after train/val split)
         n_before = len(samples)

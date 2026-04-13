@@ -50,7 +50,7 @@ def mlp_ckpt_dir(tmp_base):
     /tmp/.../mlp_exp/ckpts/<step>/ 구조로 저장된다.
     """
     mlp_exp_dir = os.path.join(tmp_base, "mlp_exp")
-    os.makedirs(mlp_exp_dir, exist_ok=True)
+    ckpt_dir = os.path.join(mlp_exp_dir, "ckpts")
 
     # Hydra 는 outputs/ 를 cwd 에 만들므로 /tmp 로 격리
     hydra_run_dir = os.path.join(tmp_base, "hydra_mlp")
@@ -67,6 +67,7 @@ def mlp_ckpt_dir(tmp_base):
             "encoder.model=mlp",
             "encoder.state=true",
             "encoder.output_dim=64",
+            f"exp_dir={mlp_exp_dir}",
             f"hydra.run.dir={hydra_run_dir}",
         ],
         cwd=_ROOT,
@@ -84,38 +85,15 @@ def mlp_ckpt_dir(tmp_base):
         f"stderr:\n{result.stderr[-3000:]}"
     )
 
-    # train_ipcgrl_encoder 이 저장한 체크포인트 탐색 — saves/ 또는 hydra cwd 아래
-    # checkpoints.save_checkpoint 은 config.exp_dir/ckpts/ 에 저장
-    # hydra 가 cwd 를 바꾸므로 hydra_run_dir 아래에서도 탐색
-    found_ckpts = None
-    for search_root in [_ROOT, hydra_run_dir]:
-        for dirpath, dirnames, filenames in os.walk(search_root):
-            if os.path.basename(dirpath) == "ckpts":
-                # flax checkpoint: <step> 이름의 숫자 파일이 존재
-                steps = [d for d in os.listdir(dirpath)
-                         if d.isdigit() or os.path.isfile(os.path.join(dirpath, d))]
-                if steps:
-                    found_ckpts = dirpath
-                    break
-        if found_ckpts:
-            break
-
-    assert found_ckpts is not None, (
-        "train_ipcgrl_encoder.py 가 체크포인트를 저장하지 않았습니다.\n"
-        f"searched: {_ROOT}, {hydra_run_dir}"
+    assert os.path.isdir(ckpt_dir), (
+        f"train_ipcgrl_encoder.py 가 체크포인트를 저장하지 않았습니다.\n"
+        f"expected: {ckpt_dir}"
     )
 
-    # /tmp/pretrained_encoders/test_mlp/ckpts 구조로 복사
-    pretrained_ckpt_dir = os.path.join(tmp_base, "pretrained_encoders", "test_mlp", "ckpts")
-    if os.path.exists(pretrained_ckpt_dir):
-        shutil.rmtree(pretrained_ckpt_dir)
-    shutil.copytree(found_ckpts, pretrained_ckpt_dir)
+    logger.info(f"[mlp_ckpt_dir] saved to: {ckpt_dir}")
+    logger.info(f"[mlp_ckpt_dir] contents: {os.listdir(ckpt_dir)}")
 
-    logger.info(f"[mlp_ckpt_dir] source: {found_ckpts}")
-    logger.info(f"[mlp_ckpt_dir] copied to: {pretrained_ckpt_dir}")
-    logger.info(f"[mlp_ckpt_dir] contents: {os.listdir(pretrained_ckpt_dir)}")
-
-    return pretrained_ckpt_dir
+    return ckpt_dir
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

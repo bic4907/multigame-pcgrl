@@ -316,14 +316,20 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
             texts.append("")  # placeholder
             has_text.append(False)
 
-    # 배치 토크나이즈
-    tokens = tokenizer(
-        texts, return_tensors="jax",
-        padding=True, truncation=True, max_length=128,
-    )
-    # BERT forward → [CLS] 토큰 임베딩
-    outputs = model(**tokens)
-    cls_embeddings = np.array(outputs.last_hidden_state[:, 0, :])  # (N, 768)
+    # 배치 단위로 BERT forward → OOM 방지
+    bert_batch_size = 64
+    all_cls = []
+    for i in range(0, len(texts), bert_batch_size):
+        batch_texts = texts[i: i + bert_batch_size]
+        tokens = tokenizer(
+            batch_texts, return_tensors="jax",
+            padding=True, truncation=True, max_length=128,
+        )
+        outputs = model(**tokens)
+        all_cls.append(np.array(outputs.last_hidden_state[:, 0, :]))
+        logger.info(f"BERT batch {i // bert_batch_size + 1}/{(len(texts) + bert_batch_size - 1) // bert_batch_size} done")
+
+    cls_embeddings = np.concatenate(all_cls, axis=0)  # (N, 768)
 
     # instruction 없는 샘플은 zeros
     for i, ht in enumerate(has_text):

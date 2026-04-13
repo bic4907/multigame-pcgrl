@@ -27,6 +27,11 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 logging.getLogger('absl').setLevel(logging.ERROR)
 
 
+class EmptyFoldError(ValueError):
+    """fold 필터 후 샘플이 0개일 때 발생."""
+    pass
+
+
 @dataclass
 class CLIPDataset:
     class_ids: np.ndarray
@@ -146,6 +151,11 @@ class CLIPDatasetBuilder:
                 f"5-fold (modulo): fold={self.fold} → {len(samples)}/{n_total} samples "
                 f"(level_idx%5=={self.fold} & reward_enum=={self.fold})"
             )
+            if len(samples) == 0:
+                raise EmptyFoldError(
+                    f"Fold {self.fold}: reward_enum={self.fold} 에 해당하는 샘플이 없습니다 "
+                    f"(해당 enum이 데이터셋에 존재하지 않거나 degenerate로 제거됨)"
+                )
 
         # Extract game types and create mapping to integer IDs (필터 이후 기준)
         games_type = [s.game for s in samples]  # N is the number of samples

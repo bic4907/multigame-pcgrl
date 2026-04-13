@@ -39,7 +39,7 @@ from encoder.schedular import create_learning_rate_fn
 from instruct_rl.utils.logger import get_wandb_name
 from encoder.utils.path import get_ckpt_dir, init_config
 from encoder.data import CLIPDatasetBuilder, CLIPEmbedData, CLIPDataset
-from encoder.data.clip_batch import create_clip_decoder_batch, CLIPDecoderBatch
+from encoder.data.clip_batch import create_clip_decoder_batch, CLIPDecoderBatch, EmptyFoldError
 
 from conf.config import CLIPDecoderTrainConfig
 
@@ -648,7 +648,10 @@ def make_train(config: CLIPDecoderTrainConfig):
         # fold 0~4 순서대로 직렬 실행
         for fold in range(5):
             rng_key, subkey = jax.random.split(rng_key)
-            _train_fold(fold, dataset, processor, subkey)
+            try:
+                _train_fold(fold, dataset, processor, subkey)
+            except EmptyFoldError as e:
+                logger.warning(f"Fold {fold} skipped: {e}")
 
     return lambda rng_key: train(rng_key)
 

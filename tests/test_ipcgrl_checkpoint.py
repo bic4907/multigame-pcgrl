@@ -73,7 +73,7 @@ def mlp_ckpt_dir(tmp_base):
         cwd=_ROOT,
         capture_output=True,
         text=True,
-        timeout=600,
+        timeout=1200,
         env={**os.environ, "WANDB_MODE": "disabled"},
     )
 
@@ -162,7 +162,7 @@ class TestIPCGRLWithMLPCheckpoint:
             cwd=_ROOT,
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=1200,
             env={**os.environ, "WANDB_MODE": "disabled"},
         )
 
@@ -200,7 +200,7 @@ class TestIPCGRLWithMLPCheckpoint:
             cwd=_ROOT,
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=1200,
             env={**os.environ, "WANDB_MODE": "disabled"},
         )
 

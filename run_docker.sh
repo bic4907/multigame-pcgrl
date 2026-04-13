@@ -4,6 +4,10 @@
 # Usage: ./run_docker.sh <command> [args...]
 # Example: ./run_docker.sh python train.py exp_name=test
 #          ./run_docker.sh wandb login
+#
+# 환경 변수:
+#   DOCKER_IMAGE  — 사용할 이미지 (기본: mgpcgrl:latest)
+#   GPU           — 사용할 GPU 번호 강제 지정 (기본: 여유 VRAM 가장 많은 GPU 자동 선택)
 
 # Get all command arguments
 COMMAND="$@"
@@ -14,17 +18,9 @@ if [ -z "$COMMAND" ]; then
     exit 1
 fi
 
-# CUDA 버전 확인 (nvidia-smi 사용)
-cuda_version=$(nvidia-smi | grep -oP "CUDA Version: \K[0-9]+")
-# 도커 이미지 선택
-if [ "$cuda_version" -eq 12 ]; then
-    docker_image="bic4907/multigame"
-elif [ "$cuda_version" -eq 11 ]; then
-    docker_image="bic4907/multigame"
-else
-    echo "Unsupported CUDA version: $cuda_version"
-    exit 1
-fi
+# 사용할 이미지 결정 (환경변수 DOCKER_IMAGE로 덮어쓰기 가능)
+docker_image="${DOCKER_IMAGE:-ghkdrmaghks/multigame}"
+echo "Using Docker image: $docker_image"
 
 # 로그 디렉토리 설정
 mkdir -p output_logs error_logs

@@ -300,30 +300,19 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
     logger.info("=" * 80)
 
 def make_train(config: CLIPDecoderTrainConfig):
-    def train(rng_key):
+
+    def _train_fold(fold, dataset, processor, rng_key):
+        """fold 하나에 대한 데이터 로딩 + 학습 전체를 처리."""
         rng_key, subkey = jax.random.split(rng_key)
-        dataset = MultiGameDataset(
-            include_dungeon=config.include_dungeon,
-            include_d2=config.include_d2,
-            include_d3=config.include_d3,
-            include_d5=config.include_d5,
-            include_pokemon=config.include_pokemon,
-            include_sokoban=config.include_sokoban,
-            include_doom=config.include_doom,
-            include_doom2=config.include_doom2,
-            include_zelda=config.include_zelda,
-        )
+        logger.info(f"=== Fold {fold} start ===")
 
-        # ── 학습 전 reward_enum / condition 범위 요약 출력 ──
-        _log_reward_condition_summary(dataset)
-
-        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         dataset_builder = CLIPDatasetBuilder(
             processor=processor,
             paired_data=dataset,
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
+            fold=fold,
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
@@ -383,7 +372,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             mode += "_state"
         config.encoder.mode = mode
 
-        # ── norm stats를 jnp 배열로 변환 (모델 내 역변환용) ──
+        # ── norm stats를 jnp 배열로 변환 (fold별로 재계산) ──
         num_cls = config.decoder.num_reward_classes
         norm_min_arr = jnp.array([cond_norm_min.get(i, 0.0) for i in range(num_cls)], dtype=jnp.float32)
         norm_max_arr = jnp.array([cond_norm_max.get(i, 1.0) for i in range(num_cls)], dtype=jnp.float32)
@@ -394,7 +383,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             cond_norm_max=norm_max_arr,
         )
 
-        logger.info("Start training CLIP + Decoder model")
+        logger.info(f"Fold {fold}: train={n_train}, val={n_test}, batches/epoch={n_train_batch}")
         logger.info(f"  contrastive_weight={config.contrastive_weight}, "
                     f"cls_weight={config.cls_weight}, reg_weight={config.reg_weight}")
 
@@ -403,7 +392,6 @@ def make_train(config: CLIPDecoderTrainConfig):
 
         for epoch in range(config.n_epochs):
             # ── 메트릭 초기화 ──
-            num_cls = config.decoder.num_reward_classes
             train_losses = {k: jnp.zeros(()) for k in [
                 "total", "contrastive", "state2text", "text2state", "cls", "reg"
             ]}
@@ -424,7 +412,6 @@ def make_train(config: CLIPDecoderTrainConfig):
             val_per_enum_mae = jnp.zeros(num_cls)
             val_per_enum_count = jnp.zeros(num_cls)
 
-            # scatter plot 버퍼 (raw scale)
             val_true_raw_buf = []
             val_pred_raw_buf = []
             val_enum_buf = []
@@ -432,7 +419,7 @@ def make_train(config: CLIPDecoderTrainConfig):
 
             i = 1
 
-            with tqdm(total=n_train_batch + n_test_batch, desc=f"Epoch {epoch + 1}") as pbar:
+            with tqdm(total=n_train_batch + n_test_batch, desc=f"Fold {fold} | Epoch {epoch + 1}") as pbar:
                 rng_key, subkey = jax.random.split(rng_key)
 
                 # ── Training Loop ──
@@ -472,7 +459,6 @@ def make_train(config: CLIPDecoderTrainConfig):
                     train_metrics["reward_accuracy"] += metrics["reward_accuracy"]
                     train_metrics["condition_mae_norm"] += metrics["condition_mae_norm"]
 
-                    # per-enum: count-weighted 누적 (나중에 count로 나눔)
                     train_per_enum_huber += metrics["per_enum_huber"] * metrics["per_enum_count"]
                     train_per_enum_mae += metrics["per_enum_mae"] * metrics["per_enum_count"]
                     train_per_enum_count += metrics["per_enum_count"]
@@ -531,7 +517,6 @@ def make_train(config: CLIPDecoderTrainConfig):
                     val_per_enum_mae += metrics["per_enum_mae"] * metrics["per_enum_count"]
                     val_per_enum_count += metrics["per_enum_count"]
 
-                    # scatter plot 버퍼 누적
                     reward_enum_0based = np.array(jax.device_get(batch.reward_enum_target))
                     pred_raw = np.array(jax.device_get(metrics["per_sample_cond_raw"]))
                     target_norm = np.array(jax.device_get(batch.condition_target))
@@ -557,7 +542,7 @@ def make_train(config: CLIPDecoderTrainConfig):
 
             # ── Checkpoint ──
             if (epoch + 1) % config.ckpt_freq == 0:
-                save_checkpoint(config, train_state, step=epoch + 1)
+                save_checkpoint(config, train_state, step=epoch + 1, fold=fold)
 
             # ── Embedding 시각화 ──
             if (epoch + 1) % config.embed_visualize_freq == 0:
@@ -575,6 +560,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             # ── W&B Logging ──
             if wandb.run is not None:
                 wandb.log({
+                    "fold": fold,
                     # Total
                     "total/train_loss": train_losses["total"],
                     "total/val_loss": val_losses["total"],
@@ -623,7 +609,7 @@ def make_train(config: CLIPDecoderTrainConfig):
                 all_true_raw = np.concatenate(val_true_raw_buf, axis=0)
                 all_pred_raw = np.concatenate(val_pred_raw_buf, axis=0)
                 all_enum = np.concatenate(val_enum_buf, axis=0)
-                scatter_dir = os.path.join(config.exp_dir, "scatter")
+                scatter_dir = os.path.join(config.exp_dir, f"scatter/fold{fold}")
                 scatter_paths = _create_condition_scatter_plots(
                     true_raw=all_true_raw,
                     pred_raw=all_pred_raw,
@@ -637,6 +623,32 @@ def make_train(config: CLIPDecoderTrainConfig):
                     wandb.log({
                         **{f"val_scatter/enum_{i}": wandb.Image(p) for i, p in enumerate(scatter_paths)}
                     })
+
+        logger.info(f"=== Fold {fold} done ===")
+
+    def train(rng_key):
+        # MultiGameDataset은 한 번만 로드 (fold 전체 공유)
+        dataset = MultiGameDataset(
+            include_dungeon=config.include_dungeon,
+            include_d2=config.include_d2,
+            include_d3=config.include_d3,
+            include_d5=config.include_d5,
+            include_pokemon=config.include_pokemon,
+            include_sokoban=config.include_sokoban,
+            include_doom=config.include_doom,
+            include_doom2=config.include_doom2,
+            include_zelda=config.include_zelda,
+        )
+
+        # 학습 전 reward_enum / condition 범위 요약 출력 (1회)
+        _log_reward_condition_summary(dataset)
+
+        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+        # fold 0~4 순서대로 직렬 실행
+        for fold in range(5):
+            rng_key, subkey = jax.random.split(rng_key)
+            _train_fold(fold, dataset, processor, subkey)
 
     return lambda rng_key: train(rng_key)
 
@@ -708,11 +720,13 @@ def get_train_state(config: CLIPDecoderTrainConfig, rng_key: jax.random.PRNGKey,
     return state, lr_schedular
 
 
-def save_checkpoint(config, state, step):
+def save_checkpoint(config, state, step, fold=None):
     ckpt_dir = get_ckpt_dir(config)
+    if fold is not None:
+        ckpt_dir = os.path.join(ckpt_dir, f"fold{fold}")
     ckpt_dir = os.path.abspath(ckpt_dir)
     checkpoints.save_checkpoint(ckpt_dir, target=state, prefix="", step=step, overwrite=True, keep=3)
-    logger.info(f"Checkpoint saved at step {step}")
+    logger.info(f"Checkpoint saved at step {step} (fold={fold})")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

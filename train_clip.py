@@ -122,7 +122,6 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
             "text_embed": text_embed,
             "text_state_temperature": text_state_temperature,
         }
-
         # compute losses and metrics for all directions
         for name, (a, b, masking, temperature) in embed_pairs.items():
             temperature = jnp.clip(temperature, jnp.log(0.01), jnp.log(100))
@@ -162,29 +161,19 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
 
 
 def make_train(config: CLIPTrainConfig):
-    def train(rng_key):
-        rng_key, subkey = jax.random.split(rng_key)
-        dataset = MultiGameDataset(
-            include_dungeon=config.include_dungeon,
-            include_d2=config.include_d2,
-            include_d3=config.include_d3,
-            include_d5=config.include_d5,
-            include_pokemon=config.include_pokemon,
-            include_sokoban=config.include_sokoban,
-            include_doom=config.include_doom,
-            include_doom2=config.include_doom2,
-            include_zelda=config.include_zelda,
-            max_samples_per_game=config.max_samples_per_game,
-            max_samples_seed=config.max_samples_seed,
-        )
 
-        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    def _train_fold(fold, dataset, processor, rng_key):
+        """fold 하나에 대한 데이터 로딩 + 학습 전체를 처리."""
+        rng_key, subkey = jax.random.split(rng_key)
+        logger.info(f"=== Fold {fold} start ===")
+
         dataset_builder = CLIPDatasetBuilder(
-            processor=processor, 
+            processor=processor,
             paired_data=dataset,
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
+            fold=fold,
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
@@ -215,23 +204,19 @@ def make_train(config: CLIPTrainConfig):
         n_train = len(train_clip_dataset.class_ids)
         n_test = len(test_clip_dataset.class_ids)
 
-        # Training loops
         n_train_batch = math.ceil(n_train / config.batch_size)
         n_test_batch = math.ceil(n_test / config.batch_size)
 
         config.steps_per_epoch = n_train_batch
 
         mode = "text"
-
         if config.encoder.state:
             mode += "_state"
-
         config.encoder.mode = mode
 
         train_state, lr_schedular = get_train_state(config, subkey)
 
-
-        logger.info("Start training model")
+        logger.info(f"Fold {fold}: train={n_train}, val={n_test}, batches/epoch={n_train_batch}")
 
         train_embed_queue = deque(maxlen=config.n_max_points)
         val_embed_queue = deque(maxlen=config.n_max_points)
@@ -253,25 +238,25 @@ def make_train(config: CLIPTrainConfig):
             }
             val_losses = deepcopy(train_losses)
             val_metrics = deepcopy(train_metrics)
-            
+
             i = 1
 
-            with tqdm(total=n_train_batch + n_test_batch, desc=f"Epoch {epoch + 1}") as pbar:
+            with tqdm(total=n_train_batch + n_test_batch, desc=f"Fold {fold} | Epoch {epoch + 1}") as pbar:
                 rng_key, subkey = jax.random.split(rng_key)
-                
+
                 # Training Loop
                 for clip_batch_data in create_clip_batch(train_clip_dataset, config.batch_size, rng_key=subkey):
                     class_ids = clip_batch_data.class_ids
                     clip_batch_data = jax.device_put(clip_batch_data)
-                    
+
                     train_state, loss, metrics, rng_key = train_step(
-                        train_state, 
+                        train_state,
                         clip_batch_data,
                         rng_key=subkey,
                         is_train=True,
                         mode=config.encoder.mode
                     )
-                    
+
                     state_embed = metrics["state_embed"]
                     text_embed = metrics["text_embed"]
 
@@ -281,32 +266,31 @@ def make_train(config: CLIPTrainConfig):
                     train_losses["total"] += loss
                     train_losses["state2text"] += metrics["state2text_loss"]
                     train_losses["text2state"] += metrics["text2state_loss"]
-                    
+
                     train_metrics["state2text_correct_pr"] += metrics["state2text_correct_pr"]
                     train_metrics["text2state_correct_pr"] += metrics["text2state_correct_pr"]
                     train_metrics["state2text_top1_accuracy"] += metrics["state2text_top1_accuracy"]
                     train_metrics["text2state_top1_accuracy"] += metrics["text2state_top1_accuracy"]
                     train_metrics["state2text_top3_accuracy"] += metrics["state2text_top3_accuracy"]
                     train_metrics["text2state_top3_accuracy"] += metrics["text2state_top3_accuracy"]
-
                     train_metrics["text_state_temperature"] += metrics["text_state_temperature"]
 
-                    pbar.update(1)  # update Progress bar
+                    pbar.update(1)
                     pbar.set_postfix({"Train Loss": train_losses['total'] / i, "Val Loss": val_losses['total']})
                     i += 1
 
-                train_losses = {k: float(v / n_train_batch) for k, v in train_losses.items()}  # calculate average Training Loss
-                train_metrics = {k: float(v / n_train_batch) for k, v in train_metrics.items()}  # calculate average Training Loss
-                
+                train_losses = {k: float(v / n_train_batch) for k, v in train_losses.items()}
+                train_metrics = {k: float(v / n_train_batch) for k, v in train_metrics.items()}
+
                 # Validation Loop
                 i = 1
 
                 for clip_batch_data in create_clip_batch(test_clip_dataset, config.batch_size, rng_key=subkey):
                     class_ids = clip_batch_data.class_ids
                     clip_batch_data = jax.device_put(clip_batch_data)
-                    
+
                     _, loss, metrics, rng_key = train_step(
-                        train_state, 
+                        train_state,
                         clip_batch_data,
                         is_train=False,
                         rng_key=subkey,
@@ -322,7 +306,7 @@ def make_train(config: CLIPTrainConfig):
                     val_losses["total"] += loss
                     val_losses["state2text"] += metrics["state2text_loss"]
                     val_losses["text2state"] += metrics["text2state_loss"]
-                    
+
                     val_metrics["state2text_correct_pr"] += metrics["state2text_correct_pr"]
                     val_metrics["text2state_correct_pr"] += metrics["text2state_correct_pr"]
                     val_metrics["state2text_top1_accuracy"] += metrics["state2text_top1_accuracy"]
@@ -330,21 +314,19 @@ def make_train(config: CLIPTrainConfig):
                     val_metrics["state2text_top3_accuracy"] += metrics["state2text_top3_accuracy"]
                     val_metrics["text2state_top3_accuracy"] += metrics["text2state_top3_accuracy"]
 
-                    pbar.update(1)  # update Progress bar
+                    pbar.update(1)
                     pbar.set_postfix({"Train Loss": train_losses['total'], "Val Loss": val_losses['total'] / i})
                     i += 1
 
-                val_losses = {k: float(v / n_test_batch) for k, v in val_losses.items()} # calculate Validation Loss
-                val_metrics = {k: float(v / n_test_batch) for k, v in val_metrics.items()} # calculate Validation Loss
+                val_losses = {k: float(v / n_test_batch) for k, v in val_losses.items()}
+                val_metrics = {k: float(v / n_test_batch) for k, v in val_metrics.items()}
 
             if (epoch + 1) % config.ckpt_freq == 0:
-                save_checkpoint(config, train_state, step=epoch + 1)
- 
-            if (epoch + 1) % config.embed_visualize_freq == 0:
+                save_checkpoint(config, train_state, step=epoch + 1, fold=fold)
 
+            if (epoch + 1) % config.embed_visualize_freq == 0:
                 task_train_embed_paths = create_clip_embedding_figures(train_embed_queue, class_id2reward_cond, epoch, config, postfix='_train')
                 task_val_embed_paths = create_clip_embedding_figures(val_embed_queue, class_id2reward_cond, epoch, config, postfix='_val')
-
                 aux_dict = {
                     "train_tsne/embed_all": wandb.Image(task_train_embed_paths),
                     "val_tsne/embed_all": wandb.Image(task_val_embed_paths),
@@ -354,8 +336,9 @@ def make_train(config: CLIPTrainConfig):
 
             if wandb.run is not None:
                 wandb.log({
-                    "total/train_loss": train_losses["total"], 
-                    
+                    "fold": fold,
+                    "total/train_loss": train_losses["total"],
+
                     "train(text-state)/state-text_temperature": train_metrics["text_state_temperature"],
                     "train(text-state)/state2text_loss": train_losses["state2text"],
                     "train(text-state)/text2state_loss": train_losses["text2state"],
@@ -365,9 +348,9 @@ def make_train(config: CLIPTrainConfig):
                     "train(text-state)/text2state_top1_accuracy": train_metrics["text2state_top1_accuracy"],
                     "train(text-state)/state2text_top3_accuracy": train_metrics["state2text_top3_accuracy"],
                     "train(text-state)/text2state_top3_accuracy": train_metrics["text2state_top3_accuracy"],
-                    
+
                     "total/val_loss": val_losses["total"],
-                    
+
                     "val(text-state)/state2text_loss": val_losses["state2text"],
                     "val(text-state)/text2state_loss": val_losses["text2state"],
                     "val(text-state)/state2text_correct_pr": val_metrics["state2text_correct_pr"],
@@ -382,6 +365,31 @@ def make_train(config: CLIPTrainConfig):
                     **aux_dict
                 })
 
+        logger.info(f"=== Fold {fold} done ===")
+
+    def train(rng_key):
+        # MultiGameDataset은 한 번만 로드 (fold 전체 공유)
+        dataset = MultiGameDataset(
+            include_dungeon=config.include_dungeon,
+            include_d2=config.include_d2,
+            include_d3=config.include_d3,
+            include_d5=config.include_d5,
+            include_pokemon=config.include_pokemon,
+            include_sokoban=config.include_sokoban,
+            include_doom=config.include_doom,
+            include_doom2=config.include_doom2,
+            include_zelda=config.include_zelda,
+            max_samples_per_game=config.max_samples_per_game,
+            max_samples_seed=config.max_samples_seed,
+        )
+        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+        folds = list(range(5))
+        logger.info(f"Running folds: {folds}")
+
+        for fold in folds:
+            rng_key, subkey = jax.random.split(rng_key)
+            _train_fold(fold, dataset, processor, subkey)
 
     return lambda rng_key: train(rng_key)
 
@@ -431,11 +439,13 @@ def get_train_state(config: CLIPTrainConfig, rng_key: jax.random.PRNGKey):
     return state, lr_schedular
 
 
-def save_checkpoint(config, state, step):
+def save_checkpoint(config, state, step, fold=None):
     ckpt_dir = get_ckpt_dir(config)
+    if fold is not None:
+        ckpt_dir = os.path.join(ckpt_dir, f"fold{fold}")
     ckpt_dir = os.path.abspath(ckpt_dir)
     checkpoints.save_checkpoint(ckpt_dir, target=state, prefix="", step=step, overwrite=True, keep=3)
-    logger.info(f"Checkpoint saved at step {step}")
+    logger.info(f"Checkpoint saved at step {step} (fold={fold})")
 
 
 

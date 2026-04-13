@@ -317,9 +317,11 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
             has_text.append(False)
 
     # 배치 단위로 BERT forward → OOM 방지
+    from tqdm import tqdm
     bert_batch_size = 64
     all_cls = []
-    for i in range(0, len(texts), bert_batch_size):
+    batches = range(0, len(texts), bert_batch_size)
+    for i in tqdm(batches, desc="BERT embeddings", unit="batch"):
         batch_texts = texts[i: i + bert_batch_size]
         tokens = tokenizer(
             batch_texts, return_tensors="jax",
@@ -327,7 +329,6 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
         )
         outputs = model(**tokens)
         all_cls.append(np.array(outputs.last_hidden_state[:, 0, :]))
-        logger.info(f"BERT batch {i // bert_batch_size + 1}/{(len(texts) + bert_batch_size - 1) // bert_batch_size} done")
 
     cls_embeddings = np.concatenate(all_cls, axis=0)  # (N, 768)
 

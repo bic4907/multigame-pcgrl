@@ -75,6 +75,13 @@ def create_batches(dataset: Dataset, batch_size: int):
 def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTrainConfig):
     dataset_samples = dataset._samples
 
+    # ── max_samples: dry-run용 — BERT 임베딩 계산 전에 샘플 수를 제한 ──
+    max_samples = getattr(config, 'max_samples', None)
+    if max_samples is not None and len(dataset_samples) > max_samples:
+        logger.info(f"[dry-run] max_samples={max_samples}: "
+                    f"dataset_samples {len(dataset_samples)} → {max_samples}")
+        dataset_samples = dataset_samples[:max_samples]
+
     games_type = [s.game for s in dataset_samples]
     unique_games = sorted(set(games_type))
     game2idx = {game: idx for idx, game in enumerate(unique_games)}
@@ -188,6 +195,7 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
                               embedding=embedding,
                               )
         del reward_enum, reward_id, reward, embedding, curr_env_map
+
 
     return dataset
 

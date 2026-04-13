@@ -401,7 +401,7 @@ class RewardConfig(Config):
 
     figure_dir: str = "figures"
     buffer_dir: str = "./dataset"
-    n_buffer: int = -1
+    buffer_raio: float = 1.0
     train_ratio: float = 0.8
     n_epochs: int = 100
 

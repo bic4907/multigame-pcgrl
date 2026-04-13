@@ -90,9 +90,6 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
 
     whole_inst = _build_instruct(sample_list=dataset_samples, config=config)
 
-    # dataset_samples 순서 기반 reward_id (0, 1, 2, ...)
-    sample_reward_id = np.arange(len(dataset_samples))
-
     whole_language_inst_list = [s.instruction for s in dataset_samples]
 
     whole_reward_enum_digits = []
@@ -122,6 +119,12 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
         unique_pair_indices = get_unique_pair_indices(
                 curr_env_map
             )
+
+        if config.buffer_ratio < 1.0:
+            n_total = len(unique_pair_indices)
+            n_sample = int(n_total * config.buffer_ratio)
+            unique_pair_indices = np.random.choice(unique_pair_indices, size=n_sample, replace=False)
+            logger.info(f"Subsampling buffer: {n_total} → {n_sample} samples (buffer_ratio={config.buffer_ratio})")
 
         curr_env_map = curr_env_map[unique_pair_indices]
 

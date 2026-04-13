@@ -64,6 +64,7 @@ def mlp_ckpt_dir(tmp_base):
             f"max_samples=32",
             "batch_size=8",
             "seed=0",
+            "buffer_ratio=0.1",
             "encoder.model=mlp",
             "encoder.state=true",
             "encoder.output_dim=64",

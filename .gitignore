@@ -30,6 +30,7 @@ vision_level_gpt
 pcgrl_buffer
 
 .env
+.netrc
 vision_level_gpt.zip
 human_dataset*
 

@@ -419,7 +419,7 @@ def make_train(config: CLIPDecoderTrainConfig):
 
             i = 1
 
-            with tqdm(total=n_train_batch + n_test_batch, desc=f"Fold {fold} | Epoch {epoch + 1}") as pbar:
+            with tqdm(total=n_train_batch + n_test_batch, desc=f"Epoch {epoch + 1}") as pbar:
                 rng_key, subkey = jax.random.split(rng_key)
 
                 # ── Training Loop ──
@@ -542,7 +542,7 @@ def make_train(config: CLIPDecoderTrainConfig):
 
             # ── Checkpoint ──
             if (epoch + 1) % config.ckpt_freq == 0:
-                save_checkpoint(config, train_state, step=epoch + 1, fold=fold)
+                save_checkpoint(config, train_state, step=epoch + 1)
 
             # ── Embedding 시각화 ──
             if (epoch + 1) % config.embed_visualize_freq == 0:
@@ -560,7 +560,6 @@ def make_train(config: CLIPDecoderTrainConfig):
             # ── W&B Logging ──
             if wandb.run is not None:
                 wandb.log({
-                    "fold": fold,
                     # Total
                     "total/train_loss": train_losses["total"],
                     "total/val_loss": val_losses["total"],
@@ -723,13 +722,11 @@ def get_train_state(config: CLIPDecoderTrainConfig, rng_key: jax.random.PRNGKey,
     return state, lr_schedular
 
 
-def save_checkpoint(config, state, step, fold=None):
+def save_checkpoint(config, state, step):
     ckpt_dir = get_ckpt_dir(config)
-    if fold is not None:
-        ckpt_dir = os.path.join(ckpt_dir, f"fold{fold}")
     ckpt_dir = os.path.abspath(ckpt_dir)
     checkpoints.save_checkpoint(ckpt_dir, target=state, prefix="", step=step, overwrite=True, keep=3)
-    logger.info(f"Checkpoint saved at step {step} (fold={fold})")
+    logger.info(f"Checkpoint saved at step {step}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

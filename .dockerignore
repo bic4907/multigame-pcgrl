@@ -1,0 +1,44 @@
+# Git
+.git
+.gitmodules
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+dist/
+build/
+
+# Dataset submodules (large binary data — mounted or pre-cloned)
+dataset/TheVGLC
+dataset/dungeon_level_dataset
+dataset/boxoban_levels
+dataset/five-dollar-model
+
+# Outputs / checkpoints
+outputs/
+saves/
+output_logs/
+error_logs/
+debug/
+*.log
+
+# Jupyter
+.ipynb_checkpoints
+notebooks/
+
+# IDE / OS
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Secrets / credentials
+.env
+.netrc
+
+# HuggingFace cache (large)
+cache/

@@ -217,7 +217,7 @@ def make_train(config: CLIPTrainConfig):
 
         train_state, lr_schedular = get_train_state(config, subkey)
 
-        logger.info(f"Fold {fold}: train={n_train}, val={n_test}, batches/epoch={n_train_batch}")
+        logger.info(f"Start training model (fold={fold}, train={n_train}, val={n_test})")
 
         train_embed_queue = deque(maxlen=config.n_max_points)
         val_embed_queue = deque(maxlen=config.n_max_points)
@@ -242,7 +242,7 @@ def make_train(config: CLIPTrainConfig):
 
             i = 1
 
-            with tqdm(total=n_train_batch + n_test_batch, desc=f"Fold {fold} | Epoch {epoch + 1}") as pbar:
+            with tqdm(total=n_train_batch + n_test_batch, desc=f"Epoch {epoch + 1}") as pbar:
                 rng_key, subkey = jax.random.split(rng_key)
 
                 # Training Loop
@@ -323,7 +323,7 @@ def make_train(config: CLIPTrainConfig):
                 val_metrics = {k: float(v / n_test_batch) for k, v in val_metrics.items()}
 
             if (epoch + 1) % config.ckpt_freq == 0:
-                save_checkpoint(config, train_state, step=epoch + 1, fold=fold)
+                save_checkpoint(config, train_state, step=epoch + 1)
 
             if (epoch + 1) % config.embed_visualize_freq == 0:
                 task_train_embed_paths = create_clip_embedding_figures(train_embed_queue, class_id2reward_cond, epoch, config, postfix='_train')
@@ -337,7 +337,6 @@ def make_train(config: CLIPTrainConfig):
 
             if wandb.run is not None:
                 wandb.log({
-                    "fold": fold,
                     "total/train_loss": train_losses["total"],
 
                     "train(text-state)/state-text_temperature": train_metrics["text_state_temperature"],
@@ -443,13 +442,11 @@ def get_train_state(config: CLIPTrainConfig, rng_key: jax.random.PRNGKey):
     return state, lr_schedular
 
 
-def save_checkpoint(config, state, step, fold=None):
+def save_checkpoint(config, state, step):
     ckpt_dir = get_ckpt_dir(config)
-    if fold is not None:
-        ckpt_dir = os.path.join(ckpt_dir, f"fold{fold}")
     ckpt_dir = os.path.abspath(ckpt_dir)
     checkpoints.save_checkpoint(ckpt_dir, target=state, prefix="", step=step, overwrite=True, keep=3)
-    logger.info(f"Checkpoint saved at step {step} (fold={fold})")
+    logger.info(f"Checkpoint saved at step {step}")
 
 
 

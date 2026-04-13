@@ -19,6 +19,7 @@ import jax
 import jax.numpy as jnp
 
 from instruct_rl.utils.level_processing_utils import mutate_level_fn, map2onehot_batch, add_coord_channel_batch
+from dataset.reward_annotations.instruction_config import CUSTOM_THRESHOLDS
 
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()  # Add the environment variable ;LOG_LEVEL=DEBUG
 logger = logging.getLogger(basename(__file__))
@@ -36,6 +37,7 @@ class CLIPDataset:
     is_train: np.ndarray
     reward_enum_targets: np.ndarray = None   # (N,) 0-indexed reward_enum
     condition_targets: np.ndarray = None     # (N,) condition float value
+    quantized_condition_targets: np.ndarray = None  # (N,) quantized bin index (0~3, CUSTOM_THRESHOLDS 기준)
 
 @dataclass
 class CLIPEmbedData:
@@ -104,6 +106,7 @@ class CLIPDatasetBuilder:
                 is_train=np.array(self.preprocessed_dataset_dict["is_train"]),
                 reward_enum_targets=np.array(self.preprocessed_dataset_dict["reward_enum_targets"]),
                 condition_targets=np.array(self.preprocessed_dataset_dict["condition_targets"]),
+                quantized_condition_targets=np.array(self.preprocessed_dataset_dict["quantized_condition_targets"]),
             )
 
     def preprocess_paired_data(self):
@@ -139,24 +142,51 @@ class CLIPDatasetBuilder:
 
         # Extract reward annotation (game_name, reward_enum, conditions) combination
         reward_cond_list = []
+        quantized_cond_list = []
         for s in samples:
             game_idx = self.game2idx.get(s.game, -1)  # Get game index
             reward_enum = s.meta.get("reward_enum", 0)
             conditions = s.meta.get("conditions", {})
             # reward_enum에 해당하는 condition 값을 사용 (없으면 첫 번째 값 fallback)
             condition_value = conditions.get(reward_enum, next(iter(conditions.values()), None))
-            # Create tuple: (game_idx, reward_enum, condition_value)
+
+            # ── CUSTOM_THRESHOLDS 기반 condition 양자화 ──
+            feature_name = s.meta.get("feature_name", "")
+            threshold_key = f"{s.game}_{feature_name}"
+            thresholds = CUSTOM_THRESHOLDS.get(threshold_key)
+            if thresholds is not None and condition_value is not None:
+                quantized_bin = int(np.digitize(condition_value, thresholds))  # 0, 1, 2, 3
+            else:
+                quantized_bin = 0  # threshold 없는 조합은 단일 bin
+
             reward_cond_tuple = (game_idx, int(reward_enum), condition_value)
             reward_cond_list.append(reward_cond_tuple)
+            quantized_cond_list.append(quantized_bin)
 
-        # Generate class_id based on unique (game_name, reward_enum, conditions) combinations
-        unique_reward_cond = sorted(set(reward_cond_list))
-        reward_cond2class_id = {rc: idx for idx, rc in enumerate(unique_reward_cond)}
-        class_ids = np.array([reward_cond2class_id[rc] for rc in reward_cond_list])
+        # ── class_id: 양자화된 condition 기준 (game_idx, reward_enum, quantized_bin) ──
+        quantized_reward_cond_list = [
+            (rc[0], rc[1], q_bin)
+            for rc, q_bin in zip(reward_cond_list, quantized_cond_list)
+        ]
+        unique_quantized_rc = sorted(set(quantized_reward_cond_list))
+        quantized_rc2class_id = {rc: idx for idx, rc in enumerate(unique_quantized_rc)}
+        class_ids = np.array([quantized_rc2class_id[rc] for rc in quantized_reward_cond_list])
 
-        # Store the mapping for reference
-        self.reward_cond2class_id = reward_cond2class_id
-        self.class_id2reward_cond = {v: k for k, v in reward_cond2class_id.items()}
+        # Store the mapping for reference (양자화 기준)
+        self.reward_cond2class_id = quantized_rc2class_id
+        self.class_id2reward_cond = {v: k for k, v in quantized_rc2class_id.items()}
+
+        # ── 양자화 요약 로그 ──
+        from collections import defaultdict
+        _game_bins = defaultdict(dict)  # {game_name: {enum: n_bins}}
+        for (g_idx, re, q_bin) in set(quantized_reward_cond_list):
+            g_name = self.idx2game.get(g_idx, "?")
+            _game_bins[g_name][re] = _game_bins[g_name].get(re, 0) + 1
+        logger.info(f"Condition quantization: {len(set(reward_cond_list))} raw → "
+                     f"{len(unique_quantized_rc)} quantized classes")
+        for g_name in sorted(_game_bins):
+            parts = [f"e{re}:{nb}" for re, nb in sorted(_game_bins[g_name].items())]
+            logger.info(f"  {g_name}: {', '.join(parts)}")
 
         # Keep reward_cond as structured data
         reward_cond = np.array([
@@ -164,9 +194,10 @@ class CLIPDatasetBuilder:
                 "game_idx": rc[0],
                 "game_name": self.idx2game.get(rc[0], "unknown"),
                 "reward_enum": rc[1],
-                "condition_value": rc[2]
+                "condition_value": rc[2],
+                "quantized_bin": q_bin,
             }
-            for rc in reward_cond_list
+            for rc, q_bin in zip(reward_cond_list, quantized_cond_list)
         ], dtype=object)
 
         # Language instruction tokenization
@@ -227,6 +258,8 @@ class CLIPDatasetBuilder:
         for eidx in unique_enums:
             logger.info(f"  enum {eidx}: min={cond_norm_min[eidx]:.2f}, max={cond_norm_max[eidx]:.2f}")
 
+        quantized_condition_targets = np.array(quantized_cond_list, dtype=np.int32)
+
         return {
             "game_type":            games_type,
             "class_ids":            class_ids,
@@ -238,6 +271,7 @@ class CLIPDatasetBuilder:
             "is_train":             is_train,
             "reward_enum_targets":  reward_enum_targets,
             "condition_targets":    condition_targets,
+            "quantized_condition_targets": quantized_condition_targets,
         }
 
     
@@ -259,6 +293,7 @@ class CLIPDatasetBuilder:
             is_train=self.dataset.is_train[train_mask],
             reward_enum_targets=self.dataset.reward_enum_targets[train_mask],
             condition_targets=self.dataset.condition_targets[train_mask],
+            quantized_condition_targets=self.dataset.quantized_condition_targets[train_mask],
         )
         test_dataset = CLIPDataset(
             class_ids=self.dataset.class_ids[test_mask],
@@ -269,6 +304,7 @@ class CLIPDatasetBuilder:
             is_train=self.dataset.is_train[test_mask],
             reward_enum_targets=self.dataset.reward_enum_targets[test_mask],
             condition_targets=self.dataset.condition_targets[test_mask],
+            quantized_condition_targets=self.dataset.quantized_condition_targets[test_mask],
         )
 
         return train_dataset, test_dataset

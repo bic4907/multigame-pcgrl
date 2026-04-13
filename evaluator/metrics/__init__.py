@@ -22,10 +22,11 @@ from .base import (
     auc_roc_score,
     roc_curve_points,
 )
-from .clip_score import CLIPScoreMetric
-from .tpkl      import TPKLMetric
-from .ssim      import SSIMMetric
-from .lpips     import LPIPSMetric
+from .clip_score      import CLIPScoreMetric
+from .tpkl            import TPKLMetric
+from .ssim            import SSIMMetric
+from .lpips           import LPIPSMetric
+from .shannon_entropy import ShannonEntropyMetric
 
 __all__ = [
     # 데이터 타입
@@ -38,6 +39,7 @@ __all__ = [
     "TPKLMetric",
     "SSIMMetric",
     "LPIPSMetric",
+    "ShannonEntropyMetric",
     # 통계 유틸
     "extract_pair_scores",
     "auc_roc_score",

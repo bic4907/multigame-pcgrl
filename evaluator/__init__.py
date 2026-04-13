@@ -8,6 +8,7 @@ from .metrics import (
     TPKLMetric,
     SSIMMetric,
     LPIPSMetric,
+    ShannonEntropyMetric,
 )
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "TPKLMetric",
     "SSIMMetric",
     "LPIPSMetric",
+    "ShannonEntropyMetric",
 ]

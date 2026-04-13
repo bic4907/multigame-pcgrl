@@ -30,7 +30,9 @@ class LPIPSMetric(BaseMetricEvaluator):
     """
 
     def __init__(self, net: str = "alex") -> None:
-        import lpips as _lpips_lib
+        import importlib
+        # 파일명 충돌 방지: 외부 lpips 패키지를 직접 지정해서 로드
+        _lpips_lib = importlib.import_module("lpips")
         self.net = net
         self._loss_fn = _lpips_lib.LPIPS(net=net, verbose=False)
         self._loss_fn.eval()

@@ -12,11 +12,8 @@ import logging
 import shutil
 import numpy as np
 from functools import partial
-from typing import Any
 import os
-from flax.training import checkpoints
 from flax.training.train_state import TrainState
-from flax.core import freeze
 from jax import jit
 import jax.numpy as jnp
 from jax.experimental.array_serialization.serialization import logger
@@ -26,6 +23,7 @@ from dataset.multigame import MultiGameDataset
 from encoder.schedular import create_learning_rate_fn
 from instruct_rl.utils.logger import get_wandb_name
 from encoder.utils.path import (get_ckpt_dir, init_config)
+from encoder.utils.training import build_multigame_dataset, save_encoder_checkpoint, setup_wandb
 from encoder.data import create_dataset, split_dataset, create_batches, EmbedData, create_embedding_table
 
 from conf.config import RewardConfig
@@ -105,13 +103,7 @@ def train_step(train_state: TrainState, X_batch, y_batch, rng, lr_rate_fn, is_tr
 
 def make_train(config: RewardConfig):
     def train(rng):
-        dataset = MultiGameDataset(include_dungeon=True,
-                                   include_sokoban=False,
-                                   include_pokemon=False,
-                                   include_zelda=False,
-                                   include_doom=False,
-                                   include_doom2=False,
-                                   include_boxoban=False)
+        dataset = build_multigame_dataset(config)
 
         database = create_dataset(config.buffer_dir, dataset, config=config)
         reward_max, reward_min = np.max(database.reward), np.min(database.reward)
@@ -200,7 +192,7 @@ def make_train(config: RewardConfig):
                 val_losses = {k: float(v / n_test_batch) for k, v in val_losses.items()}  # Validation Loss 평균 계산
 
             if (epoch + 1) % config.ckpt_freq == 0:
-                save_checkpoint(config, train_state, step=epoch + 1)
+                save_encoder_checkpoint(config, train_state, step=epoch + 1)
 
             rand_train_idx = np.random.choice(len(train_y_gt), min(len(train_y_gt), 1000), replace=False)
             rand_val_idx = np.random.choice(len(val_y_gt), min(len(val_y_gt), 1000), replace=False)
@@ -324,11 +316,6 @@ def get_train_state(config: RewardConfig, rng: jax.random.PRNGKey):
     return state, lr_schedular
 
 
-def save_checkpoint(config, state, step):
-    ckpt_dir = get_ckpt_dir(config)
-    ckpt_dir = os.path.abspath(ckpt_dir)
-    checkpoints.save_checkpoint(ckpt_dir, target=state, prefix="", step=step, overwrite=True, keep=3)
-    logger.info(f"Checkpoint saved at step {step}")
 
 
 @hydra.main(version_base=None, config_path='./conf', config_name='train_reward')
@@ -341,18 +328,7 @@ def main(config: RewardConfig):
     rng = jax.random.PRNGKey(config.seed)
     np.random.seed(config.seed)
 
-    if config.wandb_key:
-        dt = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        wandb_id = f'{get_wandb_name(config)}-{dt}'
-        wandb.login(key=config.wandb_key)
-        wandb.init(
-            project=config.wandb_project,
-            group=config.instruct,
-            entity=config.wandb_entity,
-            name=get_wandb_name(config),
-            id=wandb_id,
-            save_code=True)
-        wandb.config.update(dict(config), allow_val_change=True)
+    setup_wandb(config)
 
     exp_dir = config.exp_dir
     logger.info(f'jax devices: {jax.devices()}')

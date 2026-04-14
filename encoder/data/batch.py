@@ -104,14 +104,27 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
         [x + [0] * (max_re_len - len(x)) for x in whole_reward_enum_digits]
     )  # (n_samples, max_re_len)
 
+    # 단일 npz 를 한 번만 로드 (키: {game}_re{rn} 형태)
+    import re as _re
+    npz_path = os.path.join(buffer_dir, 'cpcgrl_buffer', 'cpcgrl_pair_dataset.npz')
+    _npz_data = np.load(npz_path, allow_pickle=True)
+    _npz_game_keys: dict[str, list[str]] = {}  # game → [key, ...]
+    for _k in _npz_data.files:
+        _m = _re.match(r"^(\w+)_re(\d+)$", _k)
+        if _m:
+            _npz_game_keys.setdefault(_m.group(1), []).append(_k)
+    logger.info(f"Buffer npz keys by game: { {g: len(ks) for g, ks in _npz_game_keys.items()} }")
+
     dataset = None
     for game in unique_games:
-        # file_list = os.path.join(buffer_dir, game, '*.npz') # TODO: 데이터셋 구조에 맞게 추후 수정
-        file = os.path.join(buffer_dir, 'cpcgrl_buffer', 'cpcgrl_pair_dataset.npz')
+        # 현재 게임에 해당하는 키들의 pairs 를 합침
+        game_keys = sorted(_npz_game_keys.get(game, []))
+        if not game_keys:
+            # 게임 키가 없으면 전체 키 사용 (backward compat)
+            game_keys = sorted(k for ks in _npz_game_keys.values() for k in ks)
+            logger.warning(f"No buffer keys for game={game!r}, using all {len(game_keys)} keys")
 
-        data = np.load(file, allow_pickle=True)
-
-        arr_env_map = data['env_map_pairs']
+        arr_env_map = np.concatenate([_npz_data[k] for k in game_keys], axis=0)
 
         # prev_env_map = arr_env_map[:, 0, :, :]
         curr_env_map = arr_env_map[:, 1, :, :]
@@ -199,6 +212,7 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
                               )
         del reward_enum, reward_id, reward, embedding, curr_env_map
 
+    _npz_data.close()
 
     return dataset
 

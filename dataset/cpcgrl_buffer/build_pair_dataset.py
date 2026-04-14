@@ -2,22 +2,22 @@
 """
 dataset/cpcgrl_buffer/build_pair_dataset.py
 ============================================
-saves/ 폴더의 CPCGRL 학습 버퍼(.npz)를 reward_enum 별로 읽어서
+saves/ 폴더의 CPCGRL 학습 버퍼(.npz)를 (game, reward_enum) 별로 읽어서
 연속 쌍 (env_map[t], env_map[t+1]) 을 구성하고,
-re-1~5 에서 골고루 추출 · 중복 제거 후 **단일 .npz 파일**로 저장한다.
+중복 제거 후 **(game, re) 별 개별 .npz 파일**로 저장한다.
 
-출력:
-    dataset/cpcgrl_buffer/cpcgrl_pair_dataset.npz
-        - env_map_pairs  : (N, 2, 16, 16) int32   # (before, after) 쌍
-        - reward_enums   : (N,) int32              # 각 쌍의 reward_enum 라벨
-        - timesteps      : (N,) int64              # 각 쌍의 시작 timestep
-    dataset/cpcgrl_buffer/metadata.json
-        - 데이터 개수, 타일 최대/최소값, 생성 PC, 생성 시간 등
+출력 (dataset/cpcgrl_buffer/pairs/ 아래):
+    pairs_{game}_re{re}.npz   ← 각 (game, re) 조합
+        - env_map_pairs  : (N, 2, 16, 16) int32
+        - reward_enums   : (N,) int32
+        - timesteps      : (N,) int64
+    metadata.json
+        - 전체 통계 + 파일 목록
 
 Usage:
     python dataset/cpcgrl_buffer/build_pair_dataset.py \\
         [--saves_dir saves] \\
-        [--pairs_per_re 4000] \\
+        [--pairs_per_group 50000] \\
         [--seed 42]
 """
 from __future__ import annotations
@@ -36,12 +36,15 @@ import numpy as np
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-def parse_reward_enum(dirname: str) -> int | None:
-    """디렉토리 이름에서 reward_enum 번호 추출.
-    예: '..._re-3_vec_ro_s-0' → 3,  '..._re-4-_vec_ro_s-0' → 4
+def parse_game_and_re(dirname: str) -> tuple[str | None, int | None]:
+    """디렉토리 이름에서 game 이름과 reward_enum 번호 추출.
+    예: 'buffer-exp-cb_game-doom_re-3_vec_ro_s-0' → ('doom', 3)
     """
-    m = re.search(r"_re-(\d+)-?_", dirname)
-    return int(m.group(1)) if m else None
+    gm = re.search(r"_game-(\w+)_", dirname)
+    rm = re.search(r"_re-(\d+)-?_", dirname)
+    game = gm.group(1) if gm else None
+    rn = int(rm.group(1)) if rm else None
+    return game, rn
 
 
 def load_buffer_dir(buffer_dir: str):
@@ -80,7 +83,6 @@ def make_pairs(env_maps, dones, timesteps):
 
 def deduplicate_pairs(pairs: np.ndarray) -> np.ndarray:
     """env_map 쌍 단위로 완전 동일한 행 제거. 반환: 고유 행 인덱스."""
-    # (N, 2, H, W) → (N, 2*H*W)  바이트 뷰로 비교
     flat = pairs.reshape(pairs.shape[0], -1)
     _, unique_idx = np.unique(flat, axis=0, return_index=True)
     unique_idx.sort()
@@ -91,129 +93,161 @@ def deduplicate_pairs(pairs: np.ndarray) -> np.ndarray:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="CPCGRL buffer → deduplicated pair dataset (single file)"
+        description="CPCGRL buffer → per-(game, re) pair datasets"
     )
     parser.add_argument("--saves_dir", default="saves")
-    parser.add_argument("--pairs_per_re", type=int, default=50000,
-                        help="reward_enum 당 추출할 쌍 수")
+    parser.add_argument("--pairs_per_group", type=int, default=50000,
+                        help="(game, re) 그룹 당 최대 추출 쌍 수")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     rng = np.random.default_rng(args.seed)
-    out_dir = os.path.join("dataset", "cpcgrl_buffer")
+    out_dir = os.path.join("dataset", "cpcgrl_buffer", "pairs")
     os.makedirs(out_dir, exist_ok=True)
 
-    # 1. reward_enum 별 버퍼 탐색
+    # 1. (game, reward_enum) 별 버퍼 탐색
     exp_dirs = sorted(glob.glob(os.path.join(args.saves_dir, "*_vec_ro_s-*")))
-    re_bufs: dict[int, str] = {}
+    group_bufs: dict[tuple[str, int], str] = {}  # (game, re) → buffer_dir
     for ed in exp_dirs:
-        rn = parse_reward_enum(os.path.basename(ed))
-        if rn is None:
+        game, rn = parse_game_and_re(os.path.basename(ed))
+        if game is None or rn is None:
             continue
         bd = os.path.join(ed, "buffer")
         if os.path.isdir(bd) and glob.glob(os.path.join(bd, "*.npz")):
-            re_bufs[rn] = bd
+            group_bufs[(game, rn)] = bd
 
-    found = sorted(re_bufs.keys())
-    print(f"Found reward_enums: {found}")
+    found = sorted(group_bufs.keys())
+    games_found = sorted(set(g for g, _ in found))
+    res_found = sorted(set(r for _, r in found))
+    print(f"Found {len(found)} (game, re) groups")
+    print(f"  games: {games_found}")
+    print(f"  reward_enums: {res_found}")
     assert found, "No buffer dirs found!"
 
-    # 2. re 별 쌍 추출
-    all_pairs, all_re, all_ts = [], [], []
-    for rn in found:
-        print(f"\n[re-{rn}] {re_bufs[rn]}")
-        env_maps, dones, timesteps = load_buffer_dir(re_bufs[rn])
+    # 2. 그룹 별 쌍 추출 & 개별 파일 저장
+    file_manifest = []
+    total_pairs = 0
+    total_before_dedup = 0
+
+    for game, rn in found:
+        buf_dir = group_bufs[(game, rn)]
+        print(f"\n[{game}/re-{rn}] {buf_dir}")
+
+        env_maps, dones, timesteps = load_buffer_dir(buf_dir)
         print(f"  transitions: {env_maps.shape[0]}")
 
         pairs, pts = make_pairs(env_maps, dones, timesteps)
         print(f"  candidate pairs: {pairs.shape[0]}")
 
         if pairs.shape[0] == 0:
-            print(f"  WARNING: skip re-{rn}")
+            print(f"  WARNING: skip {game}/re-{rn}")
             continue
 
-        n_sample = min(args.pairs_per_re, pairs.shape[0])
+        # 샘플링
+        n_sample = min(args.pairs_per_group, pairs.shape[0])
         idx = rng.choice(pairs.shape[0], size=n_sample, replace=False)
         idx.sort()
-
-        all_pairs.append(pairs[idx])
-        all_re.append(np.full(n_sample, rn, dtype=np.int32))
-        all_ts.append(pts[idx])
+        pairs = pairs[idx]
+        pts = pts[idx]
+        re_arr = np.full(n_sample, rn, dtype=np.int32)
         print(f"  sampled: {n_sample}")
 
-    # 3. 병합
-    merged_pairs = np.concatenate(all_pairs, axis=0)   # (N_raw, 2, H, W)
-    merged_re = np.concatenate(all_re, axis=0)         # (N_raw,)
-    merged_ts = np.concatenate(all_ts, axis=0)         # (N_raw,)
+        # 중복 제거
+        n_before = pairs.shape[0]
+        uniq_idx = deduplicate_pairs(pairs)
+        pairs = pairs[uniq_idx]
+        re_arr = re_arr[uniq_idx]
+        pts = pts[uniq_idx]
+        print(f"  after dedup: {pairs.shape[0]} (removed {n_before - pairs.shape[0]})")
 
-    print(f"\nMerged (before dedup): {merged_pairs.shape[0]}")
+        # 셔플
+        perm = rng.permutation(pairs.shape[0])
+        pairs = pairs[perm]
+        re_arr = re_arr[perm]
+        pts = pts[perm]
 
-    # 4. 중복 제거
-    uniq_idx = deduplicate_pairs(merged_pairs)
-    merged_pairs = merged_pairs[uniq_idx]
-    merged_re = merged_re[uniq_idx]
-    merged_ts = merged_ts[uniq_idx]
+        # 저장
+        fname = f"pairs_{game}_re{rn}.npz"
+        fpath = os.path.join(out_dir, fname)
+        np.savez_compressed(
+            fpath,
+            env_map_pairs=pairs,
+            reward_enums=re_arr,
+            timesteps=pts,
+        )
 
-    print(f"After dedup: {merged_pairs.shape[0]}")
+        fsize = os.path.getsize(fpath)
+        file_manifest.append({
+            "file": fname,
+            "game": game,
+            "reward_enum": rn,
+            "n_pairs": int(pairs.shape[0]),
+            "n_before_dedup": n_before,
+            "tile_min": int(pairs.min()),
+            "tile_max": int(pairs.max()),
+            "file_size_kb": round(fsize / 1024, 1),
+        })
+        total_pairs += pairs.shape[0]
+        total_before_dedup += n_before
+        print(f"  saved: {fpath} ({fsize / 1024:.0f} KB)")
 
-    # 5. 셔플
-    perm = rng.permutation(merged_pairs.shape[0])
-    merged_pairs = merged_pairs[perm]
-    merged_re = merged_re[perm]
-    merged_ts = merged_ts[perm]
-
-    # 6. 메타데이터 수집
-    re_dist = {int(rn): int((merged_re == rn).sum()) for rn in found}
+    # 3. 전체 메타데이터 저장
     metadata = {
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "hostname": socket.gethostname(),
         "platform": platform.platform(),
         "seed": args.seed,
-        "pairs_per_re_requested": args.pairs_per_re,
+        "pairs_per_group_requested": args.pairs_per_group,
         "saves_dir": os.path.abspath(args.saves_dir),
-        "total_pairs": int(merged_pairs.shape[0]),
-        "total_before_dedup": int(len(all_pairs) and sum(p.shape[0] for p in all_pairs)),
-        "env_map_shape": list(merged_pairs.shape),       # (N, 2, H, W)
-        "tile_min": int(merged_pairs.min()),
-        "tile_max": int(merged_pairs.max()),
-        "reward_enum_distribution": re_dist,
-        "reward_enums_found": found,
+        "total_pairs": total_pairs,
+        "total_before_dedup": total_before_dedup,
+        "games_found": games_found,
+        "reward_enums_found": res_found,
+        "n_files": len(file_manifest),
+        "files": file_manifest,
     }
-
-    # 7. 저장
-    out_path = os.path.join(out_dir, "cpcgrl_pair_dataset.npz")
-    np.savez_compressed(
-        out_path,
-        env_map_pairs=merged_pairs,
-        reward_enums=merged_re,
-        timesteps=merged_ts,
-    )
 
     meta_path = os.path.join(out_dir, "metadata.json")
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-    print(f"\n{'=' * 60}")
-    print(f"  CPCGRL Pair Dataset")
-    print(f"{'=' * 60}")
-    print(f"  env_map_pairs : {merged_pairs.shape}  {merged_pairs.dtype}")
-    print(f"  reward_enums  : {merged_re.shape}  {merged_re.dtype}")
-    print(f"  timesteps     : {merged_ts.shape}  {merged_ts.dtype}")
-    print(f"  tile range    : [{metadata['tile_min']}, {metadata['tile_max']}]")
-    print(f"  file size     : {os.path.getsize(out_path) / 1024:.0f} KB")
-    print(f"  path          : {out_path}")
-    print(f"  metadata      : {meta_path}")
+    # 4. 요약 출력
+    print(f"\n{'=' * 64}")
+    print(f"  CPCGRL Pair Dataset  (per-game, per-re)")
+    print(f"{'=' * 64}")
+    print(f"  output dir    : {out_dir}")
+    print(f"  total files   : {len(file_manifest)}")
+    print(f"  total pairs   : {total_pairs:,}")
+    print(f"  before dedup  : {total_before_dedup:,}")
+    print(f"  games         : {games_found}")
+    print(f"  reward_enums  : {res_found}")
 
-    print(f"\n  reward_enum distribution:")
-    for rn in found:
-        print(f"    re-{rn}: {re_dist[rn]:,}")
-    print(f"    total: {merged_pairs.shape[0]:,}")
+    print(f"\n  per-file breakdown:")
+    for fm in file_manifest:
+        print(f"    {fm['file']:40s}  "
+              f"n={fm['n_pairs']:>6,}  "
+              f"tiles=[{fm['tile_min']},{fm['tile_max']}]  "
+              f"{fm['file_size_kb']:>7.1f} KB")
+
+    # 게임별 합계
+    print(f"\n  per-game totals:")
+    for g in games_found:
+        n = sum(fm["n_pairs"] for fm in file_manifest if fm["game"] == g)
+        n_files = sum(1 for fm in file_manifest if fm["game"] == g)
+        print(f"    {g:12s}: {n:>6,} pairs  ({n_files} files)")
+
+    # re별 합계
+    print(f"\n  per-re totals:")
+    for r in res_found:
+        n = sum(fm["n_pairs"] for fm in file_manifest if fm["reward_enum"] == r)
+        n_files = sum(1 for fm in file_manifest if fm["reward_enum"] == r)
+        print(f"    re-{r}: {n:>6,} pairs  ({n_files} files)")
 
     print(f"\n  build info:")
     print(f"    created_at : {metadata['created_at']}")
     print(f"    hostname   : {metadata['hostname']}")
     print(f"    platform   : {metadata['platform']}")
-    print(f"{'=' * 60}")
+    print(f"{'=' * 64}")
 
 
 if __name__ == "__main__":

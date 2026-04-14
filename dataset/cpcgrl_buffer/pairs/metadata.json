@@ -1,0 +1,206 @@
+{
+  "created_at": "2026-04-14 11:05:14",
+  "hostname": "MacBookPro.local",
+  "platform": "macOS-15.7.4-arm64-arm-64bit",
+  "seed": 42,
+  "pairs_per_group_requested": 50000,
+  "saves_dir": "/Users/inchang/multigame-pcgrl/saves",
+  "total_pairs": 54187,
+  "total_before_dedup": 178578,
+  "games_found": [
+    "doom",
+    "dungeon",
+    "pokemon",
+    "sokoban"
+  ],
+  "reward_enums_found": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "n_files": 18,
+  "files": [
+    {
+      "file": "pairs_doom_re0.npz",
+      "game": "doom",
+      "reward_enum": 0,
+      "n_pairs": 3248,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 330.3
+    },
+    {
+      "file": "pairs_doom_re1.npz",
+      "game": "doom",
+      "reward_enum": 1,
+      "n_pairs": 2672,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 294.2
+    },
+    {
+      "file": "pairs_doom_re2.npz",
+      "game": "doom",
+      "reward_enum": 2,
+      "n_pairs": 3158,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 349.1
+    },
+    {
+      "file": "pairs_doom_re3.npz",
+      "game": "doom",
+      "reward_enum": 3,
+      "n_pairs": 3110,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 360.5
+    },
+    {
+      "file": "pairs_doom_re4.npz",
+      "game": "doom",
+      "reward_enum": 4,
+      "n_pairs": 2881,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 342.2
+    },
+    {
+      "file": "pairs_dungeon_re0.npz",
+      "game": "dungeon",
+      "reward_enum": 0,
+      "n_pairs": 2369,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 283.2
+    },
+    {
+      "file": "pairs_dungeon_re1.npz",
+      "game": "dungeon",
+      "reward_enum": 1,
+      "n_pairs": 3629,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 422.4
+    },
+    {
+      "file": "pairs_dungeon_re2.npz",
+      "game": "dungeon",
+      "reward_enum": 2,
+      "n_pairs": 3162,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 340.3
+    },
+    {
+      "file": "pairs_dungeon_re3.npz",
+      "game": "dungeon",
+      "reward_enum": 3,
+      "n_pairs": 3291,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 404.7
+    },
+    {
+      "file": "pairs_dungeon_re4.npz",
+      "game": "dungeon",
+      "reward_enum": 4,
+      "n_pairs": 2430,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 296.3
+    },
+    {
+      "file": "pairs_pokemon_re0.npz",
+      "game": "pokemon",
+      "reward_enum": 0,
+      "n_pairs": 2747,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 303.9
+    },
+    {
+      "file": "pairs_pokemon_re1.npz",
+      "game": "pokemon",
+      "reward_enum": 1,
+      "n_pairs": 2746,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 285.2
+    },
+    {
+      "file": "pairs_pokemon_re2.npz",
+      "game": "pokemon",
+      "reward_enum": 2,
+      "n_pairs": 3439,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 421.5
+    },
+    {
+      "file": "pairs_pokemon_re3.npz",
+      "game": "pokemon",
+      "reward_enum": 3,
+      "n_pairs": 3386,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 389.8
+    },
+    {
+      "file": "pairs_pokemon_re4.npz",
+      "game": "pokemon",
+      "reward_enum": 4,
+      "n_pairs": 3474,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 391.0
+    },
+    {
+      "file": "pairs_sokoban_re1.npz",
+      "game": "sokoban",
+      "reward_enum": 1,
+      "n_pairs": 3759,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 420.1
+    },
+    {
+      "file": "pairs_sokoban_re2.npz",
+      "game": "sokoban",
+      "reward_enum": 2,
+      "n_pairs": 1934,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 237.4
+    },
+    {
+      "file": "pairs_sokoban_re3.npz",
+      "game": "sokoban",
+      "reward_enum": 3,
+      "n_pairs": 2752,
+      "n_before_dedup": 9921,
+      "tile_min": 1,
+      "tile_max": 5,
+      "file_size_kb": 319.4
+    }
+  ]
+}

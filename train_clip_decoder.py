@@ -99,6 +99,7 @@ def train_step(
             batch.input_ids,
             batch.attention_mask,
             batch.pixel_values,
+            reward_enum=batch.reward_enum_target,
             mode=mode,
             training=is_train,
             rngs={"dropout": dropout_rng},
@@ -298,6 +299,8 @@ def make_train(config: CLIPDecoderTrainConfig):
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
             max_samples=config.max_samples,
+            prepend_game_prefix=config.prepend_game_prefix,
+            prepend_game_desc=config.prepend_game_desc,
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
@@ -613,6 +616,7 @@ def get_train_state(config: CLIPDecoderTrainConfig, rng_key: jax.random.PRNGKey,
 
         variables = module.init(
             init_rng, input_ids, attention_mask, pixel_values,
+            reward_enum=jnp.zeros((1,), dtype=jnp.int32),
             mode=config.encoder.mode, training=False,
         )
         # variables = {"params": {...}, "norm_stats": {...}}

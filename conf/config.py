@@ -191,6 +191,9 @@ class DecoderConfig:
     num_layers: int = 2
     output_dim: int = 1
     num_reward_classes: int = 6
+    # CNN 입력에 reward_enum one-hot 채널을 추가할지 여부
+    # True이면 pixel_values에 (B, H, W, num_reward_classes) one-hot을 concat
+    cnn_reward_enum_onehot: bool = False
 
 
 @dataclass
@@ -475,7 +478,12 @@ class CLIPTrainConfig(Config):
     max_samples_per_game: int = 1000   # 게임별 베이스 샘플 상한 (0=무제한)
     max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
-    
+
+    # instruction 앞에 게임 이름 prefix를 붙일지 여부 (e.g. "In Zelda, ...")
+    prepend_game_prefix: bool = False
+    # instruction 앞에 게임 설명 prefix를 붙일지 여부 (e.g. "In a top-down dungeon adventure, ...")
+    prepend_game_desc: bool = False
+
     # overwrite
     embed_type: str = "humanai"
 

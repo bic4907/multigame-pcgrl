@@ -480,6 +480,8 @@ class CLIPTrainConfig(Config):
 
     # instruction 앞에 게임 이름 prefix를 붙일지 여부 (e.g. "In Zelda, ...")
     prepend_game_prefix: bool = False
+    # instruction 앞에 게임 설명 prefix를 붙일지 여부 (e.g. "In a top-down dungeon adventure, ...")
+    prepend_game_desc: bool = False
 
     # overwrite
     embed_type: str = "humanai"

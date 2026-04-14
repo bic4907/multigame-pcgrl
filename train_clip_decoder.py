@@ -300,6 +300,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             train_ratio=config.train_ratio,
             max_samples=config.max_samples,
             prepend_game_prefix=config.prepend_game_prefix,
+            prepend_game_desc=config.prepend_game_desc,
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()

@@ -23,3 +23,6 @@ reg_weight: 0.1
 
 # instruction 앞에 게임 이름 prefix 추가 (e.g. "In Zelda, ...")
 prepend_game_prefix: false
+# instruction 앞에 게임 설명 prefix 추가 (e.g. "In a top-down dungeon adventure, ...")
+# prepend_game_prefix 보다 우선 적용됨
+prepend_game_desc: false

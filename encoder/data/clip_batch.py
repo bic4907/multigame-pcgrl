@@ -99,6 +99,76 @@ def _prepend_game_prefix(instruction: str, game: str, rng: random.Random) -> str
     return prefix + instruction
 
 
+# ── 게임별 짧은 설명 (description prefix용, 게임 이름 비명시) ─────────────────────
+# 게임 메커니즘을 추상적으로 설명, 괄호로 감싸서 prefix에 삽입
+# 게임당 5개 variation — 랜덤으로 하나 선택
+_GAME_SHORT_DESCS: dict = {
+    "dungeon": [
+        "(navigate rooms, avoid enemies, collect treasures)",
+        "(explore enclosed spaces, dodge threats, loot rewards)",
+        "(move through walled areas, evade foes, pick up valuables)",
+        "(find paths through rooms while surviving enemy encounters)",
+        "(survive hostile rooms and gather hidden loot)",
+    ],
+    "pokemon": [
+        "(explore an open area, encounter creatures, gather items)",
+        "(roam outdoor terrain, meet wild creatures, collect objects)",
+        "(wander through natural landscapes with creatures and pickups)",
+        "(traverse open fields, interact with wildlife, find collectables)",
+        "(explore varied terrain with scattered creatures and items)",
+    ],
+    "sokoban": [
+        "(push objects onto targets within confined spaces)",
+        "(slide blocks into goal positions inside walled areas)",
+        "(rearrange movable pieces to reach designated spots)",
+        "(solve spatial arrangements by pushing objects to targets)",
+        "(maneuver blocks through tight corridors to goal tiles)",
+    ],
+    "doom": [
+        "(clear interconnected rooms of enemies and find pickups)",
+        "(fight through linked chambers, eliminate threats, grab supplies)",
+        "(advance through connected areas, defeat foes, scavenge items)",
+        "(navigate room-corridor layouts while battling enemies for loot)",
+        "(sweep hostile zones, neutralize threats, and collect rewards)",
+    ],
+    "doom2": [
+        "(clear interconnected rooms of enemies and find pickups)",
+        "(fight through linked chambers, eliminate threats, grab supplies)",
+        "(advance through connected areas, defeat foes, scavenge items)",
+        "(navigate room-corridor layouts while battling enemies for loot)",
+        "(sweep hostile zones, neutralize threats, and collect rewards)",
+    ],
+    "zelda": [
+        "(traverse a room, fight creatures, unlock paths)",
+        "(explore a chamber, battle foes, open blocked passages)",
+        "(navigate a confined area, overcome enemies, find exits)",
+        "(clear a single space of threats and discover hidden routes)",
+        "(move through a walled area, defeat creatures, reveal doorways)",
+    ],
+}
+
+# {desc} 자리에 괄호로 감싼 메커니즘 설명이 들어감
+_GAME_DESC_TEMPLATES: List[str] = [
+    "{desc} ",
+    "In a game {desc}, ",
+    "For a level {desc}, ",
+    "Given a map {desc}, ",
+    "Designing a level {desc}, ",
+]
+
+
+def _prepend_game_desc(instruction: str, game: str, rng: random.Random) -> str:
+    """instruction 앞에 게임 설명 prefix를 랜덤으로 붙인다."""
+    desc_list = _GAME_SHORT_DESCS.get(game, [f"({game})"])
+    desc = rng.choice(desc_list)
+    template = rng.choice(_GAME_DESC_TEMPLATES)
+    prefix = template.format(desc=desc)
+    # 첫 글자 소문자 처리 (prefix 뒤에 이어지므로)
+    if instruction and instruction[0].isupper():
+        instruction = instruction[0].lower() + instruction[1:]
+    return prefix + instruction
+
+
 class CLIPDatasetBuilder:
     def __init__(self,
                  processor: CLIPProcessor,
@@ -108,6 +178,7 @@ class CLIPDatasetBuilder:
                  max_len:int=77,
                  max_samples: int = None,
                  prepend_game_prefix: bool = False,
+                 prepend_game_desc: bool = False,
                  ):
         self.processor = processor
         self.paired_data = paired_data
@@ -117,6 +188,7 @@ class CLIPDatasetBuilder:
         self.train_ratio = train_ratio
         self.max_samples = max_samples
         self.prepend_game_prefix = prepend_game_prefix
+        self.prepend_game_desc = prepend_game_desc
 
         # Create game_name to index mapping
         unique_games = sorted(set([s.game for s in self.paired_data._samples]))
@@ -176,15 +248,23 @@ class CLIPDatasetBuilder:
         language_inst_list = [s.instruction for s in samples]
 
         # ── 게임 prefix 추가 (옵션) ──
-        if self.prepend_game_prefix:
+        if self.prepend_game_prefix or self.prepend_game_desc:
             prefix_rng = random.Random(42)  # 재현 가능하도록 고정 시드
             game_list = [s.game for s in samples]
-            language_inst_list = [
-                _prepend_game_prefix(inst, game, prefix_rng) if inst else inst
-                for inst, game in zip(language_inst_list, game_list)
-            ]
-            logger.info(f"Prepended game prefix to {len(language_inst_list)} instructions "
-                        f"(example: '{language_inst_list[0][:80]}...')")
+            if self.prepend_game_desc:
+                language_inst_list = [
+                    _prepend_game_desc(inst, game, prefix_rng) if inst else inst
+                    for inst, game in zip(language_inst_list, game_list)
+                ]
+                logger.info(f"Prepended game description to {len(language_inst_list)} instructions "
+                            f"(example: '{language_inst_list[0][:100]}...')")
+            else:
+                language_inst_list = [
+                    _prepend_game_prefix(inst, game, prefix_rng) if inst else inst
+                    for inst, game in zip(language_inst_list, game_list)
+                ]
+                logger.info(f"Prepended game prefix to {len(language_inst_list)} instructions "
+                            f"(example: '{language_inst_list[0][:80]}...')")
 
         # Extract reward annotation (game_name, reward_enum, conditions) combination
         reward_cond_list = []

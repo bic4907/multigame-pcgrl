@@ -301,10 +301,10 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
 
 def make_train(config: CLIPDecoderTrainConfig):
 
-    def _train_fold(fold, dataset, processor, rng_key):
-        """fold 하나에 대한 데이터 로딩 + 학습 전체를 처리."""
+    def _train_game(game, dataset, processor, rng_key):
+        """게임 하나에 대한 데이터 로딩 + 학습 전체를 처리."""
         rng_key, subkey = jax.random.split(rng_key)
-        logger.info(f"=== Fold {fold} start ===")
+        logger.info(f"=== Game {game} start ===")
 
         dataset_builder = CLIPDatasetBuilder(
             processor=processor,
@@ -312,7 +312,6 @@ def make_train(config: CLIPDecoderTrainConfig):
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
-            fold=fold,
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
@@ -623,11 +622,11 @@ def make_train(config: CLIPDecoderTrainConfig):
                         **{f"val_scatter/enum_{i}": wandb.Image(p) for i, p in enumerate(scatter_paths)}
                     })
 
-        logger.info(f"=== Fold {fold} done ===")
+        logger.info(f"=== Game {game} done ===")
 
     def train(rng_key):
-        # MultiGameDataset은 한 번만 로드 (fold 전체 공유)
-        dataset = MultiGameDataset(
+        # MultiGameDataset은 한 번만 로드 (게임 전체 공유)
+        full_dataset = MultiGameDataset(
             include_dungeon=config.include_dungeon,
             include_d2=config.include_d2,
             include_d3=config.include_d3,
@@ -640,17 +639,48 @@ def make_train(config: CLIPDecoderTrainConfig):
         )
 
         # 학습 전 reward_enum / condition 범위 요약 출력 (1회)
-        _log_reward_condition_summary(dataset)
+        _log_reward_condition_summary(full_dataset)
 
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
-        # fold 0~4 순서대로 직렬 실행
-        for fold in range(5):
+        from instruct_rl.utils.env_loader import get_wandb_key
+        wandb_key = get_wandb_key()
+
+        # 게임별로 순서대로 직렬 실행, 각 게임마다 wandb 런 별도 생성
+        unique_games = sorted(set(s.game for s in full_dataset._samples))
+        logger.info(f"게임 목록: {unique_games}")
+
+        class _GameDataset:
+            def __init__(self, samples):
+                self._samples = samples
+
+        for game in unique_games:
             rng_key, subkey = jax.random.split(rng_key)
+            game_samples = full_dataset.by_game(game)
+            game_dataset = _GameDataset(game_samples)
+
+            if wandb_key:
+                dt = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                run_name = f'{get_wandb_name(config)}-{game}'
+                wandb_id = f'{run_name}-{dt}'
+                wandb.login(key=wandb_key)
+                wandb.init(
+                    project=config.wandb_project,
+                    group=config.instruct,
+                    entity=config.wandb_entity,
+                    name=run_name,
+                    id=wandb_id,
+                    save_code=True,
+                )
+                wandb.config.update(dict(config), allow_val_change=True)
+
             try:
-                _train_fold(fold, dataset, processor, subkey)
+                _train_game(game, game_dataset, processor, subkey)
             except EmptyFoldError as e:
-                logger.warning(f"Fold {fold} skipped: {e}")
+                logger.warning(f"Game {game} skipped: {e}")
+            finally:
+                if wandb.run is not None:
+                    wandb.finish()
 
     return lambda rng_key: train(rng_key)
 
@@ -744,22 +774,6 @@ def main(config: CLIPDecoderTrainConfig):
     rng_key = jax.random.PRNGKey(config.seed)
     np.random.seed(config.seed)
 
-    from instruct_rl.utils.env_loader import get_wandb_key
-    wandb_key = get_wandb_key()
-    if wandb_key:
-        dt = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        wandb_id = f'{get_wandb_name(config)}-{dt}'
-        wandb.login(key=wandb_key)
-        wandb.init(
-            project=config.wandb_project,
-            group=config.instruct,
-            entity=config.wandb_entity,
-            name=get_wandb_name(config),
-            id=wandb_id,
-            save_code=True,
-        )
-        wandb.config.update(dict(config), allow_val_change=True)
-
     exp_dir = config.exp_dir
     logger.info(f'jax devices: {jax.devices()}')
     logger.info(f'running experiment at {exp_dir}')
@@ -770,9 +784,6 @@ def main(config: CLIPDecoderTrainConfig):
     os.makedirs(exp_dir, exist_ok=True)
 
     make_train(config)(rng_key)
-
-    if wandb.run:
-        wandb.finish()
 
 
 def _create_condition_scatter_plots(

@@ -78,7 +78,6 @@ class CLIPDatasetBuilder:
                  rng_key:jax.random.PRNGKey,
                  train_ratio:float=0.8,
                  max_len:int=77,
-                 fold: int = None,
                  ):
         self.processor = processor
         self.paired_data = paired_data
@@ -86,7 +85,6 @@ class CLIPDatasetBuilder:
 
         self.max_len = max_len
         self.train_ratio = train_ratio
-        self.fold = fold  # 0~4: 해당 fold만 사용 / None: 전체 사용
 
         # Create game_name to index mapping
         unique_games = sorted(set([s.game for s in self.paired_data._samples]))
@@ -125,37 +123,33 @@ class CLIPDatasetBuilder:
         ))
         samples = [s for s in samples if s.instruction is not None]
 
-        # 5-fold 분할: 레벨 고유 인덱스 기준 modulo 배정
+        # 컨디션별 맵 비중복 분할:
         # 게임별로 unique 레벨에 순번을 부여하고,
-        # level_idx % 5 == fold 이면서 reward_enum == fold 인 샘플만 학습
-        # → 5개 fold 동시 실행 시 state 중복 없이 전체 데이터 커버
-        if self.fold is not None:
-            from collections import defaultdict
-            game_level_seq = defaultdict(dict)  # {game: {array_key: level_idx}}
-            game_next_idx  = defaultdict(int)
+        # level_idx % 5 == reward_enum 인 샘플만 학습
+        # → reward_enum k 는 level_idx%5==k 인 맵만 사용 (조건별 맵 비중복)
+        from collections import defaultdict
+        game_level_seq = defaultdict(dict)  # {game: {array_key: level_idx}}
+        game_next_idx  = defaultdict(int)
 
-            filtered = []
-            for s in samples:
-                arr_key = (s.game, s.array.tobytes())
-                if arr_key not in game_level_seq[s.game]:
-                    game_level_seq[s.game][arr_key] = game_next_idx[s.game]
-                    game_next_idx[s.game] += 1
-                level_idx   = game_level_seq[s.game][arr_key]
-                reward_enum = s.meta.get("reward_enum", 0)
-                if level_idx % 5 == self.fold and reward_enum == self.fold:
-                    filtered.append(s)
+        filtered = []
+        for s in samples:
+            arr_key = (s.game, s.array.tobytes())
+            if arr_key not in game_level_seq[s.game]:
+                game_level_seq[s.game][arr_key] = game_next_idx[s.game]
+                game_next_idx[s.game] += 1
+            level_idx   = game_level_seq[s.game][arr_key]
+            reward_enum = s.meta.get("reward_enum", 0)
+            if level_idx % 5 == reward_enum:
+                filtered.append(s)
 
-            n_total = len(samples)
-            samples = filtered
-            logger.info(
-                f"5-fold (modulo): fold={self.fold} → {len(samples)}/{n_total} samples "
-                f"(level_idx%5=={self.fold} & reward_enum=={self.fold})"
-            )
-            if len(samples) == 0:
-                raise EmptyFoldError(
-                    f"Fold {self.fold}: reward_enum={self.fold} 에 해당하는 샘플이 없습니다 "
-                    f"(해당 enum이 데이터셋에 존재하지 않거나 degenerate로 제거됨)"
-                )
+        n_total = len(samples)
+        samples = filtered
+        logger.info(
+            f"컨디션별 맵 분할: {len(samples)}/{n_total} samples "
+            f"(reward_enum k → level_idx%5==k 인 맵만 사용)"
+        )
+        if len(samples) == 0:
+            raise EmptyFoldError("컨디션별 맵 분할 후 샘플이 0개입니다")
 
         # Extract game types and create mapping to integer IDs (필터 이후 기준)
         games_type = [s.game for s in samples]  # N is the number of samples

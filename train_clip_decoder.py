@@ -99,6 +99,7 @@ def train_step(
             batch.input_ids,
             batch.attention_mask,
             batch.pixel_values,
+            reward_enum=batch.reward_enum_target,
             mode=mode,
             training=is_train,
             rngs={"dropout": dropout_rng},
@@ -613,6 +614,7 @@ def get_train_state(config: CLIPDecoderTrainConfig, rng_key: jax.random.PRNGKey,
 
         variables = module.init(
             init_rng, input_ids, attention_mask, pixel_values,
+            reward_enum=jnp.zeros((1,), dtype=jnp.int32),
             mode=config.encoder.mode, training=False,
         )
         # variables = {"params": {...}, "norm_stats": {...}}

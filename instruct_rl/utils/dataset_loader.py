@@ -214,8 +214,13 @@ def _compute_clip_embeddings(sample_list, config):
     dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
     dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
     dummy_pix = jnp.ones((1, 16, 16, 6), dtype=jnp.float32)
+    dummy_reward_enum = jnp.zeros((1,), dtype=jnp.int32)
     mode = "text_state" if encoder_config.state else "text"
-    variables = module.init(rng, dummy_ids, dummy_mask, dummy_pix, mode=mode, training=False)
+    # ContrastiveDecoderModule은 reward_enum kwarg를 지원; ContrastiveModule은 무시
+    _init_kwargs = dict(mode=mode, training=False)
+    if _use_decoder:
+        _init_kwargs["reward_enum"] = dummy_reward_enum
+    variables = module.init(rng, dummy_ids, dummy_mask, dummy_pix, **_init_kwargs)
 
     # 체크포인트 복원
     ckpt_path = encoder_config.ckpt_path

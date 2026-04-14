@@ -58,10 +58,12 @@ def load_decoder(
     dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
     dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
     dummy_pix = jnp.ones((1, 16, 16, 6), dtype=jnp.float32)
+    dummy_reward_enum = jnp.zeros((1,), dtype=jnp.int32)
 
     mode = "text_state" if encoder_config.state else "text"
     variables_template = module.init(
         rng, dummy_ids, dummy_mask, dummy_pix,
+        reward_enum=dummy_reward_enum,
         mode=mode, training=False,
     )
 

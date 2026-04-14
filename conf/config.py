@@ -191,6 +191,9 @@ class DecoderConfig:
     num_layers: int = 2
     output_dim: int = 1
     num_reward_classes: int = 6
+    # CNN 입력에 reward_enum one-hot 채널을 추가할지 여부
+    # True이면 pixel_values에 (B, H, W, num_reward_classes) one-hot을 concat
+    cnn_reward_enum_onehot: bool = False
 
 
 @dataclass

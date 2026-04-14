@@ -14,6 +14,7 @@ decoder:
   hidden_dim: 128
   num_layers: 2
   num_reward_classes: 5
+  cnn_reward_enum_onehot: true   # CNN 입력에 reward_enum one-hot 채널 추가
 
 # loss 가중치
 contrastive_weight: 1.0

@@ -1,0 +1,34 @@
+program: train_clip_decoder_unseen.py
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    value: 'all'
+  unseen_games:
+    values:
+      # C(5,2) = 10 조합 (seen 3개 / unseen 2개)
+      # dg=dungeon, pk=pokemon, sk=sokoban, dm=doom, zd=zelda
+      - 'dgpk'   # unseen: dungeon, pokemon         | seen: sokoban, doom, zelda
+      - 'dgsk'   # unseen: dungeon, sokoban          | seen: pokemon, doom, zelda
+      - 'dgdm'   # unseen: dungeon, doom             | seen: pokemon, sokoban, zelda
+      - 'dgzd'   # unseen: dungeon, zelda            | seen: pokemon, sokoban, doom
+      - 'pksk'   # unseen: pokemon, sokoban           | seen: dungeon, doom, zelda
+      - 'pkdm'   # unseen: pokemon, doom              | seen: dungeon, sokoban, zelda
+      - 'pkzd'   # unseen: pokemon, zelda             | seen: dungeon, sokoban, doom
+      - 'skdm'   # unseen: sokoban, doom              | seen: dungeon, pokemon, zelda
+      - 'skzd'   # unseen: sokoban, zelda             | seen: dungeon, pokemon, doom
+      - 'dmzd'   # unseen: doom, zelda                | seen: dungeon, pokemon, sokoban
+  seed:
+    values: [0]
+  overwrite:
+    value: true
+  exp_name:
+    value: 'def'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+  - "overwrite=true"
+

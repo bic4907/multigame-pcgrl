@@ -5,13 +5,18 @@ dataset/annotation/annotate.py
 캐시에서 doom/zelda/sokoban/pokemon/dungeon 맵을 읽어
 per-sample reward annotation CSV를 생성한다.
 
+tile_mapping.json 기반 unified 카테고리를 사용한다 (dataloader와 동일한 방식):
+  raw map → to_unified (0-4) → +1 shift → MultigameTiles (1-5)
+
 Reward enum 정의:
-  1 (RG)  region        - 연결된 통로 영역 수 (passable=Empty+Item) → condition_1
-  2 (PL)  path_length   - 가장 긴 경로 (passable=Empty+Item)        → condition_2
-  3 (WC)  wall_count    - Wall 그룹 타일 총 개수                    → condition_3
-  4 (OC)  object_count  - Object 그룹 타일 총 개수                  → condition_4
-  5 (MC)  mob_count     - Mob 그룹 타일 총 개수                     → condition_5
-  6 (IC)  item_count    - Item 그룹 타일 총 개수                    → condition_6
+  0 (RG)  region              - 연결된 통로 영역 수  → condition_0
+  1 (PL)  path_length         - 가장 긴 경로 길이    → condition_1
+  2 (IC)  interactable_count  - Interactive 타일 수  → condition_2
+  3 (HC)  hazard_count        - Hazard 타일 수       → condition_3
+  4 (CC)  collectable_count   - Collectable 타일 수  → condition_4
+
+passible (region/path_length 기준):
+  unified EMPTY(1) + HAZARD(4) + COLLECTABLE(5)  ← 모든 게임 공통
 
 Usage:
   python dataset/annotation/annotate.py
@@ -35,11 +40,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import numpy as np
 import jax.numpy as jnp
 
-from multigame_evaluator.measure import doom as doom_m
-from multigame_evaluator.measure import zelda as zelda_m
-from multigame_evaluator.measure import sokoban as sokoban_m
-from multigame_evaluator.measure import pokemon as pokemon_m
-from multigame_evaluator.measure import dungeon as dungeon_m
+from evaluator.measures import (
+    get_region as eval_get_region,
+    get_path_length as eval_get_path_length,
+    get_interactive_count,
+    get_hazard_count,
+    get_collectable_count,
+)
+from dataset.multigame.tile_utils import to_unified
+from envs.probs.multigame import MultigameTiles
+
+# unified passible tiles (MultigameTiles 공간): EMPTY(1) + HAZARD(4) + COLLECTABLE(5)
+_UNIFIED_PASSIBLE = jnp.array(
+    [int(MultigameTiles.EMPTY), int(MultigameTiles.HAZARD), int(MultigameTiles.COLLECTABLE)],
+    dtype=jnp.int32,
+)
 
 # ── 경로 ─────────────────────────────────────────────────────────────────────────
 _HERE = Path(__file__).parent                              # dataset/annotation/
@@ -49,64 +64,29 @@ _ANNOT_DIR = _HERE                                         # CSV를 같은 폴�
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-# ── 게임별 tile 설정 ─────────────────────────────────────────────────────────────
+# ── 게임별 sub_condition 레이블 (tile_mapping.json unified 카테고리 기준) ──────────
 _GAME_CONFIG = {
     "doom": {
-        "module":                doom_m,
-        "passible":              doom_m.DoomPassible,
-        "wall":                  doom_m.DoomWall,
-        "interactable":          doom_m.DoomInteractable,
-        "hazard":                doom_m.DoomHazard,
-        "collectable":           doom_m.DoomCollectable,
-        "sub_cond_wall":         "wall+empty",
         "sub_cond_interactable": "spawn+door+danger",
         "sub_cond_hazard":       "enemy",
         "sub_cond_collectable":  "item",
     },
     "zelda": {
-        "module":                zelda_m,
-        "passible":              zelda_m.ZeldaPassible,
-        "wall":                  zelda_m.ZeldaWall,
-        "interactable":          zelda_m.ZeldaInteractable,
-        "hazard":                zelda_m.ZeldaHazard,
-        "collectable":           zelda_m.ZeldaCollectable,
-        "sub_cond_wall":         "wall+flood+empty",
         "sub_cond_interactable": "door+block+start",
         "sub_cond_hazard":       "mob",
         "sub_cond_collectable":  "object",
     },
     "sokoban": {
-        "module":                sokoban_m,
-        "passible":              sokoban_m.SokobanPassible,
-        "wall":                  sokoban_m.SokobanWall,
-        "interactable":          sokoban_m.SokobanInteractable,
-        "hazard":                sokoban_m.SokobanHazard,
-        "collectable":           sokoban_m.SokobanCollectable,
-        "sub_cond_wall":         "wall",
         "sub_cond_interactable": "box",
         "sub_cond_hazard":       "",
         "sub_cond_collectable":  "",
     },
     "pokemon": {
-        "module":                pokemon_m,
-        "passible":              pokemon_m.PokemonPassible,
-        "wall":                  pokemon_m.PokemonWall,
-        "interactable":          pokemon_m.PokemonInteractable,
-        "hazard":                pokemon_m.PokemonHazard,
-        "collectable":           pokemon_m.PokemonCollectable,
-        "sub_cond_wall":         "empty+wall+fence+tree+house",
         "sub_cond_interactable": "spawn+water",
         "sub_cond_hazard":       "enemy",
         "sub_cond_collectable":  "object",
     },
     "dungeon": {
-        "module":                dungeon_m,
-        "passible":              dungeon_m.DungeonPassible,
-        "wall":                  dungeon_m.DungeonWall,
-        "interactable":          dungeon_m.DungeonInteractable,
-        "hazard":                dungeon_m.DungeonHazard,
-        "collectable":           dungeon_m.DungeonCollectable,
-        "sub_cond_wall":         "wall",
         "sub_cond_interactable": "",
         "sub_cond_hazard":       "enemy",
         "sub_cond_collectable":  "treasure",
@@ -198,48 +178,39 @@ def _shorten_source_id(source_id: str, game: str) -> str:
     return source_id
 
 
-# ── measure 헬퍼 ──────────────────────────────────────────────────────────────────
-
-def _tile_count(env_map: np.ndarray, tile_ids: jnp.ndarray) -> float:
-    """tile_ids 에 포함된 모든 타일 종류의 합산 개수를 반환한다."""
-    count = 0
-    for tid in np.array(tile_ids, dtype=np.int32):
-        count += int((env_map == int(tid)).sum())
-    return float(count)
-
+# ── measure 계산 ─────────────────────────────────────────────────────────────────
 
 def _compute_measures(
     env_map: np.ndarray,
-    config: dict,
+    game: str,
 ) -> Tuple[float, float, float, float, float, float]:
     """
-    6가지 measure를 계산한다.
+    tile_mapping.json unified 카테고리 기반으로 6가지 measure를 계산한다.
+    dataloader(to_unified)와 동일한 매핑 방식을 사용한다.
+
+      raw map → to_unified (0-4) → +1 shift → MultigameTiles (1-5)
+
+    passible = EMPTY(1) + HAZARD(4) + COLLECTABLE(5)  (모든 게임 공통)
 
     Returns
     -------
     (rg, pl, wc, ic_inter, ic_hazard, ic_coll)
-      rg        : region count               (passable = Empty + Collectable)
-      pl        : path length                (passable = Empty + Collectable)
-      wc        : wall tile count
-      ic_inter  : interactable tile count    (unified 2)
-      ic_hazard : hazard tile count          (unified 3)
-      ic_coll   : collectable tile count     (unified 4)
+      rg        : region count
+      pl        : path length
+      wc        : wall tile count         (unified WALL=2)
+      ic_inter  : interactable tile count (unified INTERACTIVE=3)
+      ic_hazard : hazard tile count       (unified HAZARD=4)
+      ic_coll   : collectable tile count  (unified COLLECTABLE=5)
     """
-    module           = config["module"]
-    passible         = config["passible"]
-    wall_ids         = config["wall"]
-    interactable_ids = config["interactable"]
-    hazard_ids       = config["hazard"]
-    collectable_ids  = config["collectable"]
+    unified       = to_unified(env_map, game, warn_unmapped=False)
+    multigame_map = jnp.array(unified + 1, dtype=jnp.int32)
 
-    jmap = jnp.array(env_map)
-
-    rg       = float(module.get_region(jmap, passible))
-    pl       = float(module.get_path_length(jmap, passible))
-    wc       = _tile_count(env_map, wall_ids)
-    ic_inter = _tile_count(env_map, interactable_ids)
-    ic_haz   = _tile_count(env_map, hazard_ids)
-    ic_coll  = _tile_count(env_map, collectable_ids)
+    rg       = float(eval_get_region(multigame_map, _UNIFIED_PASSIBLE))
+    pl       = float(eval_get_path_length(multigame_map, _UNIFIED_PASSIBLE))
+    wc       = float(jnp.sum(multigame_map == int(MultigameTiles.WALL)))
+    ic_inter = float(get_interactive_count(multigame_map))
+    ic_haz   = float(get_hazard_count(multigame_map))
+    ic_coll  = float(get_collectable_count(multigame_map))
 
     return rg, pl, wc, ic_inter, ic_haz, ic_coll
 
@@ -271,7 +242,7 @@ def _make_rows(
             logger.info(f"  [{game}] {order_idx + 1}/{len(samples)} …")
 
         try:
-            rg, pl, wc, oc, mc, ic = _compute_measures(env_map, config)
+            rg, pl, wc, oc, mc, ic = _compute_measures(env_map, game)
         except Exception as exc:
             logger.warning(f"  measure 실패 ({source_id}): {exc} → 0으로 대체")
             rg, pl, wc, oc, mc, ic = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
@@ -346,7 +317,7 @@ def annotate_game(
         writer.writeheader()
         writer.writerows(rows)
 
-    logger.info(f"  → {out_path.name}  ({len(rows)} rows, {len(samples)} samples × 6)  [{elapsed:.1f}s]")
+    logger.info(f"  → {out_path.name}  ({len(rows)} rows, {len(samples)} samples × 5)  [{elapsed:.1f}s]")
     return len(rows)
 
 

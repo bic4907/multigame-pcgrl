@@ -147,7 +147,9 @@ def _purge_old_game_caches(game_dir: Path, keep_key: str) -> None:
         if not f.is_file():
             continue
         stem = f.name
-        for ext in (".npz", ".json", ".info.json"):
+        # .info.json을 .json보다 먼저 체크해야 한다:
+        # ".info.json".endswith(".json") == True 이므로 순서가 중요함
+        for ext in (".info.json", ".npz", ".json"):
             if stem.endswith(ext):
                 candidate_key = stem[: -len(ext)]
                 if candidate_key != keep_key:
@@ -341,7 +343,7 @@ def _purge_old_caches(cache_dir: Path, keep_key: str) -> None:
         if not f.is_file():
             continue
         stem = f.name
-        for ext in (".npz", ".json", ".info.json"):
+        for ext in (".info.json", ".npz", ".json"):
             if stem.endswith(ext):
                 candidate_key = stem[: -len(ext)]
                 if candidate_key != keep_key:

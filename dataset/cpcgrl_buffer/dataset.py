@@ -2,7 +2,8 @@
 dataset/cpcgrl_buffer/dataset.py
 ================================
 CPCGRL pair dataset 로더.
-(game, reward_enum) 별 개별 .npz 파일을 읽어 통합 접근을 제공한다.
+단일 .npz 파일에서 (game, reward_enum) 별 키로 저장된 데이터를 읽어
+통합 접근을 제공한다.
 
 Usage:
     from dataset.cpcgrl_buffer import CPCGRLBufferDataset
@@ -28,6 +29,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import re as _re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Union
@@ -90,20 +92,23 @@ class MapTransitionPair:
 
 # ── 데이터셋 클래스 ──────────────────────────────────────────────────────────
 
-_DEFAULT_PAIRS_DIR = Path(__file__).parent / "pairs"
+_DEFAULT_NPZ = Path(__file__).parent / "cpcgrl_pair_dataset.npz"
+
+# {game}_re{rn} 키 패턴 (타임스탬프 키 _ts 제외)
+_KEY_PATTERN = _re.compile(r"^(\w+)_re(\d+)$")
 
 
 @dataclass
 class CPCGRLBufferDataset:
     """CPCGRL pair dataset 로더.
 
-    dataset/cpcgrl_buffer/pairs/ 폴더의 개별 .npz 파일들을 읽는다.
+    단일 .npz 파일에서 {game}_re{rn} 키로 저장된 데이터를 읽는다.
     game, reward_enum 으로 필터링 가능.
 
     Parameters
     ----------
-    pairs_dir : str or Path, optional
-        pairs 폴더 경로. 기본값은 같은 폴더의 pairs/.
+    npz_path : str or Path, optional
+        .npz 파일 경로. 기본값은 같은 폴더의 cpcgrl_pair_dataset.npz.
     games : list[str], optional
         특정 게임만 로드. None 이면 전체.
     reward_enums : list[int], optional
@@ -113,77 +118,68 @@ class CPCGRLBufferDataset:
     --------
     >>> ds = CPCGRLBufferDataset()
     >>> len(ds)
-    70000
+    54187
     >>> ds[0]
     MapTransitionPair(game='doom', re=0, ts=..., map=16x16, changes=1)
     >>> ds.by_game("doom")
-    CPCGRLBufferDataset(n=14000, games=['doom'], reward_enums=[0,1,2,3,4])
-    >>> ds.by_reward_enum(1, 2)
-    CPCGRLBufferDataset(n=28000, games=[...], reward_enums=[1,2])
+    CPCGRLBufferDataset(n=15069, games=['doom'], reward_enums=[0,1,2,3,4])
     """
-    pairs_dir: Union[str, Path] = field(default_factory=lambda: _DEFAULT_PAIRS_DIR)
+    npz_path: Union[str, Path] = field(default_factory=lambda: _DEFAULT_NPZ)
     games: Optional[List[str]] = None
     reward_enums: Optional[List[int]] = None
 
     # ── 내부 상태 (post_init 에서 로드) ──
     _pairs: np.ndarray = field(init=False, repr=False)
-    _games_arr: np.ndarray = field(init=False, repr=False)       # object array of str
+    _games_arr: np.ndarray = field(init=False, repr=False)
     _reward_enums_arr: np.ndarray = field(init=False, repr=False)
     _timesteps: np.ndarray = field(init=False, repr=False)
     _metadata: dict = field(init=False, repr=False)
 
     def __post_init__(self):
-        pairs_dir = Path(self.pairs_dir)
-        assert pairs_dir.exists(), f"Pairs dir not found: {pairs_dir}"
+        npz_path = Path(self.npz_path)
+        assert npz_path.exists(), f"Dataset not found: {npz_path}"
 
-        # metadata 로드
-        meta_path = pairs_dir / "metadata.json"
-        if meta_path.exists():
-            with open(meta_path, "r", encoding="utf-8") as f:
-                metadata = json.load(f)
+        data = np.load(npz_path, allow_pickle=True)
+
+        # 메타데이터 로드
+        if "_metadata" in data:
+            metadata = json.loads(str(data["_metadata"]))
         else:
             metadata = {}
 
-        # 파일 매니페스트에서 필터링할 대상 결정
-        file_list = metadata.get("files", [])
-        if not file_list:
-            # metadata 없으면 파일명 패턴으로 탐색
-            import re as _re
-            for p in sorted(pairs_dir.glob("pairs_*_re*.npz")):
-                m = _re.match(r"pairs_(\w+)_re(\d+)\.npz", p.name)
-                if m:
-                    file_list.append({
-                        "file": p.name,
-                        "game": m.group(1),
-                        "reward_enum": int(m.group(2)),
-                    })
+        # 키 파싱: {game}_re{rn} 형태의 키만 추출
+        group_keys = []
+        for key in data.files:
+            m = _KEY_PATTERN.match(key)
+            if m:
+                game, rn = m.group(1), int(m.group(2))
+                group_keys.append((key, game, rn))
 
         # game / reward_enum 필터
-        targets = file_list
         if self.games is not None:
-            targets = [f for f in targets if f["game"] in self.games]
+            group_keys = [(k, g, r) for k, g, r in group_keys if g in self.games]
         if self.reward_enums is not None:
-            targets = [f for f in targets if f["reward_enum"] in self.reward_enums]
+            group_keys = [(k, g, r) for k, g, r in group_keys if r in self.reward_enums]
 
-        assert targets, (
-            f"No matching files for games={self.games}, reward_enums={self.reward_enums} "
-            f"in {pairs_dir}"
+        assert group_keys, (
+            f"No matching groups for games={self.games}, "
+            f"reward_enums={self.reward_enums} in {npz_path}"
         )
 
-        # npz 파일들 로드 & 병합
+        # 데이터 로드 & 병합
         all_pairs, all_games, all_re, all_ts = [], [], [], []
-        for entry in targets:
-            fpath = pairs_dir / entry["file"]
-            if not fpath.exists():
-                print(f"  WARNING: {fpath} not found, skipping")
-                continue
-            data = np.load(fpath)
-            n = data["env_map_pairs"].shape[0]
-            all_pairs.append(data["env_map_pairs"])
-            all_re.append(data["reward_enums"])
-            all_ts.append(data["timesteps"])
-            all_games.append(np.full(n, entry["game"], dtype=object))
-            data.close()
+        for key, game, rn in sorted(group_keys):
+            pairs = data[key]                      # (N, 2, H, W)
+            ts_key = f"{key}_ts"
+            ts = data[ts_key] if ts_key in data else np.zeros(pairs.shape[0], dtype=np.int64)
+            n = pairs.shape[0]
+
+            all_pairs.append(pairs)
+            all_ts.append(ts)
+            all_re.append(np.full(n, rn, dtype=np.int32))
+            all_games.append(np.full(n, game, dtype=object))
+
+        data.close()
 
         object.__setattr__(self, "_pairs", np.concatenate(all_pairs, axis=0))
         object.__setattr__(self, "_games_arr", np.concatenate(all_games, axis=0))
@@ -205,7 +201,6 @@ class CPCGRLBufferDataset:
                 reward_enum=int(self._reward_enums_arr[idx]),
                 timestep=int(self._timesteps[idx]),
             )
-        # slice / fancy indexing → 새 dataset 반환
         return self._subset(idx)
 
     def __iter__(self):
@@ -326,7 +321,7 @@ class CPCGRLBufferDataset:
     def _subset(self, idx) -> "CPCGRLBufferDataset":
         """인덱스/마스크로 서브셋 생성 (npz 재로드 없이)."""
         new = object.__new__(CPCGRLBufferDataset)
-        object.__setattr__(new, "pairs_dir", self.pairs_dir)
+        object.__setattr__(new, "npz_path", self.npz_path)
         object.__setattr__(new, "games", None)
         object.__setattr__(new, "reward_enums", None)
         object.__setattr__(new, "_pairs", self._pairs[idx])

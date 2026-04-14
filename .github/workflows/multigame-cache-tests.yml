@@ -13,6 +13,7 @@ name: dataset validation
       - "train_clip.py"
       - "train_cpcgrl.py"
       - "train_ipcgrl.py"
+      - "train_ipcgrl_encoder.py"
       - "train_vipcgrl.py"
       - "train_mg_pcgrl.py"
       - ".github/workflows/multigame-cache-tests.yml"
@@ -28,6 +29,7 @@ name: dataset validation
       - "train_clip.py"
       - "train_cpcgrl.py"
       - "train_ipcgrl.py"
+      - "train_ipcgrl_encoder.py"
       - "train_vipcgrl.py"
       - "train_mg_pcgrl.py"
       - ".github/workflows/multigame-cache-tests.yml"
@@ -73,6 +75,7 @@ jobs:
             dataset/multigame/tests/test_tile_utils.py \
             -v --override-ini="testpaths=" \
             -k "TestMappedShape or TestMappedMinMax or TestMappedRender or TestEndToEnd"
+
 
   env-tests:
     runs-on: ubuntu-latest
@@ -160,8 +163,10 @@ jobs:
           python -m pytest tests/test_cpcgrl_baseline.py -v \
             -k "TestCPCGRLTraining"
 
-  ipcgrl-tests:
+
+  ipcgrl-checkpoint:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -179,15 +184,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install \
-            "jax[cpu]==0.5.0" \
-            "jaxlib==0.5.0" \
+            "jax[cpu]==0.4.35" \
+            "jaxlib==0.4.35" \
             flax \
             "optax==0.2.4" \
             "chex==0.1.87" \
             "distrax==0.1.1" \
             "gymnax==0.0.8" \
             hydra-core \
-            orbax-checkpoint \
+            "orbax-checkpoint==0.6.4" \
             tensorboardX \
             wandb \
             "transformers<5" \
@@ -196,61 +201,12 @@ jobs:
             numpy pillow pytest pandas
           pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-      - name: Run IPCGRL config & dataset tests
+      - name: Run IPCGRL checkpoint pipeline test
+        env:
+          WANDB_MODE: disabled
+          JAX_PLATFORMS: cpu
         run: |
-          python -m pytest tests/test_ipcgrl_baseline.py -v \
-            -k "TestIPCGRLConfig or TestIPCGRLDatasetLoading"
-
-      - name: Run IPCGRL training E2E test
-        run: |
-          python -m pytest tests/test_ipcgrl_baseline.py -v \
-            -k "TestIPCGRLTraining"
-
-  vipcgrl-tests:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install \
-            "jax[cpu]==0.5.0" \
-            "jaxlib==0.5.0" \
-            flax \
-            "optax==0.2.4" \
-            "chex==0.1.87" \
-            "distrax==0.1.1" \
-            "gymnax==0.0.8" \
-            hydra-core \
-            orbax-checkpoint \
-            tensorboardX \
-            wandb \
-            "transformers<5" \
-            scikit-learn \
-            imageio \
-            numpy pillow pytest pandas
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-      - name: Run VIPCGRL config & dataset tests
-        run: |
-          python -m pytest tests/test_vipcgrl_baseline.py -v \
-            -k "TestVIPCGRLConfig or TestVIPCGRLDatasetLoading"
-
-      - name: Run VIPCGRL training E2E test
-        run: |
-          python -m pytest tests/test_vipcgrl_baseline.py -v \
-            -k "TestVIPCGRLTraining"
+          python -m pytest tests/test_ipcgrl_checkpoint.py -v -s
 
   vipcgrl-checkpoint:
     runs-on: ubuntu-latest

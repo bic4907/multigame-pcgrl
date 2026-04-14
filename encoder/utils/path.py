@@ -53,6 +53,12 @@ def get_exp_group(config):
             'md': modality,
             'exp': config.exp_name,
         }
+    elif config.encoder.model == 'mlp':
+        config_dict = {
+            'game': getattr(config, 'game', 'dg'),
+            'enc': 'mlp',
+            'exp': config.exp_name,
+        }
     else:
         config_dict = {
             'game': getattr(config, 'game', 'dg'),
@@ -112,7 +118,8 @@ def init_config(config: Config):
             setattr(config, key, val)
 
     config.exp_group = get_exp_group(config)
-    config.exp_dir = get_exp_dir(config)
+    if not getattr(config, 'exp_dir', None):
+        config.exp_dir = get_exp_dir(config)
 
     config.arf_size = (2 * config.map_width -
                        1 if config.arf_size == -1 else config.arf_size)

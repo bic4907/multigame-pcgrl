@@ -158,9 +158,9 @@ class TestCLIPCheckpoint:
 class TestVIPCGRLWithCLIPCheckpoint:
     """train_vipcgrl.py 가 CLIP 체크포인트를 로드하여 정상 학습하는지 검증."""
 
-    def test_vipcgrl_loads_clip_ckpt_and_exits_zero(self, clip_ckpt_dir, tmp_base):
+    def test_vipcgrl_loads_clip_ckpt_and_logs_encoder(self, clip_ckpt_dir, tmp_base):
         """train_vipcgrl.py 에서 encoder.ckpt_path 로 CLIP 체크포인트를 지정하고
-        정상 종료(exit 0)를 확인한다."""
+        정상 종료(exit 0) 및 인코더 로딩 로그를 동시에 확인한다."""
 
         hydra_run_dir = os.path.join(tmp_base, "hydra_vipcgrl")
 
@@ -197,34 +197,6 @@ class TestVIPCGRLWithCLIPCheckpoint:
             f"stderr:\n{result.stderr[-3000:]}"
         )
 
-    def test_vipcgrl_stdout_contains_encoder_loaded_log(self, clip_ckpt_dir, tmp_base):
-        """학습 로그에 인코더 체크포인트 로딩 성공 메시지가 포함되어야 한다."""
-
-        hydra_run_dir = os.path.join(tmp_base, "hydra_vipcgrl_log")
-
-        result = subprocess.run(
-            [
-                sys.executable, "-m", "train_vipcgrl",
-                "overwrite=true",
-                "total_timesteps=200",
-                "n_envs=4",
-                "num_steps=4",
-                "update_epochs=1",
-                "NUM_MINIBATCHES=1",
-                "seed=42",
-                "ckpt_freq=1",
-                "render_freq=-1",
-                "eval_freq=-1",
-                "exp_name=test_vipcgrl_ckpt_log",
-                f"encoder.ckpt_path={clip_ckpt_dir}",
-                f"hydra.run.dir={hydra_run_dir}",
-            ],
-            cwd=_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=600,
-            env={**os.environ, "WANDB_MODE": "disabled"},
-        )
 
         combined_output = result.stdout + result.stderr
         assert "Encoder checkpoint" in combined_output or "encoder checkpoint" in combined_output.lower(), (

@@ -114,8 +114,9 @@ class TestDecoderCheckpoint:
 
 
 class TestMGPCGRLWithDecoderCheckpoint:
-    def test_mgpcgrl_loads_decoder_ckpt_and_exits_zero(self, decoder_ckpt_dir, tmp_base):
-        """train_mg_pcgrl.py가 decoder_ckpt_path를 로드해 정상 종료해야 한다."""
+    def test_mgpcgrl_loads_decoder_ckpt_and_logs(self, decoder_ckpt_dir, tmp_base):
+        """train_mg_pcgrl.py가 decoder_ckpt_path를 로드해 정상 종료하고
+        디코더 로딩 로그가 포함되어야 한다."""
         hydra_run_dir = os.path.join(tmp_base, "hydra_mgpcgrl")
 
         result = subprocess.run(
@@ -155,37 +156,6 @@ class TestMGPCGRLWithDecoderCheckpoint:
             f"stderr:\n{result.stderr[-3000:]}"
         )
 
-    def test_mgpcgrl_stdout_contains_decoder_loaded_log(self, decoder_ckpt_dir, tmp_base):
-        """학습 로그에 디코더 체크포인트 로딩 로그가 포함되어야 한다."""
-        hydra_run_dir = os.path.join(tmp_base, "hydra_mgpcgrl_log")
-
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "train_mg_pcgrl",
-                "overwrite=true",
-                "total_timesteps=200",
-                "n_envs=4",
-                "num_steps=4",
-                "update_epochs=1",
-                "NUM_MINIBATCHES=1",
-                "seed=43",
-                "ckpt_freq=1",
-                "render_freq=-1",
-                "eval_freq=-1",
-                "exp_name=test_mgpcgrl_ckpt_log",
-                "dummy_decoder=false",
-                "decoder_reward_classes=5",
-                f"decoder_ckpt_path={decoder_ckpt_dir}",
-                f"hydra.run.dir={hydra_run_dir}",
-            ],
-            cwd=_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=900,
-            env={**os.environ, "WANDB_MODE": "disabled"},
-        )
 
         combined_output = result.stdout + result.stderr
         assert (

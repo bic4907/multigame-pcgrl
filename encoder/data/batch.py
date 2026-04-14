@@ -6,6 +6,7 @@ import wandb
 from chex import dataclass
 from os.path import basename
 
+import jax
 from sklearn.manifold import TSNE
 from tqdm import tqdm
 import logging
@@ -14,7 +15,9 @@ from os.path import abspath, join, dirname
 from conf.config import RewardTrainConfig
 
 from encoder.data import (get_unique_pair_indices, pairing_maps)
-from evaluator import get_fitness_batch, get_reward_batch
+from evaluator import get_fitness_batch
+from dataset.multigame import MultiGameDataset
+from instruct_rl.utils.dataset_loader import _build_instruct
 
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()  # Add the environment variable ;LOG_LEVEL=DEBUG
 logger = logging.getLogger(basename(__file__))
@@ -25,21 +28,23 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 @dataclass
 class Dataset:
     reward_id: np.ndarray
-    prev_map_obs: np.ndarray
-    curr_map_obs: np.ndarray
+    reward_enum: np.ndarray
     reward: np.ndarray
+    curr_env_map: np.ndarray
+    instruct: np.ndarray
     embedding: np.ndarray
-    augmentable: np.ndarray
 
 
 @dataclass
 class EmbedData:
     reward_id: int
+    reward_enum: int
+    instruct: str
     embedding: np.ndarray
 
 
-def create_batches(dataset: Dataset, batch_size: int, augment: bool = False):
-    num_samples = len(dataset.curr_map_obs)
+def create_batches(dataset: Dataset, batch_size: int):
+    num_samples = len(dataset.curr_env_map)
     indices = np.arange(num_samples)
     np.random.shuffle(indices)
 
@@ -47,173 +52,136 @@ def create_batches(dataset: Dataset, batch_size: int, augment: bool = False):
         end_idx = min(start_idx + batch_size, num_samples)
         batch_indices = indices[start_idx:end_idx]
 
-        prev = dataset.prev_map_obs[batch_indices]
-        curr = dataset.curr_map_obs[batch_indices]
+        curr = dataset.curr_env_map[batch_indices]
         embed = dataset.embedding[batch_indices]
-        augmentable = dataset.augmentable[batch_indices]
 
         reward_id = dataset.reward_id[batch_indices]
+        reward_enum = dataset.reward_enum[batch_indices]
+        instruct = dataset.instruct[batch_indices]
 
-        if augment:
-            # Only augment data where augmentable == True (1)
-            augment_mask = augmentable.astype(bool)
+        # Convert env_map to one-hot encoding: (batch_size, 16, 16) → (batch_size, 16, 16, 4)
+        # Handle tile values: clamp to valid range [0, 3] for Dungeon3Tiles
+        curr_clamped = np.clip(curr.astype(np.int32), 0, 3)
+        curr_onehot = np.zeros((*curr_clamped.shape, 4), dtype=np.float32)
+        for i in range(4):
+            curr_onehot[..., i] = (curr_clamped == i).astype(np.float32)
 
-            k = np.random.choice([0, 1, 2, 3])  # Number of 90-degree rotations
-
-            prev[augment_mask] = np.rot90(prev[augment_mask], k=k, axes=(1, 2))
-            curr[augment_mask] = np.rot90(curr[augment_mask], k=k, axes=(1, 2))
-
-            if np.random.rand() > 0.5:
-                prev[augment_mask] = np.flip(prev[augment_mask], axis=1)
-                curr[augment_mask] = np.flip(curr[augment_mask], axis=1)
-
-            if np.random.rand() > 0.5:
-                prev[augment_mask] = np.flip(prev[augment_mask], axis=2)
-                curr[augment_mask] = np.flip(curr[augment_mask], axis=2)
-
-        X = (prev, curr, embed)
+        X = (curr_onehot, embed)
         y = dataset.reward[batch_indices]
 
-        yield X, y, reward_id
+        yield X, y, reward_id, reward_enum, instruct
 
 
-def create_dataset(buffer_dir: str, instruct_csv: str, config: RewardTrainConfig):
-    file_list = glob(os.path.join(buffer_dir, '*.npz'), recursive=True)
-    file_list += glob(os.path.join(buffer_dir, '**', '*.npz'), recursive=True)
-    total_files = len(file_list)
+def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTrainConfig):
+    dataset_samples = dataset._samples
 
-    assert len(file_list) > 0, f"No buffer files found in {buffer_dir}"
+    # ── max_samples: dry-run용 — BERT 임베딩 계산 전에 샘플 수를 제한 ──
+    max_samples = getattr(config, 'max_samples', None)
+    if max_samples is not None and len(dataset_samples) > max_samples:
+        logger.info(f"[dry-run] max_samples={max_samples}: "
+                    f"dataset_samples {len(dataset_samples)} → {max_samples}")
+        dataset_samples = dataset_samples[:max_samples]
 
-    config.n_buffer = int(total_files * config.buffer_ratio)
+    games_type = [s.game for s in dataset_samples]
+    unique_games = sorted(set(games_type))
+    game2idx = {game: idx for idx, game in enumerate(unique_games)}
+    game_ids = np.array([game2idx[game] for game in games_type])
+    logger.info(f"Detected {len(unique_games)} unique games: {game2idx}")
 
-    n_buffer = config.n_buffer
-    if n_buffer > 0:
-        file_list = file_list[:n_buffer]
-        logging.info(f"Using {n_buffer} of {total_files} buffer files")
+    whole_inst = _build_instruct(sample_list=dataset_samples, config=config)
 
-    arr_prev_map_obs, arr_curr_map_obs, arr_prev_env_map, arr_curr_env_map = [], [], [], []
-    rewards = []
+    whole_language_inst_list = [s.instruction for s in dataset_samples]
 
-    logging.info(f"Loading {len(file_list)} buffer files")
+    whole_reward_enum_digits = []
+    for s in dataset_samples:
+        reward_e = int(s.meta.get("reward_enum", 0))
 
-    for file in tqdm(file_list, desc="Loading buffer files"):
-        data = np.load(file, allow_pickle=True).get('buffer').item()
+        # reward_enum → digit 배열 (e.g. 2 → [2], 12 → [1, 2])
+        whole_reward_enum_digits.append([int(d) for d in str(reward_e)])
 
-        obs = data.get('obs')
-        map_obs = np.array(obs.get('map_obs'))
-        reward = data.get('reward')
-        done = np.array(data.get('done'))
-        env_map = np.array(data.get('env_map'))
+    max_re_len = max(len(x) for x in whole_reward_enum_digits)
+    whole_reward_enum = np.array(
+        [x + [0] * (max_re_len - len(x)) for x in whole_reward_enum_digits]
+    )  # (n_samples, max_re_len)
 
-        prev_map_obs = map_obs[:, 0:-1]
-        curr_map_obs = map_obs[:, 1:]
-        prev_env_map = env_map[:, 0:-1]
-        curr_env_map = env_map[:, 1:]
-        reward = reward[:, 1:]
-        done = done[:, 1:]
+    # 단일 npz 를 한 번만 로드 (키: {game}_re{rn} 형태)
+    import re as _re
+    npz_path = os.path.join(buffer_dir, 'cpcgrl_buffer', 'cpcgrl_pair_dataset.npz')
+    _npz_data = np.load(npz_path, allow_pickle=True)
+    _npz_game_keys: dict[str, list[str]] = {}  # game → [key, ...]
+    for _k in _npz_data.files:
+        _m = _re.match(r"^(\w+)_re(\d+)$", _k)
+        if _m:
+            _npz_game_keys.setdefault(_m.group(1), []).append(_k)
+    logger.info(f"Buffer npz keys by game: { {g: len(ks) for g, ks in _npz_game_keys.items()} }")
 
-        done_indices = np.where(done != True)
+    dataset = None
+    for game in unique_games:
+        # 현재 게임에 해당하는 키들의 pairs 를 합침
+        game_keys = sorted(_npz_game_keys.get(game, []))
+        if not game_keys:
+            # 게임 키가 없으면 전체 키 사용 (backward compat)
+            game_keys = sorted(k for ks in _npz_game_keys.values() for k in ks)
+            logger.warning(f"No buffer keys for game={game!r}, using all {len(game_keys)} keys")
 
-        prev_map_obs = prev_map_obs[done_indices[0], done_indices[1], ...]
-        curr_map_obs = curr_map_obs[done_indices[0], done_indices[1], ...]
-        prev_env_map = prev_env_map[done_indices[0], done_indices[1], ...]
-        curr_env_map = curr_env_map[done_indices[0], done_indices[1], ...]
-        reward = reward[done_indices[0], done_indices[1], ...]
+        arr_env_map = np.concatenate([_npz_data[k] for k in game_keys], axis=0)
 
-        arr_curr_env_map.append(curr_env_map)
-        arr_prev_env_map.append(prev_env_map)
-        arr_curr_map_obs.append(curr_map_obs)
-        arr_prev_map_obs.append(prev_map_obs)
-        rewards.append(reward)
+        # prev_env_map = arr_env_map[:, 0, :, :]
+        curr_env_map = arr_env_map[:, 1, :, :]
 
-    # Concat
-    curr_map_obs = np.concatenate(arr_curr_map_obs, axis=0)
-    prev_map_obs = np.concatenate(arr_prev_map_obs, axis=0)
-    curr_env_map = np.concatenate(arr_curr_env_map, axis=0)
-    prev_env_map = np.concatenate(arr_prev_env_map, axis=0)
-    # reward = np.concatenate(rewards, axis=0)
-
-    if config.use_prev:
         unique_pair_indices = get_unique_pair_indices(
-            pairing_maps(
-                prev_env_map, curr_env_map
+                curr_env_map
             )
-        )
-    else:
-        unique_pair_indices = get_unique_pair_indices(
-            curr_env_map
-        )
 
-    curr_map_obs = curr_map_obs[unique_pair_indices]
-    prev_map_obs = prev_map_obs[unique_pair_indices]
-    curr_env_map = curr_env_map[unique_pair_indices]
-    prev_env_map = prev_env_map[unique_pair_indices]
+        if config.buffer_ratio < 1.0:
+            n_total = len(unique_pair_indices)
+            n_sample = int(n_total * config.buffer_ratio)
+            unique_pair_indices = np.random.choice(unique_pair_indices, size=n_sample, replace=False)
+            logger.info(f"Subsampling buffer: {n_total} → {n_sample} samples (buffer_ratio={config.buffer_ratio})")
 
-    ############################## Embedding ##############################
-    # Load instruction csv
-    csv_path = abspath(join(dirname(__file__), '..', '..', 'instruct', f'{instruct_csv}.csv'))
-    df = pd.read_csv(csv_path)
-    logging.info(f"Loading instruction csv from {csv_path}")
+        curr_env_map = curr_env_map[unique_pair_indices]
 
-    # reward_enum = np.array(df['reward_enum'].to_list())
-    reward_enum_list = [[int(digit) for digit in str(num)] for num in df["reward_enum"].to_list()]
-    max_len = max(len(x) for x in reward_enum_list)
-    reward_enum = np.array([
-        x + [0] * (max_len - len(x)) for x in reward_enum_list
-    ])
+        game_idxes = np.where(game_ids == game2idx[game])[0]
+        instruct = np.array(whole_language_inst_list)[game_idxes]
+        reward_enum = np.array(whole_reward_enum)[game_idxes]
+        embedding = whole_inst.embedding[game_idxes]
+        reward_id = whole_inst.reward_i[game_idxes].reshape(-1)
+        condition = whole_inst.condition[game_idxes]
 
-    df_embed = df.filter(regex='embed_*')
-    df_embed = df_embed.reindex(sorted(df_embed.columns, key=lambda x: int(x.split('_')[-1])), axis=1)
-    embedding = df_embed.to_numpy()
+        sample_size = curr_env_map.shape[0]
 
-    df_cond = df.filter(regex=r'(?<!sub_)condition_')
-    condition_df = df_cond.reindex(sorted(df_cond.columns, key=lambda x: int(x.split('_')[-1])), axis=1)
-    condition = condition_df.to_numpy()
+        repeat_count = math.ceil(sample_size / len(reward_enum))
 
-    sample_size = curr_env_map.shape[0]
+        # make number numpy with the dataframe index
 
-    repeat_count = math.ceil(sample_size / len(reward_enum))
+        instruct = np.tile(instruct, repeat_count)[:sample_size]
+        reward_id = np.tile(reward_id, repeat_count)[:sample_size]
+        embedding = np.tile(embedding, (repeat_count, 1))[:sample_size]
+        # reward_enum: (n_game_samples, max_re_len) → tile → (sample_size, max_re_len)
+        reward_enum = np.tile(reward_enum, (repeat_count, 1))[:sample_size]
+        # condition:  (n_game_samples, N_CONDITION_COLS) → tile → (sample_size, N_CONDITION_COLS)
+        condition = np.tile(condition, (repeat_count, 1))[:sample_size]
 
-    # make number numpy with the dataframe index
+        logging.info(f"Loaded {sample_size:,} samples")
 
-    reward_id = df.index.to_numpy()
+        ############################## Reward ##############################
+        # Initialize an empty list to store rewards
 
-    reward_id = np.tile(reward_id, repeat_count)[:sample_size]
-    embedding = np.tile(embedding, (repeat_count, 1))[:sample_size]
-    reward_enum = np.tile(reward_enum, (repeat_count, 1))[:sample_size]
-    condition = np.tile(condition, (repeat_count, 1))[:sample_size]
+        batch_size = min(config.n_envs, config.batch_size)
+        num_batches = (sample_size + batch_size - 1) // batch_size
 
-    # if reward_enum is 5, it is not augmentable
-    augmentable = np.where(np.any(reward_enum == 5, axis=1), 0, 1)
+        recalculated_reward = list()
 
-    logging.info(f"Loaded {sample_size:,} samples")
+        for i in tqdm(range(num_batches), desc="Processing reward calculation"):
+            start_idx = i * batch_size
+            end_idx = min(start_idx + batch_size, sample_size)
 
-    ############################## Reward ##############################
-    # Initialize an empty list to store rewards
+            #slicing current batch data
+            batch_reward_enum = reward_enum[start_idx:end_idx]
+            batch_condition = condition[start_idx:end_idx]
+            batch_curr_env_map = curr_env_map[start_idx:end_idx]
 
-    batch_size = min(config.n_envs, config.batch_size)
-    num_batches = (sample_size + batch_size - 1) // batch_size
-
-    recalculated_reward = list()
-
-    for i in tqdm(range(num_batches), desc="Processing reward calculation"):
-        start_idx = i * batch_size
-        end_idx = min(start_idx + batch_size, sample_size)
-
-        #slicing current batch data
-        batch_reward_enum = reward_enum[start_idx:end_idx]
-        batch_condition = condition[start_idx:end_idx]
-        batch_prev_env_map = prev_env_map[start_idx:end_idx]
-        batch_curr_env_map = curr_env_map[start_idx:end_idx]
-
-        if config.use_prev:
-            batch_reward = get_reward_batch(
-                batch_reward_enum,
-                batch_condition,
-                batch_prev_env_map,
-                batch_curr_env_map,
-            )
-        else:
+            # Select fitness function based on game type
             batch_reward = get_fitness_batch(
                 batch_reward_enum,
                 batch_condition,
@@ -221,59 +189,32 @@ def create_dataset(buffer_dir: str, instruct_csv: str, config: RewardTrainConfig
                 config.normal_weigth,
             )
 
-        # save
-        recalculated_reward.append(batch_reward)
+            # save
+            recalculated_reward.append(batch_reward)
 
-    reward = np.concatenate(recalculated_reward, axis=0)
+        reward = np.concatenate(recalculated_reward, axis=0)
 
-    del reward_enum, condition, curr_env_map, prev_env_map
+        del condition
 
-    # Reward Replacement
+        if dataset is not None:
+            dataset.reward_id.expend(reward_id)
+            dataset.reward_enum.expend(reward_enum)
+            dataset.reward.expend(reward)
+            dataset.instruct.expend(instruct)
+            dataset.embedding.expend(embedding)
+        else:
+            dataset = Dataset(reward_id=reward_id,
+                              reward_enum=reward_enum,
+                              reward=reward,
+                              curr_env_map=curr_env_map,
+                              instruct=instruct,
+                              embedding=embedding,
+                              )
+        del reward_enum, reward_id, reward, embedding, curr_env_map
 
-    if config.zero_reward_ratio is not None:
-        zero_indices = np.where((reward < 0.001) & (reward > -0.001))[0]
-        zero_ratio = len(zero_indices) / len(reward) * 100
+    _npz_data.close()
 
-        n_keep = int(len(zero_indices) * config.zero_reward_ratio) # (111, )
-        zero_indices_keep = np.random.choice(zero_indices, n_keep, replace=False)
-
-        non_zero_indices = np.where(reward != 0)[0] # (111, )
-        sample_indices = np.concatenate([non_zero_indices, zero_indices_keep], axis=0)
-
-        non_zero_count = len(non_zero_indices)
-        final_zero_count = len(zero_indices_keep)
-        final_total_count = len(sample_indices)
-        filtered_zero_ratio = final_zero_count / final_total_count * 100
-        filtered_non_zero_ratio = 100 - filtered_zero_ratio
-
-        # logging
-        logging.info(
-            f"Initial dataset: {len(reward):,} samples. Zero reward samples: {len(zero_indices):,} ({zero_ratio:.2f}%).")
-        logging.info(
-            f"After filtering: Non-zero samples: {non_zero_count:,}, Kept zero samples: {final_zero_count:,}.")
-        logging.info(
-            f"Final dataset: {final_total_count:,} samples. Zero reward: {filtered_zero_ratio:.2f}%, Non-zero: {filtered_non_zero_ratio:.2f}%.")
-
-        curr_map_obs = curr_map_obs[sample_indices]
-        prev_map_obs = prev_map_obs[sample_indices]
-
-        reward = reward[sample_indices]
-        augmentable = augmentable[sample_indices]
-
-    dataset = Dataset(reward_id=reward_id,
-                      prev_map_obs=prev_map_obs,
-                      curr_map_obs=curr_map_obs,
-                      reward=reward,
-                      embedding=embedding,
-                      augmentable=augmentable)
-    del reward_id
-    del prev_map_obs
-    del curr_map_obs
-    del reward
-    del embedding
-    del augmentable
-
-    return dataset, df
+    return dataset
 
 
 def split_dataset(database: Dataset, train_ratio: float = 0.8):
@@ -287,7 +228,7 @@ def split_dataset(database: Dataset, train_ratio: float = 0.8):
     Returns:
         Tuple[Dataset, Dataset]: Train and Test datasets.
     """
-    total_size = database.curr_map_obs.shape[0]
+    total_size = database.curr_env_map.shape[0]
     train_size = int(total_size * train_ratio)
 
     indices = np.random.permutation(total_size)
@@ -297,37 +238,39 @@ def split_dataset(database: Dataset, train_ratio: float = 0.8):
     # Train Dataset
     train_dataset = Dataset(
         reward_id=database.reward_id[train_indices],
-        prev_map_obs=database.prev_map_obs[train_indices],
-        curr_map_obs=database.curr_map_obs[train_indices],
+        reward_enum=database.reward_enum[train_indices],
         reward=database.reward[train_indices],
+        curr_env_map=database.curr_env_map[train_indices],
+        instruct=database.instruct[train_indices],
         embedding=database.embedding[train_indices],
-        augmentable=database.augmentable[train_indices]
     )
 
     # Test Dataset
     test_dataset = Dataset(
         reward_id=database.reward_id[test_indices],
-        prev_map_obs=database.prev_map_obs[test_indices],
-        curr_map_obs=database.curr_map_obs[test_indices],
+        reward_enum=database.reward_enum[test_indices],
         reward=database.reward[test_indices],
+        curr_env_map=database.curr_env_map[test_indices],
+        instruct=database.instruct[test_indices],
         embedding=database.embedding[test_indices],
-        augmentable=database.augmentable[test_indices]
     )
 
     return train_dataset, test_dataset
 
 
-def create_embedding_table(embed_queue, reward_df: pd.DataFrame) -> wandb.Table:
-    reward_ids = [e.reward_id for e in embed_queue]
+def create_embedding_table(embed_queue) -> wandb.Table:
+    instruction = [e.instruct for e in embed_queue]
+    reward_enum = [e.reward_enum for e in embed_queue]
     embeds = np.array([e.embedding for e in embed_queue])
 
     # TSNE (2dim)
     tsne = TSNE(n_components=2, random_state=42)
     tsne_embeds = tsne.fit_transform(embeds)
 
-    inst_cols = reward_df.iloc[reward_ids][['instruction', 'reward_enum']].reset_index()
+    instruction = pd.DataFrame(instruction, columns=['instruction'])
+    reward_enum = pd.DataFrame(reward_enum, columns=['reward_enum'])
     tsne_df = pd.DataFrame(tsne_embeds, columns=['tsne_x', 'tsne_y']).reset_index()
-    df = pd.concat([inst_cols, tsne_df], axis=1).drop(columns=['index'])
+    df = pd.concat([instruction, reward_enum, tsne_df], axis=1).drop(columns=['index'])
 
     # Wandb table genarate, logging
     train_table = wandb.Table(dataframe=df)

@@ -38,6 +38,7 @@ from dataset.multigame import MultiGameDataset
 from encoder.schedular import create_learning_rate_fn
 from instruct_rl.utils.logger import get_wandb_name
 from encoder.utils.path import get_ckpt_dir, init_config
+from encoder.utils.training import build_multigame_dataset, save_encoder_checkpoint, setup_wandb
 from encoder.data import CLIPDatasetBuilder, CLIPEmbedData, CLIPDataset
 from encoder.data.clip_batch import create_clip_decoder_batch, CLIPDecoderBatch
 
@@ -98,6 +99,7 @@ def train_step(
             batch.input_ids,
             batch.attention_mask,
             batch.pixel_values,
+            reward_enum=batch.reward_enum_target,
             mode=mode,
             training=is_train,
             rngs={"dropout": dropout_rng},
@@ -284,14 +286,7 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
 def make_train(config: CLIPDecoderTrainConfig):
     def train(rng_key):
         rng_key, subkey = jax.random.split(rng_key)
-        dataset = MultiGameDataset(
-            include_dungeon=config.include_dungeon,
-            include_pokemon=config.include_pokemon,
-            include_sokoban=config.include_sokoban,
-            include_doom=config.include_doom,
-            include_doom2=config.include_doom2,
-            include_zelda=config.include_zelda,
-        )
+        dataset = build_multigame_dataset(config)
 
         # ── 학습 전 reward_enum / condition 범위 요약 출력 ──
         _log_reward_condition_summary(dataset)
@@ -303,6 +298,9 @@ def make_train(config: CLIPDecoderTrainConfig):
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
+            max_samples=config.max_samples,
+            prepend_game_prefix=config.prepend_game_prefix,
+            prepend_game_desc=config.prepend_game_desc,
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
@@ -324,30 +322,6 @@ def make_train(config: CLIPDecoderTrainConfig):
             logger.info(f"  {eidx:>10}  {name:<22} {r_min:>10.2f}  {r_max:>10.2f}  {'[0.0, 1.0]':>12}")
         logger.info("")
 
-        # dry-run: 데이터 개수 제한
-        if config.max_samples is not None:
-            n = config.max_samples
-            n_train_orig = len(train_clip_dataset.class_ids)
-            n_test_orig = len(test_clip_dataset.class_ids)
-
-            def _slice_dataset(ds, n):
-                n = min(n, len(ds.class_ids))
-                return CLIPDataset(
-                    class_ids=ds.class_ids[:n],
-                    reward_cond=ds.reward_cond[:n],
-                    input_ids=ds.input_ids[:n],
-                    attention_masks=ds.attention_masks[:n],
-                    pixel_values=ds.pixel_values[:n],
-                    is_train=ds.is_train[:n],
-                    reward_enum_targets=ds.reward_enum_targets[:n],
-                    condition_targets=ds.condition_targets[:n],
-                    quantized_condition_targets=ds.quantized_condition_targets[:n] if ds.quantized_condition_targets is not None else None,
-                )
-            train_clip_dataset = _slice_dataset(train_clip_dataset, n)
-            test_clip_dataset = _slice_dataset(test_clip_dataset, n)
-            logger.info(f"[dry-run] max_samples={n} → "
-                        f"train: {n_train_orig} → {len(train_clip_dataset.class_ids)}, "
-                        f"test: {n_test_orig} → {len(test_clip_dataset.class_ids)}")
 
         n_train = len(train_clip_dataset.class_ids)
         n_test = len(test_clip_dataset.class_ids)
@@ -531,7 +505,7 @@ def make_train(config: CLIPDecoderTrainConfig):
 
             # ── Checkpoint ──
             if (epoch + 1) % config.ckpt_freq == 0:
-                save_checkpoint(config, train_state, step=epoch + 1)
+                save_encoder_checkpoint(config, train_state, step=epoch + 1)
 
             # ── Embedding 시각화 ──
             if (epoch + 1) % config.embed_visualize_freq == 0:
@@ -642,6 +616,7 @@ def get_train_state(config: CLIPDecoderTrainConfig, rng_key: jax.random.PRNGKey,
 
         variables = module.init(
             init_rng, input_ids, attention_mask, pixel_values,
+            reward_enum=jnp.zeros((1,), dtype=jnp.int32),
             mode=config.encoder.mode, training=False,
         )
         # variables = {"params": {...}, "norm_stats": {...}}

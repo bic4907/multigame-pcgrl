@@ -214,8 +214,13 @@ def _compute_clip_embeddings(sample_list, config):
     dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
     dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
     dummy_pix = jnp.ones((1, 16, 16, 6), dtype=jnp.float32)
+    dummy_reward_enum = jnp.zeros((1,), dtype=jnp.int32)
     mode = "text_state" if encoder_config.state else "text"
-    variables = module.init(rng, dummy_ids, dummy_mask, dummy_pix, mode=mode, training=False)
+    # ContrastiveDecoderModule은 reward_enum kwarg를 지원; ContrastiveModule은 무시
+    _init_kwargs = dict(mode=mode, training=False)
+    if _use_decoder:
+        _init_kwargs["reward_enum"] = dummy_reward_enum
+    variables = module.init(rng, dummy_ids, dummy_mask, dummy_pix, **_init_kwargs)
 
     # 체크포인트 복원
     ckpt_path = encoder_config.ckpt_path
@@ -316,14 +321,21 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
             texts.append("")  # placeholder
             has_text.append(False)
 
-    # 배치 토크나이즈
-    tokens = tokenizer(
-        texts, return_tensors="jax",
-        padding=True, truncation=True, max_length=128,
-    )
-    # BERT forward → [CLS] 토큰 임베딩
-    outputs = model(**tokens)
-    cls_embeddings = np.array(outputs.last_hidden_state[:, 0, :])  # (N, 768)
+    # 배치 단위로 BERT forward → OOM 방지
+    from tqdm import tqdm
+    bert_batch_size = 64
+    all_cls = []
+    batches = range(0, len(texts), bert_batch_size)
+    for i in tqdm(batches, desc="BERT embeddings", unit="batch"):
+        batch_texts = texts[i: i + bert_batch_size]
+        tokens = tokenizer(
+            batch_texts, return_tensors="jax",
+            padding=True, truncation=True, max_length=128,
+        )
+        outputs = model(**tokens)
+        all_cls.append(np.array(outputs.last_hidden_state[:, 0, :]))
+
+    cls_embeddings = np.concatenate(all_cls, axis=0)  # (N, 768)
 
     # instruction 없는 샘플은 zeros
     for i, ht in enumerate(has_text):

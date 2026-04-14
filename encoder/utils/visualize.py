@@ -54,17 +54,26 @@ def create_scatter_plot(df, epoch, config, min_val=0, max_val=1,
     return fig_path
 
 
-def create_embedding_figure(embed_queue, reward_df: pd.DataFrame, epoch, config, postfix="") -> str:
-    reward_ids = [e.reward_id for e in embed_queue]
+def create_embedding_figure(embed_queue, epoch, config, postfix="") -> str:
     embeds = np.array([e.embedding for e in embed_queue])
 
     # TSNE (2dim)
     tsne = TSNE(n_components=2, random_state=42)
     tsne_embeds = tsne.fit_transform(embeds)
 
-    inst_cols = reward_df.iloc[reward_ids][['reward_enum']].reset_index()
+    # Extract reward_enum and convert to proper format
+    inst_cols_raw = [e.reward_enum for e in embed_queue]
+    inst_cols_converted = []
+    for col in inst_cols_raw:
+        if isinstance(col, np.ndarray):
+            # Handle numpy array: extract single value if size 1, otherwise take first element
+            inst_cols_converted.append(int(col.item()) if col.size == 1 else int(col[0]))
+        else:
+            inst_cols_converted.append(int(col))
+
     tsne_df = pd.DataFrame(tsne_embeds, columns=['tsne_x', 'tsne_y']).reset_index()
-    df = pd.concat([inst_cols, tsne_df], axis=1).drop(columns=['index'])
+    inst_cols_series = pd.Series(inst_cols_converted, name='reward_enum')
+    df = pd.concat([inst_cols_series.reset_index(drop=True), tsne_df], axis=1).drop(columns=['index'])
 
     # draw scatter plot
     sns.set_theme(style="whitegrid")
@@ -76,8 +85,14 @@ def create_embedding_figure(embed_queue, reward_df: pd.DataFrame, epoch, config,
 
     ax.set_xlabel("Projection X")
     ax.set_ylabel("Projection Y")
+
+    # Move legend outside plot area to avoid tight_layout issues
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
+
     ax.grid(True)
-    plt.tight_layout()
+
+    # Use subplots_adjust instead of tight_layout
+    plt.subplots_adjust(right=0.85, left=0.1, top=0.95, bottom=0.1)
 
     # save
     os.makedirs(os.path.join(config.exp_dir, config.figure_dir), exist_ok=True)

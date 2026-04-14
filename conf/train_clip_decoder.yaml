@@ -14,8 +14,15 @@ decoder:
   hidden_dim: 128
   num_layers: 2
   num_reward_classes: 5
+  cnn_reward_enum_onehot: true   # CNN 입력에 reward_enum one-hot 채널 추가
 
 # loss 가중치
 contrastive_weight: 1.0
 cls_weight: 1.0
 reg_weight: 0.1
+
+# instruction 앞에 게임 이름 prefix 추가 (e.g. "In Zelda, ...")
+prepend_game_prefix: false
+# instruction 앞에 게임 설명 prefix 추가 (e.g. "In a top-down dungeon adventure, ...")
+# prepend_game_prefix 보다 우선 적용됨
+prepend_game_desc: false

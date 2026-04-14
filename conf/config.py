@@ -191,6 +191,9 @@ class DecoderConfig:
     num_layers: int = 2
     output_dim: int = 1
     num_reward_classes: int = 6
+    # CNN 입력에 reward_enum one-hot 채널을 추가할지 여부
+    # True이면 pixel_values에 (B, H, W, num_reward_classes) one-hot을 concat
+    cnn_reward_enum_onehot: bool = False
 
 
 @dataclass
@@ -322,6 +325,7 @@ class CollectBufferConfig(CPCGRLConfig):
     실험 폴더의 buffer/ 디렉토리에 .npz 파일로 저장한다.
     """
     wandb_project: str = 'collect_buffer'
+    dir_prefix: str = "buffer-"
 
     # ── 버퍼 수집 파라미터 ──
     buffer_max_samples: int = 10_000       # 수집할 최대 transition 수
@@ -400,8 +404,8 @@ class RewardConfig(Config):
     output_dim: int = 1
 
     figure_dir: str = "figures"
-    buffer_dir: str = "./pcgrl_buffer"
-    n_buffer: int = -1
+    buffer_dir: str = "./dataset"
+    buffer_raio: float = 1.0
     train_ratio: float = 0.8
     n_epochs: int = 100
 
@@ -423,9 +427,19 @@ class RewardConfig(Config):
     steps_per_epoch: Optional[int] = None
     warmup_epochs: int = 10  # set 10% of the total timesteps
 
+    max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+    max_samples_per_game: int = 1000  # 게임별 베이스 샘플 상한 (0=무제한)
+    max_samples_seed: int = 42  # max_samples_per_game 서브샘플링 시드
+
 @dataclass
 class RewardTrainConfig(RewardConfig):
     wandb_project: str = 'train_mlp_encoder'
+    wandb_key: Optional[str] = None
+
+    pretrained_model: str = "bert"
+    model_size: str = "base"
+
+    max_len: int = 77
 
     n_envs: int = 300
     ckpt_freq: int = 5
@@ -464,7 +478,12 @@ class CLIPTrainConfig(Config):
     max_samples_per_game: int = 1000   # 게임별 베이스 샘플 상한 (0=무제한)
     max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
-    
+
+    # instruction 앞에 게임 이름 prefix를 붙일지 여부 (e.g. "In Zelda, ...")
+    prepend_game_prefix: bool = False
+    # instruction 앞에 게임 설명 prefix를 붙일지 여부 (e.g. "In a top-down dungeon adventure, ...")
+    prepend_game_desc: bool = False
+
     # overwrite
     embed_type: str = "humanai"
 

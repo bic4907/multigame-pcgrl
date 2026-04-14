@@ -30,11 +30,12 @@ def get_exp_group(config):
 
         # ── MultiGameDataset 기반 CPCGRL / IPCGRL / VIPCGRL 모드 ──
         if hasattr(config, 'dataset_game') and config.dataset_game is not None:
-            config_dict = {
-                'model': config.model,
-                'exp': config.exp_name,
-                'game': config.dataset_game,
-            }
+            config_dict = {}
+            # dir_prefix가 있으면 model 키 생략 (prefix가 역할을 대신함)
+            if not getattr(config, 'dir_prefix', ''):
+                config_dict['model'] = config.model
+            config_dict['exp'] = config.exp_name
+            config_dict['game'] = config.dataset_game
             if hasattr(config, 'dataset_reward_enum') and config.dataset_reward_enum is not None:
                 config_dict['re'] = config.dataset_reward_enum
             exp_group = '_'.join([f'{key}-{value}' for key, value in config_dict.items()])
@@ -160,7 +161,8 @@ def get_exp_name(config):
 
     # target_character = get_short_target(config.target_character) if config.task == 'scenario' else config.target_character
 
-    return f'{exp_group}_s-{config.seed}'
+    prefix = getattr(config, 'dir_prefix', '')
+    return f'{prefix}{exp_group}_s-{config.seed}'
 
 
 def get_exp_dir(config):
@@ -303,8 +305,6 @@ def init_config(config: Config):
 
                 conditions = {
                     'embed_type': f'enc-{config.encoder.model}',
-                    'embed_size': f'es-{config.encoder.output_dim}',
-                    'buffer_ratio': f'br-{config.buffer_ratio}',
                 }
 
                 if config.encoder.model in ['cnnclip', 'clip']:

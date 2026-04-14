@@ -299,6 +299,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
             max_samples=config.max_samples,
+            prepend_game_prefix=config.prepend_game_prefix,
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()

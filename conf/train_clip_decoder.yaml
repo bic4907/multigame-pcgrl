@@ -20,3 +20,6 @@ decoder:
 contrastive_weight: 1.0
 cls_weight: 1.0
 reg_weight: 0.1
+
+# instruction 앞에 게임 이름 prefix 추가 (e.g. "In Zelda, ...")
+prepend_game_prefix: false

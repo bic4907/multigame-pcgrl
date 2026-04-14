@@ -66,6 +66,39 @@ class CLIPDecoderBatch:
     condition_target: np.ndarray     # (B,)  — condition 값 (regression target)
 
 
+
+# ── 게임별 prefix 템플릿 (5개 variation) ──────────────────────────────────────────
+# {game} 자리에 표시 이름이 들어간다.  instruction 앞에 랜덤으로 하나가 붙는다.
+_GAME_PREFIX_TEMPLATES: List[str] = [
+    "In {game}, ",
+    "For a {game} map, ",
+    "This {game} level has ",
+    "Within {game}, ",
+    "Playing {game}, ",
+]
+
+# game tag(소문자) → 표시 이름
+_GAME_DISPLAY_NAMES: dict = {
+    "dungeon":  "Dungeon",
+    "pokemon":  "Pokémon",
+    "sokoban":  "Sokoban",
+    "doom":     "Doom",
+    "doom2":    "Doom",
+    "zelda":    "Zelda",
+}
+
+
+def _prepend_game_prefix(instruction: str, game: str, rng: random.Random) -> str:
+    """instruction 앞에 게임 이름 prefix를 랜덤으로 붙인다."""
+    display = _GAME_DISPLAY_NAMES.get(game, game.capitalize())
+    template = rng.choice(_GAME_PREFIX_TEMPLATES)
+    prefix = template.format(game=display)
+    # 첫 글자 소문자 처리 (prefix 뒤에 이어지므로)
+    if instruction and instruction[0].isupper():
+        instruction = instruction[0].lower() + instruction[1:]
+    return prefix + instruction
+
+
 class CLIPDatasetBuilder:
     def __init__(self,
                  processor: CLIPProcessor,
@@ -74,6 +107,7 @@ class CLIPDatasetBuilder:
                  train_ratio:float=0.8,
                  max_len:int=77,
                  max_samples: int = None,
+                 prepend_game_prefix: bool = False,
                  ):
         self.processor = processor
         self.paired_data = paired_data
@@ -82,6 +116,7 @@ class CLIPDatasetBuilder:
         self.max_len = max_len
         self.train_ratio = train_ratio
         self.max_samples = max_samples
+        self.prepend_game_prefix = prepend_game_prefix
 
         # Create game_name to index mapping
         unique_games = sorted(set([s.game for s in self.paired_data._samples]))
@@ -139,6 +174,17 @@ class CLIPDatasetBuilder:
         level_arrays = add_coord_channel_batch(level_arrays)  # (N, 16, 16, C)
 
         language_inst_list = [s.instruction for s in samples]
+
+        # ── 게임 prefix 추가 (옵션) ──
+        if self.prepend_game_prefix:
+            prefix_rng = random.Random(42)  # 재현 가능하도록 고정 시드
+            game_list = [s.game for s in samples]
+            language_inst_list = [
+                _prepend_game_prefix(inst, game, prefix_rng) if inst else inst
+                for inst, game in zip(language_inst_list, game_list)
+            ]
+            logger.info(f"Prepended game prefix to {len(language_inst_list)} instructions "
+                        f"(example: '{language_inst_list[0][:80]}...')")
 
         # Extract reward annotation (game_name, reward_enum, conditions) combination
         reward_cond_list = []

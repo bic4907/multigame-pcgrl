@@ -170,6 +170,7 @@ def make_train(config: CLIPTrainConfig):
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
+            prepend_game_prefix=config.prepend_game_prefix,
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()

@@ -477,7 +477,10 @@ class CLIPTrainConfig(Config):
     max_samples_per_game: int = 1000   # 게임별 베이스 샘플 상한 (0=무제한)
     max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
-    
+
+    # instruction 앞에 게임 이름 prefix를 붙일지 여부 (e.g. "In Zelda, ...")
+    prepend_game_prefix: bool = False
+
     # overwrite
     embed_type: str = "humanai"
 

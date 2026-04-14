@@ -50,20 +50,32 @@ def get_exp_group(config):
 
         config_dict = {
             'game': getattr(config, 'game', 'dg'),
+        }
+        if hasattr(config, 'unseen_games') and config.unseen_games:
+            config_dict['unseen'] = config.unseen_games
+        config_dict.update({
             'md': modality,
             'exp': config.exp_name,
-        }
+        })
     elif config.encoder.model == 'mlp':
         config_dict = {
             'game': getattr(config, 'game', 'dg'),
+        }
+        if hasattr(config, 'unseen_games') and config.unseen_games:
+            config_dict['unseen'] = config.unseen_games
+        config_dict.update({
             'enc': 'mlp',
             'exp': config.exp_name,
-        }
+        })
     else:
         config_dict = {
             'game': getattr(config, 'game', 'dg'),
-            'exp': config.exp_name,
         }
+        if hasattr(config, 'unseen_games') and config.unseen_games:
+            config_dict['unseen'] = config.unseen_games
+        config_dict.update({
+            'exp': config.exp_name,
+        })
 
     exp_group = os.path.join(
         '_'.join([f'{key}-{value}' for key, value in config_dict.items()])

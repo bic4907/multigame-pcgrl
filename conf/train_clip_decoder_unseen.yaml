@@ -1,0 +1,41 @@
+# conf/train_clip_decoder_unseen.yaml
+# Seen/Unseen 게임 분리 + Few-shot Ratio Sweep 실험 설정
+#
+# Usage:
+#   python train_clip_decoder_unseen.py game=all unseen_games=zd
+#   python train_clip_decoder_unseen.py game=all unseen_games=pkzd 'unseen_ratios=[0.0,0.1,0.5,1.0]'
+
+defaults:
+  - train_clip_decoder_unseen_schema
+  - _self_
+
+encoder:
+  model: cnnclip
+
+# 디코더 설정
+decoder:
+  hidden_dim: 128
+  num_layers: 2
+  num_reward_classes: 5
+  cnn_reward_enum_onehot: true
+
+# loss 가중치
+contrastive_weight: 1.0
+cls_weight: 1.0
+reg_weight: 0.1
+
+# instruction prefix 설정
+prepend_game_prefix: true
+prepend_game_desc: false
+
+# ── Seen/Unseen 실험 설정 ──
+# unseen 게임 지정 (2글자 약어: dg=dungeon, pk=pokemon, sk=sokoban, dm=doom, zd=zelda)
+game: "all"
+unseen_games: "zd"
+
+# 테스트셋 비율 및 분할 시드
+unseen_test_ratio: 0.2
+unseen_test_seed: 42
+
+n_epochs: 300
+

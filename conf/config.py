@@ -516,6 +516,28 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     cls_weight: float = 1.0            # reward_enum 분류 loss 가중치
     reg_weight: float = 0.1            # condition 회귀 loss 가중치
 
+@dataclass
+class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
+    """Seen/Unseen 게임 분리 + Few-shot Ratio Sweep Config.
+
+    Seen 게임의 전체 학습 데이터와 Unseen 게임의 가변 비율 학습 데이터로
+    CLIP Decoder 모델을 학습하고, 고정된 테스트셋에서 게임별 reward_accuracy를 측정한다.
+    """
+    wandb_project: str = 'train_clip_decoder_unseen'
+    dir_prefix: str = "clipdec-unseen-"
+
+    # ── Unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda) ──
+    unseen_games: str = "zd"
+
+    # ── Few-shot ratio sweep 설정 ──
+    # 0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen 학습 풀 전부 사용
+    unseen_ratios: Tuple[float, ...] = (0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0)
+
+    # ── 테스트셋 설정 ──
+    unseen_test_ratio: float = 0.2    # 각 게임 데이터에서 테스트용으로 예약할 비율
+    unseen_test_seed: int = 42        # 테스트셋 분할 시드 (재현 가능)
+
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
@@ -528,6 +550,7 @@ cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 # CLIP PCGRL Configs
 cs.store(name="train_clip", node=CLIPTrainConfig)
 cs.store(name="train_clip_decoder_schema", node=CLIPDecoderTrainConfig)
+cs.store(name="train_clip_decoder_unseen_schema", node=CLIPDecoderUnseenConfig)
 
 cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)

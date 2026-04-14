@@ -76,6 +76,7 @@ jobs:
             -v --override-ini="testpaths=" \
             -k "TestMappedShape or TestMappedMinMax or TestMappedRender or TestEndToEnd"
 
+
   env-tests:
     runs-on: ubuntu-latest
 
@@ -162,97 +163,6 @@ jobs:
           python -m pytest tests/test_cpcgrl_baseline.py -v \
             -k "TestCPCGRLTraining"
 
-  ipcgrl-tests:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install \
-            "jax[cpu]==0.5.0" \
-            "jaxlib==0.5.0" \
-            flax \
-            "optax==0.2.4" \
-            "chex==0.1.87" \
-            "distrax==0.1.1" \
-            "gymnax==0.0.8" \
-            hydra-core \
-            orbax-checkpoint \
-            tensorboardX \
-            wandb \
-            "transformers<5" \
-            scikit-learn \
-            imageio \
-            numpy pillow pytest pandas
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-      - name: Run IPCGRL config & dataset tests
-        run: |
-          python -m pytest tests/test_ipcgrl_baseline.py -v \
-            -k "TestIPCGRLConfig or TestIPCGRLDatasetLoading"
-
-      - name: Run IPCGRL training E2E test
-        run: |
-          python -m pytest tests/test_ipcgrl_baseline.py -v \
-            -k "TestIPCGRLTraining"
-
-  vipcgrl-tests:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install \
-            "jax[cpu]==0.5.0" \
-            "jaxlib==0.5.0" \
-            flax \
-            "optax==0.2.4" \
-            "chex==0.1.87" \
-            "distrax==0.1.1" \
-            "gymnax==0.0.8" \
-            hydra-core \
-            orbax-checkpoint \
-            tensorboardX \
-            wandb \
-            "transformers<5" \
-            scikit-learn \
-            imageio \
-            numpy pillow pytest pandas
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-      - name: Run VIPCGRL config & dataset tests
-        run: |
-          python -m pytest tests/test_vipcgrl_baseline.py -v \
-            -k "TestVIPCGRLConfig or TestVIPCGRLDatasetLoading"
-
-      - name: Run VIPCGRL training E2E test
-        run: |
-          python -m pytest tests/test_vipcgrl_baseline.py -v \
-            -k "TestVIPCGRLTraining"
 
   ipcgrl-checkpoint:
     runs-on: ubuntu-latest

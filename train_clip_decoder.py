@@ -382,7 +382,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             cond_norm_max=norm_max_arr,
         )
 
-        logger.info(f"Fold {fold}: train={n_train}, val={n_test}, batches/epoch={n_train_batch}")
+        logger.info(f"Game {game}: train={n_train}, val={n_test}, batches/epoch={n_train_batch}")
         logger.info(f"  contrastive_weight={config.contrastive_weight}, "
                     f"cls_weight={config.cls_weight}, reg_weight={config.reg_weight}")
 
@@ -607,7 +607,7 @@ def make_train(config: CLIPDecoderTrainConfig):
                 all_true_raw = np.concatenate(val_true_raw_buf, axis=0)
                 all_pred_raw = np.concatenate(val_pred_raw_buf, axis=0)
                 all_enum = np.concatenate(val_enum_buf, axis=0)
-                scatter_dir = os.path.join(config.exp_dir, f"scatter/fold{fold}")
+                scatter_dir = os.path.join(config.exp_dir, f"scatter/{game}")
                 scatter_paths = _create_condition_scatter_plots(
                     true_raw=all_true_raw,
                     pred_raw=all_pred_raw,

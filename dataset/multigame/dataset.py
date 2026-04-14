@@ -704,14 +704,34 @@ class MultiGameDataset:
                 sid = row.get("sample_id", "")
                 sid_to_rows[sid].append(row)
 
-            # 로드된 샘플의 source_id에서 sample_id 추출 (npz key → 숫자 부분)
-            # source_id 형태: "level_000000" 또는 "000000" 등
+            # 로드된 샘플의 source_id에서 sample_id 추출 (annotate.py의 _shorten_source_id와 동일 로직)
             def _extract_sample_id(source_id: str) -> str:
-                """source_id에서 숫자 부분을 추출하여 sample_id 형식으로 변환."""
+                """source_id를 annotate.py의 _shorten_source_id와 동일하게 변환."""
                 import re
-                m = re.search(r'(\d+)$', source_id)
-                if m:
-                    return m.group(1).lstrip('0') or '0'
+                if game_name == "doom":
+                    if "|" in source_id:
+                        path_part, slice_idx = source_id.rsplit("|", 1)
+                    else:
+                        path_part, slice_idx = source_id, "0"
+                    p = Path(path_part)
+                    stem = p.stem
+                    parts = p.parts
+                    version = "Doom2" if any("Doom2" in part for part in parts) else "Doom1"
+                    return f"{version}_{stem}_{int(slice_idx):03d}"
+                if game_name == "sokoban":
+                    if "#" in source_id:
+                        path_part, lvl_idx = source_id.rsplit("#", 1)
+                    else:
+                        path_part, lvl_idx = source_id, "0"
+                    p = Path(path_part)
+                    parts = p.parts
+                    difficulty = "hard" if any("hard" in part for part in parts) else "medium"
+                    return f"{difficulty}_{p.stem}_{int(lvl_idx):03d}"
+                if game_name in ("dungeon", "d2", "d3", "d5"):
+                    m = re.search(r'(\d+)$', source_id)
+                    if m:
+                        return m.group(1).lstrip('0') or '0'
+                # zelda, pokemon 등: source_id 그대로
                 return source_id
 
             # sample_id → game_sample index 매핑
@@ -755,7 +775,11 @@ class MultiGameDataset:
 
             for sid, rows in sid_to_rows.items():
                 # CSV sample_id → 로드된 샘플 매칭
-                sid_norm = sid.lstrip('0') or '0'
+                # dungeon 계열은 숫자 앞의 0을 제거해 비교, 나머지는 그대로
+                if game_name in ("dungeon", "d2", "d3", "d5"):
+                    sid_norm = sid.lstrip('0') or '0'
+                else:
+                    sid_norm = sid
                 sample_idx = sid_to_sample_idx.get(sid_norm)
                 if sample_idx is None:
                     continue

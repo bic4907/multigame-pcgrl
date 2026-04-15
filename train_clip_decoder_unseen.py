@@ -702,6 +702,7 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         logger.info("  Seen/Unseen Split")
         logger.info("  Seen games  : %s", seen_games)
         logger.info("  Unseen games: %s", unseen_games)
+        logger.info("  Seen ratio  : %.2f", config.seen_ratio)
         logger.info("  Total samples: %d", len(full_dataset.class_ids))
         logger.info("=" * 70)
 
@@ -789,7 +790,7 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
 
             # W&B 로깅 (per-ratio 최종 결과 + incremental plot)
             if wandb.run is not None:
-                log_dict = {"unseen/ratio": ratio}
+                log_dict = {"unseen/ratio": ratio, "unseen/seen_ratio": config.seen_ratio}
                 for g, acc in per_game_acc.items():
                     log_dict[f"unseen/acc_{g}"] = acc
                 for g, reg in per_game_reg.items():

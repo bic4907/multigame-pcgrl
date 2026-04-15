@@ -531,7 +531,7 @@ class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
 
     # ── Few-shot ratio sweep 설정 ──
     # 0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen 학습 풀 전부 사용
-    unseen_ratios: Tuple[float, ...] = (0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0)
+    unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1, 0.15, 0.2, 0.3)
 
     # ── 테스트셋 설정 ──
     unseen_test_ratio: float = 0.2    # 각 게임 데이터에서 테스트용으로 예약할 비율

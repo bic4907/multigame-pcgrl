@@ -783,12 +783,6 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
                     log_dict[f"unseen/acc_{g}"] = acc
                 for g, reg in per_game_reg.items():
                     log_dict[f"unseen/reg_{g}"] = reg
-
-                # 현재까지 누적된 결과로 incremental plot 생성
-                incr_plot_path = create_fewshot_plot(
-                    results, reg_results, unseen_game_set, config.exp_dir,
-                )
-                log_dict["unseen/fewshot_plot"] = wandb.Image(incr_plot_path)
                 wandb.log(log_dict)
 
         # ── 5. 결과 저장 ──
@@ -830,7 +824,10 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
                     row.append(reg_results[ratio_val].get(g, None))
                 row.append(reg_results[ratio_val].get("overall", None))
                 table.add_data(*row)
-            wandb.log({"unseen/results_table": table})
+            wandb.log({
+                "unseen/results_table": table,
+                "unseen/fewshot_plot": wandb.Image(plot_path),
+            })
 
         # ── 최종 요약 출력 ──
         logger.info("\n" + "=" * 70)

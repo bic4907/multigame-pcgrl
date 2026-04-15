@@ -37,5 +37,8 @@ unseen_games: "zd"
 unseen_test_ratio: 0.2
 unseen_test_seed: 42
 
+# seen 게임 데이터 비율 (1.0 = 전부 사용, 0.0 = 미사용)
+seen_ratio: 1.0
+
 n_epochs: 300
 

@@ -137,12 +137,14 @@ def build_train_indices_for_ratio(
     game_train_pool: Dict[str, np.ndarray],
     unseen_game_names: Set[str],
     ratio: float,
+    seen_ratio: float = 1.0,
 ) -> np.ndarray:
     """주어진 few-shot ``ratio`` 에 대해 학습 인덱스를 구성한다.
 
-    - Seen 게임: train pool 전체 사용
+    - Seen 게임: train pool 중 seen_ratio 비율만큼 (prefix) 사용
     - Unseen 게임: train pool 중 ratio 비율만큼 (prefix) 사용
     - ratio=0.0 이면 unseen 게임의 학습 데이터 = 0
+    - seen_ratio=0.0 이면 seen 게임의 학습 데이터 = 0
     """
     train_indices: List[np.ndarray] = []
     for game, pool in sorted(game_train_pool.items()):
@@ -151,7 +153,9 @@ def build_train_indices_for_ratio(
             if n_use > 0:
                 train_indices.append(pool[:n_use])
         else:
-            train_indices.append(pool)
+            n_use = int(len(pool) * seen_ratio)
+            if n_use > 0:
+                train_indices.append(pool[:n_use])
     if train_indices:
         return np.concatenate(train_indices)
     return np.array([], dtype=int)
@@ -741,7 +745,8 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         for ratio_idx, ratio in enumerate(ratios):
             # 학습 인덱스 구성
             train_indices = build_train_indices_for_ratio(
-                game_train_pool, unseen_game_set, ratio
+                game_train_pool, unseen_game_set, ratio,
+                seen_ratio=config.seen_ratio,
             )
 
             if len(train_indices) == 0:
@@ -842,7 +847,7 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
             # 테이블: 각 행 = 하나의 ratio
             # norm_diff = raw_diff / baseline_diff (ratio=1.0 대비 상대 에러)
             columns = [
-                "ratio", "game", "unseen_games",
+                "ratio", "seen_ratio", "game", "unseen_games",
                 "seen_acc", "unseen_acc",
                 "seen_reg", "unseen_reg",
                 "seen_avg_diff", "unseen_avg_diff",
@@ -881,7 +886,7 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
                                if unseen_avg is not None and baseline_unseen_diff else None)
 
                 row = [
-                    float(ratio_val), config.game, config.unseen_games,
+                    float(ratio_val), float(config.seen_ratio), config.game, config.unseen_games,
                     seen_acc, unseen_acc,
                     seen_reg, unseen_reg,
                     seen_avg, unseen_avg,

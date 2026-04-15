@@ -533,6 +533,10 @@ class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
     # 0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen 학습 풀 전부 사용
     unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1, 0.15, 0.2, 0.3, 1.0)
 
+    # ── Seen 게임 데이터 비율 ──
+    # 1.0 = seen 학습 풀 전부 사용 (기본값), 0.0 = seen 학습 데이터 0%
+    seen_ratio: float = 1.0
+
     # ── 테스트셋 설정 ──
     unseen_test_ratio: float = 0.2    # 각 게임 데이터에서 테스트용으로 예약할 비율
     unseen_test_seed: int = 42        # 테스트셋 분할 시드 (재현 가능)

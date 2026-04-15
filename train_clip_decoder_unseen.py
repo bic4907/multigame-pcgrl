@@ -252,6 +252,7 @@ def train_step(
             "reg_loss": reg_loss,
             "reward_accuracy": reward_accuracy,
             "reward_pred": reward_pred,  # (B,) per-sample predictions
+            "abs_diff": abs_diff,        # (B,) per-sample |pred_cond - target_cond|
             "state2text_top1_accuracy": s2t_top1 * state_mask,
             "text2state_top1_accuracy": t2s_top1 * state_mask,
         }
@@ -282,13 +283,14 @@ def evaluate_per_game(
     rng_key: jax.random.PRNGKey,
     num_cls: int,
     mode: str,
-) -> Tuple[Dict[str, float], Dict[str, float]]:
+) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]]]:
     """고정된 테스트셋에서 **게임별** reward accuracy 와 reg_loss를 계산한다.
 
     Returns
     -------
     per_game_acc      : {game: acc, "overall", "seen_overall", "unseen_overall"}
     per_game_reg_loss : {game: reg, "overall", "seen_overall", "unseen_overall"}
+    per_game_enum_diff: {game: {reward_enum: mean_abs_diff}}
     """
     n_test = len(test_ds.input_ids)
     batch_size = config.batch_size
@@ -296,6 +298,8 @@ def evaluate_per_game(
     all_preds: List[int] = []
     all_targets: List[int] = []
     all_reg_losses: List[float] = []  # per-sample reg loss
+    all_abs_diffs: List[float] = []   # per-sample |pred_cond - target_cond|
+    all_reward_enums: List[int] = []  # per-sample reward_enum target
 
     for start_idx in range(0, n_test, batch_size):
         end_idx = min(start_idx + batch_size, n_test)
@@ -341,25 +345,38 @@ def evaluate_per_game(
         preds = np.array(jax.device_get(metrics["reward_pred"]))
         targets = np.array(jax.device_get(reward_enum_target))
         batch_reg = float(jax.device_get(metrics["reg_loss"]))
+        batch_abs_diff = np.array(jax.device_get(metrics["abs_diff"]))
         all_preds.extend(preds[:actual_size].tolist())
         all_targets.extend(targets[:actual_size].tolist())
         # batch-level reg_loss를 actual_size만큼 복제 (batch 평균이므로)
         all_reg_losses.extend([batch_reg] * actual_size)
+        all_abs_diffs.extend(batch_abs_diff[:actual_size].tolist())
+        all_reward_enums.extend(targets[:actual_size].tolist())
 
     # ── Per-game accuracy 집계 ──
     all_preds_arr = np.array(all_preds[:n_test])
     all_targets_arr = np.array(all_targets[:n_test])
     all_reg_arr = np.array(all_reg_losses[:n_test])
+    all_abs_diff_arr = np.array(all_abs_diffs[:n_test])
+    all_reward_enum_arr = np.array(all_reward_enums[:n_test])
     correct = all_preds_arr == all_targets_arr
 
     per_game_acc: Dict[str, float] = {}
     per_game_reg: Dict[str, float] = {}
+    per_game_enum_diff: Dict[str, Dict[int, float]] = {}
     unique_test_games = sorted(set(test_game_names))
     for game in unique_test_games:
         mask = test_game_names == game
         if mask.sum() > 0:
             per_game_acc[game] = float(correct[mask].mean())
             per_game_reg[game] = float(all_reg_arr[mask].mean())
+            # per reward_enum mean abs diff
+            enum_diff: Dict[int, float] = {}
+            for e in sorted(set(all_reward_enum_arr[mask])):
+                emask = mask & (all_reward_enum_arr == e)
+                if emask.sum() > 0:
+                    enum_diff[int(e)] = float(all_abs_diff_arr[emask].mean())
+            per_game_enum_diff[game] = enum_diff
 
     per_game_acc["overall"] = float(correct.mean())
     per_game_reg["overall"] = float(all_reg_arr.mean())
@@ -374,7 +391,7 @@ def evaluate_per_game(
         per_game_acc["unseen_overall"] = float(correct[unseen_mask].mean())
         per_game_reg["unseen_overall"] = float(all_reg_arr[unseen_mask].mean())
 
-    return per_game_acc, per_game_reg
+    return per_game_acc, per_game_reg, per_game_enum_diff
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -465,10 +482,10 @@ def train_and_evaluate_ratio(
     ratio: float,
     ratio_idx: int,
     total_ratios: int,
-) -> Tuple[Dict[str, float], Dict[str, float]]:
+) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]]]:
     """하나의 few-shot ratio에 대해 모델을 처음부터 학습하고 평가한다.
 
-    Returns (per_game_acc, per_game_reg_loss)
+    Returns (per_game_acc, per_game_reg_loss, per_game_enum_diff)
     """
 
     n_train = len(train_ds.class_ids)
@@ -506,11 +523,11 @@ def train_and_evaluate_ratio(
 
     if n_train == 0:
         logger.warning("  ⚠ No training data for ratio=%.2f — skipping training", ratio)
-        per_game_acc, per_game_reg = evaluate_per_game(
+        per_game_acc, per_game_reg, per_game_enum_diff = evaluate_per_game(
             train_state, test_ds, test_game_names, unseen_game_names,
             config, rng_key, num_cls, mode,
         )
-        return per_game_acc, per_game_reg
+        return per_game_acc, per_game_reg, per_game_enum_diff
 
     # ── Training Loop ──
     for epoch in range(config.n_epochs):
@@ -560,7 +577,7 @@ def train_and_evaluate_ratio(
             )
 
     # ── Evaluation ──
-    per_game_acc, per_game_reg = evaluate_per_game(
+    per_game_acc, per_game_reg, per_game_enum_diff = evaluate_per_game(
         train_state, test_ds, test_game_names, unseen_game_names,
         config, rng_key, num_cls, mode,
     )
@@ -571,7 +588,7 @@ def train_and_evaluate_ratio(
         reg = per_game_reg.get(game, float("nan"))
         logger.info("    %-12s  reward_acc = %.4f  reg_loss = %.4f", game, acc, reg)
 
-    return per_game_acc, per_game_reg
+    return per_game_acc, per_game_reg, per_game_enum_diff
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -608,7 +625,7 @@ def create_fewshot_plot(
     """
     os.makedirs(out_dir, exist_ok=True)
 
-    ratios = sorted(results.keys())
+    ratios = sorted([r for r in results.keys() if r < 1.0])
     all_games = sorted(
         {g for r in reg_results.values() for g in r
          if g not in ("overall", "seen_overall", "unseen_overall")}
@@ -618,26 +635,13 @@ def create_fewshot_plot(
 
     fig, ax = plt.subplots(figsize=(3.8, 2.6))
 
-    # ── 개별 게임 (alpha, legend 없음) ──
-    for game in all_games:
-        regs = [reg_results[r].get(game, float("nan")) for r in ratios]
-        color = _game_color(game, unseen_game_names, all_games)
-        is_unseen = game in unseen_game_names
-        linestyle = "-" if is_unseen else "--"
-        marker = "o" if is_unseen else "s"
-        ax.plot(
-            ratios, regs,
-            marker=marker, markersize=2.5, linewidth=1.0,
-            linestyle=linestyle, color=color, alpha=0.35,
-        )
-
-    # ── Seen / Unseen Overall (굵은 선, legend) ──
+    # ── Seen / Unseen (굵은 선, legend) ──
     seen_ov = [reg_results[r].get("seen_overall", float("nan")) for r in ratios]
     unseen_ov = [reg_results[r].get("unseen_overall", float("nan")) for r in ratios]
     ax.plot(ratios, seen_ov, marker="s", markersize=4, linewidth=2.4,
-            linestyle="--", color="#b2182b", label="Seen Overall")
+            linestyle="--", color="#b2182b", label="Seen")
     ax.plot(ratios, unseen_ov, marker="o", markersize=4, linewidth=2.4,
-            linestyle="-", color="#2166ac", label="Unseen Overall")
+            linestyle="-", color="#2166ac", label="Unseen")
 
     ax.set_xlabel("Few-shot Ratio", fontsize=8)
     ax.set_ylabel("Regression Loss (Huber)", fontsize=8)
@@ -732,6 +736,7 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         ratios = list(config.unseen_ratios)
         results: Dict[float, Dict[str, float]] = {}
         reg_results: Dict[float, Dict[str, float]] = {}
+        enum_diff_results: Dict[float, Dict[str, Dict[int, float]]] = {}
 
         for ratio_idx, ratio in enumerate(ratios):
             # 학습 인덱스 구성
@@ -760,7 +765,7 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
             )
 
             rng_key, ratio_key = jax.random.split(rng_key)
-            per_game_acc, per_game_reg = train_and_evaluate_ratio(
+            per_game_acc, per_game_reg, per_game_enum_diff = train_and_evaluate_ratio(
                 config=config,
                 rng_key=ratio_key,
                 train_ds=train_ds,
@@ -775,6 +780,7 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
             )
             results[ratio] = per_game_acc
             reg_results[ratio] = per_game_reg
+            enum_diff_results[ratio] = per_game_enum_diff
 
             # W&B 로깅 (per-ratio 최종 결과 + incremental plot)
             if wandb.run is not None:
@@ -802,31 +808,94 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
 
         if wandb.run is not None:
 
-            # wandb Table 로도 기록
+            # reward_enum 전체 목록 수집
+            all_enums = sorted({
+                e for ratio_ed in enum_diff_results.values()
+                for game_ed in ratio_ed.values()
+                for e in game_ed.keys()
+            })
+
+            # 게임 이름 (overall 등 제외)
             game_names_sorted = sorted(
-                {g for r in results.values() for g in r if g != "overall"}
+                {g for r in results.values() for g in r
+                 if g not in ("overall", "seen_overall", "unseen_overall")}
             )
-            columns = ["ratio"]
+
+            # ratio=1.0 baseline diff 계산 (정규화 기준)
+            baseline_ratio = 1.0
+            baseline_seen_diff = None
+            baseline_unseen_diff = None
+            if baseline_ratio in enum_diff_results:
+                _s, _u = [], []
+                for g in game_names_sorted:
+                    game_ed = enum_diff_results[baseline_ratio].get(g, {})
+                    vals = [v for v in game_ed.values() if v is not None]
+                    if vals:
+                        avg = sum(vals) / len(vals)
+                        if g in unseen_game_set:
+                            _u.append(avg)
+                        else:
+                            _s.append(avg)
+                baseline_seen_diff = sum(_s) / len(_s) if _s else None
+                baseline_unseen_diff = sum(_u) / len(_u) if _u else None
+
+            # 테이블: 각 행 = 하나의 ratio
+            # norm_diff = raw_diff / baseline_diff (ratio=1.0 대비 상대 에러)
+            columns = [
+                "ratio", "game", "unseen_games",
+                "seen_acc", "unseen_acc",
+                "seen_reg", "unseen_reg",
+                "seen_avg_diff", "unseen_avg_diff",
+                "seen_norm_diff", "unseen_norm_diff",
+            ]
             for g in game_names_sorted:
-                columns.append(f"acc_{g}")
-            columns.append("acc_overall")
-            for g in game_names_sorted:
-                columns.append(f"reg_{g}")
-            columns.append("reg_overall")
+                for e in all_enums:
+                    columns.append(f"{g}_enum_{e}")
 
             table = wandb.Table(columns=columns)
             for ratio_val in sorted(results.keys()):
-                row = [float(ratio_val)]
+                # seen/unseen 집계
+                seen_acc = results[ratio_val].get("seen_overall", None)
+                unseen_acc = results[ratio_val].get("unseen_overall", None)
+                seen_reg = reg_results[ratio_val].get("seen_overall", None)
+                unseen_reg = reg_results[ratio_val].get("unseen_overall", None)
+
+                # 게임별 enum diff 평균 → seen/unseen raw avg diff
+                seen_diffs, unseen_diffs = [], []
                 for g in game_names_sorted:
-                    row.append(results[ratio_val].get(g, None))
-                row.append(results[ratio_val].get("overall", None))
+                    game_ed = enum_diff_results[ratio_val].get(g, {})
+                    vals = [v for v in game_ed.values() if v is not None]
+                    if vals:
+                        avg = sum(vals) / len(vals)
+                        if g in unseen_game_set:
+                            unseen_diffs.append(avg)
+                        else:
+                            seen_diffs.append(avg)
+                seen_avg = sum(seen_diffs) / len(seen_diffs) if seen_diffs else None
+                unseen_avg = sum(unseen_diffs) / len(unseen_diffs) if unseen_diffs else None
+
+                # ratio=1.0 대비 정규화 (1.0 = baseline과 동일, >1.0 = 더 나쁨)
+                seen_norm = (seen_avg / baseline_seen_diff
+                             if seen_avg is not None and baseline_seen_diff else None)
+                unseen_norm = (unseen_avg / baseline_unseen_diff
+                               if unseen_avg is not None and baseline_unseen_diff else None)
+
+                row = [
+                    float(ratio_val), config.game, config.unseen_games,
+                    seen_acc, unseen_acc,
+                    seen_reg, unseen_reg,
+                    seen_avg, unseen_avg,
+                    seen_norm, unseen_norm,
+                ]
                 for g in game_names_sorted:
-                    row.append(reg_results[ratio_val].get(g, None))
-                row.append(reg_results[ratio_val].get("overall", None))
+                    game_ed = enum_diff_results[ratio_val].get(g, {})
+                    for e in all_enums:
+                        row.append(game_ed.get(e, None))
                 table.add_data(*row)
+
             wandb.log({
-                "unseen/results_table": table,
-                "unseen/fewshot_plot": wandb.Image(plot_path),
+                "table/results": table,
+                "table/fewshot_plot": wandb.Image(plot_path),
             })
 
         # ── 최종 요약 출력 ──

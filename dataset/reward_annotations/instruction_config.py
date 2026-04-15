@@ -121,6 +121,22 @@ RAW_TILE_NAMES: Dict[str, Dict[int, str]] = {
     if game in _TILE_MAPPING
 }
 
+# ── unified 카테고리 → 게임별 raw 타일 이름 그룹 ───────────────────────────────────
+# tile_mapping.json의 mapping에서 자동 파생: {game: {unified_cat_id: [tile_names]}}
+UNIFIED_TILE_GROUPS: Dict[str, Dict[int, List[str]]] = {}
+for _game in _SUPPORTED_GAMES:
+    if _game not in _TILE_MAPPING:
+        continue
+    _mapping = _TILE_MAPPING[_game].get("mapping", {})
+    _names   = RAW_TILE_NAMES.get(_game, {})
+    _groups: Dict[int, List[str]] = {}
+    for _raw_str, _uni_id in _mapping.items():
+        _raw_id = int(_raw_str)
+        _name   = _names.get(_raw_id)
+        if _name:
+            _groups.setdefault(int(_uni_id), []).append(_name)
+    UNIFIED_TILE_GROUPS[_game] = _groups
+
 # ── Raw 타일 설명 (tile_mapping.json 타일명 기준) ─────────────────────────────────
 # RAW_TILE_NAMES 의 이름과 반드시 일치해야 한다.
 RAW_TILE_DESCS: Dict[str, Dict[int, str]] = {
@@ -186,7 +202,7 @@ FEATURE_TILE_DESCS: Dict[str, Dict[str, Tuple[str, str]]] = {
                                "category counted: interactive"),
         "hazard_count":       ("tiles counted: ENEMY",
                                "category counted: hazard"),
-        "collectable_count":  ("tiles counted: ITEM",
+        "collectable_count":  ("tiles counted: ITEM (id=5)",
                                "category counted: collectable"),
     },
     "zelda": {

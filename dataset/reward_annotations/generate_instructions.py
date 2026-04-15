@@ -59,6 +59,7 @@ from instruction_config import (
     FEATURE_TILE_DESCS, FEATURE_COUNT_TILE_IDS,
     GAME_DESCRIPTIONS, FEATURE_DESCRIPTIONS,
     UNIFIED_COLOR_DESCS, FEATURE_ZONE_LABELS, VOCAB_SETS,
+    UNIFIED_TILE_GROUPS,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -67,10 +68,16 @@ logger = logging.getLogger(__name__)
 
 # ── 경로 ─────────────────────────────────────────────────────────────────────────
 _CACHE_DIR   = _HERE.parent / "multigame" / "cache" / "artifacts"
-_ANNOT_DIR   = _HERE
 _BATCH_DIR   = _HERE / "batches"
 _BATCH_LOG   = _BATCH_DIR / "batch_log.csv"          # 단일 배치 추적 CSV
 _SYSTEM_PROMPT_FILE = _HERE / "system_prompt.txt"
+
+from dataset.multigame.cache_utils import (
+    load_game_annotations_from_cache,
+    save_game_annotations_to_cache,
+    find_game_cache_key,
+    update_meta_with_instructions,
+)
 
 # ── 모델 설정 ─────────────────────────────────────────────────────────────────────
 MODEL       = "gpt-5.4-mini"
@@ -203,7 +210,12 @@ def build_user_prompt(
         r, g, b = tile_colors.get(tid, (128, 0, 128))
         lines.append(f"  ID={tid}  {name:10s}  color=RGB({r},{g},{b})  — {desc}")
     if feature_name != "region":
-        raw_desc = FEATURE_TILE_DESCS.get(game, {}).get(feature_name, ("", ""))[0]
+        count_ids = FEATURE_COUNT_TILE_IDS.get(game, {}).get(feature_name, [])
+        if count_ids:
+            counted_names = [tile_names.get(tid, str(tid)) for tid in count_ids]
+            raw_desc = f"tiles counted: {', '.join(counted_names)}"
+        else:
+            raw_desc = FEATURE_TILE_DESCS.get(game, {}).get(feature_name, ("", ""))[0]
         lines.append(f"Count basis: {raw_desc if raw_desc else sub_condition}")
 
     lines.append("")
@@ -223,17 +235,14 @@ def build_user_prompt(
             color_str = region_color_descs.get(cid, "")
             lines.append(f"  {cname:10s}  {color_str}  — {cdesc}")
     else:
-        cat_info = {
-            0: ("empty",       "background / void / walkable space"),
-            1: ("wall",        "solid impassable obstacle"),
-            2: ("interactive", "interactable tiles (doors, objects, spawns)"),
-            3: ("hazard",      "enemy / damaging entity"),
-            4: ("collectable", "collectible item / pickup"),
-        }
+        cat_names = {0: "empty", 1: "wall", 2: "interactive", 3: "hazard", 4: "collectable"}
+        tile_groups = UNIFIED_TILE_GROUPS.get(game, {})
         lines.append("Tile legend:")
-        for cid, (cname, cdesc) in cat_info.items():
+        for cid, cname in cat_names.items():
             color_str = UNIFIED_COLOR_DESCS.get(cid, "")
-            lines.append(f"  ID={cid}  {cname:14s}  {color_str}  — {cdesc}")
+            raw_tiles = tile_groups.get(cid, [])
+            desc = ", ".join(raw_tiles) if raw_tiles else cname
+            lines.append(f"  {cname:14s}  {color_str}  — {desc}")
         uni_desc = FEATURE_TILE_DESCS.get(game, {}).get(feature_name, ("", ""))[1]
         lines.append(f"Count basis: {uni_desc}")
     lines.append("")
@@ -262,7 +271,7 @@ def build_user_prompt(
         if vocab_hint:
             lines.append(vocab_hint)
         lines.append(
-            "- instruction_raw: use game-specific tile names to describe the intensity."
+            "- instruction_raw: use the tile names specified in the Count basis above to describe the intensity."
         )
         lines.append(
             "- instruction_uni: use unified category names (empty/wall/interactive/hazard/collectable) only; "
@@ -427,34 +436,37 @@ def _is_none_threshold(game: str, feature_name: str) -> bool:
 def fill_none_instructions(
     games: List[str],
     enums: List[int],
-    annot_dir: Path,
+    cache_dir: Path,
     force: bool = False,
 ) -> int:
     """
     CUSTOM_THRESHOLDS 가 None 인 행은 GPT 없이 instruction_raw / instruction_uni 를
     "None" 으로 직접 채운다. 업데이트된 행 수를 반환한다.
+    ann.json에서 읽고 결과를 다시 ann.json에 저장한다.
     """
     none_results: Dict[str, dict] = {}
 
     for game in games:
-        csv_path = annot_dir / f"{game}_reward_annotations.csv"
-        if not csv_path.exists():
+        key = find_game_cache_key(cache_dir, game)
+        if key is None:
             continue
-        with csv_path.open(encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                reward_enum = int(row["reward_enum"])
-                if reward_enum not in enums:
-                    continue
-                if not force and row.get("instruction_raw", "").strip():
-                    continue
-                if _is_none_threshold(game, row["feature_name"]):
-                    none_results[row["key"]] = {
-                        "instruction_raw": "None",
-                        "instruction_uni": "None",
-                    }
+        ann_data = load_game_annotations_from_cache(cache_dir, game, key)
+        if ann_data is None:
+            continue
+        for row in ann_data.get("annotations", []):
+            reward_enum = int(row["reward_enum"])
+            if reward_enum not in enums:
+                continue
+            if not force and row.get("instruction_raw"):
+                continue
+            if _is_none_threshold(game, row["feature_name"]):
+                none_results[row["key"]] = {
+                    "instruction_raw": "None",
+                    "instruction_uni": "None",
+                }
 
     if none_results:
-        n = update_csvs(none_results, annot_dir, games)
+        n = update_caches(none_results, cache_dir, games)
         logger.info(f"threshold=None 행 {n}개 → 'None' 으로 직접 채움")
         return n
     return 0
@@ -463,7 +475,7 @@ def fill_none_instructions(
 def build_jsonl(
     games: List[str],
     enums: List[int],
-    annot_dir: Path,
+    cache_dir: Path,
     cache_by_game: Dict[str, Dict[str, np.ndarray]],
     system_prompt: str,
     force: bool = False,
@@ -471,7 +483,7 @@ def build_jsonl(
 ) -> Optional[Path]:
     """
     처리 대상 행에 대한 JSONL 파일을 단일 파일로 생성하여 경로를 반환한다.
-    threshold=None 인 행은 제외 (fill_none_instructions 에서 별도 처리).
+    ann.json에서 읽는다. threshold=None 인 행은 제외.
     생성할 행이 없으면 None을 반환한다.
     """
     _BATCH_DIR.mkdir(parents=True, exist_ok=True)
@@ -481,51 +493,55 @@ def build_jsonl(
     n_none = 0
 
     for game in games:
-        csv_path = annot_dir / f"{game}_reward_annotations.csv"
-        if not csv_path.exists():
-            logger.warning(f"{csv_path.name} 없음, 건너뜀")
+        key = find_game_cache_key(cache_dir, game)
+        if key is None:
+            logger.warning(f"{game}: 캐시 키 없음, 건너뜀")
             continue
+        ann_data = load_game_annotations_from_cache(cache_dir, game, key)
+        if ann_data is None:
+            logger.warning(f"{game}: ann.json 없음, 건너뜀")
+            continue
+
         sid_map = cache_by_game.get(game, {})
         if not sid_map:
-            logger.warning(f"{game}: 캐시 없음, 건너뜀")
+            logger.warning(f"{game}: 배열 캐시 없음, 건너뜀")
             continue
 
-        with csv_path.open(encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                reward_enum = int(row["reward_enum"])
-                if reward_enum not in enums:
-                    continue
-                if not force and row.get("instruction_raw", "").strip() and row.get("instruction_uni", "").strip():
-                    n_skip += 1
-                    continue
+        for row in ann_data.get("annotations", []):
+            reward_enum = int(row["reward_enum"])
+            if reward_enum not in enums:
+                continue
+            if not force and row.get("instruction_raw") and row.get("instruction_uni"):
+                n_skip += 1
+                continue
 
-                # threshold=None → 별도 처리 (GPT 호출 안 함)
-                if _is_none_threshold(game, row["feature_name"]):
-                    n_none += 1
-                    continue
+            # threshold=None → 별도 처리 (GPT 호출 안 함)
+            if _is_none_threshold(game, row["feature_name"]):
+                n_none += 1
+                continue
 
-                cond_col = _ENUM_TO_COND_COL.get(reward_enum)
-                raw_val  = row.get(cond_col, "")
-                if not raw_val:
-                    continue
-                try:
-                    cond_val = float(raw_val)
-                except ValueError:
-                    continue
+            cond_col = _ENUM_TO_COND_COL.get(reward_enum)
+            raw_val  = row.get(cond_col)
+            if raw_val is None:
+                continue
+            try:
+                cond_val = float(raw_val)
+            except (TypeError, ValueError):
+                continue
 
-                array = sid_map.get(row["sample_id"])
-                if array is None:
-                    continue
+            array = sid_map.get(row["source_id"])
+            if array is None:
+                continue
 
-                req  = build_batch_request(
-                    row["key"], game, row["feature_name"],
-                    cond_val, row.get("sub_condition", ""),
-                    array, system_prompt,
-                )
-                lines.append(json.dumps(req, ensure_ascii=False))
+            req = build_batch_request(
+                row["key"], game, row["feature_name"],
+                cond_val, row.get("sub_condition", ""),
+                array, system_prompt,
+            )
+            lines.append(json.dumps(req, ensure_ascii=False))
 
-                if limit and len(lines) >= limit:
-                    break
+            if limit and len(lines) >= limit:
+                break
         if limit and len(lines) >= limit:
             break
 
@@ -702,36 +718,46 @@ def retrieve_batch_results(batch_id: str) -> Dict[str, dict]:
     )
     return results
 
-# ── CSV 업데이트 ──────────────────────────────────────────────────────────────────
+# ── ann.json 업데이트 ─────────────────────────────────────────────────────────────
 
-def update_csvs(results: Dict[str, dict], annot_dir: Path, games: List[str]) -> int:
+def update_caches(results: Dict[str, dict], cache_dir: Path, games: List[str]) -> int:
+    """배치 결과(results: {key → {instruction_raw, instruction_uni}})를
+    각 게임의 ann.json에 반영하고 저장한다. 업데이트된 행 수를 반환한다."""
     total = 0
     for game in games:
-        csv_path = annot_dir / f"{game}_reward_annotations.csv"
-        if not csv_path.exists():
+        key = find_game_cache_key(cache_dir, game)
+        if key is None:
             continue
-        rows: List[dict] = []
+        ann_data = load_game_annotations_from_cache(cache_dir, game, key)
+        if ann_data is None:
+            continue
+
         updated = 0
-        with csv_path.open(encoding="utf-8") as f:
-            reader     = csv.DictReader(f)
-            fieldnames = list(reader.fieldnames or [])
-            # 이전 형식(instruction) → 새 형식 자동 변환
-            if "instruction" in fieldnames and "instruction_raw" not in fieldnames:
-                idx = fieldnames.index("instruction")
-                fieldnames = fieldnames[:idx] + ["instruction_raw", "instruction_uni"] + fieldnames[idx+1:]
-            for row in reader:
-                if row["key"] in results:
-                    row["instruction_raw"] = results[row["key"]]["instruction_raw"]
-                    row["instruction_uni"] = results[row["key"]]["instruction_uni"]
-                    updated += 1
-                rows.append(row)
+        for row in ann_data.get("annotations", []):
+            if row.get("key") in results:
+                row["instruction_raw"] = results[row["key"]]["instruction_raw"]
+                row["instruction_uni"] = results[row["key"]]["instruction_uni"]
+                updated += 1
 
-        with csv_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(rows)
-
-        logger.info(f"  {csv_path.name}: {updated}개 업데이트")
+        if updated > 0:
+            # has_instructions: 모든 행에 instruction이 채워졌는지 확인
+            all_filled = all(
+                r.get("instruction_raw") and r.get("instruction_uni")
+                for r in ann_data.get("annotations", [])
+            )
+            # 완료 시 batch_id 제거, 미완료 시 유지 (재제출 방지)
+            existing_batch_id = ann_data.get("batch_id") if not all_filled else None
+            save_game_annotations_to_cache(
+                cache_dir, game, key,
+                ann_data["annotations"],
+                has_instructions=all_filled,
+                n_samples=ann_data.get("n_samples", 0),
+                batch_id=existing_batch_id,
+            )
+            logger.info(f"  {game}/{key[:12]}….ann.json: {updated}개 업데이트"
+                        + (f" (has_instructions={all_filled})" if all_filled else ""))
+            # {key}.json 메타데이터에도 instruction 동기화
+            update_meta_with_instructions(cache_dir, game, key, ann_data)
         total += updated
     return total
 
@@ -740,17 +766,17 @@ def update_csvs(results: Dict[str, dict], annot_dir: Path, games: List[str]) -> 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="OpenAI Batch API로 instruction_raw / instruction_uni 생성"
+        description="OpenAI Batch API로 instruction_raw / instruction_uni 생성 (ann.json 저장)"
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--submit",   action="store_true",
                       help="JSONL 생성 + Batch API 제출")
     mode.add_argument("--retrieve", metavar="BATCH_ID",
-                      help="결과 조회 + CSV 업데이트")
+                      help="결과 조회 + ann.json 업데이트")
     mode.add_argument("--status",   metavar="BATCH_ID",
                       help="배치 상태 확인")
     mode.add_argument("--run",      action="store_true",
-                      help="제출 → 대기 → CSV 업데이트 (소규모 테스트)")
+                      help="제출 → 대기 → ann.json 업데이트 (소규모 테스트)")
     mode.add_argument("--log",      action="store_true",
                       help="제출된 배치 로그 출력 (batch_log.csv)")
 
@@ -761,7 +787,6 @@ def main() -> None:
                         choices=[0, 1, 2, 3, 4],
                         help="0=region 1=path_length 2=interactable 3=hazard 4=collectable")
     parser.add_argument("--cache-dir",    type=Path, default=_CACHE_DIR)
-    parser.add_argument("--annot-dir",    type=Path, default=_ANNOT_DIR)
     parser.add_argument("--limit",        type=int,  default=None,
                         help="처리할 최대 행 수 (테스트용)")
     parser.add_argument("--force",        action="store_true",
@@ -788,7 +813,7 @@ def main() -> None:
     # ── retrieve ──
     if args.retrieve:
         results = retrieve_batch_results(args.retrieve)
-        n = update_csvs(results, args.annot_dir, args.games)
+        n = update_caches(results, args.cache_dir, args.games)
         logger.info(f"총 {n}개 행 업데이트 완료")
         return
 
@@ -805,14 +830,8 @@ def main() -> None:
     # threshold=None 행은 GPT 없이 "None" 으로 직접 채움
     fill_none_instructions(
         games=args.games, enums=args.enums,
-        annot_dir=args.annot_dir, force=args.force,
+        cache_dir=args.cache_dir, force=args.force,
     )
-
-    # game × enum 조합별로 배치를 분리하여 제출
-    _ENUM_NAMES = {
-        0: "region", 1: "path_length", 2: "interactable_count",
-        3: "hazard_count", 4: "collectable_count",
-    }
 
     submitted_batches: List[Tuple[str, str]] = []  # (batch_id, game)
 
@@ -822,7 +841,7 @@ def main() -> None:
         try:
             jsonl_path = build_jsonl(
                 games=[game], enums=args.enums,
-                annot_dir=args.annot_dir, cache_by_game=cache_by_game,
+                cache_dir=args.cache_dir, cache_by_game=cache_by_game,
                 system_prompt=system_prompt, force=args.force,
                 limit=args.limit,
             )
@@ -856,7 +875,7 @@ def main() -> None:
                 if status == "completed":
                     try:
                         results = retrieve_batch_results(batch_id)
-                        n = update_csvs(results, args.annot_dir, [game])
+                        n = update_caches(results, args.cache_dir, [game])
                         total_updated += n
                     except Exception as e:
                         logger.error(f"  [{game}] 결과 조회/업데이트 실패 → {e}, 건너뜀")

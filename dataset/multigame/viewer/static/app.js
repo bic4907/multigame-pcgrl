@@ -489,8 +489,38 @@ function renderMeta(sample) {
     `source_id: ${sample.source_id}`,
     `shape: ${sample.shape[0]} x ${sample.shape[1]}`,
   ];
-  if (sample.instruction) lines.push(`instruction: ${sample.instruction}`);
   meta.textContent = lines.join('\n');
+  renderAnnotations(sample.annotations || [], renderMode);
+}
+
+const REWARD_SYMBOLS = ['RG', 'PL', 'IC', 'HC', 'CC'];
+
+function renderAnnotations(annotations, mode) {
+  const el = document.getElementById('annotations');
+  if (!annotations || annotations.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const useRaw = !mode || mode.startsWith('raw-');
+
+  const rows = annotations.map(ann => {
+    const instr = useRaw ? ann.instruction_raw : ann.instruction_uni;
+    if (!instr) return '';
+    const sym = REWARD_SYMBOLS[ann.reward_enum] || `#${ann.reward_enum}`;
+    const condStr = ann.condition != null ? Number(ann.condition).toFixed(1) : '';
+    return `<div class="ann-row">
+      <span class="ann-enum">${sym}</span>
+      ${condStr ? `<span class="ann-cond">${escHtml(condStr)}</span>` : ''}
+      <span class="ann-instr">${escHtml(instr)}</span>
+    </div>`;
+  }).filter(Boolean);
+
+  el.innerHTML = rows.join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 async function loadAndRender(game, idx) {
@@ -617,6 +647,9 @@ function bindControls() {
       tab.classList.add('active');
       renderMode = tab.dataset.mode;
       renderCurrent();
+      if (lastSample) {
+        renderAnnotations(lastSample.annotations || [], renderMode);
+      }
     });
   });
 

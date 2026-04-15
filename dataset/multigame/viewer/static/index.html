@@ -64,6 +64,23 @@
       line-height: 1.5;
       white-space: pre-wrap;
     }
+    #annotations {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #e2e8f0;
+      max-width: 100%;
+    }
+    .ann-row {
+      padding: 3px 0;
+      line-height: 1.6;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .ann-enum { color: #60a5fa; font-weight: bold; flex-shrink: 0; }
+    .ann-cond { color: #34d399; flex-shrink: 0; }
+    .ann-instr { color: #e2e8f0; }
     #view-row {
       display: flex;
       gap: 24px;
@@ -250,6 +267,7 @@
     <div id="view-row">
       <div id="canvas-wrap">
         <canvas id="levelCanvas" width="384" height="384"></canvas>
+        <div id="annotations"></div>
       </div>
       <div id="legend"></div>
       <div id="mapping-panel" style="display:none;">

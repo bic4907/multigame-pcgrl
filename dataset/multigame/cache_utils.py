@@ -22,6 +22,7 @@ from .base import GameSample
 logger = logging.getLogger(__name__)
 
 CACHE_SCHEMA_VERSION = 2
+ANN_SCHEMA_VERSION = 1
 
 # dataset/multigame/ → dataset/ → project_root
 _HERE = Path(__file__).parent
@@ -138,6 +139,11 @@ def _game_cache_paths(cache_dir: Path, game: str, key: str):
     return base.with_suffix(".npz"), base.with_suffix(".json"), base.with_suffix(".info.json")
 
 
+def _game_ann_path(cache_dir: Path, game: str, key: str) -> Path:
+    """게임별 annotation 캐시 파일 경로."""
+    return _game_cache_dir(cache_dir, game) / f"{key}.ann.json"
+
+
 def _purge_old_game_caches(game_dir: Path, keep_key: str) -> None:
     """게임별 캐시 디렉토리에서 keep_key 외 파일 삭제."""
     if not game_dir.exists():
@@ -147,9 +153,8 @@ def _purge_old_game_caches(game_dir: Path, keep_key: str) -> None:
         if not f.is_file():
             continue
         stem = f.name
-        # .info.json을 .json보다 먼저 체크해야 한다:
-        # ".info.json".endswith(".json") == True 이므로 순서가 중요함
-        for ext in (".info.json", ".npz", ".json"):
+        # 긴 확장자를 먼저 체크해야 한다: .ann.json/.info.json이 .json보다 먼저
+        for ext in (".ann.json", ".info.json", ".npz", ".json"):
             if stem.endswith(ext):
                 candidate_key = stem[: -len(ext)]
                 if candidate_key != keep_key:
@@ -198,15 +203,18 @@ def save_game_samples_to_cache(
 
     np.savez_compressed(npz_path, arrays=arrays)
 
+    # 맵 정보 + ann_keys만 저장 (instruction/meta는 ann.json에서 관리)
     meta: List[Dict[str, Any]] = []
     for s in samples:
-        meta.append({
-            "game": s.game,
+        entry: Dict[str, Any] = {
+            "game":      s.game,
             "source_id": s.source_id,
-            "instruction": s.instruction,
-            "order": s.order,
-            "meta": s.meta,
-        })
+            "order":     s.order,
+        }
+        ann_keys = s.meta.get("ann_keys") if s.meta else None
+        if ann_keys:
+            entry["ann_keys"] = ann_keys
+        meta.append(entry)
     meta_path.write_text(_stable_json(meta), encoding="utf-8")
 
     info = _collect_info(samples, game=game)
@@ -248,6 +256,16 @@ def load_game_samples_from_cache(
 
     samples: List[GameSample] = []
     for i, m in enumerate(meta):
+        # 신규 포맷: game/source_id/order/ann_keys만 저장
+        # 구 포맷(instruction/meta 포함)도 읽을 수 있도록 호환 처리
+        sample_meta: Dict[str, Any] = {}
+        if "ann_keys" in m:
+            sample_meta["ann_keys"] = m["ann_keys"]
+        elif "meta" in m:
+            old_meta = m["meta"]
+            if isinstance(old_meta, dict):
+                sample_meta = {k: v for k, v in old_meta.items()
+                               if k in ("level_id", "sample_id", "instruction_slug")}
         samples.append(
             GameSample(
                 game=m["game"],
@@ -255,9 +273,9 @@ def load_game_samples_from_cache(
                 array=arrays[i].astype(np.int32),
                 char_grid=None,
                 legend=None,
-                instruction=m.get("instruction"),
+                instruction=None,      # instruction은 ann.json에서 로드
                 order=m.get("order"),
-                meta=m.get("meta", {}),
+                meta=sample_meta,
             )
         )
     return samples
@@ -290,6 +308,192 @@ def load_any_game_cache(cache_dir: Path, game: str) -> Optional[List[GameSample]
     npz_path = npz_files[-1]
     key = npz_path.stem
     return load_game_samples_from_cache(cache_dir, game, key)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Annotation cache (ann.json)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def save_game_annotations_to_cache(
+    cache_dir: Path,
+    game: str,
+    key: str,
+    annotations: List[Dict[str, Any]],
+    has_instructions: bool = False,
+    n_samples: int = 0,
+    batch_id: Optional[str] = None,
+) -> None:
+    """게임별 annotation을 {key}.ann.json에 저장.
+
+    annotations: _make_rows()가 반환하는 dict 리스트.
+                 각 dict: key, source_id, reward_enum, feature_name,
+                           sub_condition, condition_0..4,
+                           instruction_raw, instruction_uni
+    batch_id: OpenAI 배치 제출 시 기록. None이면 필드 생략.
+    """
+    game_dir = _game_cache_dir(cache_dir, game)
+    game_dir.mkdir(parents=True, exist_ok=True)
+    ann_path = _game_ann_path(cache_dir, game, key)
+    payload: Dict[str, Any] = {
+        "schema": ANN_SCHEMA_VERSION,
+        "game": game,
+        "n_samples": n_samples,
+        "has_instructions": has_instructions,
+        "annotations": annotations,
+    }
+    if batch_id is not None:
+        payload["batch_id"] = batch_id
+    ann_path.write_text(_stable_json(payload), encoding="utf-8")
+    _cache_log(
+        f"[MultiGameDataset] Annotations saved → {game}/{ann_path.name}  "
+        f"({len(annotations)} rows, has_instructions={has_instructions})"
+    )
+
+
+def load_game_annotations_from_cache(
+    cache_dir: Path,
+    game: str,
+    key: str,
+) -> Optional[Dict[str, Any]]:
+    """게임별 annotation 로드. 없거나 파싱 실패 시 None 반환.
+
+    반환값 구조:
+      {"schema": 1, "game": ..., "n_samples": ...,
+       "has_instructions": bool, "annotations": List[dict]}
+    """
+    ann_path = _game_ann_path(cache_dir, game, key)
+    if not ann_path.exists():
+        return None
+    try:
+        data = json.loads(ann_path.read_text(encoding="utf-8"))
+        _cache_log(
+            f"[MultiGameDataset] Annotations loaded ← {game}/{ann_path.name}  "
+            f"({len(data.get('annotations', []))} rows, "
+            f"has_instructions={data.get('has_instructions', False)})"
+        )
+        return data
+    except Exception as e:
+        _cache_log(f"[MultiGameDataset] Failed to load ann.json for {game}: {e}")
+        return None
+
+
+def update_json_with_ann_keys(
+    cache_dir: Path, game: str, key: str, ann_data: Dict[str, Any]
+) -> None:
+    """ann.json의 키 정보를 {key}.json 메타데이터에 ann_keys로 기록한다.
+
+    각 샘플의 ann_keys = [key_r0, key_r1, ..., key_r{n_rewards-1}]
+    ann.json 행 순서: reward_enum 0 전체 → 1 전체 → … → 4 전체
+    sample i, reward_enum r → ann row r * n_samples + i
+    """
+    _, meta_path, _ = _game_cache_paths(cache_dir, game, key)
+    if not meta_path.exists():
+        return
+
+    annotations = ann_data.get("annotations", [])
+    n_samples = ann_data.get("n_samples", 0)
+    if not annotations or n_samples == 0:
+        return
+
+    sorted_anns = sorted(annotations, key=lambda r: r["key"])
+    n_rewards = len(sorted_anns) // n_samples
+    if n_rewards == 0:
+        return
+
+    # sample i → [key_r0, key_r1, ..., key_r{n-1}]
+    sample_ann_keys: Dict[int, List[str]] = {}
+    for r in range(n_rewards):
+        for i in range(n_samples):
+            row_idx = r * n_samples + i
+            if row_idx < len(sorted_anns):
+                sample_ann_keys.setdefault(i, []).append(sorted_anns[row_idx]["key"])
+
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    updated = 0
+    for i, entry in enumerate(meta):
+        if i in sample_ann_keys:
+            entry["ann_keys"] = sample_ann_keys[i]
+            # 구 포맷 필드 제거
+            entry.pop("instruction", None)
+            entry.pop("meta", None)
+            updated += 1
+    meta_path.write_text(_stable_json(meta), encoding="utf-8")
+    _cache_log(
+        f"[MultiGameDataset] ann_keys updated → {game}/{meta_path.name}  "
+        f"({updated} samples, {n_rewards} keys each)"
+    )
+
+
+def update_meta_with_instructions(
+    cache_dir: Path, game: str, key: str, ann_data: Dict[str, Any]
+) -> None:
+    """ann.json의 instruction 데이터를 {key}.json 메타데이터에 동기화한다.
+
+    각 sample의 meta["reward_instructions"] = {reward_enum_str: instruction_uni, ...}
+    형태로 저장한다. ann.json이 없어도 .json만으로 instruction을 복구할 수 있다.
+    """
+    _, meta_path, _ = _game_cache_paths(cache_dir, game, key)
+    if not meta_path.exists():
+        return
+
+    annotations = ann_data.get("annotations", [])
+    n_samples = ann_data.get("n_samples", 0)
+    if not annotations or n_samples == 0:
+        return
+
+    sorted_anns = sorted(annotations, key=lambda r: r["key"])
+
+    # sample_idx → {reward_enum_str: instruction_uni}
+    reward_instructions: Dict[int, Dict[str, str]] = {}
+    for i, ann in enumerate(sorted_anns):
+        sample_idx = i % n_samples
+        reward_enum = str(ann["reward_enum"])
+        instr = ann.get("instruction_uni") or ann.get("instruction_raw")
+        if instr and str(instr) != "None":
+            reward_instructions.setdefault(sample_idx, {})[reward_enum] = str(instr)
+
+    if not reward_instructions:
+        return
+
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    updated = 0
+    for i, sample_meta in enumerate(meta):
+        if i in reward_instructions:
+            sample_meta.setdefault("meta", {})["reward_instructions"] = reward_instructions[i]
+            updated += 1
+    meta_path.write_text(_stable_json(meta), encoding="utf-8")
+    _cache_log(
+        f"[MultiGameDataset] Meta instructions updated → {game}/{meta_path.name}  "
+        f"({updated}/{len(meta)} samples)"
+    )
+
+
+def update_ann_batch_id(cache_dir: Path, game: str, key: str, batch_id: str) -> None:
+    """ann.json에 batch_id 필드를 기록한다 (instruction 배치 제출 추적용)."""
+    ann_path = _game_ann_path(cache_dir, game, key)
+    if not ann_path.exists():
+        return
+    try:
+        data = json.loads(ann_path.read_text(encoding="utf-8"))
+        data["batch_id"] = batch_id
+        ann_path.write_text(_stable_json(data), encoding="utf-8")
+        _cache_log(
+            f"[MultiGameDataset] ann.json batch_id 기록 → {game}/{ann_path.name}  "
+            f"(batch_id={batch_id})"
+        )
+    except Exception as e:
+        _cache_log(f"[MultiGameDataset] ann.json batch_id 기록 실패 ({game}): {e}")
+
+
+def find_game_cache_key(cache_dir: Path, game: str) -> Optional[str]:
+    """게임 캐시 디렉토리에서 npz 파일 이름으로 캐시 키를 찾는다."""
+    game_dir = _game_cache_dir(cache_dir, game)
+    if not game_dir.exists():
+        return None
+    npz_files = sorted(game_dir.glob("*.npz"))
+    if not npz_files:
+        return None
+    return npz_files[-1].stem
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

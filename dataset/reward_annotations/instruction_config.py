@@ -297,7 +297,7 @@ GAME_DESCRIPTIONS: Dict[str, str] = {
 
 # ── Feature 설명 ──────────────────────────────────────────────────────────────────
 FEATURE_DESCRIPTIONS: Dict[str, str] = {
-    "region":             "number of disconnected passable regions (connected components of walkable tiles)",
+    "region":             "number of disconnected passable-area clusters — count of separate walkable zones (not their size or content)",
     "path_length":        "length of the longest traversable path through passable tiles",
     "interactable_count": "total count of interactive tiles (doors, objects, spawn points, etc.)",
     "hazard_count":       "total count of hazard/enemy tiles",
@@ -331,36 +331,36 @@ FEATURE_ZONE_LABELS: Dict[str, List[str]] = {
 # level 0 = 가장 적음/짧음, level 3 = 가장 많음/긺
 VOCAB_SETS: Dict[str, List[List[str]]] = {
     "region": [
-        # level 0 — very few
+        # level 0 — very few regions (fully connected map)
         [
-            "rare",
-            "few"
+            "few",
             "sparse",
+            "small",
             "marginal",
         ],
 
-        # level 1 — somewhat few
+        # level 1 — somewhat few regions (lightly divided)
         [
             "some",
-            "limited",
-            "slight",
-            "little",
-        ],
-
-        # level 2 — moderate / somewhat many
-        [
             "moderate",
-            "reasonable",
-            "decent",
-            "suitable",
+            "slight",
+            "certain",
         ],
 
-        # level 3 — very many
+        # level 2 — somewhat many regions (noticeably split)
         [
-            "many",
+            "several",
+            "balanced",
+            "multiple",
+            "partitioned",
+        ],
+
+        # level 3 — very many regions (heavily fragmented)
+        [
+            "fragmented",
             "numerous",
-            "plentiful",
-            "abundant",
+            "large",
+            "many",
         ],
     ],
 

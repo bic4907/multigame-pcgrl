@@ -424,48 +424,6 @@ def update_json_with_ann_keys(
     )
 
 
-def update_meta_with_instructions(
-    cache_dir: Path, game: str, key: str, ann_data: Dict[str, Any]
-) -> None:
-    """ann.json의 instruction 데이터를 {key}.json 메타데이터에 동기화한다.
-
-    각 sample의 meta["reward_instructions"] = {reward_enum_str: instruction_uni, ...}
-    형태로 저장한다. ann.json이 없어도 .json만으로 instruction을 복구할 수 있다.
-    """
-    _, meta_path, _ = _game_cache_paths(cache_dir, game, key)
-    if not meta_path.exists():
-        return
-
-    annotations = ann_data.get("annotations", [])
-    n_samples = ann_data.get("n_samples", 0)
-    if not annotations or n_samples == 0:
-        return
-
-    sorted_anns = sorted(annotations, key=lambda r: r["key"])
-
-    # sample_idx → {reward_enum_str: instruction_uni}
-    reward_instructions: Dict[int, Dict[str, str]] = {}
-    for i, ann in enumerate(sorted_anns):
-        sample_idx = i % n_samples
-        reward_enum = str(ann["reward_enum"])
-        instr = ann.get("instruction_uni") or ann.get("instruction_raw")
-        if instr and str(instr) != "None":
-            reward_instructions.setdefault(sample_idx, {})[reward_enum] = str(instr)
-
-    if not reward_instructions:
-        return
-
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    updated = 0
-    for i, sample_meta in enumerate(meta):
-        if i in reward_instructions:
-            sample_meta.setdefault("meta", {})["reward_instructions"] = reward_instructions[i]
-            updated += 1
-    meta_path.write_text(_stable_json(meta), encoding="utf-8")
-    _cache_log(
-        f"[MultiGameDataset] Meta instructions updated → {game}/{meta_path.name}  "
-        f"({updated}/{len(meta)} samples)"
-    )
 
 
 def update_ann_batch_id(cache_dir: Path, game: str, key: str, batch_id: str) -> None:

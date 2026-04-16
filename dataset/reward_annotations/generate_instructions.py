@@ -76,7 +76,6 @@ from dataset.multigame.cache_utils import (
     load_game_annotations_from_cache,
     save_game_annotations_to_cache,
     find_game_cache_key,
-    update_meta_with_instructions,
 )
 
 # ── 모델 설정 ─────────────────────────────────────────────────────────────────────
@@ -182,8 +181,7 @@ def build_user_prompt(
 
     lines.append("## Condition")
     lines.append(f"- Feature: {feature_name}")
-    if feature_name != "region":
-        lines.append(f"- Description: {FEATURE_DESCRIPTIONS.get(feature_name, feature_name)}")
+    lines.append(f"- Description: {FEATURE_DESCRIPTIONS.get(feature_name, feature_name)}")
     if zone_display is not None:
         lines.append(f"- Intensity level: {zone_display} (scale: 1=lowest → 4=highest)")
     elif thresholds is not None:
@@ -203,13 +201,31 @@ def build_user_prompt(
     tile_names  = RAW_TILE_NAMES.get(game, {})
     tile_descs  = RAW_TILE_DESCS.get(game, {})
     tile_colors = RAW_TILE_COLORS.get(game, {})
-    lines.append("Tile legend:")
-    for tid in sorted(tile_names.keys()):
-        name = tile_names[tid]
-        desc = tile_descs.get(tid, "")
-        r, g, b = tile_colors.get(tid, (128, 0, 128))
-        lines.append(f"  ID={tid}  {name:10s}  color=RGB({r},{g},{b})  — {desc}")
-    if feature_name != "region":
+    if feature_name == "region":
+        # region은 passable/wall 구분만 표시 — 특정 타일 이름이 instruction에 유입되지 않도록
+        game_mapping = {int(k): int(v) for k, v in
+                        __import__('json').loads(
+                            (__import__('pathlib').Path(__file__).parent.parent /
+                             "multigame" / "tile_mapping.json").read_text()
+                        ).get(game, {}).get("mapping", {}).items()}
+        passable_ids = [tid for tid, uni in game_mapping.items() if uni != 1]  # wall=1
+        wall_ids     = [tid for tid, uni in game_mapping.items() if uni == 1]
+        passable_colors = [tile_colors.get(tid, (200, 200, 200)) for tid in passable_ids if tid in tile_colors]
+        wall_colors     = [tile_colors.get(tid, (80, 80, 80))    for tid in wall_ids     if tid in tile_colors]
+        lines.append("Tile legend (passable vs. wall only):")
+        if passable_colors:
+            r, g, b = passable_colors[0]
+            lines.append(f"  passable  color=RGB({r},{g},{b}) (representative)  — walkable area")
+        if wall_colors:
+            r, g, b = wall_colors[0]
+            lines.append(f"  wall      color=RGB({r},{g},{b}) (representative)  — impassable barrier")
+    else:
+        lines.append("Tile legend:")
+        for tid in sorted(tile_names.keys()):
+            name = tile_names[tid]
+            desc = tile_descs.get(tid, "")
+            r, g, b = tile_colors.get(tid, (128, 0, 128))
+            lines.append(f"  ID={tid}  {name:10s}  color=RGB({r},{g},{b})  — {desc}")
         count_ids = FEATURE_COUNT_TILE_IDS.get(game, {}).get(feature_name, [])
         if count_ids:
             counted_names = [tile_names.get(tid, str(tid)) for tid in count_ids]
@@ -259,7 +275,34 @@ def build_user_prompt(
             )
 
     lines.append("## Task")
-    if feature_name in _COUNT_FEATURES:
+    if feature_name == "region":
+        if zone_display is not None:
+            lines.append(
+                f"Write one short sentence describing the number of disconnected passable-area clusters in this map ({zone_display})."
+            )
+        else:
+            lines.append(
+                "Write one short sentence describing the number of disconnected passable-area clusters in this map."
+            )
+        lines.append(
+            "A 'region' is a contiguous group of passable tiles. "
+            "The measured value is the NUMBER of such clusters — NOT their size or area. "
+            "e.g. 'few' means there are few separate clusters (not that the clusters are small); "
+            "'many' means there are many separate clusters (not that they are large)."
+        )
+        if vocab_hint:
+            lines.append(vocab_hint)
+        lines.append(
+            "- Focus only on the COUNT of separate passable clusters, not their size or content."
+        )
+        lines.append(
+            "- Do NOT mention tile types or categories (empty, interactive, hazard, enemy, etc.)."
+        )
+        lines.append(
+            "- Do NOT use words that imply a specific count (e.g. 'one', 'single', 'sole', 'twice', 'double', etc.)."
+        )
+        lines.append("Neither sentence should contain any numbers or measured values.")
+    elif feature_name in _COUNT_FEATURES:
         if zone_display is not None:
             lines.append(
                 f"Write one short sentence describing this map's {feature_name} ({zone_display})."
@@ -276,6 +319,21 @@ def build_user_prompt(
         lines.append(
             "- instruction_uni: use unified category names (empty/wall/interactive/hazard/collectable) only; "
             "do NOT reference specific tile names — describe only the overall intensity level."
+        )
+        lines.append("Neither sentence should contain any numbers or measured values.")
+    elif feature_name == "path_length":
+        if zone_display is not None:
+            lines.append(
+                f"Write one short sentence describing the traversable path length of this map ({zone_display})."
+            )
+        else:
+            lines.append(
+                "Write one short sentence describing the traversable path length of this map."
+            )
+        if vocab_hint:
+            lines.append(vocab_hint)
+        lines.append(
+            "- Do NOT mention specific tile types or names (enemy, door, floor, etc.) — describe only the path length."
         )
         lines.append("Neither sentence should contain any numbers or measured values.")
     else:
@@ -756,8 +814,6 @@ def update_caches(results: Dict[str, dict], cache_dir: Path, games: List[str]) -
             )
             logger.info(f"  {game}/{key[:12]}….ann.json: {updated}개 업데이트"
                         + (f" (has_instructions={all_filled})" if all_filled else ""))
-            # {key}.json 메타데이터에도 instruction 동기화
-            update_meta_with_instructions(cache_dir, game, key, ann_data)
         total += updated
     return total
 
@@ -791,7 +847,7 @@ def main() -> None:
                         help="처리할 최대 행 수 (테스트용)")
     parser.add_argument("--force",        action="store_true",
                         help="이미 채워진 instruction도 재생성")
-    parser.add_argument("--poll-interval",type=int,  default=60)
+    parser.add_argument("--poll-interval",type=int,  default=10)
     args = parser.parse_args()
 
     # ── log ──
@@ -860,30 +916,63 @@ def main() -> None:
         return
 
     if args.run:
-        logger.info(f"\n완료 대기 중 (interval={args.poll_interval}s) …")
-        pending = list(submitted_batches)
+        logger.info(f"완료 대기 중 (interval={args.poll_interval}s) …")
+        all_batches   = list(submitted_batches)           # 고정 순서
+        n_block       = len(all_batches) + 1              # header + 배치당 1줄 (고정)
+        bst: Dict[str, dict] = {                          # 배치별 상태 캐시
+            bid: {"game": game, "status": "submitted", "completed": 0, "total": 0}
+            for bid, game in all_batches
+        }
+        pending_ids   = {bid for bid, _ in all_batches}
         total_updated = 0
-        while pending:
+        start_time    = time.time()
+        first         = True
+
+        while pending_ids:
             time.sleep(args.poll_interval)
-            still_pending = []
-            for batch_id, game in pending:
-                info   = check_batch_status(batch_id)
-                status = info["status"]
-                counts = info["request_counts"]
-                logger.info(f"  [{game}] {batch_id}: {status}  "
-                            f"{counts['completed']}/{counts['total']} completed")
+            elapsed     = int(time.time() - start_time)
+            elapsed_str = f"{elapsed // 60}m {elapsed % 60:02d}s"
+
+            for batch_id in list(pending_ids):
+                info = check_batch_status(batch_id)
+                bst[batch_id].update({
+                    "status":    info["status"],
+                    "completed": info["request_counts"]["completed"],
+                    "total":     info["request_counts"]["total"],
+                })
+
+            # 직전 블록 덮어쓰기
+            if not first:
+                sys.stdout.write(f"\033[{n_block}A")
+            first = False
+
+            sys.stdout.write(f"\r\033[K[{elapsed_str}] "
+                             f"pending={len(pending_ids)}/{len(all_batches)}\n")
+            for batch_id, game in all_batches:
+                bs  = bst[batch_id]
+                c, t = bs["completed"], bs["total"]
+                bar = f"{c}/{t}" if t else "-/-"
+                sys.stdout.write(f"\r\033[K  [{game:8s}] {bs['status']:15s}  {bar}\n")
+            sys.stdout.flush()
+
+            # 완료/실패 처리 (logger 출력은 블록 아래에 쌓임)
+            for batch_id in list(pending_ids):
+                status = bst[batch_id]["status"]
+                game   = bst[batch_id]["game"]
                 if status == "completed":
+                    pending_ids.discard(batch_id)
                     try:
                         results = retrieve_batch_results(batch_id)
                         n = update_caches(results, args.cache_dir, [game])
                         total_updated += n
+                        logger.info(f"  [{game}] 완료 → {n}개 업데이트")
                     except Exception as e:
-                        logger.error(f"  [{game}] 결과 조회/업데이트 실패 → {e}, 건너뜀")
+                        logger.error(f"  [{game}] 결과 조회/업데이트 실패 → {e}")
                 elif status in ("failed", "expired", "cancelled"):
+                    pending_ids.discard(batch_id)
                     logger.error(f"  [{game}] 배치 실패/만료/취소: {status}")
-                else:
-                    still_pending.append((batch_id, game))
-            pending = still_pending
+
+        print()
         logger.info(f"총 {total_updated}개 행 업데이트 완료")
     else:
         logger.info("\n배치 제출 완료. 결과 조회:")

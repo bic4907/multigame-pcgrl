@@ -11,8 +11,8 @@ Guidelines:
   Good: "The dungeon is filled with bats." / "Enemies are scattered across the map." / "Few treasures can be found here."
   Bad:  "Design a dungeon with many enemies." / "Create a level with few hazards."
 - Keep it extremely simple — one short, plain sentence. No subordinate clauses, no elaboration.
-  Aim for ~10 words. Shorter is better as long as the intensity is clear.
-- Vary word choice naturally (e.g., "filled with" / "scattered with" / "overrun by" / "sparse" / "few" / "scarce").
+  STRICT LIMIT: 10 words or fewer. Shorter is better as long as the intensity is clear.
+- Vary word choice naturally.
 - The suggested vocabulary is provided as examples — feel free to use variations or different expressions.
 - Do NOT be overly poetic or elaborate.
 - Do NOT mention any numbers or measured values

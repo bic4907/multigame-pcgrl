@@ -363,15 +363,19 @@ class CLIPDatasetBuilder:
             for rc in reward_cond_list
         ], dtype=np.float32)
 
-        # ── reward_enum별 min-max normalization → [0, 1] ──
+        # ── log1p 변환: right-skewed 분포의 high-value 영역 확장 ──
+        # 데이터 특성: 낮은 값에 밀집 / 높은 값은 long-tail → log1p로 균등화
+        condition_targets_log = np.log1p(np.maximum(condition_targets_raw, 0.0))
+
+        # ── reward_enum별 min-max normalization → [0, 1] (log 공간에서) ──
         unique_enums = sorted(set(reward_enum_targets))
-        cond_norm_min = {}   # {enum_idx: min_val}
-        cond_norm_max = {}   # {enum_idx: max_val}
-        condition_targets = condition_targets_raw.copy()
+        cond_norm_min = {}   # {enum_idx: log1p 공간의 min}
+        cond_norm_max = {}   # {enum_idx: log1p 공간의 max}
+        condition_targets = condition_targets_log.copy()
 
         for eidx in unique_enums:
             mask = (reward_enum_targets == eidx)
-            vals = condition_targets_raw[mask]
+            vals = condition_targets_log[mask]
             v_min, v_max = float(vals.min()), float(vals.max())
             cond_norm_min[int(eidx)] = v_min
             cond_norm_max[int(eidx)] = v_max
@@ -380,9 +384,12 @@ class CLIPDatasetBuilder:
 
         self.cond_norm_min = cond_norm_min
         self.cond_norm_max = cond_norm_max
-        logger.info(f"Condition normalization (per reward_enum, 0-indexed):")
+        logger.info(f"Condition normalization (log1p → min-max, per reward_enum, 0-indexed):")
         for eidx in unique_enums:
-            logger.info(f"  enum {eidx}: min={cond_norm_min[eidx]:.2f}, max={cond_norm_max[eidx]:.2f}")
+            raw_mask = (reward_enum_targets == eidx)
+            raw_vals = condition_targets_raw[raw_mask]
+            logger.info(f"  enum {eidx}: raw=[{raw_vals.min():.2f}, {raw_vals.max():.2f}] "
+                        f"→ log1p=[{cond_norm_min[eidx]:.3f}, {cond_norm_max[eidx]:.3f}]")
 
         quantized_condition_targets = np.array(quantized_cond_list, dtype=np.int32)
 

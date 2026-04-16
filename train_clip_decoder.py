@@ -483,7 +483,9 @@ def make_train(config: CLIPDecoderTrainConfig):
                     reward_enum_0based = np.array(jax.device_get(batch.reward_enum_target))
                     pred_raw = np.array(jax.device_get(metrics["per_sample_cond_raw"]))
                     target_norm = np.array(jax.device_get(batch.condition_target))
-                    target_raw = target_norm * (norm_max_arr[reward_enum_0based] - norm_min_arr[reward_enum_0based]) + norm_min_arr[reward_enum_0based]
+                    # [0,1] → log1p 공간 → 원래 스케일 (expm1)
+                    target_log = target_norm * (norm_max_arr[reward_enum_0based] - norm_min_arr[reward_enum_0based]) + norm_min_arr[reward_enum_0based]
+                    target_raw = np.expm1(np.maximum(target_log, 0.0))
                     games = [class_id2game_name.get(int(cid), "unknown") for cid in np.array(jax.device_get(batch.class_ids))]
 
                     val_true_raw_buf.append(np.array(target_raw))

@@ -275,8 +275,10 @@ class RewardDecoder(nn.Module):
         condition_pred = jax.nn.sigmoid(reg_logits)
 
         # 역변환 → 원래 스케일 (추론 시 사용)
+        # log1p 공간에서 정규화되었으므로: denorm → expm1
         scale = cond_max - cond_min                              # (num_classes,)
-        condition_pred_raw = condition_pred * scale + cond_min
+        condition_pred_log = condition_pred * scale + cond_min   # log1p 공간
+        condition_pred_raw = jnp.expm1(condition_pred_log)       # 원래 스케일
 
         return reward_logits, condition_pred, condition_pred_raw
 

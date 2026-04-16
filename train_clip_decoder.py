@@ -707,8 +707,8 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         logger.info("=" * 70)
 
         if not unseen_games:
-            logger.error("No unseen games found in dataset! Check 'game' and 'unseen_games' config.")
-            return
+            logger.warning("No unseen games found in dataset — treating all games as seen.")
+            unseen_game_set = set()
 
         # ── 3. 게임별 train pool / test 분할 (seed 고정) ──
         game_train_pool, game_test, _ = split_dataset_by_game(

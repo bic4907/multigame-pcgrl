@@ -57,6 +57,7 @@ def decoder_ckpt_dir(tmp_base):
             "encoder.model=cnnclip",
             "encoder.state=true",
             "decoder.num_reward_classes=5",
+            "unseen_games=dg",
             f"hydra.run.dir={hydra_run_dir}",
         ],
         cwd=_ROOT,

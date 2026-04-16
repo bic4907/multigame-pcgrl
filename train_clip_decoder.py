@@ -39,6 +39,7 @@ from transformers import CLIPProcessor
 from conf.config import CLIPDecoderUnseenConfig
 from conf.game_utils import GAME_ABBR
 from encoder.clip_model import get_cnnclip_decoder_encoder
+from encoder.utils.training import save_encoder_checkpoint
 from encoder.data.clip_batch import (
     CLIPDataset,
     CLIPDecoderBatch,
@@ -579,6 +580,11 @@ def train_and_evaluate_ratio(
                     f"ratio_{ratio:.2f}/lr": lr_sched(train_state.step),
                 }
             )
+
+        # ── Checkpoint 저장 ──
+        if hasattr(config, 'ckpt_freq') and config.ckpt_freq > 0:
+            if (epoch + 1) % config.ckpt_freq == 0:
+                save_encoder_checkpoint(config, train_state, step=epoch + 1)
 
     # ── Evaluation ──
     per_game_acc, per_game_reg, per_game_enum_diff = evaluate_per_game(

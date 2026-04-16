@@ -114,7 +114,7 @@ txtorcon==24.8.0
 typing-extensions==4.12.2
 tzdata==2024.2
 urllib3==2.3.0
-wandb==0.23.1
+wandb==0.25.1
 zipp==3.21.0
 zipstream-ng==1.8.0
 zope-interface==7.2

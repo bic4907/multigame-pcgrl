@@ -516,6 +516,10 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     cls_weight: float = 1.0            # reward_enum 분류 loss 가중치
     reg_weight: float = 0.1            # condition 회귀 loss 가중치
 
+    # ── regression loss 종류 ──
+    # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
+    regression_loss: str = "mae"
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)

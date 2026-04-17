@@ -140,12 +140,16 @@ def train_step(
         else:  # mae
             reg_loss = jnp.mean(abs_diff)
 
-        # normalized [0,1] 공간 MAE (모니터링용 — gradient 계산에 불포함)
-        condition_mae_normalized = jnp.mean(abs_diff)
-
-        # scatter plot용 원래 스케일 예측값 (gradient 계산에 불포함)
-        condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes) — 원래 스케일
+        # linear 공간 normalized [0,1] MAE (모니터링용 — gradient 계산에 불포함)
+        # norm_min/max는 log1p 공간이므로 expm1로 linear 스케일로 복원 후 정규화
+        condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes) — 원래 linear 스케일
         per_sample_cond_raw = condition_pred_raw[jnp.arange(condition_pred_raw.shape[0]), reward_target]
+        target_log = condition_target * (norm_max_arr[reward_target] - norm_min_arr[reward_target]) + norm_min_arr[reward_target]
+        target_raw_mae = jnp.expm1(jnp.maximum(target_log, 0.0))
+        linear_min = jnp.expm1(norm_min_arr[reward_target])
+        linear_max = jnp.expm1(norm_max_arr[reward_target])
+        linear_range = linear_max - linear_min + 1e-8
+        condition_mae_normalized = jnp.mean(jnp.abs(per_sample_cond_raw - target_raw_mae) / linear_range)
 
         # ── Per-reward_enum regression 메트릭 ──
         per_enum_huber = jnp.zeros(num_reward_classes)

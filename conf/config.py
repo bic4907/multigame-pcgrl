@@ -520,6 +520,9 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
     regression_loss: str = "mae"
 
+    # ── long-tail cutting ──
+    longtail_cut: bool = False
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)

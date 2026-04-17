@@ -60,7 +60,7 @@ logging.getLogger('absl').setLevel(logging.ERROR)
 #  Train Step (JIT)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8))
+@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9))
 def train_step(
     train_state: TrainState,
     batch: CLIPDecoderBatch,
@@ -71,6 +71,9 @@ def train_step(
     cls_weight: float = 1.0,
     reg_weight: float = 0.1,
     num_reward_classes: int = 5,
+    regression_loss: str = "mae",
+    norm_min_arr: jnp.ndarray = None,
+    norm_max_arr: jnp.ndarray = None,
 ):
     rng_key, dropout_rng = jax.random.split(rng_key)
 
@@ -126,19 +129,23 @@ def train_step(
         reward_pred = jnp.argmax(reward_logits, axis=-1)
         reward_accuracy = jnp.mean(reward_pred == reward_target)
 
-        # ── (3) Decoder: condition regression loss (MAE, log1p 공간) ──
+        # ── (3) Decoder: condition regression loss (huber or mae, log1p 공간) ──
         condition_pred = outputs["condition_pred"]    # (B, num_classes) — [0,1] 정규화
         condition_target = batch.condition_target      # (B,) — [0,1] 정규화
         # 각 샘플의 predicted condition을 gt reward_enum 인덱스로 gather
         per_sample_cond = condition_pred[jnp.arange(condition_pred.shape[0]), reward_target]
-        # Linear MAE loss (log1p 공간에서 정규화된 값 기준)
         abs_diff = jnp.abs(per_sample_cond - condition_target)
-        reg_loss = jnp.mean(abs_diff)
+        if regression_loss == "huber":
+            reg_loss = jnp.mean(jnp.where(abs_diff <= 1.0, 0.5 * abs_diff ** 2, abs_diff - 0.5))
+        else:  # mae
+            reg_loss = jnp.mean(abs_diff)
 
-        # 원래 스케일 MAE (모니터링용 — gradient 계산에 불포함)
+        # 원래 스케일 MAE (모니터링용 — gradient 계산에 불포함, 항상 linear 기준)
         condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes) — 원래 스케일
         per_sample_cond_raw = condition_pred_raw[jnp.arange(condition_pred_raw.shape[0]), reward_target]
-        condition_mae_normalized = jnp.mean(abs_diff)
+        target_raw = condition_target * (norm_max_arr[reward_target] - norm_min_arr[reward_target]) + norm_min_arr[reward_target]
+        target_raw = jnp.expm1(jnp.maximum(target_raw, 0.0))  # log1p 역변환 → linear 스케일
+        condition_mae_normalized = jnp.mean(jnp.abs(per_sample_cond_raw - target_raw))
 
         # ── Per-reward_enum regression 메트릭 ──
         per_enum_huber = jnp.zeros(num_reward_classes)
@@ -396,6 +403,9 @@ def make_train(config: CLIPDecoderTrainConfig):
                         cls_weight=config.cls_weight,
                         reg_weight=config.reg_weight,
                         num_reward_classes=num_cls,
+                        regression_loss=config.regression_loss,
+                        norm_min_arr=norm_min_arr,
+                        norm_max_arr=norm_max_arr,
                     )
 
                     embeddings = [
@@ -449,6 +459,9 @@ def make_train(config: CLIPDecoderTrainConfig):
                         cls_weight=config.cls_weight,
                         reg_weight=config.reg_weight,
                         num_reward_classes=num_cls,
+                        regression_loss=config.regression_loss,
+                        norm_min_arr=norm_min_arr,
+                        norm_max_arr=norm_max_arr,
                     )
 
                     embeddings = [

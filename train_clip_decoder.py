@@ -126,34 +126,31 @@ def train_step(
         reward_pred = jnp.argmax(reward_logits, axis=-1)
         reward_accuracy = jnp.mean(reward_pred == reward_target)
 
-        # ── (3) Decoder: condition regression loss (Huber / Smooth L1) ──
+        # ── (3) Decoder: condition regression loss (MAE, log1p 공간) ──
         condition_pred = outputs["condition_pred"]    # (B, num_classes) — [0,1] 정규화
         condition_target = batch.condition_target      # (B,) — [0,1] 정규화
         # 각 샘플의 predicted condition을 gt reward_enum 인덱스로 gather
         per_sample_cond = condition_pred[jnp.arange(condition_pred.shape[0]), reward_target]
-        # Huber loss (δ=1.0): outlier에 robust한 regression loss (정규화 공간)
+        # Linear MAE loss (log1p 공간에서 정규화된 값 기준)
         abs_diff = jnp.abs(per_sample_cond - condition_target)
-        reg_loss = jnp.mean(
-            jnp.where(abs_diff <= 1.0, 0.5 * abs_diff ** 2, abs_diff - 0.5)
-        )
+        reg_loss = jnp.mean(abs_diff)
 
         # 원래 스케일 MAE (모니터링용 — gradient 계산에 불포함)
         condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes) — 원래 스케일
         per_sample_cond_raw = condition_pred_raw[jnp.arange(condition_pred_raw.shape[0]), reward_target]
-        condition_mae_normalized = jnp.mean(jnp.abs(per_sample_cond - condition_target))
+        condition_mae_normalized = jnp.mean(abs_diff)
 
         # ── Per-reward_enum regression 메트릭 ──
         per_enum_huber = jnp.zeros(num_reward_classes)
         per_enum_mae = jnp.zeros(num_reward_classes)
         per_enum_count = jnp.zeros(num_reward_classes)
 
-        huber_per_sample = jnp.where(abs_diff <= 1.0, 0.5 * abs_diff ** 2, abs_diff - 0.5)
-        mae_per_sample = jnp.abs(per_sample_cond - condition_target)
+        mae_per_sample = abs_diff
 
         for eidx in range(num_reward_classes):
             mask = (reward_target == eidx).astype(jnp.float32)        # (B,)
             count = jnp.sum(mask) + 1e-8                               # 0-div 방지
-            per_enum_huber = per_enum_huber.at[eidx].set(jnp.sum(huber_per_sample * mask) / count)
+            per_enum_huber = per_enum_huber.at[eidx].set(jnp.sum(mae_per_sample * mask) / count)
             per_enum_mae = per_enum_mae.at[eidx].set(jnp.sum(mae_per_sample * mask) / count)
             per_enum_count = per_enum_count.at[eidx].set(jnp.sum(mask))
 

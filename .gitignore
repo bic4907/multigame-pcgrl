@@ -58,3 +58,5 @@ dataset/reward_annotations/batches/*
 
 #실수로 덮어쓰는거 방지
 CLAUDE.md
+
+wandb_download

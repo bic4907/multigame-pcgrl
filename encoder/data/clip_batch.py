@@ -179,6 +179,7 @@ class CLIPDatasetBuilder:
                  max_samples: int = None,
                  prepend_game_prefix: bool = False,
                  prepend_game_desc: bool = False,
+                 longtail_cut: bool = False,
                  ):
         self.processor = processor
         self.paired_data = paired_data
@@ -189,6 +190,7 @@ class CLIPDatasetBuilder:
         self.max_samples = max_samples
         self.prepend_game_prefix = prepend_game_prefix
         self.prepend_game_desc = prepend_game_desc
+        self.longtail_cut = longtail_cut
 
         # Create game_name to index mapping
         unique_games = sorted(set([s.game for s in self.paired_data._samples]))
@@ -232,6 +234,28 @@ class CLIPDatasetBuilder:
             for s in samples if s.instruction is None
         ))
         samples = [s for s in samples if s.instruction is not None]
+
+        # ── Long-tail cutting: 극단적 condition 값 제거 ──
+        if self.longtail_cut:
+            _LONGTAIL_CUTOFF = [
+                ("dungeon",  1, 80),    # enum1 (path_length), dg: condition >= 80
+                ("pokemon",  2, 150),   # enum2 (interactive_count), pk: condition >= 150
+                ("pokemon",  4, 29),    # enum4 (collectable_count), pk: condition >= 29
+            ]
+            n_before_lt = len(samples)
+            def _is_longtail(s):
+                reward_enum = s.meta.get("reward_enum")
+                conditions = s.meta.get("conditions", {})
+                condition_value = conditions.get(reward_enum)
+                if condition_value is None:
+                    return False
+                for game, enum, cutoff in _LONGTAIL_CUTOFF:
+                    if s.game == game and reward_enum == enum and condition_value >= cutoff:
+                        return True
+                return False
+            samples = [s for s in samples if not _is_longtail(s)]
+            logger.info(f"Long-tail cutting: {n_before_lt} → {len(samples)} "
+                        f"(removed {n_before_lt - len(samples)} samples)")
 
         # Extract game types and create mapping to integer IDs (필터 이후 기준)
         games_type = [s.game for s in samples]  # N is the number of samples

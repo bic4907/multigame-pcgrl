@@ -69,7 +69,7 @@ class MegaManConfig(VGLCGameConfig):
 class DungeonConfig:
     """Dungeon Level Dataset 설정"""
     rotate_90: bool = False  # 시계방향 90도 회전 증강
-    max_samples: int = 10000
+    max_samples: int = 4000
 
 
 @dataclass

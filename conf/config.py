@@ -541,6 +541,12 @@ class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
     unseen_test_ratio: float = 0.2    # 각 게임 데이터에서 테스트용으로 예약할 비율
     unseen_test_seed: int = 42        # 테스트셋 분할 시드 (재현 가능)
 
+    # ── regression loss 종류 ──
+    # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
+    regression_loss: str = "mae"
+
+    # ── long-tail cutting ──
+    longtail_cut: bool = False
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)

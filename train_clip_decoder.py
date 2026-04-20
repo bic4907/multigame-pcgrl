@@ -190,14 +190,14 @@ def build_train_indices_for_ratio(
 #  Train Step (JIT) — reward_pred 추가
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 10))
+@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9))
 def train_step(
     train_state: TrainState,
     batch: CLIPDecoderBatch,
     rng_key: jax.random.PRNGKey,
     is_train: bool = True,
     mode: str = "text_state",
-    contrastive_weight: float = 1.0,
+    contrastive_weight: float = 1.0,dw
     cls_weight: float = 1.0,
     reg_weight: float = 0.1,
     num_reward_classes: int = 5,

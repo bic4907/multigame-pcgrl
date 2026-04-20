@@ -492,6 +492,8 @@ def evaluate_per_game(
     rng_key: jax.random.PRNGKey,
     num_cls: int,
     mode: str,
+    norm_min_arr: jnp.ndarray = None,
+    norm_max_arr: jnp.ndarray = None,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]]]:
     """고정된 테스트셋에서 **게임별** reward accuracy 와 reg_loss를 계산한다.
 
@@ -549,6 +551,9 @@ def evaluate_per_game(
             cls_weight=config.cls_weight,
             reg_weight=config.reg_weight,
             num_reward_classes=num_cls,
+            regression_loss=config.regression_loss,
+            norm_min_arr=norm_min_arr,
+            norm_max_arr=norm_max_arr,
         )
 
         preds = np.array(jax.device_get(metrics["reward_pred"]))
@@ -735,6 +740,7 @@ def train_and_evaluate_ratio(
         per_game_acc, per_game_reg, per_game_enum_diff = evaluate_per_game(
             train_state, test_ds, test_game_names, unseen_game_names,
             config, rng_key, num_cls, mode,
+            norm_min_arr=norm_min_arr, norm_max_arr=norm_max_arr,
         )
         return per_game_acc, per_game_reg, per_game_enum_diff
 
@@ -759,6 +765,9 @@ def train_and_evaluate_ratio(
                 cls_weight=config.cls_weight,
                 reg_weight=config.reg_weight,
                 num_reward_classes=num_cls,
+                regression_loss=config.regression_loss,
+                norm_min_arr=norm_min_arr,
+                norm_max_arr=norm_max_arr,
             )
             epoch_loss += float(loss)
             epoch_acc += float(metrics["reward_accuracy"])
@@ -794,6 +803,7 @@ def train_and_evaluate_ratio(
     per_game_acc, per_game_reg, per_game_enum_diff = evaluate_per_game(
         train_state, test_ds, test_game_names, unseen_game_names,
         config, rng_key, num_cls, mode,
+        norm_min_arr=norm_min_arr, norm_max_arr=norm_max_arr,
     )
 
     logger.info("  [ratio=%.2f] Evaluation results:", ratio)

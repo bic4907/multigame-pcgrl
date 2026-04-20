@@ -197,7 +197,7 @@ def train_step(
     rng_key: jax.random.PRNGKey,
     is_train: bool = True,
     mode: str = "text_state",
-    contrastive_weight: float = 1.0,dw
+    contrastive_weight: float = 1.0,
     cls_weight: float = 1.0,
     reg_weight: float = 0.1,
     num_reward_classes: int = 5,

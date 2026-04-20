@@ -21,7 +21,7 @@ parameters:
       - 'skzd'   # unseen: sokoban, zelda             | seen: dungeon, pokemon, doom
       - 'dmzd'   # unseen: doom, zelda                | seen: dungeon, pokemon, sokoban
   seen_ratio:
-    values: [0.0, 0.5, 1.0]
+    values: [0.0, 0.05, 0.1, 1.0]
   seed:
     values: [0]
   overwrite:

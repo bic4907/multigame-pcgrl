@@ -466,7 +466,7 @@ class CLIPTrainConfig(Config):
     lr: float = 1.0e-3
     weight_decay: float = 1e-5
     train_ratio: float = 0.8
-    batch_size: int = 128
+    batch_size: int = 256
     buffer_ratio: float = 1.0 # Not implemented for clip yet.
     train_shuffle: bool = False
     

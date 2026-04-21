@@ -46,7 +46,7 @@ class PretrainedImageEncoder(nn.Module):
     projection_dim: int = None
 
     @nn.compact
-    def __call__(self, pixel_values):
+    def __call__(self, pixel_values, training: bool = False):
         x = self.pretrained_state_encoder(pixel_values).pooler_output
         x = nn.Dense(
                 512, 
@@ -393,11 +393,42 @@ def get_clip_encoder(config: EncoderConfig, RL_training: bool=True):
     encoder = ContrastiveModule(
         encoders=encoder_dict,
         dropout_rate=config.dropout_rate,
-        mode=mode
     )
 
 
     return encoder, pretrained_params
+
+
+def get_clip_hf_pretrained_params(config: EncoderConfig):
+    """HuggingFace CLIP pretrained weights를 ContrastiveModule param tree 형식으로 반환."""
+    clip = FlaxCLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    clip_module, clip_variables = clip.module, {"params": clip.params}
+
+    text_model, text_model_vars = clip_module.bind(clip_variables).text_model.unbind()
+    vision_model, vision_model_vars = clip_module.bind(clip_variables).vision_model.unbind()
+
+    # Flax은 Dict[str, nn.Module] 필드를 "{field}_{key}" 형태로 flat하게 저장함
+    # encoders: Dict[str, nn.Module] → encoders_text, encoders_state
+    # text_projection / visual_projection은 HF에서 이미 {"kernel": array} 형태로 저장됨
+    pretrained_params = {
+        "encoders_text": {
+            "pretrained_text_encoder": text_model_vars["params"],
+            "pretrained_text_projection": clip_variables["params"]["text_projection"],
+        },
+    }
+
+    if config.state:
+        # patch_embedding.kernel은 입력 채널 수가 다르므로 (HF=3ch, 게임=5ch) 제외
+        vision_params = dict(vision_model_vars["params"])
+        vision_embeddings = dict(vision_params["embeddings"])
+        del vision_embeddings["patch_embedding"]
+        vision_params = {**vision_params, "embeddings": vision_embeddings}
+        pretrained_params["encoders_state"] = {
+            "pretrained_state_encoder": vision_params,
+            "pretrained_image_projection": clip_variables["params"]["visual_projection"],
+        }
+
+    return pretrained_params
 
 
 def get_cnnclip_encoder(config: EncoderConfig, RL_training: bool = True):

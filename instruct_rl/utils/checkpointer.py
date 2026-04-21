@@ -213,6 +213,10 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
 
         if enc_param is None:
             logger.error(f"  ❌ Failed to load any encoder checkpoint from {config.encoder.ckpt_path}")
+    elif config.encoder.model == "clip":
+        from encoder.clip_model import get_clip_hf_pretrained_params
+        logger.info("No encoder ckpt_path — loading pretrained CLIP weights from HuggingFace (openai/clip-vit-base-patch32)")
+        enc_param = get_clip_hf_pretrained_params(config.encoder)
     else:
         enc_param = None
 
@@ -252,8 +256,18 @@ def save_checkpoint_step(runner_state, info, steps_prev_complete,
                 logger.warning(f"save_checkpoint_step failed at step {t}: {e}")
 
 
+def _deep_merge(base: dict, update: dict) -> dict:
+    """update의 키만 base에 재귀적으로 덮어씀 (없는 키는 base 값 유지)."""
+    for k, v in update.items():
+        if k in base and isinstance(base[k], dict) and isinstance(v, dict):
+            _deep_merge(base[k], v)
+        else:
+            base[k] = v
+    return base
+
+
 def apply_encoder_params(runner_state, encoder_params, config):
-    """인코더 체크포인트 파라미터를 runner_state 에 적용하고 메모리 사용량을 로깅한다.
+    """인코더 파라미터를 runner_state 에 적용하고 메모리 사용량을 로깅한다.
 
     Parameters
     ----------
@@ -267,10 +281,9 @@ def apply_encoder_params(runner_state, encoder_params, config):
     """
     from flax.traverse_util import flatten_dict
 
-    logger.info(
-        f"Parameters loaded from encoder checkpoint ({config.encoder.ckpt_path})"
-    )
-    runner_state.train_state.params["params"]["subnet"]["encoder"] = encoder_params
+    source = config.encoder.ckpt_path if config.encoder.ckpt_path else "HuggingFace pretrained"
+    logger.info(f"Parameters loaded from encoder ({source})")
+    _deep_merge(runner_state.train_state.params["params"]["subnet"]["encoder"], encoder_params)
 
     logger.info("-" * 80)
     for key, enc_param in encoder_params.items():

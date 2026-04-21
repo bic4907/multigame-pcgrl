@@ -169,6 +169,8 @@ class EncoderConfig(CLIPConfig):
     state: bool = True
     mode: str = "text_state"
 
+    pretrained_clip_model: str = "openai/clip-vit-base-patch32"
+
     deterministic: bool = True
     num_layers: int = 2
     hidden_dim: int = 256
@@ -265,6 +267,21 @@ class VIPCGRLConfig(CPCGRLConfig):
 
     use_sim_reward: bool = True
     wandb_project: Optional[str] = "vipcgrl"
+
+
+@dataclass
+class Pretrained_CLIP_PCGRLConfig(CPCGRLConfig):
+    use_clip: bool = True
+    model: str = "clipconv"
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="clip"))
+
+    use_nlp: bool = False
+    vec_cont: bool = False
+    nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
+
+    use_sim_reward: bool = True
+    wandb_project: Optional[str] = "pretrained_clip_pcgrl"
+
 
 
 @dataclass
@@ -513,6 +530,7 @@ cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
+cs.store(name="pretrained_clip_pcgrl", node=Pretrained_CLIP_PCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 

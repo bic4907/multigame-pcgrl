@@ -227,22 +227,29 @@ class CLIPDatasetBuilder:
                         f"samples {len(samples)} → {self.max_samples}")
             samples = samples[:self.max_samples]
 
-        # Filter out samples with None instruction
+        # Filter out samples with missing/invalid instruction
+        # Catches: None, "None" string, empty string, whitespace-only, NaN float
+        def _invalid_instruction(inst) -> bool:
+            if inst is None:
+                return True
+            s = str(inst).strip()
+            return s == "" or s.lower() == "none" or s.lower() == "nan"
+
         n_before = len(samples)
         dropped_combos = sorted(set(
             (s.game, s.meta.get("reward_enum"))
-            for s in samples if s.instruction is None
+            for s in samples if _invalid_instruction(s.instruction)
         ))
-        samples = [s for s in samples if s.instruction is not None]
+        samples = [s for s in samples if not _invalid_instruction(s.instruction)]
         n_dropped = n_before - len(samples)
         if n_dropped > 0:
             logger.info(
-                "None-instruction filter: %d → %d (dropped %d samples). "
+                "Instruction filter: %d → %d (dropped %d samples). "
                 "Dropped (game, reward_enum) combos: %s",
                 n_before, len(samples), n_dropped, dropped_combos,
             )
         else:
-            logger.info("None-instruction filter: all %d samples have instructions.", n_before)
+            logger.info("Instruction filter: all %d samples have valid instructions.", n_before)
 
         # ── Long-tail cutting: 극단적 condition 값 제거 ──
         if self.longtail_cut:

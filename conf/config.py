@@ -537,9 +537,9 @@ class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
     # ── Unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda) ──
     unseen_games: str = "zd"
 
-    # ── Few-shot ratio sweep 설정 ──
+    # ── Few-shot ratio (단일 실행용) ──
     # 0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen 학습 풀 전부 사용
-    unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1, 0.15, 0.2, 0.3, 1.0)
+    unseen_ratio: float = 0.0
 
     # ── Seen 게임 데이터 비율 ──
     # 1.0 = seen 학습 풀 전부 사용 (기본값), 0.0 = seen 학습 데이터 0%
@@ -548,6 +548,18 @@ class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
     # ── 테스트셋 설정 ──
     unseen_test_ratio: float = 0.2    # 각 게임 데이터에서 테스트용으로 예약할 비율
     unseen_test_seed: int = 42        # 테스트셋 분할 시드 (재현 가능)
+
+
+@dataclass
+class CLIPDecoderUnseenSweepConfig(CLIPDecoderUnseenConfig):
+    """Seen/Unseen 게임 분리 + Few-shot Ratio **Sweep** Config.
+
+    CLIPDecoderUnseenConfig 를 상속하며, unseen_ratios 리스트를 추가로 정의한다.
+    sweep/runnable_sweep/unseen_games.py 에서 사용한다.
+    """
+    # ── Few-shot ratio sweep 설정 ──
+    # 0.0 = zero-shot, 1.0 = unseen 학습 풀 전부 사용
+    unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1)
 
 
 cs = ConfigStore.instance()
@@ -563,6 +575,7 @@ cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 cs.store(name="train_clip", node=CLIPTrainConfig)
 cs.store(name="train_clip_decoder_schema", node=CLIPDecoderTrainConfig)
 cs.store(name="train_clip_decoder_unseen_schema", node=CLIPDecoderUnseenConfig)
+cs.store(name="train_clip_decoder_unseen_sweep_schema", node=CLIPDecoderUnseenSweepConfig)
 
 cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)

@@ -69,7 +69,7 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
             max_samples=config.max_samples,
             prepend_game_prefix=config.prepend_game_prefix,
             prepend_game_desc=config.prepend_game_desc,
-            longtail_cut=True,
+            longtail_cut=config.longtail_cut,
         )
 
         full_dataset = dataset_builder.get_dataset()

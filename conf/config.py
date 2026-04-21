@@ -482,10 +482,13 @@ class CLIPTrainConfig(Config):
     # instruction 앞에 게임 이름 prefix를 붙일지 여부 (e.g. "In Zelda, ...")
     prepend_game_prefix: bool = False
     # instruction 앞에 게임 설명 prefix를 붙일지 여부 (e.g. "In a top-down dungeon adventure, ...")
-    prepend_game_desc: bool = False
+    prepend_game_desc: bool = True
 
     # overwrite
     embed_type: str = "humanai"
+
+    # ── long-tail cutting ──
+    longtail_cut: bool = True
 
 @dataclass
 class CLIPEvalConfig(EvalConfig):
@@ -519,9 +522,6 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # ── regression loss 종류 ──
     # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
     regression_loss: str = "mae"
-
-    # ── long-tail cutting ──
-    longtail_cut: bool = True
 
 
 @dataclass

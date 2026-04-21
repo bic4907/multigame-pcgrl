@@ -179,7 +179,7 @@ class CLIPDatasetBuilder:
                  max_samples: int = None,
                  prepend_game_prefix: bool = False,
                  prepend_game_desc: bool = False,
-                 longtail_cut: bool = False,
+                 longtail_cut: bool = True,
                  ):
         self.processor = processor
         self.paired_data = paired_data

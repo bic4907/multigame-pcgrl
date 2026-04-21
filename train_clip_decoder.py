@@ -960,7 +960,10 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         logger.info("  Total test: %d", len(test_indices))
 
         # ── 4. Few-shot ratio sweep ──
-        ratios = list(config.unseen_ratios)
+        if hasattr(config, "unseen_ratios"):
+            ratios = list(config.unseen_ratios)
+        else:
+            ratios = [config.unseen_ratio]
         results: Dict[float, Dict[str, float]] = {}
         reg_results: Dict[float, Dict[str, float]] = {}
         enum_diff_results: Dict[float, Dict[str, Dict[int, float]]] = {}

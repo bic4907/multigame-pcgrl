@@ -227,13 +227,22 @@ class CLIPDatasetBuilder:
                         f"samples {len(samples)} → {self.max_samples}")
             samples = samples[:self.max_samples]
 
-        # Filter out samples with None instruction (count logged after train/val split)
+        # Filter out samples with None instruction
         n_before = len(samples)
         dropped_combos = sorted(set(
             (s.game, s.meta.get("reward_enum"))
             for s in samples if s.instruction is None
         ))
         samples = [s for s in samples if s.instruction is not None]
+        n_dropped = n_before - len(samples)
+        if n_dropped > 0:
+            logger.info(
+                "None-instruction filter: %d → %d (dropped %d samples). "
+                "Dropped (game, reward_enum) combos: %s",
+                n_before, len(samples), n_dropped, dropped_combos,
+            )
+        else:
+            logger.info("None-instruction filter: all %d samples have instructions.", n_before)
 
         # ── Long-tail cutting: 극단적 condition 값 제거 ──
         if self.longtail_cut:

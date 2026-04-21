@@ -886,8 +886,8 @@ class MultiGameDataset:
                 target.meta["instruction_uni"] = str(uni) if uni and str(uni) != "None" else None
                 # instruction 필드: instruction_uni 우선, 없으면 instruction_raw
                 instr = target.meta["instruction_uni"] or target.meta["instruction_raw"]
+                target.instruction = instr if instr else None
                 if instr:
-                    target.instruction = instr
                     instr_count += 1
                 attached += 1
 

@@ -27,19 +27,19 @@ _SUPPORTED_GAMES = ["doom", "zelda", "sokoban", "pokemon", "dungeon"]
 # None = 해당 (game, feature) 조합에 threshold 없음
 # threshold 3개 → 4 구간: 매우 적음 / 다소 적음 / 다소 많음 / 매우 많음
 CUSTOM_THRESHOLDS: Dict[str, Optional[List[float]]] = {
-    "dungeon_region":             [2.5, 5.5, 11.5],
-    "dungeon_path_length":        [16.5, 29.5, 40.5],
+    "dungeon_region":             [1.5, 4.5, 10.5],
+    "dungeon_path_length":        [23.5, 32.5, 46.5],
     "dungeon_interactable_count": None,
     "dungeon_hazard_count":       [5.5, 10.5, 18.5],
     "dungeon_collectable_count":  [1.5, 4.5, 7.5],
 
-    "doom_region":                [3.5, 5.5, 7.5],
-    "doom_path_length":           [17.5, 21.5, 25.5],
+    "doom_region":                [1.5, 2.5, 3.5],
+    "doom_path_length":           [23.5, 27.5, 30.5],
     "doom_interactable_count":    [0.5, 3.5, 6.5],
     "doom_hazard_count":          [1.5, 3.5, 5.5],
     "doom_collectable_count":     [1.5, 2.5, 5.5],
 
-    "zelda_region":               [0.5, 1.5, 2.5],
+    "zelda_region":               [1.5, 2.5, 4.5],
     "zelda_path_length":          [16.5, 21.5, 22.5],
     "zelda_interactable_count":   [4.5, 8.5, 26.5],
     "zelda_hazard_count":         [0.5, 4.5, 8.5],
@@ -121,6 +121,22 @@ RAW_TILE_NAMES: Dict[str, Dict[int, str]] = {
     if game in _TILE_MAPPING
 }
 
+# ── unified 카테고리 → 게임별 raw 타일 이름 그룹 ───────────────────────────────────
+# tile_mapping.json의 mapping에서 자동 파생: {game: {unified_cat_id: [tile_names]}}
+UNIFIED_TILE_GROUPS: Dict[str, Dict[int, List[str]]] = {}
+for _game in _SUPPORTED_GAMES:
+    if _game not in _TILE_MAPPING:
+        continue
+    _mapping = _TILE_MAPPING[_game].get("mapping", {})
+    _names   = RAW_TILE_NAMES.get(_game, {})
+    _groups: Dict[int, List[str]] = {}
+    for _raw_str, _uni_id in _mapping.items():
+        _raw_id = int(_raw_str)
+        _name   = _names.get(_raw_id)
+        if _name:
+            _groups.setdefault(int(_uni_id), []).append(_name)
+    UNIFIED_TILE_GROUPS[_game] = _groups
+
 # ── Raw 타일 설명 (tile_mapping.json 타일명 기준) ─────────────────────────────────
 # RAW_TILE_NAMES 의 이름과 반드시 일치해야 한다.
 RAW_TILE_DESCS: Dict[str, Dict[int, str]] = {
@@ -186,7 +202,7 @@ FEATURE_TILE_DESCS: Dict[str, Dict[str, Tuple[str, str]]] = {
                                "category counted: interactive"),
         "hazard_count":       ("tiles counted: ENEMY",
                                "category counted: hazard"),
-        "collectable_count":  ("tiles counted: ITEM",
+        "collectable_count":  ("tiles counted: ITEM (id=5)",
                                "category counted: collectable"),
     },
     "zelda": {
@@ -281,7 +297,7 @@ GAME_DESCRIPTIONS: Dict[str, str] = {
 
 # ── Feature 설명 ──────────────────────────────────────────────────────────────────
 FEATURE_DESCRIPTIONS: Dict[str, str] = {
-    "region":             "number of disconnected passable regions (connected components of walkable tiles)",
+    "region":             "number of disconnected passable-area clusters — count of separate walkable zones (not their size or content)",
     "path_length":        "length of the longest traversable path through passable tiles",
     "interactable_count": "total count of interactive tiles (doors, objects, spawn points, etc.)",
     "hazard_count":       "total count of hazard/enemy tiles",
@@ -310,3 +326,115 @@ FEATURE_ZONE_LABELS: Dict[str, List[str]] = {
     "collectable_count":  ["very few collectables",     "somewhat few collectables",
                            "somewhat many collectables","very many collectables"],
 }
+
+# ── 어휘 세트: feature × intensity level(0~3) → 추천 표현 목록 ────────────────────
+# level 0 = 가장 적음/짧음, level 3 = 가장 많음/긺
+VOCAB_SETS: Dict[str, List[List[str]]] = {
+    "region": [
+        # level 0 — very few regions (fully connected map)
+        [
+            "few",
+            "sparse",
+            "small",
+            "marginal",
+        ],
+
+        # level 1 — somewhat few regions (lightly divided)
+        [
+            "some",
+            "moderate",
+            "slight",
+            "certain",
+        ],
+
+        # level 2 — somewhat many regions (noticeably split)
+        [
+            "several",
+            "balanced",
+            "multiple",
+            "partitioned",
+        ],
+
+        # level 3 — very many regions (heavily fragmented)
+        [
+            "fragmented",
+            "numerous",
+            "large",
+            "many",
+        ],
+    ],
+
+    "path_length": [
+        # level 0 — very short
+        [
+            "tiny",
+            "nano",
+            "minimal",
+            "micro",
+        ],
+
+        # level 1 — somewhat short
+        [
+            "short",
+            "limited",
+            "restricted",
+            "condenced",
+        ],
+
+        # level 2 — somewhat long
+        [
+            "moderate",
+            "reasonable",
+            "medium",
+            "balanced",
+        ],
+
+        # level 3 — very long
+        [
+            "long",
+            "large",
+            "lengthly",
+            "extensive"
+        ],
+    ]
+}
+
+
+_COUNT_VOCAB: List[List[str]] = [
+    # level 0 — very few
+    [
+        "rare",
+        "few"
+        "sparse",
+        "marginal",
+    ],
+
+    # level 1 — somewhat few
+    [
+        "some",
+        "limited",
+        "slight",
+        "little",
+    ],
+
+    # level 2 — moderate / somewhat many
+    [
+        "moderate",
+        "reasonable",
+        "decent",
+        "suitable",
+    ],
+
+    # level 3 — very many
+    [
+        "many",
+        "numerous",
+        "plentiful",
+        "abundant",
+    ],
+]
+
+
+VOCAB_SETS["interactable_count"] = _COUNT_VOCAB
+VOCAB_SETS["hazard_count"]       = _COUNT_VOCAB
+VOCAB_SETS["collectable_count"]  = _COUNT_VOCAB

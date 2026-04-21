@@ -170,6 +170,8 @@ def make_train(config: CLIPTrainConfig):
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
+            prepend_game_prefix=config.prepend_game_prefix,
+            prepend_game_desc=config.prepend_game_desc,
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
@@ -189,6 +191,7 @@ def make_train(config: CLIPTrainConfig):
                     attention_masks=ds.attention_masks[:n],
                     pixel_values=ds.pixel_values[:n],
                     is_train=ds.is_train[:n],
+                    quantized_condition_targets=ds.quantized_condition_targets[:n] if ds.quantized_condition_targets is not None else None,
                 )
             train_clip_dataset = _slice_dataset(train_clip_dataset, n)
             test_clip_dataset = _slice_dataset(test_clip_dataset, n)

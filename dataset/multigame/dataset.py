@@ -56,6 +56,11 @@ from .cache_utils import (
     load_game_samples_from_cache,
     save_game_samples_to_cache,
     load_any_game_cache,
+    save_game_annotations_to_cache,
+    load_game_annotations_from_cache,
+    find_game_cache_key,
+    update_ann_batch_id,
+    update_json_with_ann_keys,
     # legacy (하위 호환)
     build_cache_key,
     load_samples_from_cache,
@@ -64,7 +69,6 @@ from .cache_utils import (
 from .tile_utils import to_unified, render_unified_rgb, game_mapping_rows
 
 _HERE = Path(__file__).parent
-_DEFAULT_REWARD_ANNOTATIONS_DIR = _HERE.parent / "reward_annotations"
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +157,7 @@ class MultiGameDataset:
         cache_dir:            Path | str | None = None,
         use_tile_mapping:     bool = True,
         handler_config:       Optional[HandlerConfig] = None,
-        reward_annotations_dir: Path | str | None = _DEFAULT_REWARD_ANNOTATIONS_DIR,
+        reward_annotations_dir: Path | str | None = None,  # deprecated: ignored, ann.json used
         max_samples_per_game: int = 0,
         max_samples_seed:     int = 42,
         # 하위 호환: 구 파라미터명 지원
@@ -178,13 +182,15 @@ class MultiGameDataset:
         self._sokoban_handler: Optional[BoxobanHandler] = None
         self._doom_handler: Optional[DoomHandler] = None
         self._zelda_handler: Optional[ZeldaHandler] = None
-        self._zelda_handler: Optional[ZeldaHandler] = None
 
         if cache_dir is None:
             cache_dir = _HERE / "cache" / "artifacts"
         cache_dir = Path(cache_dir)
         self._cache_dir = cache_dir
         self._use_cache = use_cache
+
+        # 게임별 캐시 키 추적 (annotation 로드에 사용)
+        self._game_cache_keys: Dict[str, str] = {}
 
         hc = handler_config.to_dict()
 
@@ -204,6 +210,7 @@ class MultiGameDataset:
         for game, game_root, game_hc in _game_specs:
             cache_key = build_per_game_cache_key(game, game_root, game_hc)
             logger.info("[%s] cache key: %s", game, cache_key[:12])
+            self._game_cache_keys[game] = cache_key
             # (1) per-game 캐시 히트 시도
             if use_cache:
                 cached = load_game_samples_from_cache(cache_dir, game, cache_key)
@@ -244,6 +251,10 @@ class MultiGameDataset:
                     for s in fallback:
                         s.order = len(self._samples)
                         self._samples.append(s)
+                    # fallback 시 실제 로드된 파일의 키로 갱신
+                    actual_key = find_game_cache_key(cache_dir, game)
+                    if actual_key:
+                        self._game_cache_keys[game] = actual_key
                     continue
 
             # (4) 아무것도 없으면 경고만 출력
@@ -258,6 +269,7 @@ class MultiGameDataset:
                 doom_hc,
             )
             logger.info("[doom] cache key: %s", doom_cache_key[:12])
+            self._game_cache_keys["doom"] = doom_cache_key
             doom_cached = load_game_samples_from_cache(cache_dir, "doom", doom_cache_key) if use_cache else None
             if doom_cached is not None:
                 for s in doom_cached:
@@ -290,9 +302,14 @@ class MultiGameDataset:
                         for s in fallback:
                             s.order = len(self._samples)
                             self._samples.append(s)
+                        # fallback 시 실제 로드된 파일의 키로 갱신
+                        actual_key = find_game_cache_key(cache_dir, "doom")
+                        if actual_key:
+                            self._game_cache_keys["doom"] = actual_key
 
-        if reward_annotations_dir is not None:
-            self._load_reward_annotations(Path(reward_annotations_dir))
+        # ── annotation 자동 로드 (ann.json → 샘플 복제) ─────────────────────
+        if use_cache and self._game_cache_keys:
+            self._ensure_and_load_all_annotations()
 
         # ── 게임별 베이스 샘플 수 제한 (source_id 기준, annotation 복제 이후) ──
         # source_id 단위로 선택하므로 모든 reward_enum 복제본이 함께 유지됨
@@ -626,6 +643,265 @@ class MultiGameDataset:
                         logger.info("  %s: %d (max_samples=%d)", game, count, max_samples)
                 else:
                     logger.info("  %s: %d (no limit)", game, count)
+
+    # ── ann.json 기반 annotation 자동 로드 ─────────────────────────────────────
+
+    def _ensure_and_load_all_annotations(self) -> None:
+        """모든 게임의 ann.json을 확인·생성하고 샘플에 부착한다.
+
+        ann.json이 없으면 compute_game_annotations()로 자동 계산 후 저장.
+        이미 있으면 그대로 로드.
+        """
+        import time as _time
+
+        games = list(self._game_cache_keys.items())
+        logger.info("[Annotation] 시작: %d개 게임 처리 예정 (%s)",
+                    len(games), ", ".join(g for g, _ in games))
+
+        total_attached = 0
+        for game, cache_key in games:
+            existing = load_game_annotations_from_cache(self._cache_dir, game, cache_key)
+            if existing is None:
+                # ann.json 없음: 자동 계산
+                game_samples = [s for s in self._samples if s.game == game]
+                if not game_samples:
+                    logger.info("[Annotation][%s] 샘플 없음 — 건너뜀", game)
+                    continue
+                logger.info("[Annotation][%s] ann.json 없음 — measure 계산 시작 (%d samples)",
+                            game, len(game_samples))
+                t0 = _time.perf_counter()
+                try:
+                    # JAX 의존 모듈 lazy import
+                    from dataset.reward_annotations.annotate import compute_game_annotations
+                    rows = compute_game_annotations(game_samples, game)
+                except Exception as exc:
+                    logger.warning("[Annotation][%s] 계산 실패: %s — 건너뜀", game, exc)
+                    continue
+                elapsed = _time.perf_counter() - t0
+                logger.info("[Annotation][%s] 계산 완료: %d rows  [%.1fs]",
+                            game, len(rows), elapsed)
+                save_game_annotations_to_cache(
+                    self._cache_dir, game, cache_key, rows,
+                    has_instructions=False,
+                    n_samples=len(game_samples),
+                )
+                existing = load_game_annotations_from_cache(self._cache_dir, game, cache_key)
+                if existing is None:
+                    logger.warning("[Annotation][%s] 저장 후 로드 실패 — 건너뜀", game)
+                    continue
+                # 신규 생성 시 .json에 ann_keys 기록
+                update_json_with_ann_keys(self._cache_dir, game, cache_key, existing)
+            else:
+                n_rows = len(existing.get("annotations", []))
+                has_instr = existing.get("has_instructions", False)
+                logger.info("[Annotation][%s] ann.json 캐시 히트: %d rows, has_instructions=%s",
+                            game, n_rows, has_instr)
+                # ann_keys가 .json에 없으면 기록 (기존 캐시 호환)
+                meta_path = self._cache_dir / game / f"{cache_key}.json"
+                if meta_path.exists():
+                    import json as _json
+                    first = _json.loads(meta_path.read_text())[0] if meta_path.stat().st_size > 2 else {}
+                    if "ann_keys" not in first:
+                        update_json_with_ann_keys(self._cache_dir, game, cache_key, existing)
+                if not has_instr:
+                    self._try_submit_instruction_batch(game, cache_key, existing)
+
+            before = len(self._samples)
+            self._attach_annotations_from_cache(game, existing)
+            added = len(self._samples) - before
+            total_attached += added
+
+        logger.info("[Annotation] 완료: 전체 샘플 수 %d (복제 추가 %d)",
+                    len(self._samples), total_attached)
+
+    def _try_submit_instruction_batch(
+        self, game: str, cache_key: str, ann_data: Dict[str, Any]
+    ) -> None:
+        """instruction이 없는 게임의 배치를 OpenAI Batch API에 제출한다.
+
+        - ann.json에 batch_id가 이미 있으면 제출 건너뜀 (완료 대기 중).
+        - OPENAI_API_KEY 환경 변수 없으면 건너뜀.
+        - 제출 성공 시 batch_id를 ann.json에 기록.
+        """
+        import os
+
+        # 이미 배치 제출됨 → 상태 확인 후 완료 시 자동 수령
+        existing_batch_id = ann_data.get("batch_id")
+        if existing_batch_id:
+            try:
+                from dataset.reward_annotations.generate_instructions import (
+                    check_batch_status,
+                    retrieve_batch_results,
+                    update_caches,
+                )
+                status_info = check_batch_status(existing_batch_id)
+                status = status_info["status"]
+                counts = status_info["request_counts"]
+                logger.info(
+                    "[Instruction][%s] 배치 상태 확인: batch_id=%s  status=%s  "
+                    "(%d/%d completed)",
+                    game, existing_batch_id, status,
+                    counts["completed"], counts["total"],
+                )
+                if status == "completed":
+                    logger.info("[Instruction][%s] 배치 완료 — 결과 수령 중...", game)
+                    results = retrieve_batch_results(existing_batch_id)
+                    n = update_caches(results, self._cache_dir, [game])
+                    logger.info("[Instruction][%s] instruction %d개 ann.json 반영 완료", game, n)
+                    # ann.json 재로드하여 existing 갱신 (부착 시 최신 데이터 사용)
+                    updated = load_game_annotations_from_cache(self._cache_dir, game, cache_key)
+                    if updated is not None:
+                        ann_data.clear()
+                        ann_data.update(updated)
+                elif status in ("failed", "expired", "cancelled"):
+                    logger.warning(
+                        "[Instruction][%s] 배치 %s — 재제출 필요 (batch_id=%s)",
+                        game, status, existing_batch_id,
+                    )
+                else:
+                    logger.info("[Instruction][%s] 배치 처리 중 (status=%s) — 다음 실행 시 재확인",
+                                game, status)
+            except Exception as exc:
+                logger.warning("[Instruction][%s] 배치 상태 확인 실패: %s", game, exc)
+            return
+
+        # API 키 없으면 건너뜀
+        if not os.environ.get("OPENAI_API_KEY"):
+            logger.warning(
+                "[Instruction][%s] OPENAI_API_KEY 없음 — instruction 생성 건너뜀 "
+                "(설정 후 generate_instructions.py --submit --games %s 실행)",
+                game, game,
+            )
+            return
+
+        logger.info("[Instruction][%s] instruction 없음 — 배치 제출 시작", game)
+        try:
+            from dataset.reward_annotations.generate_instructions import (
+                fill_none_instructions,
+                build_jsonl,
+                submit_batch,
+                load_system_prompt,
+            )
+            from dataset.reward_annotations.annotate import _shorten_source_id
+
+            enums = list(range(5))
+            cache_dir = self._cache_dir
+
+            # threshold=None 행 미리 채우기
+            fill_none_instructions([game], enums, cache_dir)
+
+            # source_id → array 맵 구성 (shortened key 사용)
+            cache_by_game: Dict[str, Dict[str, Any]] = {}
+            for s in self._samples:
+                if s.game == game:
+                    sid = _shorten_source_id(s.source_id, game)
+                    cache_by_game.setdefault(game, {})[sid] = s.array
+
+            system_prompt = load_system_prompt()
+            jsonl_path = build_jsonl(
+                [game], enums, cache_dir, cache_by_game, system_prompt
+            )
+            if jsonl_path is None:
+                logger.info("[Instruction][%s] 제출할 요청 없음 (이미 모두 채워짐)", game)
+                return
+
+            n_requests = sum(1 for _ in jsonl_path.read_text(encoding="utf-8").splitlines() if _.strip())
+            batch_id = submit_batch(jsonl_path, [game], enums, n_requests)
+            logger.info("[Instruction][%s] 배치 제출 완료: batch_id=%s (%d requests)",
+                        game, batch_id, n_requests)
+
+            # ann.json에 batch_id 기록
+            update_ann_batch_id(cache_dir, game, cache_key, batch_id)
+
+        except Exception as exc:
+            logger.warning("[Instruction][%s] 배치 제출 실패: %s", game, exc)
+
+    def _attach_annotations_from_cache(self, game: str, ann_data: Dict[str, Any]) -> None:
+        """ann.json 데이터를 게임 샘플에 reward_enum별로 복제·부착한다.
+
+        ann_keys 기반 매핑 (샘플 meta["ann_keys"] → ann.json 행 직접 조회).
+        ann_keys 없는 구 포맷은 index 산술로 fallback.
+        """
+        import dataclasses
+        import time as _time
+
+        all_rows: List[Dict[str, Any]] = ann_data.get("annotations", [])
+        if not all_rows:
+            logger.warning("[Annotation][%s] ann.json에 annotations 없음 — 건너뜀", game)
+            return
+
+        # key → ann row 딕셔너리 (빠른 조회)
+        ann_by_key: Dict[str, Dict[str, Any]] = {r["key"]: r for r in all_rows}
+
+        game_samples = [s for s in self._samples if s.game == game]
+        n_samples = len(game_samples)
+        if n_samples == 0:
+            logger.warning("[Annotation][%s] 로드된 샘플 없음 — 건너뜀", game)
+            return
+
+        # fallback: index 산술용 정렬 행
+        sorted_rows = sorted(all_rows, key=lambda r: r["key"])
+        n_rewards = len(sorted_rows) // n_samples if n_samples else 0
+        if n_rewards == 0:
+            logger.warning("[Annotation][%s] rows(%d) < samples(%d) — 건너뜀",
+                           game, len(all_rows), n_samples)
+            return
+
+        t0 = _time.perf_counter()
+        attached = 0
+        instr_count = 0
+        new_samples: List[GameSample] = []
+
+        for i, sample in enumerate(game_samples):
+            # ann_keys 기반 (신규 포맷)
+            ann_keys: Optional[List[str]] = sample.meta.get("ann_keys")
+            if ann_keys:
+                ann_list = [ann_by_key[k] for k in ann_keys if k in ann_by_key]
+            else:
+                # 구 포맷 fallback: index 산술
+                ann_list = [sorted_rows[r * n_samples + i]
+                            for r in range(n_rewards)
+                            if r * n_samples + i < len(sorted_rows)]
+
+            for r, ann in enumerate(ann_list):
+                if r == 0:
+                    target = sample
+                else:
+                    target = dataclasses.replace(sample, meta=dict(sample.meta))
+                    new_samples.append(target)
+                target.meta["key"]           = ann["key"]
+                target.meta["reward_enum"]   = int(ann["reward_enum"])
+                target.meta["feature_name"]  = ann["feature_name"]
+                target.meta["sub_condition"] = ann.get("sub_condition", "")
+                conditions: Dict[int, float] = {}
+                for ci in range(5):
+                    val = ann.get(f"condition_{ci}")
+                    if val is not None:
+                        conditions[ci] = float(val)
+                target.meta["conditions"] = conditions
+                # instruction_raw / instruction_uni 분리 저장
+                raw = ann.get("instruction_raw")
+                uni = ann.get("instruction_uni")
+                target.meta["instruction_raw"] = str(raw) if raw and str(raw) != "None" else None
+                target.meta["instruction_uni"] = str(uni) if uni and str(uni) != "None" else None
+                # instruction 필드: instruction_uni 우선, 없으면 instruction_raw
+                instr = target.meta["instruction_uni"] or target.meta["instruction_raw"]
+                if instr:
+                    target.instruction = instr
+                    instr_count += 1
+                attached += 1
+
+        if new_samples:
+            self._samples.extend(new_samples)
+        elapsed = _time.perf_counter() - t0
+
+        logger.info(
+            "[Annotation][%s] 부착 완료: %d samples × %d enums = %d rows "
+            "(원본 %d + 복제 %d) | instruction=%d/%d  [%.3fs]",
+            game, n_samples, n_rewards, attached,
+            n_samples, len(new_samples),
+            instr_count, attached, elapsed,
+        )
 
     def _load_reward_annotations(self, annotations_dir: Path) -> None:
         """

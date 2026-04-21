@@ -193,6 +193,9 @@ class DecoderConfig:
     num_layers: int = 2
     output_dim: int = 1
     num_reward_classes: int = 6
+    # CNN 입력에 reward_enum one-hot 채널을 추가할지 여부
+    # True이면 pixel_values에 (B, H, W, num_reward_classes) one-hot을 concat
+    cnn_reward_enum_onehot: bool = False
 
 
 @dataclass
@@ -339,6 +342,7 @@ class CollectBufferConfig(CPCGRLConfig):
     실험 폴더의 buffer/ 디렉토리에 .npz 파일로 저장한다.
     """
     wandb_project: str = 'collect_buffer'
+    dir_prefix: str = "buffer-"
 
     # ── 버퍼 수집 파라미터 ──
     buffer_max_samples: int = 10_000       # 수집할 최대 transition 수
@@ -479,7 +483,7 @@ class CLIPTrainConfig(Config):
     lr: float = 1.0e-3
     weight_decay: float = 1e-5
     train_ratio: float = 0.8
-    batch_size: int = 128
+    batch_size: int = 256
     buffer_ratio: float = 1.0 # Not implemented for clip yet.
     train_shuffle: bool = False
     
@@ -491,7 +495,12 @@ class CLIPTrainConfig(Config):
     max_samples_per_game: int = 1000   # 게임별 베이스 샘플 상한 (0=무제한)
     max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
-    
+
+    # instruction 앞에 게임 이름 prefix를 붙일지 여부 (e.g. "In Zelda, ...")
+    prepend_game_prefix: bool = False
+    # instruction 앞에 게임 설명 prefix를 붙일지 여부 (e.g. "In a top-down dungeon adventure, ...")
+    prepend_game_desc: bool = False
+
     # overwrite
     embed_type: str = "humanai"
 
@@ -524,6 +533,40 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     cls_weight: float = 1.0            # reward_enum 분류 loss 가중치
     reg_weight: float = 0.1            # condition 회귀 loss 가중치
 
+    # ── regression loss 종류 ──
+    # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
+    regression_loss: str = "mae"
+
+    # ── long-tail cutting ──
+    longtail_cut: bool = True
+
+
+@dataclass
+class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
+    """Seen/Unseen 게임 분리 + Few-shot Ratio Sweep Config.
+
+    Seen 게임의 전체 학습 데이터와 Unseen 게임의 가변 비율 학습 데이터로
+    CLIP Decoder 모델을 학습하고, 고정된 테스트셋에서 게임별 reward_accuracy를 측정한다.
+    """
+    wandb_project: str = 'train_clip_decoder_unseen'
+    dir_prefix: str = "clipdec-unseen-"
+
+    # ── Unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda) ──
+    unseen_games: str = "zd"
+
+    # ── Few-shot ratio sweep 설정 ──
+    # 0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen 학습 풀 전부 사용
+    unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1, 0.15, 0.2, 0.3, 1.0)
+
+    # ── Seen 게임 데이터 비율 ──
+    # 1.0 = seen 학습 풀 전부 사용 (기본값), 0.0 = seen 학습 데이터 0%
+    seen_ratio: float = 1.0
+
+    # ── 테스트셋 설정 ──
+    unseen_test_ratio: float = 0.2    # 각 게임 데이터에서 테스트용으로 예약할 비율
+    unseen_test_seed: int = 42        # 테스트셋 분할 시드 (재현 가능)
+
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
@@ -537,6 +580,7 @@ cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 # CLIP PCGRL Configs
 cs.store(name="train_clip", node=CLIPTrainConfig)
 cs.store(name="train_clip_decoder_schema", node=CLIPDecoderTrainConfig)
+cs.store(name="train_clip_decoder_unseen_schema", node=CLIPDecoderUnseenConfig)
 
 cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)

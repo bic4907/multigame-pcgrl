@@ -11,7 +11,11 @@ from ..handlers.boxoban_handler import BOXOBAN_PALETTE, _DEFAULT_BOXOBAN_ROOT
 from ..handlers.pokemon_handler import POKEMON_PALETTE, _DEFAULT_POKEMON_ROOT
 from ..handlers.doom_handler import DOOM_PALETTE_DICT, _DEFAULT_DOOM_ROOT, _DEFAULT_DOOM2_ROOT
 from ..handlers.zelda_handler import ZELDA_PALETTE
+from ..cache_utils import find_game_cache_key, load_game_annotations_from_cache
 from .. import MultiGameDataset
+
+_ENUM_TO_COND_COL = {0: "condition_0", 1: "condition_1", 2: "condition_2",
+                     3: "condition_3", 4: "condition_4"}
 
 # ── unified 카테고리 메타 ───────────────────────────────────────────────────────
 _UNIFIED_PALETTE: Dict[str, Any] = {
@@ -97,7 +101,20 @@ class DatasetViewerBackend:
             game: len(samples)
             for game, samples in self._raw_samples_by_game.items()
         }
-        
+
+        # ann.json 로드: game → {ann_key → annotation_row}
+        cache_dir = self._dataset._cache_dir
+        self._ann_lookup: Dict[str, Dict[str, Any]] = {}
+        for game in self._games:
+            cache_key = find_game_cache_key(cache_dir, game)
+            if cache_key:
+                ann_data = load_game_annotations_from_cache(cache_dir, game, cache_key)
+                if ann_data:
+                    self._ann_lookup[game] = {
+                        row["key"]: row for row in ann_data.get("annotations", [])
+                    }
+                    print(f"[DatasetViewerBackend] ann.json loaded: {game} ({len(self._ann_lookup[game])} rows)", flush=True)
+
         print(f"[DatasetViewerBackend] Games: {self._games}", flush=True)
         print(f"[DatasetViewerBackend] Samples: {self._counts}", flush=True)
 
@@ -137,8 +154,38 @@ class DatasetViewerBackend:
             "unified_palette": _UNIFIED_PALETTE,
             "unified_names": _UNIFIED_NAMES,
             "instruction": sample.instruction,
+            "annotations": self._get_annotations(game, sample),
             "meta": sample.meta,
         }
+
+    def _get_annotations(self, game: str, sample: GameSample) -> List[Dict[str, Any]]:
+        """샘플의 모든 reward_enum annotation을 반환한다."""
+        lookup = self._ann_lookup.get(game, {})
+        if not lookup:
+            return []
+
+        ann_keys: List[str] = sample.meta.get("ann_keys", [])
+        if ann_keys:
+            rows = [lookup[k] for k in ann_keys if k in lookup]
+        else:
+            return []
+
+        result = []
+        for row in rows:
+            enum = int(row["reward_enum"])
+            cond_col = _ENUM_TO_COND_COL.get(enum)
+            cond_val = row.get(cond_col) if cond_col else None
+            raw  = row.get("instruction_raw")
+            uni  = row.get("instruction_uni")
+            result.append({
+                "reward_enum":     enum,
+                "feature_name":    row["feature_name"],
+                "sub_condition":   row.get("sub_condition", ""),
+                "condition":       cond_val,
+                "instruction_raw": str(raw) if raw and str(raw) != "None" else None,
+                "instruction_uni": str(uni) if uni and str(uni) != "None" else None,
+            })
+        return result
 
     def _load_sample(self, game: str, index: int) -> GameSample:
         if game not in self._raw_samples_by_game:

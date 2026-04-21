@@ -1,0 +1,23 @@
+program: collect_buffer.py
+method: grid
+metric:
+  goal: maximize
+  name: Train/ep_return
+parameters:
+  dataset_game:
+    values: ['dungeon', 'sokoban', 'zelda', 'pokemon', 'doom']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0]
+  n_envs:
+    values: [600]
+  overwrite:
+    value: true
+  exp_name:
+    value: 'def'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+  - "overwrite=true"

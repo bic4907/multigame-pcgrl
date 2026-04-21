@@ -275,8 +275,10 @@ class RewardDecoder(nn.Module):
         condition_pred = jax.nn.sigmoid(reg_logits)
 
         # 역변환 → 원래 스케일 (추론 시 사용)
+        # log1p 공간에서 정규화되었으므로: denorm → expm1
         scale = cond_max - cond_min                              # (num_classes,)
-        condition_pred_raw = condition_pred * scale + cond_min
+        condition_pred_log = condition_pred * scale + cond_min          # log1p 공간
+        condition_pred_raw = jnp.expm1(jnp.maximum(condition_pred_log, 0.0))  # 원래 스케일
 
         return reward_logits, condition_pred, condition_pred_raw
 
@@ -286,10 +288,15 @@ class ContrastiveDecoderModule(nn.Module):
 
     기존 contrastive 학습에 디코더 브랜치를 추가하여
     embedding 으로부터 reward_enum과 condition을 예측한다.
+
+    reward_enum_onehot_dim > 0 이면, pixel_values에 reward_enum의
+    one-hot 인코딩을 공간 차원으로 broadcast하여 채널 concat한다.
+    → CNN이 해당 레벨이 어떤 reward_enum인지 알 수 있다.
     """
     encoders: Dict[str, nn.Module]
     decoder: RewardDecoder
     dropout_rate: float = 0.0
+    reward_enum_onehot_dim: int = 0  # num_reward_classes for one-hot; 0 = disabled
 
     def setup(self):
         self.text_state_temperature = self.param(
@@ -305,8 +312,23 @@ class ContrastiveDecoderModule(nn.Module):
         return x
 
     def encode_state(
-            self, pixel_values: jnp.ndarray, training: bool
+            self, pixel_values: jnp.ndarray, training: bool,
+            reward_enum: jnp.ndarray = None,
     ) -> jnp.ndarray:
+        # ── reward_enum one-hot concat ──
+        if self.reward_enum_onehot_dim > 0:
+            B, H, W, _ = pixel_values.shape
+            if reward_enum is not None:
+                # (B,) → (B, num_classes) → (B, 1, 1, num_classes) → (B, H, W, num_classes)
+                onehot = jax.nn.one_hot(reward_enum, self.reward_enum_onehot_dim)
+                onehot = jnp.broadcast_to(
+                    onehot[:, None, None, :], (B, H, W, self.reward_enum_onehot_dim)
+                )
+            else:
+                # reward_enum 미제공 시 zeros (정보 없음)
+                onehot = jnp.zeros((B, H, W, self.reward_enum_onehot_dim))
+            pixel_values = jnp.concatenate([pixel_values, onehot], axis=-1)
+
         x = self.encoders["state"](pixel_values, training)
         x = x / (jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-6)
         return x
@@ -317,6 +339,7 @@ class ContrastiveDecoderModule(nn.Module):
             input_ids: jnp.ndarray = None,
             attention_mask: jnp.ndarray = None,
             pixel_values: jnp.ndarray = None,
+            reward_enum: jnp.ndarray = None,
             mode: str = "text_state",
             training: bool = False,
     ):
@@ -324,7 +347,7 @@ class ContrastiveDecoderModule(nn.Module):
         modes = mode.split("_")
 
         if "state" in modes:
-            state_embed = self.encode_state(pixel_values, training)
+            state_embed = self.encode_state(pixel_values, training, reward_enum=reward_enum)
             output_dict["state_embed"] = state_embed
             output_dict["text_state_temperature"] = self.text_state_temperature
 
@@ -525,10 +548,14 @@ def get_cnnclip_decoder_encoder(config: EncoderConfig, decoder_config=None,
         cond_norm_max_init=cond_norm_max,
     )
 
+    # reward_enum one-hot 채널 추가 여부 결정
+    _onehot_dim = decoder_config.num_reward_classes if getattr(decoder_config, 'cnn_reward_enum_onehot', False) else 0
+
     module = ContrastiveDecoderModule(
         encoders=encoder_dict,
         decoder=decoder,
         dropout_rate=config.dropout_rate,
+        reward_enum_onehot_dim=_onehot_dim,
     )
 
     return module, pretrained_params

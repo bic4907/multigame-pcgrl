@@ -170,7 +170,7 @@ def get_exp_name(config):
         re = getattr(config, 'dataset_reward_enum', None)
         re_str = f'_re-{re}' if re is not None else ''
         exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
-        return f'cpcgrl_game-{game_abbr}{re_str}_s-{config.seed}{exp_str}'
+        return f'cpcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
 
     exp_group = get_exp_group(config)
 

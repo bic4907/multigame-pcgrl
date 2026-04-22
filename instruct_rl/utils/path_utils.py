@@ -9,7 +9,7 @@ from os.path import abspath, join
 from encoder.model import apply_encoder_model
 from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder
 from conf.config import Config, TrainConfig, EncoderConfig
-from conf.game_utils import parse_game_str
+from conf.game_utils import parse_game_str, GAME_ABBR
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
@@ -165,7 +165,7 @@ def get_exp_name(config):
         and not getattr(config, 'use_nlp', False)
     )
     if _is_cpcgrl:
-        from conf.game_utils import GAME_ABBR, GAME_ABBR_INV
+        from conf.game_utils import GAME_ABBR_INV
         # 약어 입력이면 첫 번째 full name 으로, 이미 full name 이면 그대로 사용
         _dg = config.dataset_game
         if _dg in GAME_ABBR:
@@ -204,14 +204,18 @@ def init_config(config: Config):
         for key, val in includes.items():
             setattr(config, key, val)
 
-        # ── dataset_game 동기화: dataset_game이 미설정(None)인 경우에만 game 값으로 설정 ──
-        # CPCGRLConfig 등에서 dataset_game="all"로 명시적으로 설정한 경우는 그대로 유지한다.
-        if (
-            hasattr(config, 'dataset_game')
-            and getattr(config, 'dataset_game', None) is None
-        ):
-            config.dataset_game = config.game
-            logger.debug(f"[init_config] dataset_game auto-synced to game='{config.game}'")
+        # ── dataset_game 동기화: game 파라미터가 명시적으로 전달된 경우 dataset_game을 override ──
+        # dataset_game이 None이거나 기본값("all")인 경우 game 값으로 덮어씌운다.
+        if hasattr(config, 'dataset_game'):
+            _dg_val = getattr(config, 'dataset_game', None)
+            if _dg_val is None or _dg_val == 'all':
+                # 약어(dg 등)를 정식 게임명으로 변환
+                _game_key = config.game.lower()
+                if _game_key in GAME_ABBR:
+                    config.dataset_game = GAME_ABBR[_game_key][0]
+                else:
+                    config.dataset_game = config.game
+                logger.debug(f"[init_config] dataset_game overridden by game='{config.game}' → '{config.dataset_game}'")
 
     # ── MultiGameDataset 기반 CPCGRL / IPCGRL / VIPCGRL 모드 ─────────────
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:

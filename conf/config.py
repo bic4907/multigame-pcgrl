@@ -229,6 +229,8 @@ class TrainConfig(Config):
 class CPCGRLConfig(TrainConfig):
     problem: str = "multigame"
 
+    game: str = "all"
+
     dataset_game: Optional[str] = "all"
     dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95

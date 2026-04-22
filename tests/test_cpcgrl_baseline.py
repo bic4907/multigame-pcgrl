@@ -46,7 +46,6 @@ def _make_cpcgrl_config(**overrides):
         overwrite=True,
         ckpt_freq=1,
         render_freq=-1,
-        dataset_game="dungeon",
         dataset_reward_enum=0,
         exp_name="test_cpcgrl",
     )
@@ -77,7 +76,6 @@ class TestCPCGRLConfig:
 
         c = CPCGRLConfig()
         assert c.problem == "multigame"
-        assert c.dataset_game == "all"
         assert c.dataset_reward_enum == 0
         assert c.vec_cont is True
         assert c.raw_obs is True

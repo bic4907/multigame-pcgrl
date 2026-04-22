@@ -9,6 +9,7 @@ make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None)
 import logging
 import math
 import os
+import time
 
 import cv2
 import imageio
@@ -147,10 +148,12 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         n_batches = math.ceil(n_rows / n_envs)
         losses, values, features = [], [], []
         eval_rendered = []
+        loop_start_time = time.time()
 
         # ── 평가 루프 ─────────────────────────────────────────────────────────
         with tqdm(total=n_batches, desc="Evaluating Batches") as pbar:
             for batch_i in range(n_batches):
+                batch_start_time = time.time()
                 start_idx = batch_i * n_envs
                 end_idx = min((batch_i + 1) * n_envs, n_rows)
                 idxes = eval_batches[start_idx:end_idx]
@@ -289,9 +292,20 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                     batch_reward_i, batch_repetition,
                     result, rendered, jax.device_get(raw_rendered), last_states,
                 )
+                batch_elapsed = time.time() - batch_start_time
+                logger.info(
+                    f"[Batch {batch_i+1}/{n_batches}] elapsed: {batch_elapsed:.1f}s  "
+                    f"(cumulative: {time.time() - loop_start_time:.1f}s)"
+                )
                 pbar.update(1)
 
         # ── 결과 DataFrame 구성 ───────────────────────────────────────────────
+        total_elapsed = time.time() - loop_start_time
+        logger.info(
+            f"[Eval] Done: {n_batches} batches / {n_rows} samples  "
+            f"total: {total_elapsed:.1f}s  "
+            f"(avg per batch: {total_elapsed/n_batches:.1f}s)"
+        )
         losses_arr = np.stack(losses, axis=0).reshape(-1)[:n_rows]
 
         # feature 차원을 실제 결과에서 동적으로 결정 (get_loss_batch는 5개 반환)

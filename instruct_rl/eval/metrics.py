@@ -1,21 +1,17 @@
 """
 metrics.py
 ==========
-eval 후처리 메트릭 계산.
-  - diversity    : Hamming distance
-  - human_likeness: ViT 기반
-  - tpkldiv      : TP-KL divergence
+Post-eval metric orchestrator.
+Delegates to individual wrappers in instruct_rl.eval.wrappers:
+  - DiversityWrapper   — Hamming diversity across seeds
+  - HumanLikenessWrapper — ViT-based human-likeness score
+  - TPKLWrapper        — Tile-Pattern KL divergence
 """
 import logging
 
-import numpy as np
 import pandas as pd
-import wandb
-from tqdm import tqdm
 
-from instruct_rl.evaluation.hamming import compute_hamming_distance
-from instruct_rl.evaluation.metrics.tpkldiv import TPKLEvaluator
-from instruct_rl.evaluation.metrics.vit import ViTEvaluator
+from instruct_rl.eval.wrappers import DiversityWrapper, ViTScoreWrapper, TPKLWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -28,62 +24,34 @@ def run_post_eval(
     n_rows: int,
     n_eps: int,
 ) -> pd.DataFrame:
-    """diversity / human_likeness / tpkldiv 를 계산하여 df_output 에 컬럼으로 추가.
+    """Run all enabled post-eval metrics and attach results to df_output.
 
     Args:
-        config        : EvalConfig (또는 하위 클래스).
-        instruct_df   : 원본 instruct CSV DataFrame.
-        df_output     : 결과 DataFrame (loss 등 이미 포함).
-        eval_rendered : 배치별 raw_rendered 리스트 (human_likeness 용).
-        n_rows        : 총 평가 row 수.
-        n_eps         : 에피소드 수 (seed 수).
+        config        : EvalConfig (or subclass).
+        instruct_df   : Original instruct DataFrame.
+        df_output     : Result DataFrame (already contains loss etc.).
+        eval_rendered : List of raw_rendered arrays per batch (for vit_score).
+        n_rows        : Total number of evaluation rows.
+        n_eps         : Number of episodes (seeds).
 
     Returns:
-        메트릭 컬럼이 추가된 df_output.
+        df_output with metric columns appended.
     """
+    kwargs = dict(
+        instruct_df=instruct_df,
+        eval_rendered=eval_rendered,
+        n_rows=n_rows,
+        n_eps=n_eps,
+    )
 
-    # ── Diversity ─────────────────────────────────────────────────────────────
     if config.diversity:
-        scores = []
-        for row_i, _ in tqdm(instruct_df.iterrows(), desc="Computing Diversity"):
-            states = [
-                np.load(f"{config.eval_dir}/reward_{row_i}/seed_{seed_i}/state_0.npy")
-                for seed_i in range(1, n_eps + 1)
-            ]
-            scores.append(compute_hamming_distance(np.array(states)))
+        df_output = DiversityWrapper(config).run(df_output, **kwargs)
 
-        diversity_df = instruct_df.copy()
-        diversity_df = diversity_df.loc[:, ~diversity_df.columns.str.startswith('embed')]
-        diversity_df['diversity'] = scores
+    if config.vit_score:
+        df_output = ViTScoreWrapper(config).run(df_output, **kwargs)
 
-        if wandb.run:
-            wandb.log({'diversity': wandb.Table(dataframe=diversity_df)})
-
-    # ── Human-likeness ────────────────────────────────────────────────────────
-    if config.human_likeness:
-        eval_rendered_arr = np.concatenate(eval_rendered, axis=0)[:n_rows]
-        evaluator = ViTEvaluator(normalized_vector=config.vit_normalize)
-
-        index_ids = instruct_df.index.to_numpy()
-        task_ids = np.repeat((index_ids // 4).astype(int), n_eps)
-        df_output['human_likeness'] = evaluator.run(eval_rendered_arr, task_ids)
-
-    # ── TP-KL Divergence ──────────────────────────────────────────────────────
     if config.tpkldiv:
-        states = [
-            np.load(f"{config.eval_dir}/reward_{row_i}/seed_{seed_i}/state_0.npy")
-            for row_i, _ in tqdm(instruct_df.iterrows(), desc="Computing TPKLDiv")
-            for seed_i in range(1, n_eps + 1)
-        ]
-        states = np.array(states)
-
-        index_ids = instruct_df.index.to_numpy()
-        task_ids = np.repeat((index_ids // 4).astype(int), n_eps)
-
-        evaluator = TPKLEvaluator()
-        df_output['tpkldiv'] = np.array(
-            evaluator.run(states, task_ids, show_progress=True)
-        ).reshape(-1)
+        df_output = TPKLWrapper(config).run(df_output, **kwargs)
 
     return df_output
 

@@ -308,7 +308,7 @@ class EvalConfig(TrainConfig):
     eval_human_demo_path: str = './human_dataset'
 
     diversity: bool = True
-    human_likeness: bool = True
+    vit_score: bool = True
     vit_normalize: bool = False
     tpkldiv: bool = True
 

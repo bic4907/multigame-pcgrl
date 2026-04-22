@@ -60,7 +60,7 @@ def process_result(raw_df: pd.DataFrame, div_df: pd.DataFrame,
     df = pd.merge(df, initial_df, on='seed')
 
     optional_columns = {
-        'human_likeness': 0.1,
+        'vit_score': 0.1,
     }
 
     for col, default_val in optional_columns.items():
@@ -115,7 +115,7 @@ def process_result(raw_df: pd.DataFrame, div_df: pd.DataFrame,
                                                    'progress_nblock': 'mean',
                                                    'progress_nbat': 'mean',
                                                    'progress_batdir': 'mean',
-                                                          'human_likeness': 'mean', 'tpkldiv': 'mean'
+                                                          'vit_score': 'mean', 'tpkldiv': 'mean'
                                                           }).reset_index()
 
     div_df = div_df[['config.run_id', 'row_i', 'diversity']]
@@ -135,7 +135,7 @@ def process_result_from_loss_csv(raw_df: pd.DataFrame, exp_name:str,
     
 
     optional_columns = {
-        'human_likeness': 0.1,
+        'vit_score': 0.1,
     }
 
     for col, default_val in optional_columns.items():
@@ -199,7 +199,7 @@ def process_result_from_loss_csv(raw_df: pd.DataFrame, exp_name:str,
                                                    'progress_nblock': 'mean',
                                                    'progress_nbat': 'mean',
                                                    'progress_batdir': 'mean',
-                                                          'human_likeness': 'mean', 'tpkldiv': 'mean'
+                                                          'vit_score': 'mean', 'tpkldiv': 'mean'
                                                           }).reset_index()
 
 

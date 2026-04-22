@@ -1,0 +1,13 @@
+index,seen_game,unseen_game,reg_loss,cls_acc
+3,pkdgdmsk,zd,0.19768,1.0
+4,pkdgzdsk,dm,0.16908,0.999
+5,pkdgzddm,sk,0.1496,1.0
+13,pkdgsk,zddm,0.20013,1.0
+14,pkdgdm,zdsk,0.21579,1.0
+15,pkdgzd,dmsk,0.17315,0.99938
+19,dgsk,pkzddm,0.22187,0.8402
+22,pksk,dgzddm,0.18969,0.97534
+25,pkdg,zddmsk,0.19988,1.0
+26,sk,pkdgzddm,0.20041,0.47793
+29,dg,pkzddmsk,0.34775,0.5696
+30,pk,dgzddmsk,0.18268,0.99353

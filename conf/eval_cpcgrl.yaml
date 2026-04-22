@@ -1,0 +1,8 @@
+defaults:
+  - eval_cpcgrl_schema
+  - _self_
+
+hydra:
+  sweeper:
+    params: {}
+

@@ -320,6 +320,27 @@ class EvalConfig(TrainConfig):
 
 
 @dataclass
+class CPCGRLEvalConfig(EvalConfig):
+    """CPCGRL 평가용 Config.
+
+    CPCGRLConfig 와 동일한 모델/환경 설정을 EvalConfig 위에 덮어쓴다.
+    """
+    problem: str = "multigame"
+
+    vec_cont: bool = True
+    raw_obs: bool = True
+    model: str = "contconv"
+    use_nlp: bool = False
+    use_clip: bool = False
+    vec_input_dim: Optional[int] = 5
+    nlp_input_dim: int = 0
+
+    max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+
+    wandb_project: Optional[str] = "eval_cpcgrl"
+
+
+@dataclass
 class CollectBufferConfig(CPCGRLConfig):
     """학습 중 trajectory 버퍼를 수집하는 Config.
 
@@ -572,6 +593,7 @@ cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
+cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs

@@ -333,6 +333,10 @@ class CPCGRLEvalConfig(EvalConfig):
     dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
 
+    # 평가 대상 게임 (None이면 game과 동일). 체크포인트 로딩은 game 기준, 평가 데이터는 eval_games 기준.
+    # 예: game="all" 로 학습된 모델을 특정 게임만 평가할 때 eval_games="dg" 처럼 지정.
+    eval_games: Optional[str] = None
+
     vec_cont: bool = True
     raw_obs: bool = True
     model: str = "contconv"
@@ -343,8 +347,8 @@ class CPCGRLEvalConfig(EvalConfig):
 
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
 
-    # 평가에 사용할 총 샘플 수 (게임별 균등 분배). None이면 전체 test split 사용.
-    n_eval_samples: Optional[int] = 1000
+    # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
+    eval_samples_per_group: Optional[int] = 200
 
     wandb_project: Optional[str] = "eval_cpcgrl"
 

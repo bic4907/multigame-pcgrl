@@ -150,6 +150,13 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         eval_rendered = []
         loop_start_time = time.time()
 
+        # ── 평가 루프 시작 전 요약 로그 ───────────────────────────────────────
+        logger.info(
+            "[Eval Loop] total_items=%d  (samples=%d × n_eps=%d)  "
+            "batch_size(n_envs)=%d  n_batches=%d",
+            n_rows, len(instruct_df), n_eps, n_envs, n_batches,
+        )
+
         # ── 평가 루프 ─────────────────────────────────────────────────────────
         with tqdm(total=n_batches, desc="Evaluating Batches") as pbar:
             for batch_i in range(n_batches):

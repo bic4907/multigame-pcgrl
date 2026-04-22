@@ -40,12 +40,17 @@ def load_dataset_instruct(config):
     """
     from dataset.multigame import MultiGameDataset
 
-    logger.info(f"Loading MultiGameDataset (game={config.dataset_game}, "
-                f"reward_enum={config.dataset_reward_enum})")
+    # eval_games가 지정된 경우 평가 데이터 로딩에 우선 사용 (체크포인트 경로는 game 기준 유지)
+    _eval_games_str = getattr(config, 'eval_games', None)
+    _load_game = _eval_games_str if _eval_games_str is not None else config.dataset_game
+
+    logger.info(f"Loading MultiGameDataset (game={_load_game}, "
+                f"reward_enum={config.dataset_reward_enum})"
+                + (f"  [eval_games override: {_eval_games_str}]" if _eval_games_str else ""))
 
     # 'all'이면 전체 게임 로드, 약어면 역매핑으로 full name 리스트 획득
     from conf.game_utils import GAME_ABBR, GAME_ABBR_INV, ALL_GAMES, parse_game_str
-    _dg = config.dataset_game
+    _dg = _load_game
     if _dg == 'all':
         _game_names = ALL_GAMES  # ['dungeon', 'pokemon', 'sokoban', 'doom', 'doom2', 'zelda']
     elif _dg in GAME_ABBR:
@@ -91,20 +96,25 @@ def load_dataset_instruct(config):
         logger.info(f"Condition filter '{cond_filter}': {before} → {len(samples)} samples")
 
     assert len(samples) > 0, (
-        f"No samples found for game={config.dataset_game}, "
+        f"No samples found for game={_load_game}, "
         f"reward_enum={config.dataset_reward_enum}. "
         f"Check that reward annotations exist."
     )
 
-    # ── eval 모드: 게임별 균등 서브샘플링 ─────────────────────────────────
-    n_eval_samples = getattr(config, 'n_eval_samples', None)
+    # ── eval 모드: (game, re) 그룹별 고정 수 서브샘플링 ──────────────────
+    eval_samples_per_group = getattr(config, 'eval_samples_per_group', None)
     sampled_counts: dict = {}  # game → sampled count (테이블용)
-    if n_eval_samples is not None and n_eval_samples < len(samples):
-        samples, sampled_counts = _subsample_by_game(
-            samples, n_eval_samples, seed=config.seed
+    if eval_samples_per_group is not None:
+        # eval_seed 가 있으면 우선 사용 (없으면 config.seed fallback)
+        _subsample_seed = getattr(config, 'eval_seed', None)
+        if _subsample_seed is None:
+            _subsample_seed = config.seed
+        samples, sampled_counts = _subsample_per_group(
+            samples, eval_samples_per_group, seed=_subsample_seed
         )
         logger.info(
-            f"[n_eval_samples={n_eval_samples}] subsampled: → {len(samples)} samples"
+            f"[eval_samples_per_group={eval_samples_per_group}, seed={_subsample_seed}]"
+            f" subsampled: {len(samples)} samples"
         )
 
     all_inst = _build_instruct(samples, config)
@@ -117,44 +127,44 @@ def load_dataset_instruct(config):
 # ── 내부 헬퍼 ──────────────────────────────────────────────────────────────────
 
 
-def _subsample_by_game(samples, n_total: int, seed: int = 0):
-    """게임별로 최대한 균등하게 n_total개를 서브샘플링한다.
+def _subsample_per_group(samples, n_per_group: int, seed: int = 0):
+    """(game, re) 그룹별로 최대 n_per_group 개를 서브샘플링한다.
+
+    가용 샘플이 n_per_group 보다 적은 그룹은 전부 사용.
 
     Returns
     -------
     subsampled : list
-    sampled_counts : dict  game → sampled count
+    sampled_counts : dict  game → sampled count  (re가 1개인 경우 game 기준)
     """
     import random as _random
     from collections import defaultdict
 
-    by_game: dict = defaultdict(list)
+    # (game, re) 그룹핑
+    by_group: dict = defaultdict(list)
     for s in samples:
-        by_game[s.game].append(s)
+        re = s.meta.get("reward_enum", None)
+        by_group[(s.game, re)].append(s)
 
-    games = sorted(by_game.keys())
-    n_games = len(games)
-    quota = {g: len(by_game[g]) for g in games}
+    # 그룹 내 순서 고정 (결정론적 보장)
+    for key in by_group:
+        by_group[key].sort(key=lambda s: str(getattr(s, 'source_id', s)))
 
-    # 쿼터를 최대한 균등하게 배분 (가용 샘플이 부족한 게임은 전부 사용)
-    remaining = int(n_total)
-    allocated = {}
-    for g in sorted(games, key=lambda g: quota[g]):  # 작은 게임 먼저
-        share = remaining // (n_games - len(allocated))
-        allocated[g] = min(quota[g], share)
-        remaining -= allocated[g]
-
-    rng = _random.Random(seed)
     result = []
-    sampled_counts = {}
-    for g in games:
-        pool = by_game[g][:]
-        rng.shuffle(pool)
-        chosen = pool[:allocated[g]]
-        result.extend(chosen)
-        sampled_counts[g] = len(chosen)
+    sampled_counts: dict = {}  # game → count (re 단일 가정, 복수면 합산)
 
-    rng.shuffle(result)
+    for (game, re) in sorted(by_group.keys()):
+        # 그룹별로 독립 시드 사용 → eval_games가 달라도 같은 게임은 같은 샘플이 뽑힘
+        group_seed = seed ^ hash((game, re)) & 0xFFFFFFFF
+        group_rng = _random.Random(group_seed)
+        pool = by_group[(game, re)][:]
+        group_rng.shuffle(pool)
+        chosen = pool[:n_per_group]
+        result.extend(chosen)
+        sampled_counts[game] = sampled_counts.get(game, 0) + len(chosen)
+
+    # 최종 결과 셔플도 재현 가능하게 고정 시드 사용
+    _random.Random(seed).shuffle(result)
     return result, sampled_counts
 
 def _build_instruct(sample_list, config):

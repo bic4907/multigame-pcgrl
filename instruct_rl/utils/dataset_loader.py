@@ -97,8 +97,6 @@ def load_dataset_instruct(config):
         f"Check that reward annotations exist."
     )
 
-    # ── 데이터셋 상세 로그 ──────────────────────────────────────────────
-    _log_dataset_summary(config, samples)
 
     # Train/Test 분할
     n_total = len(samples)
@@ -120,6 +118,7 @@ def load_dataset_instruct(config):
     train_inst = _build_instruct(train_samples, config)
     test_inst = _build_instruct(test_samples, config)
 
+    _log_split_summary(train_samples, test_samples, train_inst)
 
     return train_inst, test_inst
 
@@ -374,10 +373,11 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
 
 def _log_dataset_table(ds, all_samples, config):
     """(game, re) 조합별 처리 통계를 표로 출력한다 (줄마다 별도 logger.info)."""
+    import numpy as _np
     from collections import defaultdict
 
-    # (game, re) → {samples, w_instr}
-    cell: dict = defaultdict(lambda: {"n": 0, "instr": 0})
+    # (game, re) → {n, instr, cond_vals}
+    cell: dict = defaultdict(lambda: {"n": 0, "instr": 0, "cond_vals": []})
 
     for s in ds:
         re = s.meta.get("reward_enum")
@@ -387,6 +387,10 @@ def _log_dataset_table(ds, all_samples, config):
         cell[key]["n"] += 1
         if s.instruction:
             cell[key]["instr"] += 1
+        conds = s.meta.get("conditions", {})
+        val = conds.get(re, conds.get(str(re), None))
+        if val is not None:
+            cell[key]["cond_vals"].append(float(val))
 
     # 캐시 해시 (앞 12자)
     cache_keys: dict = getattr(ds, "_game_cache_keys", {})
@@ -400,20 +404,26 @@ def _log_dataset_table(ds, all_samples, config):
     col_hash  = "Hash"
     col_n     = "Samples"
     col_instr = "w/ Instr"
+    col_cmin  = "cond_min"
+    col_cmax  = "cond_max"
 
     rows_data = []
     for g in games:
         for re in re_vals:
             if (g, re) not in cell:
                 continue
+            c = cell[(g, re)]
             re_label = f"{re}({REWARD_ENUM_NAMES.get(re, '?')})"
-            highlight = (re == re_filter)
+            highlight = (re_filter is None) or (re == re_filter)
+            arr = _np.array(c["cond_vals"]) if c["cond_vals"] else None
             rows_data.append({
                 "game":     g,
                 "re":       re_label,
                 "hash":     cache_keys.get(g, "")[:12],
-                "n":        cell[(g, re)]["n"],
-                "instr":    cell[(g, re)]["instr"],
+                "n":        c["n"],
+                "instr":    c["instr"],
+                "cmin":     f"{arr.min():.1f}" if arr is not None else "-",
+                "cmax":     f"{arr.max():.1f}" if arr is not None else "-",
                 "selected": highlight,
             })
 
@@ -427,18 +437,24 @@ def _log_dataset_table(ds, all_samples, config):
     w2 = max(len(col_hash),  max(len(r["hash"]) for r in selected))
     w3 = max(len(col_n),     max(len(str(r["n"]))     for r in selected))
     w4 = max(len(col_instr), max(len(str(r["instr"])) for r in selected))
+    w5 = max(len(col_cmin),  max(len(r["cmin"]) for r in selected))
+    w6 = max(len(col_cmax),  max(len(r["cmax"]) for r in selected))
 
-    sep    = f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}+{'-'*(w3+2)}+{'-'*(w4+2)}+"
+    sep = (f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}"
+           f"+{'-'*(w3+2)}+{'-'*(w4+2)}+{'-'*(w5+2)}+{'-'*(w6+2)}+")
     header = (f"| {col_game:<{w0}} | {col_re:<{w1}} | {col_hash:<{w2}} "
-              f"| {col_n:>{w3}} | {col_instr:>{w4}} |")
+              f"| {col_n:>{w3}} | {col_instr:>{w4}} "
+              f"| {col_cmin:>{w5}} | {col_cmax:>{w6}} |")
 
-    tot_n     = sum(r["n"]     for r in rows_data if r["selected"])
-    tot_instr = sum(r["instr"] for r in rows_data if r["selected"])
-    total_row = (f"| {'TOTAL (re='+str(re_filter)+')':<{w0}} | {'':<{w1}} | {'':<{w2}} "
-                 f"| {tot_n:>{w3}} | {tot_instr:>{w4}} |")
+    tot_n     = sum(r["n"]     for r in selected)
+    tot_instr = sum(r["instr"] for r in selected)
+    re_label_str = "all" if re_filter is None else str(re_filter)
+    re_name_str  = "all" if re_filter is None else REWARD_ENUM_NAMES.get(re_filter, "?")
+    total_row = (f"| {'TOTAL (re='+re_label_str+')':<{w0}} | {'':<{w1}} | {'':<{w2}} "
+                 f"| {tot_n:>{w3}} | {tot_instr:>{w4}} | {'':{w5}} | {'':{w6}} |")
 
     logger.info("Dataset Summary  "
-                f"(game={config.dataset_game}, re={re_filter}/{REWARD_ENUM_NAMES.get(re_filter,'?')}, "
+                f"(game={config.dataset_game}, re={re_label_str}/{re_name_str}, "
                 f"train_ratio={config.dataset_train_ratio})")
     logger.info(sep)
     logger.info(header)
@@ -450,7 +466,8 @@ def _log_dataset_table(ds, all_samples, config):
         if prev_game and prev_game != r["game"]:
             logger.info(sep)
         row = (f"| {r['game']:<{w0}} | {r['re']:<{w1}} | {r['hash']:<{w2}} "
-               f"| {r['n']:>{w3}} | {r['instr']:>{w4}} |")
+               f"| {r['n']:>{w3}} | {r['instr']:>{w4}} "
+               f"| {r['cmin']:>{w5}} | {r['cmax']:>{w6}} |")
         logger.info(row)
         prev_game = r["game"]
     logger.info(sep)

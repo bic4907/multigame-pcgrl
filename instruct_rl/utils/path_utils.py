@@ -172,10 +172,11 @@ def get_exp_name(config):
             game_full = GAME_ABBR[_dg][0]   # e.g. "dg" → "dungeon"
         else:
             game_full = _dg                  # e.g. "dungeon" → "dungeon"
+        game_abbr = GAME_ABBR_INV.get(game_full, game_full)
         re = getattr(config, 'dataset_reward_enum', None)
         re_str = f'_re-{re}' if re is not None else ''
         exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
-        return f'cpcgrl_game-{game_full}{re_str}{exp_str}_s-{config.seed}'
+        return f'cpcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
 
     exp_group = get_exp_group(config)
 

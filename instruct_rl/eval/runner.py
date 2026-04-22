@@ -38,7 +38,7 @@ from purejaxrl.structures import Transition, RunnerState
 logger = logging.getLogger(__name__)
 
 
-def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval_inst=None):
+def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval_inst=None, eval_inst_meta=None):
     """평가 함수를 생성하여 반환.
 
     Args:
@@ -116,8 +116,23 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 'row_i': list(range(n_inst)),
                 'reward_enum': reward_i_flat,
             })
+            # 샘플 메타데이터 (game, instruction) 병합
+            if eval_inst_meta is not None:
+                instruct_df['game']        = eval_inst_meta['game'].values[:n_inst]
+                instruct_df['instruction'] = eval_inst_meta['instruction'].values[:n_inst]
+            else:
+                instruct_df['game']        = 'unknown'
+                instruct_df['instruction'] = None
             for c_i in range(instruct.condition.shape[1]):
                 instruct_df[f'condition_{c_i}'] = instruct.condition[:, c_i].tolist()
+            # 컬럼 순서 정렬: game, instruction, reward_enum, condition_*
+            cond_cols = [c for c in instruct_df.columns if c.startswith('condition_')]
+            ordered_cols = ['row_i', 'game', 'instruction', 'reward_enum'] + cond_cols
+            instruct_df = instruct_df[[c for c in ordered_cols if c in instruct_df.columns]]
+            # -1 (null 센티널) → NaN (CSV 빈값)
+            instruct_df['reward_enum'] = instruct_df['reward_enum'].replace(-1, float('nan'))
+            for c in cond_cols:
+                instruct_df[c] = instruct_df[c].replace(-1.0, float('nan'))
             instruct_df.to_csv(join(config.eval_dir, 'input.csv'), index=False)
             logger.info(f"[Dataset mode] eval instruct: {n_inst} samples")
         else:
@@ -158,7 +173,9 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         )
 
         # ── 평가 루프 ─────────────────────────────────────────────────────────
-        with tqdm(total=n_batches, desc="Evaluating Batches") as pbar:
+        from instruct_rl.eval.hdf5_store import open_eval_store
+        with open_eval_store(config.eval_dir, mode="a") as h5_store, \
+             tqdm(total=n_batches, desc="Evaluating Batches") as pbar:
             for batch_i in range(n_batches):
                 batch_start_time = time.time()
                 start_idx = batch_i * n_envs
@@ -298,6 +315,8 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                     config, idxes, batch_valid_size,
                     batch_reward_i, batch_repetition,
                     result, rendered, jax.device_get(raw_rendered), last_states,
+                    instruct_df=instruct_df,
+                    h5=h5_store,
                 )
                 batch_elapsed = time.time() - batch_start_time
                 logger.debug(
@@ -359,8 +378,11 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             wandb.log({'raw': wandb.Table(dataframe=df_output)})
 
         if wandb.run and config.flush:
-            for row_i, _ in instruct_df.iterrows():
-                os.system(f"rm -r {config.eval_dir}/reward_{row_i}")
+            for row_i, row in instruct_df.iterrows():
+                game      = row.get('game', 'unknown')
+                re_val    = int(row.get('reward_enum', row_i))
+                folder_name = f"{game}_re{re_val}_{int(row_i):04d}"
+                os.system(f"rm -r {config.eval_dir}/{folder_name}")
 
         return losses_arr
 
@@ -373,7 +395,11 @@ def _save_batch_results(
     config, idxes, batch_valid_size,
     batch_reward_i, batch_repetition,
     result, rendered, raw_rendered, last_states,
+    instruct_df=None,
+    h5=None,
 ):
+    from instruct_rl.eval.hdf5_store import write_sample
+
     for idx, (row_i, reward_i, repeat_i, feature, state) in enumerate(zip(
         idxes,
         batch_reward_i[:batch_valid_size],
@@ -381,26 +407,36 @@ def _save_batch_results(
         result.feature[:batch_valid_size],
         last_states.env_state.env_map[0, :][:batch_valid_size],
     )):
-        save_dir = f"{config.eval_dir}/reward_{row_i}/seed_{repeat_i}"
-        os.makedirs(save_dir, exist_ok=True)
+        # 폴더명: {game}_re{re}_{row_i:04d}  (메타 없으면 기존 reward_{row_i} 유지)
+        if instruct_df is not None and row_i < len(instruct_df):
+            meta = instruct_df.iloc[int(row_i)]
+            game   = str(meta.get('game', 'unknown'))
+            re_val = int(meta.get('reward_enum', int(reward_i[0]) if hasattr(reward_i, '__len__') else int(reward_i)))
+            folder_name = f"{game}_re{re_val}_{int(row_i):04d}"
+        else:
+            folder_name = f"reward_{row_i}"
 
-        if wandb.run:
-            wandb.log({f"RawImage/reward_{row_i}/seed_{repeat_i}": wandb.Image(raw_rendered[idx])})
-
-        for i, frame in enumerate(rendered[idx]):
+        # ── 프레임 배열 조합 (RGBA→RGB, 텍스트 오버레이) ──────────────────
+        frames_rgb = []
+        for frame in rendered[idx]:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
             task_text = _build_task_text(reward_i, feature)
             frame = cv2.putText(
                 frame, task_text, (20, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA,
             )
-            imageio.imwrite(f"{save_dir}/frame_{i}.png", frame)
-            np.save(f"{save_dir}/state_{i}.npy", state)
+            frames_rgb.append(frame)
+        frames_rgb = np.array(frames_rgb, dtype=np.uint8)  # (n_frames, H, W, 3)
 
-            if wandb.run:
-                wandb.log({f"Image/reward_{row_i}/seed_{repeat_i}": wandb.Image(frame)})
-                if config.flush:
-                    os.system(f"rm -r {save_dir}/frame_{i}.png")
+        # ── HDF5 저장 ─────────────────────────────────────────────────────
+        if h5 is not None:
+            write_sample(h5, folder_name, int(repeat_i), frames_rgb, np.array(state))
+
+        # ── wandb 로깅 (메모리에서 직접) ──────────────────────────────────
+        if wandb.run:
+            wandb.log({f"RawImage/{folder_name}/seed_{repeat_i}": wandb.Image(raw_rendered[idx])})
+            for frame in frames_rgb:
+                wandb.log({f"Image/{folder_name}/seed_{repeat_i}": wandb.Image(frame)})
 
 
 def _build_task_text(reward_i, feature) -> str:
@@ -410,4 +446,5 @@ def _build_task_text(reward_i, feature) -> str:
               4: f"BC: {int(feature[3])} | ",
               5: "BD | "}
     return "".join(v for k, v in labels.items() if k in reward_i)
+
 

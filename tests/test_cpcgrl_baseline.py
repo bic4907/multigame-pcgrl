@@ -124,7 +124,7 @@ class TestCPCGRLDatasetLoading:
         """load_dataset_instruct 가 정상적으로 Instruct 객체를 반환한다."""
         from instruct_rl.utils.dataset_loader import load_dataset_instruct
 
-        train_inst, test_inst = load_dataset_instruct(cpcgrl_config)
+        train_inst, test_inst, _ = load_dataset_instruct(cpcgrl_config)
 
         assert train_inst is not None
         assert test_inst is not None
@@ -147,7 +147,7 @@ class TestCPCGRLDatasetLoading:
             seed=0,
         )
 
-        train_inst, test_inst = load_dataset_instruct(config)
+        train_inst, test_inst, _ = load_dataset_instruct(config)
         assert train_inst is not None
         assert (train_inst.reward_i == 1).all()
 

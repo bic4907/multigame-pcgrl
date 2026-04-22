@@ -350,6 +350,11 @@ class CPCGRLEvalConfig(EvalConfig):
     # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
     eval_samples_per_group: Optional[int] = 200
 
+    # 평가 시 복수 reward_enum 지정. None이면 dataset_reward_enum 단일값 사용.
+    # 숫자 연결 문자열로 지정 가능: "12" → [1,2],  "012" → [0,1,2]
+    # 리스트/튜플도 허용: [0,1,2]
+    eval_dataset_reward_enums: Optional[str] = None
+
     wandb_project: Optional[str] = "eval_cpcgrl"
 
 

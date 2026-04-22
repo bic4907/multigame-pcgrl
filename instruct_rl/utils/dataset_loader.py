@@ -44,9 +44,24 @@ def load_dataset_instruct(config):
     _eval_games_str = getattr(config, 'eval_games', None)
     _load_game = _eval_games_str if _eval_games_str is not None else config.dataset_game
 
-    logger.info(f"Loading MultiGameDataset (game={_load_game}, "
-                f"reward_enum={config.dataset_reward_enum})"
-                + (f"  [eval_games override: {_eval_games_str}]" if _eval_games_str else ""))
+    # eval_dataset_reward_enums 파싱 (로딩 로그·필터링·테이블 표시에서 공통 사용)
+    _eval_re_raw = getattr(config, 'eval_dataset_reward_enums', None)
+    if _eval_re_raw is not None:
+        if isinstance(_eval_re_raw, (str, int)):
+            _eval_re_list = [int(c) for c in str(_eval_re_raw)]
+        else:
+            _eval_re_list = [int(x) for x in _eval_re_raw]
+    else:
+        _eval_re_list = None
+
+    _effective_re = _eval_re_list if _eval_re_list else (
+        [config.dataset_reward_enum] if config.dataset_reward_enum is not None else None
+    )
+
+    logger.info(
+        f"Loading MultiGameDataset (game={_load_game}, reward_enum={_effective_re})"
+        + (f"  [eval_games override: {_eval_games_str}]" if _eval_games_str else "")
+    )
 
     # 'all'이면 전체 게임 로드, 약어면 역매핑으로 full name 리스트 획득
     from conf.game_utils import GAME_ABBR, GAME_ABBR_INV, ALL_GAMES, parse_game_str
@@ -80,8 +95,12 @@ def load_dataset_instruct(config):
 
     # ── 게임별 처리 통계 표 출력 (분할/샘플링 후 최종 정보 포함) ──────────────
 
-    # reward_enum 필터링
-    if config.dataset_reward_enum is not None:
+    # reward_enum 필터링 — 위에서 파싱한 _eval_re_list / _effective_re 사용
+    if _eval_re_list:
+        _re_set = set(_eval_re_list)
+        samples = [s for s in samples if s.meta.get("reward_enum") in _re_set]
+        logger.info(f"eval_dataset_reward_enums={_eval_re_list}: {len(samples)} samples")
+    elif config.dataset_reward_enum is not None:
         samples = [s for s in samples if s.meta.get("reward_enum") == config.dataset_reward_enum]
 
     # reward annotation이 있는 샘플만
@@ -119,9 +138,10 @@ def load_dataset_instruct(config):
 
     all_inst = _build_instruct(samples, config)
 
-    _log_dataset_table(ds, samples, config, sampled_counts=sampled_counts)
+    _log_dataset_table(ds, samples, config, sampled_counts=sampled_counts,
+                       re_filter_list=_effective_re)
 
-    return all_inst, all_inst
+    return all_inst, all_inst, samples
 
 
 # ── 내부 헬퍼 ──────────────────────────────────────────────────────────────────
@@ -412,7 +432,8 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
     return jnp.array(cls_embeddings, dtype=jnp.float32)
 
 
-def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None):
+def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None,
+                       re_filter_list=None):
     """(game, re) 조합별 처리 통계를 표로 출력한다 (줄마다 별도 logger.info)."""
     import numpy as _np
     from collections import defaultdict
@@ -441,7 +462,13 @@ def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None):
 
     games   = sorted({k[0] for k in cell})
     re_vals = sorted({k[1] for k in cell})
-    re_filter = config.dataset_reward_enum
+    # re_filter_list 가 있으면 그 목록 기준, 없으면 단일 dataset_reward_enum 기준
+    if re_filter_list:
+        _re_filter_set = set(re_filter_list)
+        re_filter = None  # highlight 판단에 set 사용
+    else:
+        _re_filter_set = None
+        re_filter = config.dataset_reward_enum
 
     col_game  = "Game"
     col_re    = "re(name)"
@@ -458,7 +485,10 @@ def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None):
                 continue
             c = cell[(g, re)]
             re_label = f"{re}({REWARD_ENUM_NAMES.get(re, '?')})"
-            highlight = (re_filter is None) or (re == re_filter)
+            if _re_filter_set is not None:
+                highlight = re in _re_filter_set
+            else:
+                highlight = (re_filter is None) or (re == re_filter)
             arr = _np.array(c["cond_vals"]) if c["cond_vals"] else None
             rows_data.append({
                 "game":     g,
@@ -502,8 +532,14 @@ def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None):
     tot_n     = sum(r["n"]     for r in selected)
     tot_instr = sum(r["instr"] for r in selected)
     tot_sampled = sum(sampled_counts.values()) if has_sampled else None
-    re_label_str = "all" if re_filter is None else str(re_filter)
-    re_name_str  = "all" if re_filter is None else REWARD_ENUM_NAMES.get(re_filter, "?")
+    if _re_filter_set is not None:
+        re_label_str = ",".join(str(r) for r in sorted(_re_filter_set))
+        re_name_str  = ",".join(REWARD_ENUM_NAMES.get(r, "?") for r in sorted(_re_filter_set))
+    elif re_filter is None:
+        re_label_str, re_name_str = "all", "all"
+    else:
+        re_label_str = str(re_filter)
+        re_name_str  = REWARD_ENUM_NAMES.get(re_filter, "?")
     if has_sampled:
         total_row = (f"| {'TOTAL (re='+re_label_str+')':<{w0}} | {'':<{w1}} | {'':<{w2}} "
                      f"| {tot_n:>{w3}} | {tot_instr:>{w4}} | {tot_sampled:>{w7}} | {'':{w5}} | {'':{w6}} |")

@@ -629,7 +629,7 @@ def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None, inject_reward_fn=Non
 
     train_inst, test_inst = None, None
     if hasattr(config, "dataset_game") and config.dataset_game is not None:
-        train_inst, test_inst = load_dataset_instruct(config)
+        train_inst, test_inst, _ = load_dataset_instruct(config)
 
     train_jit = jax.jit(
         make_train(

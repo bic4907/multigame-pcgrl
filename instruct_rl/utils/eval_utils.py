@@ -32,10 +32,19 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
 
     # train과 동일하게 MultiGameDataset 기반 eval instruct 로드
     eval_inst = None
+    eval_inst_meta = None
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:
         from instruct_rl.utils.dataset_loader import load_dataset_instruct
-        _, eval_inst = load_dataset_instruct(config)  # test split 사용
+        import pandas as pd
+        _, eval_inst, samples = load_dataset_instruct(config)  # test split 사용
         logger.info(f"Loaded eval instruct from dataset: {eval_inst.reward_i.shape[0]} samples")
+
+        # 샘플 메타데이터 DataFrame (game, instruction, reward_enum)
+        eval_inst_meta = pd.DataFrame({
+            'game':        [s.game for s in samples],
+            'instruction': [getattr(s, 'instruction', None) for s in samples],
+            'reward_enum': [s.meta.get('reward_enum', None) for s in samples],
+        })
 
         # ── dry-run: max_samples 로 잘라내기 ─────────────────────────────
         max_samples = getattr(config, 'max_samples', None)
@@ -51,11 +60,13 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
                 embedding=eval_inst.embedding[:max_samples],
                 condition_id=eval_inst.condition_id[:max_samples],
             )
+            eval_inst_meta = eval_inst_meta.iloc[:max_samples].reset_index(drop=True)
 
     eval_fn = make_eval(
         config, restored_ckpt, encoder_param,
         inject_obs_fn=inject_obs_fn,
         eval_inst=eval_inst,
+        eval_inst_meta=eval_inst_meta,
     )
     out = eval_fn(rng)
     jax.block_until_ready(out)

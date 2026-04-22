@@ -73,8 +73,7 @@ def load_dataset_instruct(config):
     else:
         samples = ds.by_games(_game_names)
 
-    # ── 게임별 처리 통계 표 출력 ──────────────────────────────────────────────
-    _log_dataset_table(ds, samples, config)
+    # ── 게임별 처리 통계 표 출력 (분할/샘플링 후 최종 정보 포함) ──────────────
 
     # reward_enum 필터링
     if config.dataset_reward_enum is not None:
@@ -97,34 +96,66 @@ def load_dataset_instruct(config):
         f"Check that reward annotations exist."
     )
 
+    # ── eval 모드: 게임별 균등 서브샘플링 ─────────────────────────────────
+    n_eval_samples = getattr(config, 'n_eval_samples', None)
+    sampled_counts: dict = {}  # game → sampled count (테이블용)
+    if n_eval_samples is not None and n_eval_samples < len(samples):
+        samples, sampled_counts = _subsample_by_game(
+            samples, n_eval_samples, seed=config.seed
+        )
+        logger.info(
+            f"[n_eval_samples={n_eval_samples}] subsampled: → {len(samples)} samples"
+        )
 
-    # Train/Test 분할
-    n_total = len(samples)
-    rng_split = jax.random.PRNGKey(config.seed)
-    perm = jax.random.permutation(rng_split, n_total)
-    n_train = int(n_total * config.dataset_train_ratio)
+    all_inst = _build_instruct(samples, config)
 
-    train_indices = perm[:n_train].tolist()
-    test_indices = perm[n_train:].tolist()
+    _log_dataset_table(ds, samples, config, sampled_counts=sampled_counts)
 
-    if len(train_indices) == 0:
-        train_indices = list(range(n_total))
-    if len(test_indices) == 0:
-        test_indices = list(range(n_total))
-
-    train_samples = [samples[i] for i in train_indices]
-    test_samples = [samples[i] for i in test_indices]
-
-    train_inst = _build_instruct(train_samples, config)
-    test_inst = _build_instruct(test_samples, config)
-
-    _log_split_summary(train_samples, test_samples, train_inst)
-
-    return train_inst, test_inst
+    return all_inst, all_inst
 
 
 # ── 내부 헬퍼 ──────────────────────────────────────────────────────────────────
 
+
+def _subsample_by_game(samples, n_total: int, seed: int = 0):
+    """게임별로 최대한 균등하게 n_total개를 서브샘플링한다.
+
+    Returns
+    -------
+    subsampled : list
+    sampled_counts : dict  game → sampled count
+    """
+    import random as _random
+    from collections import defaultdict
+
+    by_game: dict = defaultdict(list)
+    for s in samples:
+        by_game[s.game].append(s)
+
+    games = sorted(by_game.keys())
+    n_games = len(games)
+    quota = {g: len(by_game[g]) for g in games}
+
+    # 쿼터를 최대한 균등하게 배분 (가용 샘플이 부족한 게임은 전부 사용)
+    remaining = int(n_total)
+    allocated = {}
+    for g in sorted(games, key=lambda g: quota[g]):  # 작은 게임 먼저
+        share = remaining // (n_games - len(allocated))
+        allocated[g] = min(quota[g], share)
+        remaining -= allocated[g]
+
+    rng = _random.Random(seed)
+    result = []
+    sampled_counts = {}
+    for g in games:
+        pool = by_game[g][:]
+        rng.shuffle(pool)
+        chosen = pool[:allocated[g]]
+        result.extend(chosen)
+        sampled_counts[g] = len(chosen)
+
+    rng.shuffle(result)
+    return result, sampled_counts
 
 def _build_instruct(sample_list, config):
     """샘플 리스트에서 Instruct 객체를 빌드한다."""
@@ -371,10 +402,13 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
     return jnp.array(cls_embeddings, dtype=jnp.float32)
 
 
-def _log_dataset_table(ds, all_samples, config):
+def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None):
     """(game, re) 조합별 처리 통계를 표로 출력한다 (줄마다 별도 logger.info)."""
     import numpy as _np
     from collections import defaultdict
+
+    has_sampled = bool(sampled_counts)
+    col_sampled = "Sampled"
 
     # (game, re) → {n, instr, cond_vals}
     cell: dict = defaultdict(lambda: {"n": 0, "instr": 0, "cond_vals": []})
@@ -439,19 +473,33 @@ def _log_dataset_table(ds, all_samples, config):
     w4 = max(len(col_instr), max(len(str(r["instr"])) for r in selected))
     w5 = max(len(col_cmin),  max(len(r["cmin"]) for r in selected))
     w6 = max(len(col_cmax),  max(len(r["cmax"]) for r in selected))
+    if has_sampled:
+        w7 = max(len(col_sampled), max(len(str(sampled_counts.get(r["game"], "-"))) for r in selected))
 
-    sep = (f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}"
-           f"+{'-'*(w3+2)}+{'-'*(w4+2)}+{'-'*(w5+2)}+{'-'*(w6+2)}+")
-    header = (f"| {col_game:<{w0}} | {col_re:<{w1}} | {col_hash:<{w2}} "
-              f"| {col_n:>{w3}} | {col_instr:>{w4}} "
-              f"| {col_cmin:>{w5}} | {col_cmax:>{w6}} |")
+    if has_sampled:
+        sep = (f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}"
+               f"+{'-'*(w3+2)}+{'-'*(w4+2)}+{'-'*(w7+2)}+{'-'*(w5+2)}+{'-'*(w6+2)}+")
+        header = (f"| {col_game:<{w0}} | {col_re:<{w1}} | {col_hash:<{w2}} "
+                  f"| {col_n:>{w3}} | {col_instr:>{w4}} "
+                  f"| {col_sampled:>{w7}} | {col_cmin:>{w5}} | {col_cmax:>{w6}} |")
+    else:
+        sep = (f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}"
+               f"+{'-'*(w3+2)}+{'-'*(w4+2)}+{'-'*(w5+2)}+{'-'*(w6+2)}+")
+        header = (f"| {col_game:<{w0}} | {col_re:<{w1}} | {col_hash:<{w2}} "
+                  f"| {col_n:>{w3}} | {col_instr:>{w4}} "
+                  f"| {col_cmin:>{w5}} | {col_cmax:>{w6}} |")
 
     tot_n     = sum(r["n"]     for r in selected)
     tot_instr = sum(r["instr"] for r in selected)
+    tot_sampled = sum(sampled_counts.values()) if has_sampled else None
     re_label_str = "all" if re_filter is None else str(re_filter)
     re_name_str  = "all" if re_filter is None else REWARD_ENUM_NAMES.get(re_filter, "?")
-    total_row = (f"| {'TOTAL (re='+re_label_str+')':<{w0}} | {'':<{w1}} | {'':<{w2}} "
-                 f"| {tot_n:>{w3}} | {tot_instr:>{w4}} | {'':{w5}} | {'':{w6}} |")
+    if has_sampled:
+        total_row = (f"| {'TOTAL (re='+re_label_str+')':<{w0}} | {'':<{w1}} | {'':<{w2}} "
+                     f"| {tot_n:>{w3}} | {tot_instr:>{w4}} | {tot_sampled:>{w7}} | {'':{w5}} | {'':{w6}} |")
+    else:
+        total_row = (f"| {'TOTAL (re='+re_label_str+')':<{w0}} | {'':<{w1}} | {'':<{w2}} "
+                     f"| {tot_n:>{w3}} | {tot_instr:>{w4}} | {'':{w5}} | {'':{w6}} |")
 
     logger.info("Dataset Summary  "
                 f"(game={config.dataset_game}, re={re_label_str}/{re_name_str}, "
@@ -465,9 +513,15 @@ def _log_dataset_table(ds, all_samples, config):
             continue
         if prev_game and prev_game != r["game"]:
             logger.info(sep)
-        row = (f"| {r['game']:<{w0}} | {r['re']:<{w1}} | {r['hash']:<{w2}} "
-               f"| {r['n']:>{w3}} | {r['instr']:>{w4}} "
-               f"| {r['cmin']:>{w5}} | {r['cmax']:>{w6}} |")
+        if has_sampled:
+            sc = sampled_counts.get(r["game"], "-")
+            row = (f"| {r['game']:<{w0}} | {r['re']:<{w1}} | {r['hash']:<{w2}} "
+                   f"| {r['n']:>{w3}} | {r['instr']:>{w4}} "
+                   f"| {sc:>{w7}} | {r['cmin']:>{w5}} | {r['cmax']:>{w6}} |")
+        else:
+            row = (f"| {r['game']:<{w0}} | {r['re']:<{w1}} | {r['hash']:<{w2}} "
+                   f"| {r['n']:>{w3}} | {r['instr']:>{w4}} "
+                   f"| {r['cmin']:>{w5}} | {r['cmax']:>{w6}} |")
         logger.info(row)
         prev_game = r["game"]
     logger.info(sep)
@@ -501,37 +555,53 @@ def _log_dataset_summary(config, samples):
                         re_val, REWARD_ENUM_NAMES.get(re_val, "?"), len(re_samples))
 
 
-def _log_split_summary(train_samples, test_samples, train_inst):
-    """Train/Test 분할 결과 요약."""
+def _log_split_summary(train_samples, test_samples, train_inst, *, sampled_counts: dict = None):
+    """Train/Test 분할 결과 요약. sampled_counts가 있으면 Sampled 컬럼을 추가한다."""
     train_game = Counter(s.game for s in train_samples)
     test_game  = Counter(s.game for s in test_samples)
     games = sorted(set(train_game) | set(test_game))
 
-    col_game  = "Game"
-    col_train = "Train"
-    col_test  = "Test"
+    has_sampled = bool(sampled_counts)
+
+    col_game    = "Game"
+    col_train   = "Train"
+    col_test    = "Test"
+    col_sampled = "Sampled"
+
     w0 = max(len(col_game),  max(len(g) for g in games))
     w1 = max(len(col_train), max(len(str(train_game[g])) for g in games))
     w2 = max(len(col_test),  max(len(str(test_game[g]))  for g in games))
+    if has_sampled:
+        w3 = max(len(col_sampled), max(len(str(sampled_counts.get(g, 0))) for g in games))
 
-    sep    = f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}+"
-    header = f"| {col_game:<{w0}} | {col_train:>{w1}} | {col_test:>{w2}} |"
-    total_row = (f"| {'TOTAL':<{w0}} | {len(train_samples):>{w1}} | "
-                 f"{len(test_samples):>{w2}} |")
+    if has_sampled:
+        sep    = f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}+{'-'*(w3+2)}+"
+        header = f"| {col_game:<{w0}} | {col_train:>{w1}} | {col_test:>{w2}} | {col_sampled:>{w3}} |"
+        total_sampled = sum(sampled_counts.values())
+        total_row = (f"| {'TOTAL':<{w0}} | {len(train_samples):>{w1}} | "
+                     f"{len(test_samples):>{w2}} | {total_sampled:>{w3}} |")
+    else:
+        sep    = f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}+"
+        header = f"| {col_game:<{w0}} | {col_train:>{w1}} | {col_test:>{w2}} |"
+        total_row = (f"| {'TOTAL':<{w0}} | {len(train_samples):>{w1}} | "
+                     f"{len(test_samples):>{w2}} |")
 
-    logger.info("Train/Test Split  "
+    logger.debug("Train/Test Split  "
                 f"(total=%d, train=%d, test=%d)",
                 len(train_samples) + len(test_samples),
                 len(train_samples), len(test_samples))
-    logger.info(sep)
-    logger.info(header)
-    logger.info(sep)
+    logger.debug(sep)
+    logger.debug(header)
+    logger.debug(sep)
     for g in games:
-        row = f"| {g:<{w0}} | {train_game[g]:>{w1}} | {test_game[g]:>{w2}} |"
-        logger.info(row)
-    logger.info(sep)
-    logger.info(total_row)
-    logger.info(sep)
+        if has_sampled:
+            row = f"| {g:<{w0}} | {train_game[g]:>{w1}} | {test_game[g]:>{w2}} | {sampled_counts.get(g, 0):>{w3}} |"
+        else:
+            row = f"| {g:<{w0}} | {train_game[g]:>{w1}} | {test_game[g]:>{w2}} |"
+        logger.debug(row)
+    logger.debug(sep)
+    logger.debug(total_row)
+    logger.debug(sep)
 
 
 # ── Condition 필터 유틸 ────────────────────────────────────────────────────────

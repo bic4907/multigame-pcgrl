@@ -327,6 +327,12 @@ class CPCGRLEvalConfig(EvalConfig):
     """
     problem: str = "multigame"
 
+    # ── CPCGRLConfig 와 동일한 game / dataset 기본값 → exp_dir 이름 일치 ──
+    game: str = "all"
+    dataset_game: Optional[str] = "all"
+    dataset_reward_enum: Optional[int] = 0        # 0=region
+    dataset_train_ratio: float = 0.95
+
     vec_cont: bool = True
     raw_obs: bool = True
     model: str = "contconv"
@@ -336,6 +342,9 @@ class CPCGRLEvalConfig(EvalConfig):
     nlp_input_dim: int = 0
 
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+
+    # 평가에 사용할 총 샘플 수 (게임별 균등 분배). None이면 전체 test split 사용.
+    n_eval_samples: Optional[int] = 1000
 
     wandb_project: Optional[str] = "eval_cpcgrl"
 

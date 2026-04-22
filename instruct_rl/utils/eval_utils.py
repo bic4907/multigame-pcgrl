@@ -83,10 +83,11 @@ def main_eval_entry(config, *, inject_obs_fn=None):
     exp_dir = config.exp_dir
     logger.info(f"Running experiment at {exp_dir}")
 
+    _re = getattr(config, 'dataset_reward_enum', None)
+    _re_suffix = f"_re-{_re}" if _re is not None else ""
     eval_dir = os.path.join(
         exp_dir,
-        f"ev_{config.eval_instruct}_{config.eval_modality}"
-        f"{f'_{config.eval_exp_name}' if config.eval_exp_name else ''}",
+        f"ev{_re_suffix}",
     )
     config.eval_dir = eval_dir
 

@@ -293,7 +293,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                     result, rendered, jax.device_get(raw_rendered), last_states,
                 )
                 batch_elapsed = time.time() - batch_start_time
-                logger.info(
+                logger.debug(
                     f"[Batch {batch_i+1}/{n_batches}] elapsed: {batch_elapsed:.1f}s  "
                     f"(cumulative: {time.time() - loop_start_time:.1f}s)"
                 )

@@ -5,11 +5,11 @@ metric:
   name: unseen/reg_unseen_overall
 parameters:
   game:
-    value: 'all'
+    values: ['all', 'dg']
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0, 1, 2]
+    values: [0]
   n_envs:
     value: 600
   overwrite:

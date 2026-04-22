@@ -43,18 +43,31 @@ def load_dataset_instruct(config):
     logger.info(f"[CPCGRL] Loading MultiGameDataset (game={config.dataset_game}, "
                 f"reward_enum={config.dataset_reward_enum})")
 
+    # 'all'이면 전체 게임 로드, 약어면 역매핑으로 full name 리스트 획득
+    from conf.game_utils import GAME_ABBR, GAME_ABBR_INV, ALL_GAMES
+    _dg = config.dataset_game
+    if _dg == 'all':
+        _game_names = ALL_GAMES  # ['dungeon', 'pokemon', 'sokoban', 'doom', 'doom2', 'zelda']
+    elif _dg in GAME_ABBR:
+        _game_names = GAME_ABBR[_dg]  # 약어 → full name 리스트
+    else:
+        _game_names = [_dg]  # 이미 full name
+
     ds = MultiGameDataset(
-        include_dungeon=(config.dataset_game == 'dungeon'),
-        include_pokemon=(config.dataset_game == 'pokemon'),
-        include_sokoban=(config.dataset_game == 'sokoban'),
-        include_doom=(config.dataset_game == 'doom'),
-        include_doom2=(config.dataset_game == 'doom'),
-        include_zelda=(config.dataset_game == 'zelda'),
+        include_dungeon=('dungeon' in _game_names),
+        include_pokemon=('pokemon' in _game_names),
+        include_sokoban=('sokoban' in _game_names),
+        include_doom=('doom' in _game_names),
+        include_doom2=('doom2' in _game_names),
+        include_zelda=('zelda' in _game_names),
         use_tile_mapping=False,
     )
 
-    # 게임별 필터링
-    samples = ds.by_game(config.dataset_game)
+    # 게임별 필터링 ('all'이면 전체 사용)
+    if _dg == 'all':
+        samples = list(ds)
+    else:
+        samples = ds.by_games(_game_names)
 
     # reward_enum 필터링
     if config.dataset_reward_enum is not None:

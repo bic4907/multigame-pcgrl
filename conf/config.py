@@ -228,7 +228,8 @@ class TrainConfig(Config):
 @dataclass
 class CPCGRLConfig(TrainConfig):
     problem: str = "multigame"
-    dataset_game: Optional[str] = "dungeon"
+
+    dataset_game: Optional[str] = "all"
     dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
     # condition 값 기반 필터: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"

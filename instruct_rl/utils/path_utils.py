@@ -157,6 +157,21 @@ def get_short_target(target: str) -> str:
 
 
 def get_exp_name(config):
+    # ── CPCGRL 모드: cpcgrl_game-{game}_re-{re}_s-{seed}_exp-{exp_name} ──
+    _is_cpcgrl = (
+        hasattr(config, 'dataset_game') and config.dataset_game is not None
+        and getattr(config, 'vec_cont', False)
+        and not getattr(config, 'use_clip', False)
+        and not getattr(config, 'use_nlp', False)
+    )
+    if _is_cpcgrl:
+        from conf.game_utils import GAME_ABBR_INV
+        game_abbr = GAME_ABBR_INV.get(config.dataset_game, config.dataset_game)
+        re = getattr(config, 'dataset_reward_enum', None)
+        re_str = f'_re-{re}' if re is not None else ''
+        exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
+        return f'cpcgrl_game-{game_abbr}{re_str}_s-{config.seed}{exp_str}'
+
     exp_group = get_exp_group(config)
 
     # target_character = get_short_target(config.target_character) if config.task == 'scenario' else config.target_character

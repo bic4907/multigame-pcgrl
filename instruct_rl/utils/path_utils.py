@@ -204,15 +204,13 @@ def init_config(config: Config):
         for key, val in includes.items():
             setattr(config, key, val)
 
-        # ── dataset_game 동기화: game이 명시적으로 설정된 경우 dataset_game도 함께 설정 ──
-        # dataset_game이 기본값("all")인 경우에만 game 값으로 덮어쓴다.
-        # (dataset_game이 이미 명시적으로 다른 값으로 설정된 경우는 그대로 유지)
+        # ── dataset_game 동기화: dataset_game이 미설정(None)인 경우에만 game 값으로 설정 ──
+        # CPCGRLConfig 등에서 dataset_game="all"로 명시적으로 설정한 경우는 그대로 유지한다.
         if (
             hasattr(config, 'dataset_game')
-            and getattr(config, 'dataset_game', 'all') == 'all'
+            and getattr(config, 'dataset_game', None) is None
         ):
             config.dataset_game = config.game
-            logger.debug(f"[init_config] dataset_game auto-synced to game='{config.game}'")
             logger.debug(f"[init_config] dataset_game auto-synced to game='{config.game}'")
 
     # ── MultiGameDataset 기반 CPCGRL / IPCGRL / VIPCGRL 모드 ─────────────

@@ -44,12 +44,16 @@ def load_dataset_instruct(config):
                 f"reward_enum={config.dataset_reward_enum})")
 
     # 'all'이면 전체 게임 로드, 약어면 역매핑으로 full name 리스트 획득
-    from conf.game_utils import GAME_ABBR, GAME_ABBR_INV, ALL_GAMES
+    from conf.game_utils import GAME_ABBR, GAME_ABBR_INV, ALL_GAMES, parse_game_str
     _dg = config.dataset_game
     if _dg == 'all':
         _game_names = ALL_GAMES  # ['dungeon', 'pokemon', 'sokoban', 'doom', 'doom2', 'zelda']
     elif _dg in GAME_ABBR:
-        _game_names = GAME_ABBR[_dg]  # 약어 → full name 리스트
+        _game_names = GAME_ABBR[_dg]  # 단일 약어 → full name 리스트
+    elif len(_dg) % 2 == 0 and all(_dg[i:i+2] in GAME_ABBR for i in range(0, len(_dg), 2)):
+        # 복합 약어 (예: "dgpk") → parse_game_str로 파싱
+        includes = parse_game_str(_dg)
+        _game_names = [name for name in ALL_GAMES if includes.get(f"include_{name}", False)]
     else:
         _game_names = [_dg]  # 이미 full name
 

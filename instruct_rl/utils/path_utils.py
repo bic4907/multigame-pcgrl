@@ -165,12 +165,18 @@ def get_exp_name(config):
         and not getattr(config, 'use_nlp', False)
     )
     if _is_cpcgrl:
-        from conf.game_utils import GAME_ABBR_INV
-        game_abbr = GAME_ABBR_INV.get(config.dataset_game, config.dataset_game)
+        from conf.game_utils import GAME_ABBR, GAME_ABBR_INV
+        # 약어 입력이면 첫 번째 full name 으로, 이미 full name 이면 그대로 사용
+        _dg = config.dataset_game
+        if _dg in GAME_ABBR:
+            game_full = GAME_ABBR[_dg][0]   # e.g. "dg" → "dungeon"
+        else:
+            game_full = _dg                  # e.g. "dungeon" → "dungeon"
         re = getattr(config, 'dataset_reward_enum', None)
         re_str = f'_re-{re}' if re is not None else ''
         exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
-        return f'cpcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
+        model_str = f'_{config.model}' if getattr(config, 'model', None) else ''
+        return f'cpcgrl_game-{game_full}{re_str}{exp_str}{model_str}_s-{config.seed}'
 
     exp_group = get_exp_group(config)
 
@@ -197,6 +203,18 @@ def init_config(config: Config):
         includes = parse_game_str(config.game)
         for key, val in includes.items():
             setattr(config, key, val)
+
+        # ── dataset_game 동기화: game이 명시적으로 설정된 경우 dataset_game도 함께 설정 ──
+        # dataset_game이 기본값("all")인 경우에만 game 값으로 덮어쓴다.
+        # (dataset_game이 이미 명시적으로 다른 값으로 설정된 경우는 그대로 유지)
+        if (
+            hasattr(config, 'dataset_game')
+            and config.game.lower() != 'dg'   # game 기본값(dg)인 경우 동기화 생략
+            and getattr(config, 'dataset_game', 'all') == 'all'
+        ):
+            config.dataset_game = config.game
+            logger.debug(f"[init_config] dataset_game auto-synced to game='{config.game}'")
+            logger.debug(f"[init_config] dataset_game auto-synced to game='{config.game}'")
 
     # ── MultiGameDataset 기반 CPCGRL / IPCGRL / VIPCGRL 모드 ─────────────
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:

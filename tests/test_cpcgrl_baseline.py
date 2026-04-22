@@ -77,7 +77,7 @@ class TestCPCGRLConfig:
 
         c = CPCGRLConfig()
         assert c.problem == "multigame"
-        assert c.dataset_game == "dungeon"
+        assert c.dataset_game == "all"
         assert c.dataset_reward_enum == 0
         assert c.vec_cont is True
         assert c.raw_obs is True
@@ -97,7 +97,7 @@ class TestCPCGRLConfig:
         c = init_config(c)
         assert c.exp_dir is not None
         assert "contconv" in c.exp_dir
-        assert "game-dungeon" in c.exp_dir
+        assert "game-all" in c.exp_dir
         assert "re-0" in c.exp_dir
         assert "s-99" in c.exp_dir
 

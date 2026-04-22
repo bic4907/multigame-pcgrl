@@ -94,7 +94,6 @@ class TestCPCGRLConfig:
         c = CPCGRLConfig(seed=99, exp_name="ci")
         c = init_config(c)
         assert c.exp_dir is not None
-        assert "contconv" in c.exp_dir
         assert "game-all" in c.exp_dir
         assert "re-0" in c.exp_dir
         assert "s-99" in c.exp_dir

@@ -209,7 +209,6 @@ def init_config(config: Config):
         # (dataset_game이 이미 명시적으로 다른 값으로 설정된 경우는 그대로 유지)
         if (
             hasattr(config, 'dataset_game')
-            and config.game.lower() != 'dg'   # game 기본값(dg)인 경우 동기화 생략
             and getattr(config, 'dataset_game', 'all') == 'all'
         ):
             config.dataset_game = config.game

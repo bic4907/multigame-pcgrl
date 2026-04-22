@@ -39,9 +39,11 @@ GAME_HANDLER_FILES: Dict[str, List[str]] = {
 }
 
 
-def _cache_log(msg: str) -> None:
-    """logger.info + print fallback."""
-    logger.info(msg)
+def _cache_log(msg: str, level: str = "info") -> None:
+    """logger.info/debug + print fallback."""
+    getattr(logger, level)(msg)
+    if level == "debug":
+        return
     root_has_handlers = bool(logging.root.handlers)
     pkg_has_real_handler = any(
         not isinstance(h, logging.NullHandler)
@@ -245,13 +247,15 @@ def load_game_samples_from_cache(
                 f"[MultiGameDataset] Loaded {game} from cache  "
                 f"total={info.get('total_samples', len(meta))} | "
                 f"created_at={info.get('created_at', '?')} | "
-                f"host={info.get('hostname', '?')}"
+                f"host={info.get('hostname', '?')}",
+                level="debug",
             )
         except Exception:
             pass
     else:
         _cache_log(
-            f"[MultiGameDataset] Loaded {game} from cache  total={len(meta)}"
+            f"[MultiGameDataset] Loaded {game} from cache  total={len(meta)}",
+            level="debug",
         )
 
     samples: List[GameSample] = []
@@ -369,7 +373,8 @@ def load_game_annotations_from_cache(
         _cache_log(
             f"[MultiGameDataset] Annotations loaded ← {game}/{ann_path.name}  "
             f"({len(data.get('annotations', []))} rows, "
-            f"has_instructions={data.get('has_instructions', False)})"
+            f"has_instructions={data.get('has_instructions', False)})",
+            level="debug",
         )
         return data
     except Exception as e:

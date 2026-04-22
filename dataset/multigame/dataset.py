@@ -209,7 +209,7 @@ class MultiGameDataset:
         # ── 게임별 로드 루프 ─────────────────────────────────────────────────
         for game, game_root, game_hc in _game_specs:
             cache_key = build_per_game_cache_key(game, game_root, game_hc)
-            logger.info("[%s] cache key: %s", game, cache_key[:12])
+            logger.debug("[%s] cache key: %s", game, cache_key[:12])
             self._game_cache_keys[game] = cache_key
             # (1) per-game 캐시 히트 시도
             if use_cache:
@@ -268,7 +268,7 @@ class MultiGameDataset:
                 include_doom, include_doom2,
                 doom_hc,
             )
-            logger.info("[doom] cache key: %s", doom_cache_key[:12])
+            logger.debug("[doom] cache key: %s", doom_cache_key[:12])
             self._game_cache_keys["doom"] = doom_cache_key
             doom_cached = load_game_samples_from_cache(cache_dir, "doom", doom_cache_key) if use_cache else None
             if doom_cached is not None:
@@ -655,7 +655,7 @@ class MultiGameDataset:
         import time as _time
 
         games = list(self._game_cache_keys.items())
-        logger.info("[Annotation] Starting: %d game(s) to process (%s)",
+        logger.debug("[Annotation] Starting: %d game(s) to process (%s)",
                     len(games), ", ".join(g for g, _ in games))
 
         total_attached = 0
@@ -694,7 +694,7 @@ class MultiGameDataset:
             else:
                 n_rows = len(existing.get("annotations", []))
                 has_instr = existing.get("has_instructions", False)
-                logger.info("[Annotation][%s] ann.json cache hit: %d rows, has_instructions=%s",
+                logger.debug("[Annotation][%s] ann.json cache hit: %d rows, has_instructions=%s",
                             game, n_rows, has_instr)
                 # ann_keys가 .json에 없으면 기록 (기존 캐시 호환)
                 meta_path = self._cache_dir / game / f"{cache_key}.json"
@@ -711,7 +711,7 @@ class MultiGameDataset:
             added = len(self._samples) - before
             total_attached += added
 
-        logger.info("[Annotation] Done: total samples %d (replicas added %d)",
+        logger.debug("[Annotation] Done: total samples %d (replicas added %d)",
                     len(self._samples), total_attached)
 
     def _try_submit_instruction_batch(
@@ -895,7 +895,7 @@ class MultiGameDataset:
             self._samples.extend(new_samples)
         elapsed = _time.perf_counter() - t0
 
-        logger.info(
+        logger.debug(
             "[Annotation][%s] Attached: %d samples x %d enums = %d rows "
             "(original %d + replicas %d) | instruction=%d/%d  [%.3fs]",
             game, n_samples, n_rewards, attached,

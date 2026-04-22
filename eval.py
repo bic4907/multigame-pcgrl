@@ -765,14 +765,10 @@ def main(config: EvalConfig):
             name=get_wandb_name_eval(config),
             id=wandb_id,
             save_code=True,
-            config_exclude_keys=[
-                "wandb_key",
-                "_vid_dir",
-                "_img_dir",
-                "_numpy_dir",
-                "overwrite",
-                "initialize",
-            ],
+            config=wandb.helper.parse_config(
+                dict(config),
+                exclude=("wandb_key", "_vid_dir", "_img_dir", "_numpy_dir", "overwrite", "initialize"),
+            ),
         )
         wandb.config.update(dict(config), allow_val_change=True)
 

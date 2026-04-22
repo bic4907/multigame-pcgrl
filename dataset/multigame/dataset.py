@@ -896,8 +896,8 @@ class MultiGameDataset:
         elapsed = _time.perf_counter() - t0
 
         logger.info(
-            "[Annotation][%s] 부착 완료: %d samples × %d enums = %d rows "
-            "(원본 %d + 복제 %d) | instruction=%d/%d  [%.3fs]",
+            "[Annotation][%s] Attached: %d samples x %d enums = %d rows "
+            "(original %d + replicas %d) | instruction=%d/%d  [%.3fs]",
             game, n_samples, n_rewards, attached,
             n_samples, len(new_samples),
             instr_count, attached, elapsed,

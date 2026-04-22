@@ -669,10 +669,10 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
             name=get_wandb_name(config),
             id=wandb_id,
             save_code=True,
-            config_exclude_keys=[
-                "_vid_dir", "_img_dir",
-                "_numpy_dir", "_traj_dir", "overwrite", "initialize",
-            ],
+            config=wandb.helper.parse_config(
+                dict(config),
+                exclude=("_vid_dir", "_img_dir", "_numpy_dir", "_traj_dir", "overwrite", "initialize"),
+            ),
         )
         wandb.config.update(dict(config), allow_val_change=True)
 

@@ -655,7 +655,7 @@ class MultiGameDataset:
         import time as _time
 
         games = list(self._game_cache_keys.items())
-        logger.info("[Annotation] 시작: %d개 게임 처리 예정 (%s)",
+        logger.info("[Annotation] Starting: %d game(s) to process (%s)",
                     len(games), ", ".join(g for g, _ in games))
 
         total_attached = 0
@@ -665,9 +665,9 @@ class MultiGameDataset:
                 # ann.json 없음: 자동 계산
                 game_samples = [s for s in self._samples if s.game == game]
                 if not game_samples:
-                    logger.info("[Annotation][%s] 샘플 없음 — 건너뜀", game)
+                    logger.info("[Annotation][%s] No samples — skipping", game)
                     continue
-                logger.info("[Annotation][%s] ann.json 없음 — measure 계산 시작 (%d samples)",
+                logger.info("[Annotation][%s] ann.json not found — computing measures (%d samples)",
                             game, len(game_samples))
                 t0 = _time.perf_counter()
                 try:
@@ -675,10 +675,10 @@ class MultiGameDataset:
                     from dataset.reward_annotations.annotate import compute_game_annotations
                     rows = compute_game_annotations(game_samples, game)
                 except Exception as exc:
-                    logger.warning("[Annotation][%s] 계산 실패: %s — 건너뜀", game, exc)
+                    logger.warning("[Annotation][%s] Computation failed: %s — skipping", game, exc)
                     continue
                 elapsed = _time.perf_counter() - t0
-                logger.info("[Annotation][%s] 계산 완료: %d rows  [%.1fs]",
+                logger.info("[Annotation][%s] Computation done: %d rows  [%.1fs]",
                             game, len(rows), elapsed)
                 save_game_annotations_to_cache(
                     self._cache_dir, game, cache_key, rows,
@@ -687,14 +687,14 @@ class MultiGameDataset:
                 )
                 existing = load_game_annotations_from_cache(self._cache_dir, game, cache_key)
                 if existing is None:
-                    logger.warning("[Annotation][%s] 저장 후 로드 실패 — 건너뜀", game)
+                    logger.warning("[Annotation][%s] Failed to reload after save — skipping", game)
                     continue
                 # 신규 생성 시 .json에 ann_keys 기록
                 update_json_with_ann_keys(self._cache_dir, game, cache_key, existing)
             else:
                 n_rows = len(existing.get("annotations", []))
                 has_instr = existing.get("has_instructions", False)
-                logger.info("[Annotation][%s] ann.json 캐시 히트: %d rows, has_instructions=%s",
+                logger.info("[Annotation][%s] ann.json cache hit: %d rows, has_instructions=%s",
                             game, n_rows, has_instr)
                 # ann_keys가 .json에 없으면 기록 (기존 캐시 호환)
                 meta_path = self._cache_dir / game / f"{cache_key}.json"
@@ -711,7 +711,7 @@ class MultiGameDataset:
             added = len(self._samples) - before
             total_attached += added
 
-        logger.info("[Annotation] 완료: 전체 샘플 수 %d (복제 추가 %d)",
+        logger.info("[Annotation] Done: total samples %d (replicas added %d)",
                     len(self._samples), total_attached)
 
     def _try_submit_instruction_batch(
@@ -738,16 +738,16 @@ class MultiGameDataset:
                 status = status_info["status"]
                 counts = status_info["request_counts"]
                 logger.info(
-                    "[Instruction][%s] 배치 상태 확인: batch_id=%s  status=%s  "
+                    "[Instruction][%s] Checking batch status: batch_id=%s  status=%s  "
                     "(%d/%d completed)",
                     game, existing_batch_id, status,
                     counts["completed"], counts["total"],
                 )
                 if status == "completed":
-                    logger.info("[Instruction][%s] 배치 완료 — 결과 수령 중...", game)
+                    logger.info("[Instruction][%s] Batch completed — retrieving results...", game)
                     results = retrieve_batch_results(existing_batch_id)
                     n = update_caches(results, self._cache_dir, [game])
-                    logger.info("[Instruction][%s] instruction %d개 ann.json 반영 완료", game, n)
+                    logger.info("[Instruction][%s] %d instructions applied to ann.json", game, n)
                     # ann.json 재로드하여 existing 갱신 (부착 시 최신 데이터 사용)
                     updated = load_game_annotations_from_cache(self._cache_dir, game, cache_key)
                     if updated is not None:
@@ -755,26 +755,26 @@ class MultiGameDataset:
                         ann_data.update(updated)
                 elif status in ("failed", "expired", "cancelled"):
                     logger.warning(
-                        "[Instruction][%s] 배치 %s — 재제출 필요 (batch_id=%s)",
+                        "[Instruction][%s] Batch %s — re-submission required (batch_id=%s)",
                         game, status, existing_batch_id,
                     )
                 else:
-                    logger.info("[Instruction][%s] 배치 처리 중 (status=%s) — 다음 실행 시 재확인",
+                    logger.info("[Instruction][%s] Batch in progress (status=%s) — will retry next run",
                                 game, status)
             except Exception as exc:
-                logger.warning("[Instruction][%s] 배치 상태 확인 실패: %s", game, exc)
+                logger.warning("[Instruction][%s] Failed to check batch status: %s", game, exc)
             return
 
         # API 키 없으면 건너뜀
         if not os.environ.get("OPENAI_API_KEY"):
             logger.warning(
-                "[Instruction][%s] OPENAI_API_KEY 없음 — instruction 생성 건너뜀 "
-                "(설정 후 generate_instructions.py --submit --games %s 실행)",
+                "[Instruction][%s] OPENAI_API_KEY not set — skipping instruction generation "
+                "(run generate_instructions.py --submit --games %s after setting the key)",
                 game, game,
             )
             return
 
-        logger.info("[Instruction][%s] instruction 없음 — 배치 제출 시작", game)
+        logger.info("[Instruction][%s] No instructions found — submitting batch", game)
         try:
             from dataset.reward_annotations.generate_instructions import (
                 fill_none_instructions,
@@ -802,19 +802,19 @@ class MultiGameDataset:
                 [game], enums, cache_dir, cache_by_game, system_prompt
             )
             if jsonl_path is None:
-                logger.info("[Instruction][%s] 제출할 요청 없음 (이미 모두 채워짐)", game)
+                logger.info("[Instruction][%s] No pending requests (all already filled)", game)
                 return
 
             n_requests = sum(1 for _ in jsonl_path.read_text(encoding="utf-8").splitlines() if _.strip())
             batch_id = submit_batch(jsonl_path, [game], enums, n_requests)
-            logger.info("[Instruction][%s] 배치 제출 완료: batch_id=%s (%d requests)",
+            logger.info("[Instruction][%s] Batch submitted: batch_id=%s (%d requests)",
                         game, batch_id, n_requests)
 
             # ann.json에 batch_id 기록
             update_ann_batch_id(cache_dir, game, cache_key, batch_id)
 
         except Exception as exc:
-            logger.warning("[Instruction][%s] 배치 제출 실패: %s", game, exc)
+            logger.warning("[Instruction][%s] Batch submission failed: %s", game, exc)
 
     def _attach_annotations_from_cache(self, game: str, ann_data: Dict[str, Any]) -> None:
         """ann.json 데이터를 게임 샘플에 reward_enum별로 복제·부착한다.
@@ -827,7 +827,7 @@ class MultiGameDataset:
 
         all_rows: List[Dict[str, Any]] = ann_data.get("annotations", [])
         if not all_rows:
-            logger.warning("[Annotation][%s] ann.json에 annotations 없음 — 건너뜀", game)
+            logger.warning("[Annotation][%s] No annotations in ann.json — skipping", game)
             return
 
         # key → ann row 딕셔너리 (빠른 조회)
@@ -836,14 +836,14 @@ class MultiGameDataset:
         game_samples = [s for s in self._samples if s.game == game]
         n_samples = len(game_samples)
         if n_samples == 0:
-            logger.warning("[Annotation][%s] 로드된 샘플 없음 — 건너뜀", game)
+            logger.warning("[Annotation][%s] No loaded samples — skipping", game)
             return
 
         # fallback: index 산술용 정렬 행
         sorted_rows = sorted(all_rows, key=lambda r: r["key"])
         n_rewards = len(sorted_rows) // n_samples if n_samples else 0
         if n_rewards == 0:
-            logger.warning("[Annotation][%s] rows(%d) < samples(%d) — 건너뜀",
+            logger.warning("[Annotation][%s] rows(%d) < samples(%d) — skipping",
                            game, len(all_rows), n_samples)
             return
 

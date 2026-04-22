@@ -436,11 +436,11 @@ def update_ann_batch_id(cache_dir: Path, game: str, key: str, batch_id: str) -> 
         data["batch_id"] = batch_id
         ann_path.write_text(_stable_json(data), encoding="utf-8")
         _cache_log(
-            f"[MultiGameDataset] ann.json batch_id 기록 → {game}/{ann_path.name}  "
+            f"[MultiGameDataset] ann.json batch_id recorded → {game}/{ann_path.name}  "
             f"(batch_id={batch_id})"
         )
     except Exception as e:
-        _cache_log(f"[MultiGameDataset] ann.json batch_id 기록 실패 ({game}): {e}")
+        _cache_log(f"[MultiGameDataset] Failed to record ann.json batch_id ({game}): {e}")
 
 
 def find_game_cache_key(cache_dir: Path, game: str) -> Optional[str]:

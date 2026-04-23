@@ -174,7 +174,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         # ── 평가 루프 ─────────────────────────────────────────────────────────
         from instruct_rl.eval.hdf5_store import open_eval_store
         with open_eval_store(config.eval_dir, mode="a") as h5_store, \
-             tqdm(total=n_batches, desc="Evaluating Batches") as pbar:
+             tqdm(total=n_batches, desc="Rollout Batches") as pbar:
             for batch_i in range(n_batches):
                 batch_start_time = time.time()
                 start_idx = batch_i * n_envs

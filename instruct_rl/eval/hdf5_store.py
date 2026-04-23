@@ -57,6 +57,30 @@ def write_sample(
         grp.create_dataset(name, data=data, compression="lzf")
 
 
+def write_rendered_image(
+    h5,
+    folder_name: str,
+    seed_i: int,
+    image: np.ndarray,   # (H, W, C) uint8 — 텍스트 없는 순수 렌더링 이미지
+) -> None:
+    """최종 렌더링 이미지(단일 프레임, 오버레이 없음)를 HDF5에 기록한다."""
+    key = f"{folder_name}/seed_{seed_i}"
+    grp = h5.require_group(key)
+    name = "rendered_image"
+    if name in grp:
+        del grp[name]
+    grp.create_dataset(name, data=np.asarray(image, dtype=np.uint8), compression="lzf")
+
+
+def read_rendered_image(
+    h5,
+    folder_name: str,
+    seed_i: int,
+) -> np.ndarray:
+    """저장된 렌더링 이미지 (H, W, C) 를 반환한다."""
+    return h5[f"{folder_name}/seed_{seed_i}/rendered_image"][()]
+
+
 def read_state(
     h5,
     folder_name: str,

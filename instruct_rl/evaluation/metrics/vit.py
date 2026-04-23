@@ -20,6 +20,16 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 
 class ViTEvaluator(BaseEvaluator):
 
+    def __init__(self, backbone=None, gt_data=None, **kwargs):
+        """
+        kwargs가 비어있으면 preload를 건너뛴다 (run_pairwise 전용 모드).
+        gt_data_name 등 preload 인자가 있을 때만 preload를 호출한다.
+        """
+        self.model = backbone
+        self.gt_data = gt_data
+        if kwargs:
+            self.preload(**kwargs)
+
     def preload(self,
                 batch_size: int = 32,
                 model_name: str = "google/vit-base-patch16-224",
@@ -139,6 +149,42 @@ class ViTEvaluator(BaseEvaluator):
             scores = scores.at[indices].set(mean_sim)
 
         return scores # (B,)
+
+    def run_pairwise(
+        self,
+        pred_images: np.ndarray,   # (N, H, W, 3) uint8 — 생성된 레벨 렌더링
+        gt_images: np.ndarray,     # (N, H, W, 3) uint8 — GT 레벨 렌더링 (1:1 대응)
+    ) -> np.ndarray:
+        """
+        생성 이미지와 GT 이미지를 1:1로 비교하여 코사인 유사도를 반환한다.
+
+        preload() 없이 사용 가능. model_name은 기본값 사용.
+
+        Parameters
+        ----------
+        pred_images : (N, H, W, 3) uint8
+        gt_images   : (N, H, W, 3) uint8  (pred_images[i] ↔ gt_images[i])
+
+        Returns
+        -------
+        scores : (N,) float — 높을수록 GT와 유사
+        """
+        assert pred_images.shape[0] == gt_images.shape[0], (
+            f"pred/gt 이미지 수가 다릅니다: {pred_images.shape[0]} vs {gt_images.shape[0]}"
+        )
+        # feature_extractor가 없으면 (kwargs 없이 생성된 경우) 모델 초기화
+        if not hasattr(self, "feature_extractor"):
+            _model_name = "google/vit-base-patch16-224"
+            self.batch_size = 32
+            self.feature_extractor = ViTImageProcessor.from_pretrained(_model_name)
+            self.model = FlaxViTModel.from_pretrained(_model_name)
+
+        pred_feats = self.get_embeddings(pred_images, norm=True)  # (N, D)
+        gt_feats   = self.get_embeddings(gt_images,   norm=True)  # (N, D)
+
+        # 각 쌍의 코사인 유사도 (element-wise dot product, 이미 L2 정규화됨)
+        scores = jnp.sum(pred_feats * gt_feats, axis=1)  # (N,)
+        return np.array(scores)
 
 
 if __name__ == "__main__":

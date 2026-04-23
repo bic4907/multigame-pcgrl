@@ -38,7 +38,7 @@ from purejaxrl.structures import Transition, RunnerState
 logger = logging.getLogger(__name__)
 
 
-def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval_inst=None, eval_inst_meta=None, gt_levels=None):
+def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval_inst=None, eval_inst_meta=None, gt_levels=None, gt_images=None):
     """평가 함수를 생성하여 반환.
 
     Args:
@@ -360,6 +360,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         df_output = run_post_eval(
             config, instruct_df, df_output, eval_rendered, n_rows, n_eps,
             gt_levels=gt_levels,
+            gt_images=gt_images,
         )
 
         # ── wandb / CSV 출력 ──────────────────────────────────────────────────
@@ -398,7 +399,7 @@ def _save_batch_results(
     instruct_df=None,
     h5=None,
 ):
-    from instruct_rl.eval.hdf5_store import write_sample
+    from instruct_rl.eval.hdf5_store import write_sample, write_rendered_image
 
     for idx, (row_i, reward_i, repeat_i, feature, state) in enumerate(zip(
         idxes,
@@ -431,6 +432,11 @@ def _save_batch_results(
         # ── HDF5 저장 ─────────────────────────────────────────────────────
         if h5 is not None:
             write_sample(h5, folder_name, int(repeat_i), frames_rgb, np.array(state))
+            # raw rendered image (텍스트 오버레이 없는 순수 렌더링) 별도 저장
+            raw_img = raw_rendered[idx]
+            if raw_img.shape[-1] == 4:   # RGBA → RGB
+                raw_img = cv2.cvtColor(raw_img, cv2.COLOR_RGBA2RGB)
+            write_rendered_image(h5, folder_name, int(repeat_i), raw_img)
 
         # ── wandb 로깅 (메모리에서 직접) ──────────────────────────────────
         if wandb.run:

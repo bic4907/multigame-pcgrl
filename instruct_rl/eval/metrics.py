@@ -24,6 +24,7 @@ def run_post_eval(
     n_rows: int,
     n_eps: int,
     gt_levels=None,
+    gt_images=None,
 ) -> pd.DataFrame:
     """Run all enabled post-eval metrics and attach results to df_output.
 
@@ -34,8 +35,8 @@ def run_post_eval(
         eval_rendered : List of raw_rendered arrays per batch (for vit_score).
         n_rows        : Total number of evaluation rows.
         n_eps         : Number of episodes (seeds).
-        gt_levels     : (M, H, W) int — eval_utils에서 samples 기반으로 직접 전달.
-                        TPKL 계산에 사용. None 이면 AssertionError.
+        gt_levels     : (M, H, W) int — TPKL 계산용. None 이면 AssertionError.
+        gt_images     : (M, H*ts, W*ts, 3) uint8 — ViT 계산용 dataset 렌더링 이미지.
 
     Returns:
         df_output with metric columns appended.
@@ -51,7 +52,11 @@ def run_post_eval(
         df_output = DiversityWrapper(config).run(df_output, **kwargs)
 
     if config.vit_score:
-        df_output = ViTScoreWrapper(config).run(df_output, **kwargs)
+        assert gt_images is not None, (
+            "[run_post_eval] gt_images must be provided for ViT score. "
+            "Pass gt_images from eval_utils via make_eval."
+        )
+        df_output = ViTScoreWrapper(config).run(df_output, gt_images=gt_images, **kwargs)
 
     if config.tpkldiv:
         assert gt_levels is not None, (

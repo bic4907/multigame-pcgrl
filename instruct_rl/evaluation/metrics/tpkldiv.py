@@ -49,7 +49,7 @@ class TPKLEvaluator(BaseEvaluator):
         gt_levels    = np.asarray(gt_levels,   dtype=np.int32)
 
         assert pred_levels.ndim == 3 and gt_levels.ndim == 3, (
-            f"[TPKLEvaluator] inputs must be 3-D (N,H,W) arrays. "
+            f"inputs must be 3-D (N,H,W) arrays. "
             f"pred={pred_levels.shape}  gt={gt_levels.shape}"
         )
 

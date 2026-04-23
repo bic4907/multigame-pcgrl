@@ -35,6 +35,7 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
     eval_inst = None
     eval_inst_meta = None
     gt_levels = None
+    gt_images = None
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:
         from instruct_rl.utils.dataset_loader import load_dataset_instruct
         import numpy as np
@@ -56,6 +57,16 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
         gt_levels = np.repeat(_gt_raw, _n_eps, axis=0)                   # (M*n_eps, H, W)
         logger.info(f"GT levels: {_gt_raw.shape} × n_eps={_n_eps} → {gt_levels.shape}")
 
+        # GT 렌더링 이미지: dataset의 render_unified_rgb 사용 (통일된 팔레트)
+        from dataset.multigame.tile_utils import render_unified_rgb
+        _tile_size = getattr(config, 'vit_tile_size', 16)
+        logger.info(f"Rendering GT images (tile_size={_tile_size}) ...")
+        _gt_images_raw = np.stack([
+            render_unified_rgb(s.array, tile_size=_tile_size) for s in samples
+        ])  # (M, H*ts, W*ts, 3)
+        gt_images = np.repeat(_gt_images_raw, _n_eps, axis=0)  # (M*n_eps, H*ts, W*ts, 3)
+        logger.info(f"GT images: {_gt_images_raw.shape} × n_eps={_n_eps} → {gt_images.shape}")
+
         # ── dry-run: max_samples 로 잘라내기 ─────────────────────────────
         max_samples = getattr(config, 'max_samples', None)
         if max_samples is not None and eval_inst.reward_i.shape[0] > max_samples:
@@ -72,6 +83,7 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
             )
             eval_inst_meta = eval_inst_meta.iloc[:max_samples].reset_index(drop=True)
             gt_levels = gt_levels[:max_samples * _n_eps]
+            gt_images = gt_images[:max_samples * _n_eps]
 
     eval_fn = make_eval(
         config, restored_ckpt, encoder_param,
@@ -79,6 +91,7 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
         eval_inst=eval_inst,
         eval_inst_meta=eval_inst_meta,
         gt_levels=gt_levels,
+        gt_images=gt_images,
     )
     out = eval_fn(rng)
     jax.block_until_ready(out)

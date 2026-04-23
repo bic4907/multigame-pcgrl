@@ -6,3 +6,4 @@ hydra:
   sweeper:
     params: {}
 
+n_envs: 600

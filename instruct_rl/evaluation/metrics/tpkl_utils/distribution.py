@@ -36,6 +36,7 @@ def build_gt_distribution(gt_levels: np.ndarray,
         wins = extract_windows(gt_levels, k)
         M, P, k2 = wins.shape
         patches = wins.reshape(M * P, k2)
-        dists.append(patches_to_dist(patches, epsilon, n_tiles))
+        # n_tiles를 함께 저장해 scoring 쪽에서 해시 공간을 일치시킴
+        dists.append({"n_tiles": n_tiles, "dist": patches_to_dist(patches, epsilon, n_tiles)})
     return dists
 

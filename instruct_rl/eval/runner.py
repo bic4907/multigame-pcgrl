@@ -38,7 +38,7 @@ from purejaxrl.structures import Transition, RunnerState
 logger = logging.getLogger(__name__)
 
 
-def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval_inst=None, eval_inst_meta=None):
+def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval_inst=None, eval_inst_meta=None, gt_levels=None):
     """평가 함수를 생성하여 반환.
 
     Args:
@@ -134,7 +134,6 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             for c in cond_cols:
                 instruct_df[c] = instruct_df[c].replace(-1.0, float('nan'))
             instruct_df.to_csv(join(config.eval_dir, 'input.csv'), index=False)
-            logger.info(f"[Dataset mode] eval instruct: {n_inst} samples")
         else:
             # CSV 모드 (NLP/CLIP 기반 모델)
             from os.path import abspath, dirname
@@ -359,7 +358,8 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
 
         # ── 후처리 메트릭 ─────────────────────────────────────────────────────
         df_output = run_post_eval(
-            config, instruct_df, df_output, eval_rendered, n_rows, n_eps
+            config, instruct_df, df_output, eval_rendered, n_rows, n_eps,
+            gt_levels=gt_levels,
         )
 
         # ── wandb / CSV 출력 ──────────────────────────────────────────────────

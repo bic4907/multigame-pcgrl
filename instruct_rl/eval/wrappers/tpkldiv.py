@@ -11,13 +11,13 @@ TPKLWrapper — Tile-Pattern KL divergence across seeds per instruction.
 from __future__ import annotations
 
 import logging
+import time
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
 from instruct_rl.eval.hdf5_store import open_eval_store, read_state
-from instruct_rl.evaluation.metrics.tpkl_utils import load_gt_levels
 from instruct_rl.evaluation.metrics.tpkldiv import TPKLEvaluator
 
 logger = logging.getLogger(__name__)
@@ -33,13 +33,15 @@ class TPKLWrapper:
         self,
         df_output: pd.DataFrame,
         instruct_df: pd.DataFrame,
+        gt_levels: np.ndarray,
         n_eps: int,
-        **_,                          # eval_rendered, n_rows 등 미사용 kwargs 흡수
+        **_,
     ) -> pd.DataFrame:
         """
         Parameters
         ----------
         instruct_df : 평가 대상 DataFrame (game, reward_enum, feature_name, condition_value)
+        gt_levels   : (M, H, W) int — 호출자(metrics.py)가 이미 필터링해서 전달
         n_eps       : 시드(에피소드) 수
         """
         # ① Predicted levels 로드 (HDF5) → (N*n_eps, H, W)
@@ -58,14 +60,15 @@ class TPKLWrapper:
                 ]
             )
 
-        # ② GT levels 로드 (M, H, W)
-        gt_levels = load_gt_levels()
+        logger.info("[TPKLWrapper] pred_levels=%s  gt_levels=%s", pred_levels.shape, gt_levels.shape)
 
-        # ③ 순수 연산 위임
+        # ② 순수 연산 위임
         evaluator = TPKLEvaluator()
+        t0 = time.perf_counter()
         scores = evaluator.run(pred_levels, gt_levels)
+        elapsed = time.perf_counter() - t0
 
         df_output["tpkldiv"] = scores.reshape(-1)
-        logger.info("[TPKLWrapper] done: mean=%.4f", float(np.mean(scores)))
+        logger.info("[TPKLWrapper] done: mean=%.4f  elapsed=%.2fs", float(np.mean(scores)), elapsed)
         return df_output
 

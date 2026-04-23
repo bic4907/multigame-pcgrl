@@ -4,8 +4,6 @@ tpkldiv.py
 Tile-Pattern KL Divergence Evaluator.
 """
 import logging
-import os
-from os.path import basename
 
 import numpy as np
 
@@ -19,9 +17,7 @@ from instruct_rl.evaluation.metrics.tpkl_utils import (
     group_states_by_task as prepare_pred_groups, # noqa: F401
 )
 
-log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-logger = logging.getLogger(basename(__file__))
-logger.setLevel(getattr(logging, log_level, logging.INFO))
+logger = logging.getLogger(__name__)
 
 
 class TPKLEvaluator(BaseEvaluator):
@@ -52,8 +48,14 @@ class TPKLEvaluator(BaseEvaluator):
         pred_levels  = np.asarray(pred_levels, dtype=np.int32)
         gt_levels    = np.asarray(gt_levels,   dtype=np.int32)
 
-        logger.info("[TPKL] Building GT distribution (M=%d) ...", len(gt_levels))
-        gt_dists = build_gt_distribution(gt_levels, window_sizes, epsilon)
-        logger.info("[TPKL] GT distribution ready.")
+        assert pred_levels.ndim == 3 and gt_levels.ndim == 3, (
+            f"[TPKLEvaluator] inputs must be 3-D (N,H,W) arrays. "
+            f"pred={pred_levels.shape}  gt={gt_levels.shape}"
+        )
 
-        return compute_jsd_scores(pred_levels, gt_dists, window_sizes, epsilon)
+        logger.info("Building GT distribution — M=%d levels, window_sizes=%s", len(gt_levels), window_sizes)
+        gt_dists = build_gt_distribution(gt_levels, window_sizes, epsilon)
+        logger.info("GT distribution ready. Computing JSD scores for N=%d pred levels ...", len(pred_levels))
+        scores = compute_jsd_scores(pred_levels, gt_dists, window_sizes, epsilon)
+        logger.info("Done. scores: min=%.4f  max=%.4f  mean=%.4f", scores.min(), scores.max(), scores.mean())
+        return scores

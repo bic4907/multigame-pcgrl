@@ -33,8 +33,10 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
     # train과 동일하게 MultiGameDataset 기반 eval instruct 로드
     eval_inst = None
     eval_inst_meta = None
+    gt_levels = None
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:
         from instruct_rl.utils.dataset_loader import load_dataset_instruct
+        import numpy as np
         import pandas as pd
         _, eval_inst, samples = load_dataset_instruct(config)  # test split 사용
         logger.info(f"Loaded eval instruct from dataset: {eval_inst.reward_i.shape[0]} samples")
@@ -45,6 +47,13 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
             'instruction': [getattr(s, 'instruction', None) for s in samples],
             'reward_enum': [s.meta.get('reward_enum', None) for s in samples],
         })
+
+        # GT 레벨: samples에서 직접 추출 후 n_eps배 반복
+        # → pred_levels (N*n_eps, H, W) 와 배치 크기를 맞춤
+        _n_eps = getattr(config, 'n_eps', 1)
+        _gt_raw = np.stack([s.array.astype(np.int32) for s in samples])  # (M, H, W)
+        gt_levels = np.repeat(_gt_raw, _n_eps, axis=0)                   # (M*n_eps, H, W)
+        logger.info(f"GT levels: {_gt_raw.shape} × n_eps={_n_eps} → {gt_levels.shape}")
 
         # ── dry-run: max_samples 로 잘라내기 ─────────────────────────────
         max_samples = getattr(config, 'max_samples', None)
@@ -61,12 +70,14 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
                 condition_id=eval_inst.condition_id[:max_samples],
             )
             eval_inst_meta = eval_inst_meta.iloc[:max_samples].reset_index(drop=True)
+            gt_levels = gt_levels[:max_samples * _n_eps]
 
     eval_fn = make_eval(
         config, restored_ckpt, encoder_param,
         inject_obs_fn=inject_obs_fn,
         eval_inst=eval_inst,
         eval_inst_meta=eval_inst_meta,
+        gt_levels=gt_levels,
     )
     out = eval_fn(rng)
     jax.block_until_ready(out)

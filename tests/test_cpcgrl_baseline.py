@@ -156,7 +156,7 @@ class TestCPCGRLDatasetLoading:
         from instruct_rl.utils.dataset_loader import load_dataset_instruct
         import jax.numpy as jnp
 
-        train_inst, _ = load_dataset_instruct(cpcgrl_config)
+        train_inst, _, _ = load_dataset_instruct(cpcgrl_config)
         assert train_inst.condition.dtype == jnp.float32
         assert train_inst.reward_i.dtype == jnp.int32
 

@@ -9,6 +9,7 @@ eval_utils.py
 """
 import os
 import logging
+import time
 from datetime import datetime
 
 import jax
@@ -91,6 +92,7 @@ def main_eval_entry(config, *, inject_obs_fn=None):
         config: Hydra config (EvalConfig 또는 그 하위 클래스).
         inject_obs_fn: obs 주입 콜백. None 이면 config 기반 주입 로직 사용.
     """
+    _eval_start = time.perf_counter()
 
     config = init_config(config)
 
@@ -152,6 +154,14 @@ def main_eval_entry(config, *, inject_obs_fn=None):
         wandb.config.update(dict(config), allow_val_change=True)
 
     main_chunk(config, rng, inject_obs_fn=inject_obs_fn)
+
+    _elapsed = time.perf_counter() - _eval_start
+    _h, _rem = divmod(int(_elapsed), 3600)
+    _m, _s   = divmod(_rem, 60)
+    _time_str = f"{_h:02d}h {_m:02d}m {_s:02d}s  ({_elapsed:.1f}s total)"
+    logger.info("=" * 60)
+    logger.info(f"  ✅  Evaluation finished  —  elapsed: {_time_str}")
+    logger.info("=" * 60)
 
     if wandb.run:
         wandb.finish()

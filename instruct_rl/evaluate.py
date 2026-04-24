@@ -33,6 +33,7 @@ def get_loss_batch(
     reward_i: chex.Array,
     condition: chex.Array,
     env_maps: chex.Array,
+    map_size: int = 16,
 ) -> chex.Array:
     """
     Compute batch rewards by mapping indices to reward functions and executing them in parallel.

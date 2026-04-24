@@ -36,16 +36,6 @@ class DiversityWrapper:
         scores : np.ndarray, shape (N,) — one value per instruction row.
         """
 
-        """
-        # instruct_df : pd.DataFrame
-        +----+---------+---------+-----------------------------------------+---------------+---------------+---------------+---------------+---------------+---------------+
-        |    |   row_i | game    | instruction                             |   reward_enum |   condition_0 |   condition_1 |   condition_2 |   condition_3 |   condition_4 |
-        |----+---------+---------+-----------------------------------------+---------------+---------------+---------------+---------------+---------------+---------------|
-        |  0 |       0 | dungeon | Marginally disconnected walkable areas. |             0 |             1 |           nan |           nan |           nan |           nan |
-        |  1 |       1 | dungeon | The map is heavily fragmented.          |             0 |            37 |           nan |           nan |           nan |           nan |
-        +----+---------+---------+-----------------------------------------+---------------+---------------+---------------+---------------+---------------+---------------+
-        """
-
         output_df = instruct_df.copy()
         output_df['diversity'] = np.nan
 

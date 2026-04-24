@@ -12,6 +12,7 @@ import time
 
 import jax
 import jax.numpy as jnp
+import os
 import numpy as np
 import optax
 import pandas as pd
@@ -22,9 +23,9 @@ from tqdm import tqdm
 
 from envs.pcgrl_env import gen_dummy_queued_state
 from instruct_rl.dataclass import Instruct
-from instruct_rl.eval.metrics import EvaluationResult
-from instruct_rl.eval.result_utils import join_eval_result
 from instruct_rl.eval.wrappers import DiversityWrapper, ViTScoreWrapper, TPKLWrapper
+from instruct_rl.eval.wrappers.progress import ProgressWrapper
+from instruct_rl.eval.agg import iqr_mean
 from instruct_rl.eval.batch_save import save_batch_results
 from instruct_rl.evaluate import get_loss_batch
 from instruct_rl.utils.path_utils import gymnax_pcgrl_make, init_network
@@ -143,6 +144,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
 
         n_batches = math.ceil(n_rows / n_envs)
         losses, values, features = [], [], []
+        losses_s0, features_s0 = [], []
         eval_rendered = []
         loop_start_time = time.time()
 
@@ -261,17 +263,25 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                         condition=batch_instruct.condition,
                         env_maps=states.env_state.env_map[-1, :, :, :],
                     )
-                    return result, rendered, rendered_raw, last_states
+                    result_s0 = get_loss_batch(
+                        reward_i=batch_instruct.reward_i,
+                        condition=batch_instruct.condition,
+                        env_maps=init_state.env_state.env_map,
+                    )
+                    return result, result_s0, rendered, rendered_raw, last_states
 
                 rng_eval = jax.random.PRNGKey(30)
-                result, rendered, raw_rendered, last_states = run_eval_step(
+                result, result_s0, rendered, raw_rendered, last_states = run_eval_step(
                     rng_eval, init_obs, init_state, done
                 )
 
                 result = jax.device_get(result)
+                result_s0 = jax.device_get(result_s0)
                 losses.append(result.loss)
                 values.append(result.value)
                 features.append(result.feature)
+                losses_s0.append(result_s0.loss)
+                features_s0.append(result_s0.feature)
                 eval_rendered.append(jax.device_get(raw_rendered))
                 rendered = jax.device_get(rendered)
 
@@ -299,56 +309,75 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             f"(avg per batch: {total_elapsed/n_batches:.1f}s)"
         )
 
-
-
-        df_results = instruct_df.iloc[eval_batches].copy()
-        df_results['seed'] = repetitions
-        df_results = df_results.reset_index()
+        df_ctrl_sim = instruct_df.iloc[eval_batches].copy()
+        df_ctrl_sim['seed'] = repetitions
+        df_ctrl_sim = df_ctrl_sim.reset_index(drop=True)
 
         ##################################
         # Append the controllability loss#
         ##################################
         losses_arr = np.stack(losses, axis=0).reshape(-1)[:n_rows]
+        losses_s0_arr = np.stack(losses_s0, axis=0).reshape(-1)[:n_rows]
 
         # features: list of (n_envs, feat_dim) → (n_rows, feat_dim)
         features_stacked = np.stack(features, axis=0)          # (n_batches, n_envs, feat_dim)
         actual_feat_dim = features_stacked.shape[-1]
         features_arr = features_stacked.reshape(-1, actual_feat_dim)[:n_rows]  # (n_rows, feat_dim)
 
-        df_results['loss'] = losses_arr
+        features_s0_stacked = np.stack(features_s0, axis=0)
+        features_s0_arr = features_s0_stacked.reshape(-1, actual_feat_dim)[:n_rows]
+
+        df_ctrl_sim['loss'] = losses_arr
+        df_ctrl_sim['loss_s0'] = losses_s0_arr
 
         # condition_* 컬럼 수만큼 feat 컬럼 생성 (e.g. feat_region, feat_plength, ...)
-        cond_cols = [c for c in df_results.columns if c.startswith('condition_')]
+        cond_cols = [c for c in df_ctrl_sim.columns if c.startswith('condition_')]
         n_cond = len(cond_cols)
 
         # reward_enum에 해당하는 feat 컬럼에만 측정값을 채우고 나머지는 NaN
-        reward_enum_arr = df_results['reward_enum'].values  # (n_rows,)
+        reward_enum_arr = df_ctrl_sim['reward_enum'].values  # (n_rows,)
         feat_df = pd.DataFrame(
             np.full((n_rows, n_cond), np.nan),
             columns=[f"feat_{i}" for i in range(n_cond)],
         )
+        feat_s0_df = pd.DataFrame(
+            np.full((n_rows, n_cond), np.nan),
+            columns=[f"feat_{i}_s0" for i in range(n_cond)],
+        )
         for col_i in range(min(n_cond, actual_feat_dim)):
             mask = (reward_enum_arr == col_i)   # reward_enum은 0-based
             feat_df.loc[mask, f"feat_{col_i}"] = features_arr[mask, col_i]
+            feat_s0_df.loc[mask, f"feat_{col_i}_s0"] = features_s0_arr[mask, col_i]
 
-        df_results = pd.concat([df_results.reset_index(drop=True), feat_df], axis=1)
+        df_ctrl_sim = pd.concat([df_ctrl_sim.reset_index(drop=True), feat_df, feat_s0_df], axis=1)
+
+        # progress 측정: condition_* (cont_value), feat_*, feat_*_s0 → progress_*
+        df_ctrl_sim = ProgressWrapper(n_cond=n_cond).run(df_ctrl_sim)
+
+        ##################################
+        # Similarity scores              #
+        ##################################
 
         if config.vit_score:
             vit_scores = ViTScoreWrapper(config).run(
                 instruct_df=instruct_df, n_eps=n_eps, gt_images=gt_images
             )
-            df_results['vit_score'] = vit_scores
+            df_ctrl_sim['vit_score'] = vit_scores
 
         if config.tpkldiv:
             tpkl_scores = TPKLWrapper(config).run(
                 instruct_df=instruct_df, n_eps=n_eps, gt_levels=gt_levels
             )
-            df_results['tpkldiv'] = tpkl_scores
+            df_ctrl_sim['tpkldiv'] = tpkl_scores
 
         # ── wandb / CSV 출력 ──────────────────────────────────────────────────
-        results_path = join(config.eval_dir, "results.csv")
-        df_results.to_csv(results_path, index=False)
-        logger.info("[Eval] Saved results → %s", results_path)
+        ctrl_sim_path = join(config.eval_dir, "ctrl_sim.csv")
+        df_ctrl_sim.to_csv(ctrl_sim_path, index=False)
+        logger.info("[Eval] Saved ctrl_sim → %s", ctrl_sim_path)
+
+        ##################################
+        # Diversity scores               #
+        ##################################
 
         # ── 후처리 메트릭 ─────────────────────────────────────────────────────
         if config.diversity:
@@ -359,11 +388,47 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         else:
             diversity_df = None
 
+        # ── row_i 단위 mean DataFrame 생성 ───────────────────────────────────
+        mean_cols = (['progress'] if 'progress' in df_ctrl_sim.columns else [])
+        if 'vit_score' in df_ctrl_sim.columns:
+            mean_cols.append('vit_score')
+        if 'tpkldiv' in df_ctrl_sim.columns:
+            mean_cols.append('tpkldiv')
+
+        # row_i 기준 IQR-trimmed mean (seed 축 집계)
+        meta_cols = ['row_i', 'game', 'instruction', 'reward_enum']
+        df_results = df_ctrl_sim.groupby('row_i', sort=True)[mean_cols].agg(iqr_mean).reset_index()
+        # 메타데이터 병합 (row_i당 첫 번째 행 사용)
+        meta_df = df_ctrl_sim[meta_cols].drop_duplicates(subset='row_i').reset_index(drop=True)
+        df_results = meta_df.merge(df_results, on='row_i')
+
+        # diversity 있으면 옆에 붙이기
+        if diversity_df is not None:
+            df_results = df_results.merge(
+                diversity_df[['row_i', 'diversity']],
+                on='row_i',
+                how='left',
+            )
+
+        results_path = join(config.eval_dir, "results.csv")
+        df_results.to_csv(results_path, index=False)
+        logger.info("[Eval] Saved results → %s", results_path)
+
         if wandb.run:
-            log_dict = {'results': wandb.Table(dataframe=df_results)}
+            log_dict = {
+                'ctrl_sim': wandb.Table(dataframe=df_ctrl_sim),
+                'results': wandb.Table(dataframe=df_results),
+            }
             if diversity_df is not None:
                 log_dict['diversity'] = wandb.Table(dataframe=diversity_df)
             wandb.log(log_dict)
+
+            h5_path = join(config.eval_dir, "eval.h5")
+            if os.path.exists(h5_path):
+                artifact = wandb.Artifact(name="eval_h5", type="dataset")
+                artifact.add_file(h5_path, name="eval.h5")
+                wandb.log_artifact(artifact)
+                logger.info("[Eval] Uploaded eval.h5 → wandb artifact")
 
         return losses_arr
 

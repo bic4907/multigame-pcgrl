@@ -72,6 +72,7 @@ def make_train(
     *,
     inject_obs_fn: Callable | None = None,
     inject_reward_fn: Callable | None = None,
+    map_size: Optional[int] = None,
 ):
     """PPO 학습 함수를 생성한다.
 

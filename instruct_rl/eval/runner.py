@@ -30,6 +30,7 @@ from instruct_rl.eval.batch_save import save_batch_results
 from instruct_rl.evaluate import get_loss_batch
 from instruct_rl.utils.path_utils import gymnax_pcgrl_make, init_network
 from instruct_rl.eval.hdf5_store import open_eval_store
+from instruct_rl.eval.image_utils import sample_wandb_images
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from purejaxrl.structures import Transition, RunnerState
 
@@ -434,6 +435,15 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             if summary_metric_cols:
                 log_dict.update({row['metric']: row['mean'] for _, row in df_summary.iterrows()})
             wandb.log(log_dict)
+
+            # ── 샘플 이미지 wandb 업로드 (N개, 조건 다양성 확보) ────────────────
+            wandb_images = sample_wandb_images(
+                df_ctrl_sim, eval_rendered, n_rows,
+                n_samples=getattr(config, 'n_sample_images', 10),
+            )
+            if wandb_images:
+                wandb.log({f'images/{i}': img for i, img in enumerate(wandb_images)})
+                logger.info("[Eval] Uploaded %d sample images → wandb", len(wandb_images))
 
             # ── CSV artifact 업로드 ───────────────────────────────────────────
             csv_artifact = wandb.Artifact(name="eval_csv", type="dataset")

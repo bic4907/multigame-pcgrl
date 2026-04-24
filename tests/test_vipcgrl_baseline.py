@@ -117,7 +117,7 @@ class TestVIPCGRLDatasetLoading:
         from instruct_rl.utils.dataset_loader import load_dataset_instruct
         import jax.numpy as jnp
 
-        train_inst, test_inst = load_dataset_instruct(vipcgrl_config)
+        train_inst, test_inst, _ = load_dataset_instruct(vipcgrl_config)
 
         assert train_inst is not None
         assert test_inst is not None

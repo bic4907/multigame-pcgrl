@@ -40,24 +40,67 @@ def load_dataset_instruct(config):
     """
     from dataset.multigame import MultiGameDataset
 
-    logger.info(f"[CPCGRL] Loading MultiGameDataset (game={config.dataset_game}, "
-                f"reward_enum={config.dataset_reward_enum})")
+    # eval_games가 지정된 경우 평가 데이터 로딩에 우선 사용 (체크포인트 경로는 game 기준 유지)
+    _eval_games_str = getattr(config, 'eval_games', None)
+    _load_game = _eval_games_str if _eval_games_str is not None else config.dataset_game
+
+    # eval_dataset_reward_enums 파싱 (로딩 로그·필터링·테이블 표시에서 공통 사용)
+    _eval_re_raw = getattr(config, 'eval_dataset_reward_enums', None)
+    if _eval_re_raw is not None:
+        if isinstance(_eval_re_raw, (str, int)):
+            _eval_re_list = [int(c) for c in str(_eval_re_raw)]
+        else:
+            _eval_re_list = [int(x) for x in _eval_re_raw]
+    else:
+        _eval_re_list = None
+
+    _effective_re = _eval_re_list if _eval_re_list else (
+        [config.dataset_reward_enum] if config.dataset_reward_enum is not None else None
+    )
+
+    logger.info(
+        f"Loading MultiGameDataset (game={_load_game}, reward_enum={_effective_re})"
+        + (f"  [eval_games override: {_eval_games_str}]" if _eval_games_str else "")
+    )
+
+    # 'all'이면 전체 게임 로드, 약어면 역매핑으로 full name 리스트 획득
+    from conf.game_utils import GAME_ABBR, GAME_ABBR_INV, ALL_GAMES, parse_game_str
+    _dg = _load_game
+    if _dg == 'all':
+        _game_names = ALL_GAMES  # ['dungeon', 'pokemon', 'sokoban', 'doom', 'doom2', 'zelda']
+    elif _dg in GAME_ABBR:
+        _game_names = GAME_ABBR[_dg]  # 단일 약어 → full name 리스트
+    elif len(_dg) % 2 == 0 and all(_dg[i:i+2] in GAME_ABBR for i in range(0, len(_dg), 2)):
+        # 복합 약어 (예: "dgpk") → parse_game_str로 파싱
+        includes = parse_game_str(_dg)
+        _game_names = [name for name in ALL_GAMES if includes.get(f"include_{name}", False)]
+    else:
+        _game_names = [_dg]  # 이미 full name
 
     ds = MultiGameDataset(
-        include_dungeon=(config.dataset_game == 'dungeon'),
-        include_pokemon=(config.dataset_game == 'pokemon'),
-        include_sokoban=(config.dataset_game == 'sokoban'),
-        include_doom=(config.dataset_game == 'doom'),
-        include_doom2=(config.dataset_game == 'doom'),
-        include_zelda=(config.dataset_game == 'zelda'),
+        include_dungeon=('dungeon' in _game_names),
+        include_pokemon=('pokemon' in _game_names),
+        include_sokoban=('sokoban' in _game_names),
+        include_doom=('doom' in _game_names),
+        include_doom2=('doom2' in _game_names),
+        include_zelda=('zelda' in _game_names),
         use_tile_mapping=False,
     )
 
-    # 게임별 필터링
-    samples = ds.by_game(config.dataset_game)
+    # 게임별 필터링 ('all'이면 전체 사용)
+    if _dg == 'all':
+        samples = list(ds)
+    else:
+        samples = ds.by_games(_game_names)
 
-    # reward_enum 필터링
-    if config.dataset_reward_enum is not None:
+    # ── 게임별 처리 통계 표 출력 (분할/샘플링 후 최종 정보 포함) ──────────────
+
+    # reward_enum 필터링 — 위에서 파싱한 _eval_re_list / _effective_re 사용
+    if _eval_re_list:
+        _re_set = set(_eval_re_list)
+        samples = [s for s in samples if s.meta.get("reward_enum") in _re_set]
+        logger.info(f"eval_dataset_reward_enums={_eval_re_list}: {len(samples)} samples")
+    elif config.dataset_reward_enum is not None:
         samples = [s for s in samples if s.meta.get("reward_enum") == config.dataset_reward_enum]
 
     # reward annotation이 있는 샘플만
@@ -69,45 +112,80 @@ def load_dataset_instruct(config):
         filters = _parse_condition_filters(cond_filter)
         before = len(samples)
         samples = _apply_condition_filters(samples, filters)
-        logger.info(f"[CPCGRL] Condition filter '{cond_filter}': {before} → {len(samples)} samples")
+        logger.info(f"Condition filter '{cond_filter}': {before} → {len(samples)} samples")
 
     assert len(samples) > 0, (
-        f"No samples found for game={config.dataset_game}, "
+        f"No samples found for game={_load_game}, "
         f"reward_enum={config.dataset_reward_enum}. "
         f"Check that reward annotations exist."
     )
 
-    # ── 데이터셋 상세 로그 ──────────────────────────────────────────────
-    _log_dataset_summary(config, samples)
+    # ── eval 모드: (game, re) 그룹별 고정 수 서브샘플링 ──────────────────
+    eval_samples_per_group = getattr(config, 'eval_samples_per_group', None)
+    sampled_counts: dict = {}  # game → sampled count (테이블용)
+    if eval_samples_per_group is not None:
+        # eval_seed 가 있으면 우선 사용 (없으면 config.seed fallback)
+        _subsample_seed = getattr(config, 'eval_seed', None)
+        if _subsample_seed is None:
+            _subsample_seed = config.seed
+        samples, sampled_counts = _subsample_per_group(
+            samples, eval_samples_per_group, seed=_subsample_seed
+        )
+        logger.info(
+            f"[eval_samples_per_group={eval_samples_per_group}, seed={_subsample_seed}]"
+            f" subsampled: {len(samples)} samples"
+        )
 
-    # Train/Test 분할
-    n_total = len(samples)
-    rng_split = jax.random.PRNGKey(config.seed)
-    perm = jax.random.permutation(rng_split, n_total)
-    n_train = int(n_total * config.dataset_train_ratio)
+    all_inst = _build_instruct(samples, config)
 
-    train_indices = perm[:n_train].tolist()
-    test_indices = perm[n_train:].tolist()
+    _log_dataset_table(ds, samples, config, sampled_counts=sampled_counts,
+                       re_filter_list=_effective_re)
 
-    if len(train_indices) == 0:
-        train_indices = list(range(n_total))
-    if len(test_indices) == 0:
-        test_indices = list(range(n_total))
-
-    train_samples = [samples[i] for i in train_indices]
-    test_samples = [samples[i] for i in test_indices]
-
-    train_inst = _build_instruct(train_samples, config)
-    test_inst = _build_instruct(test_samples, config)
-
-    # ── Train/Test 분할 로그 ─────────────────────────────────────────────
-    _log_split_summary(train_samples, test_samples, train_inst)
-
-    return train_inst, test_inst
+    return all_inst, all_inst, samples
 
 
 # ── 내부 헬퍼 ──────────────────────────────────────────────────────────────────
 
+
+def _subsample_per_group(samples, n_per_group: int, seed: int = 0):
+    """(game, re) 그룹별로 최대 n_per_group 개를 서브샘플링한다.
+
+    가용 샘플이 n_per_group 보다 적은 그룹은 전부 사용.
+
+    Returns
+    -------
+    subsampled : list
+    sampled_counts : dict  game → sampled count  (re가 1개인 경우 game 기준)
+    """
+    import random as _random
+    from collections import defaultdict
+
+    # (game, re) 그룹핑
+    by_group: dict = defaultdict(list)
+    for s in samples:
+        re = s.meta.get("reward_enum", None)
+        by_group[(s.game, re)].append(s)
+
+    # 그룹 내 순서 고정 (결정론적 보장)
+    for key in by_group:
+        by_group[key].sort(key=lambda s: str(getattr(s, 'source_id', s)))
+
+    result = []
+    sampled_counts: dict = {}  # game → count (re 단일 가정, 복수면 합산)
+
+    for (game, re) in sorted(by_group.keys()):
+        # 그룹별로 독립 시드 사용 → eval_games가 달라도 같은 게임은 같은 샘플이 뽑힘
+        group_seed = seed ^ hash((game, re)) & 0xFFFFFFFF
+        group_rng = _random.Random(group_seed)
+        pool = by_group[(game, re)][:]
+        group_rng.shuffle(pool)
+        chosen = pool[:n_per_group]
+        result.extend(chosen)
+        sampled_counts[game] = sampled_counts.get(game, 0) + len(chosen)
+
+    # 최종 결과 셔플도 재현 가능하게 고정 시드 사용
+    _random.Random(seed).shuffle(result)
+    return result, sampled_counts
 
 def _build_instruct(sample_list, config):
     """샘플 리스트에서 Instruct 객체를 빌드한다."""
@@ -354,29 +432,155 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
     return jnp.array(cls_embeddings, dtype=jnp.float32)
 
 
-def _log_dataset_summary(config, samples):
-    """데이터셋 요약을 로거로 출력한다."""
-    logger.info("=" * 70)
-    logger.info("[CPCGRL] Dataset Summary")
-    logger.info(f"  Game           : {config.dataset_game}")
-    if config.dataset_reward_enum is not None:
-        logger.info(f"  Reward Enum    : {config.dataset_reward_enum}"
-                    f" ({REWARD_ENUM_NAMES.get(config.dataset_reward_enum, '?')})")
+def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None,
+                       re_filter_list=None):
+    """(game, re) 조합별 처리 통계를 표로 출력한다 (줄마다 별도 logger.info)."""
+    import numpy as _np
+    from collections import defaultdict
+
+    has_sampled = bool(sampled_counts)
+    col_sampled = "Sampled"
+
+    # (game, re) → {n, instr, cond_vals}
+    cell: dict = defaultdict(lambda: {"n": 0, "instr": 0, "cond_vals": []})
+
+    for s in ds:
+        re = s.meta.get("reward_enum")
+        if re is None or "conditions" not in s.meta:
+            continue
+        key = (s.game, re)
+        cell[key]["n"] += 1
+        if s.instruction:
+            cell[key]["instr"] += 1
+        conds = s.meta.get("conditions", {})
+        val = conds.get(re, conds.get(str(re), None))
+        if val is not None:
+            cell[key]["cond_vals"].append(float(val))
+
+    # 캐시 해시 (앞 12자)
+    cache_keys: dict = getattr(ds, "_game_cache_keys", {})
+
+    games   = sorted({k[0] for k in cell})
+    re_vals = sorted({k[1] for k in cell})
+    # re_filter_list 가 있으면 그 목록 기준, 없으면 단일 dataset_reward_enum 기준
+    if re_filter_list:
+        _re_filter_set = set(re_filter_list)
+        re_filter = None  # highlight 판단에 set 사용
     else:
-        logger.info(f"  Reward Enum    : None (all)")
-    logger.info(f"  Total Samples  : {len(samples)}")
+        _re_filter_set = None
+        re_filter = config.dataset_reward_enum
 
-    # reward_enum별 분포
+    col_game  = "Game"
+    col_re    = "re(name)"
+    col_hash  = "Hash"
+    col_n     = "Samples"
+    col_instr = "w/ Instr"
+    col_cmin  = "cond_min"
+    col_cmax  = "cond_max"
+
+    rows_data = []
+    for g in games:
+        for re in re_vals:
+            if (g, re) not in cell:
+                continue
+            c = cell[(g, re)]
+            re_label = f"{re}({REWARD_ENUM_NAMES.get(re, '?')})"
+            if _re_filter_set is not None:
+                highlight = re in _re_filter_set
+            else:
+                highlight = (re_filter is None) or (re == re_filter)
+            arr = _np.array(c["cond_vals"]) if c["cond_vals"] else None
+            rows_data.append({
+                "game":     g,
+                "re":       re_label,
+                "hash":     cache_keys.get(g, "")[:12],
+                "n":        c["n"],
+                "instr":    c["instr"],
+                "cmin":     f"{arr.min():.1f}" if arr is not None else "-",
+                "cmax":     f"{arr.max():.1f}" if arr is not None else "-",
+                "selected": highlight,
+            })
+
+    selected = [r for r in rows_data if r["selected"]]
+    if not selected:
+        logger.info("No samples found for re=%s", re_filter)
+        return
+
+    w0 = max(len(col_game),  max(len(r["game"]) for r in selected))
+    w1 = max(len(col_re),    max(len(r["re"])   for r in selected))
+    w2 = max(len(col_hash),  max(len(r["hash"]) for r in selected))
+    w3 = max(len(col_n),     max(len(str(r["n"]))     for r in selected))
+    w4 = max(len(col_instr), max(len(str(r["instr"])) for r in selected))
+    w5 = max(len(col_cmin),  max(len(r["cmin"]) for r in selected))
+    w6 = max(len(col_cmax),  max(len(r["cmax"]) for r in selected))
+    if has_sampled:
+        w7 = max(len(col_sampled), max(len(str(sampled_counts.get(r["game"], "-"))) for r in selected))
+
+    if has_sampled:
+        sep = (f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}"
+               f"+{'-'*(w3+2)}+{'-'*(w4+2)}+{'-'*(w7+2)}+{'-'*(w5+2)}+{'-'*(w6+2)}+")
+        header = (f"| {col_game:<{w0}} | {col_re:<{w1}} | {col_hash:<{w2}} "
+                  f"| {col_n:>{w3}} | {col_instr:>{w4}} "
+                  f"| {col_sampled:>{w7}} | {col_cmin:>{w5}} | {col_cmax:>{w6}} |")
+    else:
+        sep = (f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}"
+               f"+{'-'*(w3+2)}+{'-'*(w4+2)}+{'-'*(w5+2)}+{'-'*(w6+2)}+")
+        header = (f"| {col_game:<{w0}} | {col_re:<{w1}} | {col_hash:<{w2}} "
+                  f"| {col_n:>{w3}} | {col_instr:>{w4}} "
+                  f"| {col_cmin:>{w5}} | {col_cmax:>{w6}} |")
+
+    tot_n     = sum(r["n"]     for r in selected)
+    tot_instr = sum(r["instr"] for r in selected)
+    tot_sampled = sum(sampled_counts.values()) if has_sampled else None
+    if _re_filter_set is not None:
+        re_label_str = ",".join(str(r) for r in sorted(_re_filter_set))
+        re_name_str  = ",".join(REWARD_ENUM_NAMES.get(r, "?") for r in sorted(_re_filter_set))
+    elif re_filter is None:
+        re_label_str, re_name_str = "all", "all"
+    else:
+        re_label_str = str(re_filter)
+        re_name_str  = REWARD_ENUM_NAMES.get(re_filter, "?")
+    if has_sampled:
+        total_row = (f"| {'TOTAL (re='+re_label_str+')':<{w0}} | {'':<{w1}} | {'':<{w2}} "
+                     f"| {tot_n:>{w3}} | {tot_instr:>{w4}} | {tot_sampled:>{w7}} | {'':{w5}} | {'':{w6}} |")
+    else:
+        total_row = (f"| {'TOTAL (re='+re_label_str+')':<{w0}} | {'':<{w1}} | {'':<{w2}} "
+                     f"| {tot_n:>{w3}} | {tot_instr:>{w4}} | {'':{w5}} | {'':{w6}} |")
+
+    logger.info("Dataset Summary  "
+                f"(game={config.dataset_game}, re={re_label_str}/{re_name_str}, "
+                f"train_ratio={config.dataset_train_ratio})")
+    logger.info(sep)
+    logger.info(header)
+    logger.info(sep)
+    prev_game = None
+    for r in rows_data:
+        if not r["selected"]:
+            continue
+        if prev_game and prev_game != r["game"]:
+            logger.info(sep)
+        if has_sampled:
+            sc = sampled_counts.get(r["game"], "-")
+            row = (f"| {r['game']:<{w0}} | {r['re']:<{w1}} | {r['hash']:<{w2}} "
+                   f"| {r['n']:>{w3}} | {r['instr']:>{w4}} "
+                   f"| {sc:>{w7}} | {r['cmin']:>{w5}} | {r['cmax']:>{w6}} |")
+        else:
+            row = (f"| {r['game']:<{w0}} | {r['re']:<{w1}} | {r['hash']:<{w2}} "
+                   f"| {r['n']:>{w3}} | {r['instr']:>{w4}} "
+                   f"| {r['cmin']:>{w5}} | {r['cmax']:>{w6}} |")
+        logger.info(row)
+        prev_game = r["game"]
+    logger.info(sep)
+    logger.info(total_row)
+    logger.info(sep)
+
+
+def _log_dataset_summary(config, samples):
+    """reward_enum 필터 후 최종 샘플 요약 (condition 통계 포함)."""
+    import numpy as _np
+
     re_counter = Counter(s.meta["reward_enum"] for s in samples)
-    for re_val in sorted(re_counter.keys()):
-        feat_names = set(
-            s.meta.get("feature_name", "?")
-            for s in samples if s.meta["reward_enum"] == re_val
-        )
-        logger.info(f"    reward_enum={re_val} ({REWARD_ENUM_NAMES.get(re_val, '?')}): "
-                     f"{re_counter[re_val]} samples, features={feat_names}")
-
-    # condition 값 통계
+    logger.info("Filtered samples: %d  (reward_enum breakdown below)", len(samples))
     for re_val in sorted(re_counter.keys()):
         re_samples = [s for s in samples if s.meta["reward_enum"] == re_val]
         cond_vals = []
@@ -386,24 +590,64 @@ def _log_dataset_summary(config, samples):
             if val is not None:
                 cond_vals.append(float(val))
         if cond_vals:
-            import numpy as _np
             arr = _np.array(cond_vals)
-            logger.info(f"    → condition stats: min={arr.min():.1f}, max={arr.max():.1f}, "
-                        f"mean={arr.mean():.2f}, std={arr.std():.2f}, n_unique={len(set(cond_vals))}")
+            logger.info(
+                "  re=%d (%s): %d samples  cond[min=%.1f, max=%.1f, mean=%.2f, std=%.2f]",
+                re_val, REWARD_ENUM_NAMES.get(re_val, "?"), len(re_samples),
+                arr.min(), arr.max(), arr.mean(), arr.std(),
+            )
+        else:
+            logger.info("  re=%d (%s): %d samples",
+                        re_val, REWARD_ENUM_NAMES.get(re_val, "?"), len(re_samples))
 
-    logger.info(f"  Train Ratio    : {config.dataset_train_ratio}")
-    logger.info("=" * 70)
 
+def _log_split_summary(train_samples, test_samples, train_inst, *, sampled_counts: dict = None):
+    """Train/Test 분할 결과 요약. sampled_counts가 있으면 Sampled 컬럼을 추가한다."""
+    train_game = Counter(s.game for s in train_samples)
+    test_game  = Counter(s.game for s in test_samples)
+    games = sorted(set(train_game) | set(test_game))
 
-def _log_split_summary(train_samples, test_samples, train_inst):
-    """Train/Test 분할 결과를 로거로 출력한다."""
-    train_re = Counter(s.meta["reward_enum"] for s in train_samples)
-    test_re = Counter(s.meta["reward_enum"] for s in test_samples)
-    logger.info("[CPCGRL] Train/Test Split")
-    logger.info(f"  Train : {len(train_samples)} samples  {dict(sorted(train_re.items()))}")
-    logger.info(f"  Test  : {len(test_samples)} samples  {dict(sorted(test_re.items()))}")
-    logger.info(f"  Instruct reward_i shape : {train_inst.reward_i.shape}")
-    logger.info(f"  Instruct condition shape: {train_inst.condition.shape}")
+    has_sampled = bool(sampled_counts)
+
+    col_game    = "Game"
+    col_train   = "Train"
+    col_test    = "Test"
+    col_sampled = "Sampled"
+
+    w0 = max(len(col_game),  max(len(g) for g in games))
+    w1 = max(len(col_train), max(len(str(train_game[g])) for g in games))
+    w2 = max(len(col_test),  max(len(str(test_game[g]))  for g in games))
+    if has_sampled:
+        w3 = max(len(col_sampled), max(len(str(sampled_counts.get(g, 0))) for g in games))
+
+    if has_sampled:
+        sep    = f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}+{'-'*(w3+2)}+"
+        header = f"| {col_game:<{w0}} | {col_train:>{w1}} | {col_test:>{w2}} | {col_sampled:>{w3}} |"
+        total_sampled = sum(sampled_counts.values())
+        total_row = (f"| {'TOTAL':<{w0}} | {len(train_samples):>{w1}} | "
+                     f"{len(test_samples):>{w2}} | {total_sampled:>{w3}} |")
+    else:
+        sep    = f"+{'-'*(w0+2)}+{'-'*(w1+2)}+{'-'*(w2+2)}+"
+        header = f"| {col_game:<{w0}} | {col_train:>{w1}} | {col_test:>{w2}} |"
+        total_row = (f"| {'TOTAL':<{w0}} | {len(train_samples):>{w1}} | "
+                     f"{len(test_samples):>{w2}} |")
+
+    logger.debug("Train/Test Split  "
+                f"(total=%d, train=%d, test=%d)",
+                len(train_samples) + len(test_samples),
+                len(train_samples), len(test_samples))
+    logger.debug(sep)
+    logger.debug(header)
+    logger.debug(sep)
+    for g in games:
+        if has_sampled:
+            row = f"| {g:<{w0}} | {train_game[g]:>{w1}} | {test_game[g]:>{w2}} | {sampled_counts.get(g, 0):>{w3}} |"
+        else:
+            row = f"| {g:<{w0}} | {train_game[g]:>{w1}} | {test_game[g]:>{w2}} |"
+        logger.debug(row)
+    logger.debug(sep)
+    logger.debug(total_row)
+    logger.debug(sep)
 
 
 # ── Condition 필터 유틸 ────────────────────────────────────────────────────────

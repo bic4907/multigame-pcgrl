@@ -228,7 +228,10 @@ class TrainConfig(Config):
 @dataclass
 class CPCGRLConfig(TrainConfig):
     problem: str = "multigame"
-    dataset_game: Optional[str] = "dungeon"
+
+    game: str = "all"
+
+    dataset_game: Optional[str] = "all"
     dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
     # condition 값 기반 필터: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
@@ -305,7 +308,7 @@ class EvalConfig(TrainConfig):
     eval_human_demo_path: str = './human_dataset'
 
     diversity: bool = True
-    human_likeness: bool = True
+    vit_score: bool = True
     vit_normalize: bool = False
     tpkldiv: bool = True
 
@@ -314,6 +317,45 @@ class EvalConfig(TrainConfig):
     metrics_to_keep: Tuple[str] = ("mean_ep_reward",)
     flush: bool = True
 
+
+
+@dataclass
+class CPCGRLEvalConfig(EvalConfig):
+    """CPCGRL 평가용 Config.
+
+    CPCGRLConfig 와 동일한 모델/환경 설정을 EvalConfig 위에 덮어쓴다.
+    """
+    problem: str = "multigame"
+
+    # ── CPCGRLConfig 와 동일한 game / dataset 기본값 → exp_dir 이름 일치 ──
+    game: str = "all"
+    dataset_game: Optional[str] = "all"
+    dataset_reward_enum: Optional[int] = 0        # 0=region
+    dataset_train_ratio: float = 0.95
+
+    # 평가 대상 게임 (None이면 game과 동일). 체크포인트 로딩은 game 기준, 평가 데이터는 eval_games 기준.
+    # 예: game="all" 로 학습된 모델을 특정 게임만 평가할 때 eval_games="dg" 처럼 지정.
+    eval_games: Optional[str] = None
+
+    vec_cont: bool = True
+    raw_obs: bool = True
+    model: str = "contconv"
+    use_nlp: bool = False
+    use_clip: bool = False
+    vec_input_dim: Optional[int] = 5
+    nlp_input_dim: int = 0
+
+    max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+
+    # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
+    eval_samples_per_group: Optional[int] = 200
+
+    # 평가 시 복수 reward_enum 지정. None이면 dataset_reward_enum 단일값 사용.
+    # 숫자 연결 문자열로 지정 가능: "12" → [1,2],  "012" → [0,1,2]
+    # 리스트/튜플도 허용: [0,1,2]
+    eval_dataset_reward_enums: Optional[str] = None
+
+    wandb_project: Optional[str] = "eval_cpcgrl"
 
 
 @dataclass
@@ -569,6 +611,7 @@ cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
+cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs

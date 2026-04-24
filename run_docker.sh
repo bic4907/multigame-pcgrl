@@ -19,6 +19,8 @@ cuda_version=$(nvidia-smi | grep -oP "CUDA Version: \K[0-9]+")
 # 도커 이미지 선택
 if [ "$cuda_version" -eq 12 ]; then
     docker_image="bic4907/multigame"
+elif [ "$cuda_version" -eq 13 ]; then
+    docker_image="bic4907/multigame"
 elif [ "$cuda_version" -eq 11 ]; then
     docker_image="bic4907/multigame"
 else

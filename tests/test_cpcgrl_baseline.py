@@ -46,7 +46,6 @@ def _make_cpcgrl_config(**overrides):
         overwrite=True,
         ckpt_freq=1,
         render_freq=-1,
-        dataset_game="dungeon",
         dataset_reward_enum=0,
         exp_name="test_cpcgrl",
     )
@@ -77,7 +76,6 @@ class TestCPCGRLConfig:
 
         c = CPCGRLConfig()
         assert c.problem == "multigame"
-        assert c.dataset_game == "dungeon"
         assert c.dataset_reward_enum == 0
         assert c.vec_cont is True
         assert c.raw_obs is True
@@ -96,8 +94,7 @@ class TestCPCGRLConfig:
         c = CPCGRLConfig(seed=99, exp_name="ci")
         c = init_config(c)
         assert c.exp_dir is not None
-        assert "contconv" in c.exp_dir
-        assert "game-dungeon" in c.exp_dir
+        assert "game-all" in c.exp_dir
         assert "re-0" in c.exp_dir
         assert "s-99" in c.exp_dir
 
@@ -127,7 +124,7 @@ class TestCPCGRLDatasetLoading:
         """load_dataset_instruct 가 정상적으로 Instruct 객체를 반환한다."""
         from instruct_rl.utils.dataset_loader import load_dataset_instruct
 
-        train_inst, test_inst = load_dataset_instruct(cpcgrl_config)
+        train_inst, test_inst, _ = load_dataset_instruct(cpcgrl_config)
 
         assert train_inst is not None
         assert test_inst is not None
@@ -150,7 +147,7 @@ class TestCPCGRLDatasetLoading:
             seed=0,
         )
 
-        train_inst, test_inst = load_dataset_instruct(config)
+        train_inst, test_inst, _ = load_dataset_instruct(config)
         assert train_inst is not None
         assert (train_inst.reward_i == 1).all()
 
@@ -159,7 +156,7 @@ class TestCPCGRLDatasetLoading:
         from instruct_rl.utils.dataset_loader import load_dataset_instruct
         import jax.numpy as jnp
 
-        train_inst, _ = load_dataset_instruct(cpcgrl_config)
+        train_inst, _, _ = load_dataset_instruct(cpcgrl_config)
         assert train_inst.condition.dtype == jnp.float32
         assert train_inst.reward_i.dtype == jnp.int32
 

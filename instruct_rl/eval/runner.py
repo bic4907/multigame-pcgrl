@@ -414,14 +414,37 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         df_results.to_csv(results_path, index=False)
         logger.info("[Eval] Saved results → %s", results_path)
 
+        # ── 전체 mean 요약 CSV 생성 및 wandb 업로드 ─────────────────────────────
+        summary_metric_cols = [c for c in ['progress', 'vit_score', 'tpkldiv', 'diversity'] if c in df_results.columns]
+        if summary_metric_cols:
+            summary_series = df_results[summary_metric_cols].mean()
+            df_summary = summary_series.reset_index()
+            df_summary.columns = ['metric', 'mean']
+            summary_path = join(config.eval_dir, "summary.csv")
+            df_summary.to_csv(summary_path, index=False)
+            logger.info("[Eval] Saved summary → %s", summary_path)
+
         if wandb.run:
             log_dict = {
-                'ctrl_sim': wandb.Table(dataframe=df_ctrl_sim),
-                'results': wandb.Table(dataframe=df_results),
+                'ctrl_sim_tb': wandb.Table(dataframe=df_ctrl_sim),
+                'results_tb': wandb.Table(dataframe=df_results),
             }
             if diversity_df is not None:
-                log_dict['diversity'] = wandb.Table(dataframe=diversity_df)
+                log_dict['diversity_tb'] = wandb.Table(dataframe=diversity_df)
+            if summary_metric_cols:
+                log_dict.update({row['metric']: row['mean'] for _, row in df_summary.iterrows()})
             wandb.log(log_dict)
+
+            # ── CSV artifact 업로드 ───────────────────────────────────────────
+            csv_artifact = wandb.Artifact(name="eval_csv", type="dataset")
+            csv_artifact.add_file(ctrl_sim_path, name="ctrl_sim.csv")
+            csv_artifact.add_file(results_path, name="results.csv")
+            if diversity_df is not None:
+                csv_artifact.add_file(diversity_path, name="diversity.csv")
+            if summary_metric_cols:
+                csv_artifact.add_file(summary_path, name="summary.csv")
+            wandb.log_artifact(csv_artifact)
+            logger.info("[Eval] Uploaded CSV files → wandb artifact (eval_csv)")
 
             h5_path = join(config.eval_dir, "eval.h5")
             if os.path.exists(h5_path):

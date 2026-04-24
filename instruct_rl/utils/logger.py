@@ -32,12 +32,15 @@ def get_wandb_name(config: Config):
 
 
 def get_wandb_name_eval(config: Config):
-    wandb_name = get_wandb_name(config)
+    original_name = get_wandb_name(config)
 
-    wandb_eval_name = f"{wandb_name}"
+    exp_dir_path = config.eval_dir.replace('\\', '/')
+    exp_dirs = exp_dir_path.split('/')
+    exp_dir_name = exp_dirs[-1]
 
-    if config.eval_exp_name is not None:
-        wandb_eval_name += f"-{config.eval_exp_name}"
+    name = f'{original_name}--{exp_dir_name}'
 
-    return wandb_eval_name
+    return name
+
+
 

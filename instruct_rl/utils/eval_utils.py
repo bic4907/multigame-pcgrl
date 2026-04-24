@@ -11,13 +11,16 @@ import os
 import logging
 import time
 from datetime import datetime
-
+import numpy as np
+import pandas as pd
 import jax
 import wandb
 
 from instruct_rl.utils.env_loader import get_wandb_key
 from instruct_rl.utils.path_utils import init_config
 from instruct_rl.utils.logger import get_wandb_name_eval
+from instruct_rl.utils.dataset_loader import load_dataset_instruct
+from dataset.multigame.tile_utils import render_unified_rgb
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +41,7 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
     gt_levels = None
     gt_images = None
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:
-        from instruct_rl.utils.dataset_loader import load_dataset_instruct
-        import numpy as np
-        import pandas as pd
+
         _, eval_inst, samples = load_dataset_instruct(config)  # test split 사용
         logger.info(f"Loaded eval instruct from dataset: {eval_inst.reward_i.shape[0]} samples")
 
@@ -59,7 +60,7 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
         logger.info(f"GT levels: {_gt_raw.shape} × n_eps={_n_eps} → {gt_levels.shape}")
 
         # GT 렌더링 이미지: dataset의 render_unified_rgb 사용 (통일된 팔레트)
-        from dataset.multigame.tile_utils import render_unified_rgb
+
         _tile_size = getattr(config, 'vit_tile_size', 16)
         logger.info(f"Rendering GT images (tile_size={_tile_size}) ...")
         _gt_images_raw = np.stack([

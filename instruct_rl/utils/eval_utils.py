@@ -15,6 +15,7 @@ from datetime import datetime
 import jax
 import wandb
 
+from instruct_rl.utils.env_loader import get_wandb_key
 from instruct_rl.utils.path_utils import init_config
 from instruct_rl.utils.logger import get_wandb_name_eval
 
@@ -149,10 +150,13 @@ def main_eval_entry(config, *, inject_obs_fn=None):
     os.makedirs(eval_dir, exist_ok=True)
     logger.info(f"Running evaluation at {eval_dir}")
 
-    if config.wandb_key:
+
+    wandb_key = get_wandb_key()
+
+    if wandb_key:
         dt = datetime.now().strftime("%Y%m%d%H%M%S")
         wandb_id = f"{get_wandb_name_eval(config)}-{dt}"
-        wandb.login(key=config.wandb_key)
+        wandb.login(key=wandb_key)
         wandb.init(
             project=config.wandb_project,
             entity=config.wandb_entity,

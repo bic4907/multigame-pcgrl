@@ -36,11 +36,6 @@ def get_wandb_name_eval(config: Config):
 
     wandb_eval_name = f"{wandb_name}"
 
-    if config.eval_modality == "text":
-        wandb_eval_name += "-t"
-    elif config.eval_modality == "state":
-        wandb_eval_name += "-s"
-
     if config.eval_exp_name is not None:
         wandb_eval_name += f"-{config.eval_exp_name}"
 

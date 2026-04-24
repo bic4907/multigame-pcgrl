@@ -7,6 +7,8 @@ from conf.game_utils import (                       # noqa: F401  — re-export
     parse_game_str, build_game_str,
 )
 
+PREFIX = "aaai27_"
+
 @dataclass
 class Config:
     lr: float = 1.0e-4
@@ -355,7 +357,7 @@ class CPCGRLEvalConfig(EvalConfig):
     # 리스트/튜플도 허용: [0,1,2]
     eval_dataset_reward_enums: Optional[str] = None
 
-    wandb_project: Optional[str] = "eval_cpcgrl"
+    wandb_project: Optional[str] = f"{PREFIX}eval_cpcgrl"
 
 
 @dataclass

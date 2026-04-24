@@ -36,12 +36,11 @@ class ViTScoreWrapper:
 
     def run(
         self,
-        df_output: pd.DataFrame,
         instruct_df: pd.DataFrame,
         gt_images: np.ndarray,        # (N, H, W, 3) uint8 — eval_utils가 dataset 렌더링으로 전달
         n_eps: int,
         **_,
-    ) -> pd.DataFrame:
+    ) -> np.ndarray:
         """
         Parameters
         ----------
@@ -61,7 +60,7 @@ class ViTScoreWrapper:
                 game        = row.get("game", "unknown")
                 re_val      = int(row.get("reward_enum", row_i))
                 folder_name = f"{game}_re{re_val}_{int(row_i):04d}"
-                for seed_i in range(1, n_eps + 1):
+                for seed_i in range(n_eps):
                     pred_images.append(read_rendered_image(h5, folder_name, seed_i))
 
         pred_images = np.stack(pred_images, axis=0)  # (N*n_eps, H, W, C)
@@ -85,10 +84,10 @@ class ViTScoreWrapper:
         scores = evaluator.run_pairwise(pred_images, gt_images)   # (N*n_eps,)
         elapsed = time.perf_counter() - t0
 
-        df_output["vit_score"] = np.array(scores).reshape(-1)
+        scores = np.array(scores).reshape(-1)
         logger.info(
             "done: mean=%.4f  elapsed=%.2fs",
             float(np.mean(scores)), elapsed,
         )
-        return df_output
+        return scores
 

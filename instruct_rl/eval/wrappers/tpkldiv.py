@@ -31,18 +31,21 @@ class TPKLWrapper:
 
     def run(
         self,
-        df_output: pd.DataFrame,
         instruct_df: pd.DataFrame,
         gt_levels: np.ndarray,
         n_eps: int,
         **_,
-    ) -> pd.DataFrame:
+    ) -> np.ndarray:
         """
         Parameters
         ----------
         instruct_df : 평가 대상 DataFrame (game, reward_enum, feature_name, condition_value)
         gt_levels   : (M, H, W) int — 호출자(metrics.py)가 이미 필터링해서 전달
         n_eps       : 시드(에피소드) 수
+
+        Returns
+        -------
+        scores : np.ndarray, shape (N*n_eps,)
         """
         # ① Predicted levels 로드 (HDF5) → (N*n_eps, H, W)
         with open_eval_store(self.config.eval_dir, mode="r") as h5:
@@ -56,7 +59,7 @@ class TPKLWrapper:
                     for row_i, row in tqdm(instruct_df.iterrows(),
                                            desc="[TPKL] Loading predicted states",
                                            total=len(instruct_df))
-                    for seed_i in range(1, n_eps + 1)
+                    for seed_i in range(n_eps)
                 ]
             )
 
@@ -68,7 +71,6 @@ class TPKLWrapper:
         scores = evaluator.run(pred_levels, gt_levels)
         elapsed = time.perf_counter() - t0
 
-        df_output["tpkldiv"] = scores.reshape(-1)
         logger.info("[TPKLWrapper] done: mean=%.4f  elapsed=%.2fs", float(np.mean(scores)), elapsed)
-        return df_output
+        return scores.reshape(-1)
 

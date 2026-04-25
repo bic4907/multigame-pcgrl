@@ -48,31 +48,34 @@ def annotate_image(img_arr: np.ndarray, game: str, instruction: str, conditions:
 
 def sample_wandb_images(
     df_ctrl_sim,
-    eval_rendered: list,
+    eval_env_maps: list,   # 배치별 env_map list (각 원소: (n_envs, H, W) uint8)
     n_rows: int,
     n_samples: int = 16,
     seed: int = 0,
+    tile_size: int = 16,
 ) -> list:
     """df_ctrl_sim에서 조건이 겹치지 않도록 샘플을 뽑아 wandb.Image 리스트 반환.
 
+    env_map(state)을 받아 render_unified_rgb 로 on-demand 렌더링한다.
+
     Args:
-        df_ctrl_sim  : 전체 평가 결과 DataFrame (seed, row_i, game, instruction, condition_* 포함).
-        eval_rendered: 배치별 렌더링 결과 list (각 원소: (n_envs, H, W, C) ndarray).
+        df_ctrl_sim  : 전체 평가 결과 DataFrame.
+        eval_env_maps: 배치별 env_map list (각 원소: (n_envs, H, W) uint8).
         n_rows       : 실제 유효 샘플 수 (패딩 제거용).
         n_samples    : 최대 업로드 이미지 수 (기본 16).
         seed         : 샘플링 random seed.
-
-    Returns:
-        wandb.Image 객체 리스트.
+        tile_size    : 렌더링 타일 픽셀 크기 (기본 16).
     """
-    all_rendered = np.concatenate(eval_rendered, axis=0)[:n_rows]
+    from envs.probs.multigame import render_multigame_map
+
+    all_env_maps = np.concatenate(eval_env_maps, axis=0)[:n_rows]  # (n_rows, H, W)
     cond_cols = [c for c in df_ctrl_sim.columns if c.startswith('condition_')]
 
     # seed==0 행에서 row_i별 1개씩 추출 → unique 명령어당 1샘플
     first_per_row = (
         df_ctrl_sim[df_ctrl_sim['seed'] == 0]
         .drop_duplicates(subset='row_i')
-        .reset_index()  # 원래 DataFrame 인덱스(= all_rendered 인덱스) 보존
+        .reset_index()  # 원래 DataFrame 인덱스(= all_env_maps 인덱스) 보존
     )
     sample_df = first_per_row.sample(
         n=min(n_samples, len(first_per_row)),
@@ -82,7 +85,10 @@ def sample_wandb_images(
     wandb_images = []
     for _, srow in sample_df.iterrows():
         orig_idx = int(srow['index'])
-        img_arr = all_rendered[orig_idx]
+        env_map = all_env_maps[orig_idx]                           # (H, W) uint8
+        img_arr = np.array(
+            render_multigame_map(env_map.astype(np.int32), tile_size=tile_size)
+        )  # (H*ts, W*ts, 3) uint8
         conditions = {c: srow[c] for c in cond_cols if c in srow}
         pil_img = annotate_image(
             img_arr,

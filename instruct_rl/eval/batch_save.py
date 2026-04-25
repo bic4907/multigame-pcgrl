@@ -6,9 +6,8 @@ instruct_rl/eval/batch_save.py
 from __future__ import annotations
 
 import numpy as np
-import cv2
 
-from instruct_rl.eval.hdf5_store import write_sample, write_rendered_image
+from instruct_rl.eval.hdf5_store import write_sample
 
 
 def save_batch_results(
@@ -17,8 +16,6 @@ def save_batch_results(
     batch_reward_i,
     batch_repetition,
     result,
-    rendered,
-    raw_rendered,
     last_states,
     instruct_df=None,
     h5=None,
@@ -40,26 +37,9 @@ def save_batch_results(
         else:
             folder_name = f"reward_{row_i}"
 
-        # ── 프레임 배열 조합 (RGBA→RGB, 텍스트 오버레이) ──────────────────
-        frames_rgb = []
-        for frame in rendered[idx]:
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
-            task_text = build_task_text(reward_i, feature)
-            frame = cv2.putText(
-                frame, task_text, (20, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA,
-            )
-            frames_rgb.append(frame)
-        frames_rgb = np.array(frames_rgb, dtype=np.uint8)  # (n_frames, H, W, 3)
-
-        # ── HDF5 저장 ─────────────────────────────────────────────────────
+        # ── HDF5 저장 — state(env_map)만 저장 ────────────────────────────────
         if h5 is not None:
-            write_sample(h5, folder_name, int(repeat_i), frames_rgb, np.array(state))
-            # raw rendered image (텍스트 오버레이 없는 순수 렌더링) 별도 저장
-            raw_img = raw_rendered[idx]
-            if raw_img.shape[-1] == 4:   # RGBA → RGB
-                raw_img = cv2.cvtColor(raw_img, cv2.COLOR_RGBA2RGB)
-            write_rendered_image(h5, folder_name, int(repeat_i), raw_img)
+            write_sample(h5, folder_name, int(repeat_i), state=np.array(state))
 
 
 def build_task_text(reward_i, feature) -> str:
@@ -69,4 +49,3 @@ def build_task_text(reward_i, feature) -> str:
               4: f"BC: {int(feature[3])} | ",
               5: "BD | "}
     return "".join(v for k, v in labels.items() if k in reward_i)
-

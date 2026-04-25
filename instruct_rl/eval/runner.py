@@ -249,15 +249,6 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                     )
                     last_states = jax.tree.map(lambda x: x[[-1], ...], states)
 
-                    rendered = jax.vmap(
-                        lambda s: jax.vmap(env.render)(s.env_state)
-                    )(last_states).transpose(1, 0, 2, 3, 4)
-
-                    rendered_raw = jax.vmap(
-                        lambda s: jax.vmap(env.render_env_map)(s.env_state.env_map)
-                    )(last_states)
-                    _n_row, _n_eps, _h, _w, _c = rendered_raw.shape
-                    rendered_raw = rendered_raw.reshape(-1, _h, _w, _c)
 
                     result = get_loss_batch(
                         reward_i=batch_instruct.reward_i,
@@ -269,10 +260,10 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                         condition=batch_instruct.condition,
                         env_maps=init_state.env_state.env_map,
                     )
-                    return result, result_s0, rendered, rendered_raw, last_states
+                    return result, result_s0, last_states
 
                 rng_eval = jax.random.PRNGKey(30)
-                result, result_s0, rendered, raw_rendered, last_states = run_eval_step(
+                result, result_s0, last_states = run_eval_step(
                     rng_eval, init_obs, init_state, done
                 )
 
@@ -283,14 +274,15 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 features.append(result.feature)
                 losses_s0.append(result_s0.loss)
                 features_s0.append(result_s0.feature)
-                eval_rendered.append(jax.device_get(raw_rendered))
-                rendered = jax.device_get(rendered)
+                # env_map만 보관 (렌더링은 wandb 업로드 시 on-demand)
+                env_maps_batch = jax.device_get(last_states.env_state.env_map[0])  # (n_envs, H, W)
+                eval_rendered.append(env_maps_batch)
 
                 # ── 이미지/상태 저장 ─────────────────────────────────────────
                 save_batch_results(
                     idxes, batch_valid_size,
                     batch_reward_i, batch_repetition,
-                    result, rendered, jax.device_get(raw_rendered), last_states,
+                    result, last_states,
                     instruct_df=instruct_df,
                     h5=h5_store,
                 )
@@ -440,6 +432,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             wandb_images = sample_wandb_images(
                 df_ctrl_sim, eval_rendered, n_rows,
                 n_samples=getattr(config, 'n_sample_images', 10),
+                tile_size=getattr(config, 'vit_tile_size', 16),
             )
             if wandb_images:
                 wandb.log({f'images/{i}': img for i, img in enumerate(wandb_images)})

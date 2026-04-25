@@ -358,6 +358,9 @@ class CPCGRLEvalConfig(EvalConfig):
     # 리스트/튜플도 허용: [0,1,2]
     eval_dataset_reward_enums: Optional[str] = None
 
+    # True이면 체크포인트 없어도 진행 (WARNING 출력). False(기본)이면 체크포인트 없을 시 에러.
+    ignore_checkpoint: bool = False
+
     wandb_project: Optional[str] = f"{PREFIX}eval_cpcgrl"
 
 

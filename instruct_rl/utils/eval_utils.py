@@ -32,6 +32,24 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
 
     if not config.random_agent:
         _, restored_ckpt, encoder_param = init_checkpointer(config)
+
+        # ── 체크포인트 로드 보장 ──────────────────────────────────────────────
+        if restored_ckpt is None:
+            if getattr(config, 'ignore_checkpoint', False):
+                logger.warning(
+                    "⚠️  No checkpoint found at '%s'. "
+                    "Proceeding with randomly-initialized weights (ignore_checkpoint=True).",
+                    config.exp_dir,
+                )
+            else:
+                raise FileNotFoundError(
+                    f"No checkpoint found at '{config.exp_dir}'. "
+                    "Ensure the model has been trained before running evaluation. "
+                    "To skip this check and use random weights, set ignore_checkpoint=True."
+                )
+        else:
+            ckpt_step = restored_ckpt.get("steps_prev_complete", "?")
+            logger.info("✅  Checkpoint loaded — step=%s  (path: %s)", ckpt_step, config.exp_dir)
     else:
         restored_ckpt, encoder_param = None, None
 

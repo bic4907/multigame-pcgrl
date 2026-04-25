@@ -187,7 +187,8 @@ def get_exp_name(config):
 
 
 def get_exp_dir(config):
-    return os.path.join('saves', get_exp_name(config))
+    saves_dir = getattr(config, 'saves_dir', 'saves')
+    return os.path.join(saves_dir, get_exp_name(config))
 
 
 def init_config(config: Config):

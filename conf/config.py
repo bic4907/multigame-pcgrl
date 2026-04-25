@@ -33,6 +33,7 @@ class Config:
     exp_name: str = "def"
     random_exp_name: bool = False
     seed: int = 0
+    saves_dir: str = "saves"
 
     # Game selection — 2글자 약어 조합 (dg=dungeon, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
     # 예: "dg" (dungeon만), "dgdm" (dungeon+doom+doom2), "all" (전체)

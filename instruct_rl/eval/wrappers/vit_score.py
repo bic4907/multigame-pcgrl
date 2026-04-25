@@ -47,28 +47,28 @@ class ViTScoreWrapper:
         gt_images   : (N*n_eps, H*ts, W*ts, 3) uint8
         n_eps       : 시드(에피소드) 수
         """
-        from envs.probs.multigame import render_multigame_map
+        from envs.probs.multigame import render_multigame_maps_batch
 
         tile_size = getattr(self.config, 'vit_tile_size', 16)
         n_samples = len(instruct_df) * n_eps
 
-        # ① HDF5에서 state 일괄 로드 후 on-demand 렌더링
-        pred_list = []
+        # ① HDF5에서 state 일괄 로드 (렌더링은 아직 안 함)
+        env_map_list = []
         with open_eval_store(self.config.eval_dir, mode="r") as h5, \
-             tqdm(total=n_samples, desc="[ViT] Render pred states") as pbar:
+             tqdm(total=n_samples, desc="[ViT] Load pred states") as pbar:
             for row_i, row in instruct_df.iterrows():
                 game        = row.get("game", "unknown")
                 re_val      = int(row.get("reward_enum", row_i))
                 folder_name = f"{game}_re{re_val}_{int(row_i):04d}"
                 for seed_i in range(n_eps):
                     env_map = read_state(h5, folder_name, seed_i)   # (H, W) uint8
-                    img = np.array(
-                        render_multigame_map(env_map.astype(np.int32), tile_size=tile_size)
-                    )  # (H*ts, W*ts, 3) uint8
-                    pred_list.append(img)
+                    env_map_list.append(env_map.astype(np.int32))
                     pbar.update(1)
 
-        pred_images = np.stack(pred_list, axis=0)  # (N*n_eps, H*ts, W*ts, 3)
+        # ② numpy fancy-indexing 배치 렌더링 (for 루프 / PIL 없음)
+        env_maps_batch = np.stack(env_map_list, axis=0)  # (N, H, W)
+        logger.info("[ViTScoreWrapper] Batch rendering %d maps...", len(env_maps_batch))
+        pred_images = render_multigame_maps_batch(env_maps_batch, tile_size=tile_size)  # (N, H*ts, W*ts, 3)
 
         logger.info(
             "[ViTScoreWrapper] pred=%s  gt=%s",

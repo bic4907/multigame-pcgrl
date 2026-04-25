@@ -25,7 +25,7 @@ class ViTEvaluator(BaseEvaluator):
     """
 
     _MODEL_NAME = "google/vit-base-patch16-224"
-    _DEFAULT_BATCH_SIZE = 32
+    _DEFAULT_BATCH_SIZE = 256
 
     def __init__(self, batch_size: int = _DEFAULT_BATCH_SIZE):
         self.batch_size = batch_size

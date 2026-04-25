@@ -5,15 +5,15 @@ metric:
   name: unseen/reg_unseen_overall
 parameters:
   game:
-    values: ['all', 'dg', 'pk', 'sk', 'dm', 'zd']
+    values: ['all']
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
     values: [0]
   reevaluate:
     value: true
-#  max_board_scans:
-#    value: 1
+  max_board_scans:
+    value: 5
 command:
   - ${interpreter}
   - ${program}

@@ -20,7 +20,7 @@ from instruct_rl.utils.env_loader import get_wandb_key
 from instruct_rl.utils.path_utils import init_config
 from instruct_rl.utils.logger import get_wandb_name_eval
 from instruct_rl.utils.dataset_loader import load_dataset_instruct
-from dataset.multigame.tile_utils import render_unified_rgb
+from envs.probs.multigame import render_multigame_maps_batch
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +59,13 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
         gt_levels = np.repeat(_gt_raw, _n_eps, axis=0)                   # (M*n_eps, H, W)
         logger.info(f"GT levels: {_gt_raw.shape} × n_eps={_n_eps} → {gt_levels.shape}")
 
-        # GT 렌더링 이미지: dataset의 render_unified_rgb 사용 (통일된 팔레트)
-
+        # GT 렌더링 이미지: 스프라이트 타일 배치 렌더링 (render_multigame_maps_batch)
         _tile_size = getattr(config, 'vit_tile_size', 16)
         logger.info(f"Rendering GT images (tile_size={_tile_size}) ...")
-        _gt_images_raw = np.stack([
-            render_unified_rgb(s.array, tile_size=_tile_size) for s in samples
-        ])  # (M, H*ts, W*ts, 3)
+        _gt_images_raw = render_multigame_maps_batch(
+            np.stack([s.array.astype(np.int32) for s in samples]),  # (M, H, W)
+            tile_size=_tile_size,
+        )  # (M, H*ts, W*ts, 3)
         gt_images = np.repeat(_gt_images_raw, _n_eps, axis=0)  # (M*n_eps, H*ts, W*ts, 3)
         logger.info(f"GT images: {_gt_images_raw.shape} × n_eps={_n_eps} → {gt_images.shape}")
 

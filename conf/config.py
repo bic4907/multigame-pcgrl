@@ -156,7 +156,7 @@ class Config:
     placement_w_spread: float = 0.1
 
     # Special tile (interactive/hazard/collectable) 존재 패널티 가중치
-    special_tile_penalty_weight: float = 0.3
+    special_tile_penalty_weight: float = 0.05
 
 @dataclass
 class CLIPConfig:

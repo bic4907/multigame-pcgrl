@@ -31,7 +31,7 @@ class ViTEvaluator(BaseEvaluator):
             self.preload(**kwargs)
 
     def preload(self,
-                batch_size: int = 32,
+                batch_size: int = 512,
                 model_name: str = "google/vit-base-patch16-224",
                 gt_data_name: str = 'human_20250630_213109.legacy.npz',
                 force_reload: bool = False,

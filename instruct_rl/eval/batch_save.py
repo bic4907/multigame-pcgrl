@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from instruct_rl.eval.hdf5_store import write_sample
-
 
 def save_batch_results(
     idxes,
@@ -18,7 +16,7 @@ def save_batch_results(
     result,
     last_states,
     instruct_df=None,
-    h5=None,
+    h5_writer=None,   # AsyncH5Writer 인스턴스
 ):
 
     for idx, (row_i, reward_i, repeat_i, feature, state) in enumerate(zip(
@@ -37,9 +35,9 @@ def save_batch_results(
         else:
             folder_name = f"reward_{row_i}"
 
-        # ── HDF5 저장 — state(env_map)만 저장 ────────────────────────────────
-        if h5 is not None:
-            write_sample(h5, folder_name, int(repeat_i), state=np.array(state))
+        # ── 비동기 HDF5 저장 — state(env_map)를 writer 큐에 전달 ──────────────
+        if h5_writer is not None:
+            h5_writer.write(folder_name, int(repeat_i), state)
 
 
 def build_task_text(reward_i, feature) -> str:

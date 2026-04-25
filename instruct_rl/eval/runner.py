@@ -29,7 +29,7 @@ from instruct_rl.eval.agg import iqr_mean
 from instruct_rl.eval.batch_save import save_batch_results
 from instruct_rl.evaluate import get_loss_batch
 from instruct_rl.utils.path_utils import gymnax_pcgrl_make, init_network
-from instruct_rl.eval.hdf5_store import open_eval_store
+from instruct_rl.eval.hdf5_store import AsyncH5Writer
 from instruct_rl.eval.image_utils import sample_wandb_images
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from purejaxrl.structures import Transition, RunnerState
@@ -157,7 +157,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         )
 
         # ── 평가 루프 ─────────────────────────────────────────────────────────
-        with open_eval_store(config.eval_dir, mode="a") as h5_store, \
+        with AsyncH5Writer(config.eval_dir) as h5_writer, \
              tqdm(total=n_batches, desc="Rollout Batches") as pbar:
             for batch_i in range(n_batches):
                 batch_start_time = time.time()
@@ -284,7 +284,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                     batch_reward_i, batch_repetition,
                     result, last_states,
                     instruct_df=instruct_df,
-                    h5=h5_store,
+                    h5_writer=h5_writer,
                 )
                 batch_elapsed = time.time() - batch_start_time
                 logger.debug(
@@ -293,6 +293,10 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 )
                 pbar.update(1)
 
+            # ── 루프 완료 후 HDF5 큐 완전 소진 확인 ─────────────────────────
+            # ViTScore / TPKL / Diversity 등이 HDF5를 읽기 전에 모든 쓰기가
+            # 디스크에 반영됐음을 보장한다.
+            h5_writer.flush()
 
         # ── 결과 DataFrame 구성 ───────────────────────────────────────────────
         total_elapsed = time.time() - loop_start_time
@@ -301,6 +305,14 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             f"total: {total_elapsed:.1f}s  "
             f"(avg per batch: {total_elapsed/n_batches:.1f}s)"
         )
+
+        # ── HDF5 artifact 업로드 (rollout 완료 직후, 메트릭 계산과 병렬 진행) ─
+        h5_path = join(config.eval_dir, "eval.h5")
+        if wandb.run and os.path.exists(h5_path):
+            h5_artifact = wandb.Artifact(name="eval_h5", type="dataset")
+            h5_artifact.add_file(h5_path, name="eval.h5")
+            wandb.log_artifact(h5_artifact)
+            logger.info("[Eval] Started eval.h5 upload → wandb artifact")
 
         df_ctrl_sim = instruct_df.iloc[eval_batches].copy()
         df_ctrl_sim['seed'] = repetitions
@@ -449,12 +461,6 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             wandb.log_artifact(csv_artifact)
             logger.info("[Eval] Uploaded CSV files → wandb artifact (eval_csv)")
 
-            h5_path = join(config.eval_dir, "eval.h5")
-            if os.path.exists(h5_path):
-                artifact = wandb.Artifact(name="eval_h5", type="dataset")
-                artifact.add_file(h5_path, name="eval.h5")
-                wandb.log_artifact(artifact)
-                logger.info("[Eval] Uploaded eval.h5 → wandb artifact")
 
         return losses_arr
 

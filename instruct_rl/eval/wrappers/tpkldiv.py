@@ -68,7 +68,8 @@ class TPKLWrapper:
         # ② 순수 연산 위임
         evaluator = TPKLEvaluator()
         t0 = time.perf_counter()
-        scores = evaluator.run(pred_levels, gt_levels)
+        with tqdm(total=2, desc="[TPKL] Computing scores") as pbar:
+            scores = evaluator.run(pred_levels, gt_levels, _pbar=pbar)
         elapsed = time.perf_counter() - t0
 
         logger.info("[TPKLWrapper] done: mean=%.4f  elapsed=%.2fs", float(np.mean(scores)), elapsed)

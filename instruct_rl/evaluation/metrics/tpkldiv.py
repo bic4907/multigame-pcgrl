@@ -38,6 +38,7 @@ class TPKLEvaluator(BaseEvaluator):
         gt_levels: np.ndarray,
         window_sizes=(2, 3),
         epsilon: float = 1e-6,
+        _pbar=None,
     ) -> np.ndarray:
         """
         Returns
@@ -54,8 +55,8 @@ class TPKLEvaluator(BaseEvaluator):
         )
 
         logger.info("Building GT distribution — M=%d levels, window_sizes=%s", len(gt_levels), window_sizes)
-        gt_dists = build_gt_distribution(gt_levels, window_sizes, epsilon)
+        gt_dists = build_gt_distribution(gt_levels, window_sizes, epsilon, _pbar=_pbar)
         logger.info("GT distribution ready. Computing JSD scores for N=%d pred levels ...", len(pred_levels))
-        scores = compute_jsd_scores(pred_levels, gt_dists, window_sizes, epsilon)
+        scores = compute_jsd_scores(pred_levels, gt_dists, window_sizes, epsilon, _pbar=_pbar)
         logger.info("Done. scores: min=%.4f  max=%.4f  mean=%.4f", scores.min(), scores.max(), scores.mean())
         return scores

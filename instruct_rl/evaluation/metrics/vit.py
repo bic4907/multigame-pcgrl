@@ -86,17 +86,25 @@ class ViTEvaluator(BaseEvaluator):
                 self.norm_mean = normalized['mean']
                 self.norm_std = normalized['std']
 
-    def get_embeddings(self, level: np.ndarray, norm: bool = False) -> np.ndarray:
+    def get_embeddings(
+        self,
+        level: np.ndarray,
+        norm: bool = False,
+        desc: str = "ViT embedding",
+    ) -> np.ndarray:
+        features = []
+        n = level.shape[0]
+        n_batches = (n + self.batch_size - 1) // self.batch_size
 
-        features = list()
-
-        for start_idx in range(0, level.shape[0], self.batch_size):
-            end_idx = min(start_idx + self.batch_size, level.shape[0])
-            batch = [Image.fromarray(p).convert("RGB") for p in level[start_idx:end_idx]]
-            inputs = self.feature_extractor(batch, return_tensors="np")
-            outputs = self.model(**inputs)
-            pred_feats = outputs.last_hidden_state[:, 0, :]  # (B, feat_dim)
-            features.append(pred_feats)
+        with tqdm(total=n_batches, desc=desc, leave=False) as pbar:
+            for start_idx in range(0, n, self.batch_size):
+                end_idx = min(start_idx + self.batch_size, n)
+                batch = [Image.fromarray(p).convert("RGB") for p in level[start_idx:end_idx]]
+                inputs = self.feature_extractor(batch, return_tensors="np")
+                outputs = self.model(**inputs)
+                pred_feats = outputs.last_hidden_state[:, 0, :]  # (B, feat_dim)
+                features.append(pred_feats)
+                pbar.update(1)
 
         features = jnp.concatenate(features, axis=0)  # (N, feat_dim)
 
@@ -179,8 +187,8 @@ class ViTEvaluator(BaseEvaluator):
             self.feature_extractor = ViTImageProcessor.from_pretrained(_model_name)
             self.model = FlaxViTModel.from_pretrained(_model_name)
 
-        pred_feats = self.get_embeddings(pred_images, norm=True)  # (N, D)
-        gt_feats   = self.get_embeddings(gt_images,   norm=True)  # (N, D)
+        pred_feats = self.get_embeddings(pred_images, norm=True, desc="[ViT] pred embedding")  # (N, D)
+        gt_feats   = self.get_embeddings(gt_images,   norm=True, desc="[ViT] gt  embedding")   # (N, D)
 
         # 각 쌍의 코사인 유사도 (element-wise dot product, 이미 L2 정규화됨)
         scores = jnp.sum(pred_feats * gt_feats, axis=1)  # (N,)

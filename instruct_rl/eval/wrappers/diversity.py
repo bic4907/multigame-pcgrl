@@ -40,7 +40,9 @@ class DiversityWrapper:
         output_df['diversity'] = np.nan
 
         with open_eval_store(self.config.eval_dir, mode="r") as h5:
-            for row_i, row in tqdm(instruct_df.iterrows(), desc="Computing Diversity"):
+            for row_i, row in tqdm(instruct_df.iterrows(),
+                                   desc="[Diversity] Hamming distance",
+                                   total=len(instruct_df)):
                 game        = row.get('game', 'unknown')
                 re_val      = int(row.get('reward_enum', row_i))
                 folder_name = f"{game}_re{re_val}_{int(row_i):04d}"

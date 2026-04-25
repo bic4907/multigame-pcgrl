@@ -14,6 +14,8 @@ parameters:
     value: true
   max_board_scans:
     value: 5
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/cpcgrl'
 command:
   - ${interpreter}
   - ${program}

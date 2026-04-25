@@ -337,7 +337,7 @@ class CPCGRLEvalConfig(EvalConfig):
 
     # 평가 대상 게임 (None이면 game과 동일). 체크포인트 로딩은 game 기준, 평가 데이터는 eval_games 기준.
     # 예: game="all" 로 학습된 모델을 특정 게임만 평가할 때 eval_games="dg" 처럼 지정.
-    eval_games: Optional[str] = None
+    eval_games: str = 'all'
 
     vec_cont: bool = True
     raw_obs: bool = True

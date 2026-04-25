@@ -309,10 +309,13 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         # ── HDF5 artifact 업로드 (rollout 완료 직후, 메트릭 계산과 병렬 진행) ─
         h5_path = join(config.eval_dir, "eval.h5")
         if wandb.run and os.path.exists(h5_path):
-            h5_artifact = wandb.Artifact(name="eval_h5", type="dataset")
+            # run마다 고유한 artifact name 생성 (동일 내용 dedup 방지)
+            import uuid
+            _uid = uuid.uuid4().hex[:8]
+            h5_artifact = wandb.Artifact(name=f"eval_h5_{_uid}", type="dataset")
             h5_artifact.add_file(h5_path, name="eval.h5")
             wandb.log_artifact(h5_artifact)
-            logger.info("[Eval] Started eval.h5 upload → wandb artifact")
+            logger.info("[Eval] Started eval.h5 upload → wandb artifact (name=eval_h5_%s)", _uid)
 
         df_ctrl_sim = instruct_df.iloc[eval_batches].copy()
         df_ctrl_sim['seed'] = repetitions

@@ -5,7 +5,7 @@ metric:
   name: unseen/reg_unseen_overall
 parameters:
   game:
-    values: ['all']
+    values: ['all', 'dg', 'pk', 'sk', 'dm', 'zd']
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:

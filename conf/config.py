@@ -7,6 +7,8 @@ from conf.game_utils import (                       # noqa: F401  — re-export
     parse_game_str, build_game_str,
 )
 
+PREFIX = "aaai27_"
+
 @dataclass
 class Config:
     lr: float = 1.0e-4
@@ -31,6 +33,7 @@ class Config:
     exp_name: str = "def"
     random_exp_name: bool = False
     seed: int = 0
+    saves_dir: str = "saves"
 
     # Game selection — 2글자 약어 조합 (dg=dungeon, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
     # 예: "dg" (dungeon만), "dgdm" (dungeon+doom+doom2), "all" (전체)
@@ -153,7 +156,7 @@ class Config:
     placement_w_spread: float = 0.1
 
     # Special tile (interactive/hazard/collectable) 존재 패널티 가중치
-    special_tile_penalty_weight: float = 0.3
+    special_tile_penalty_weight: float = 0.05
 
 @dataclass
 class CLIPConfig:
@@ -317,6 +320,33 @@ class EvalConfig(TrainConfig):
     metrics_to_keep: Tuple[str] = ("mean_ep_reward",)
     flush: bool = True
 
+    problem: str = "multigame"
+
+
+
+@dataclass
+class RandomEvalConfig(EvalConfig):
+    """완전 랜덤 정책 평가용 Config.
+
+    NN 없이 uniform random action을 사용하며,
+    exp_dir 이름이 "random_" 으로 시작한다 (cpcgrl_ 접두사와 대응).
+    """
+
+    random_agent: bool = True
+    dir_prefix: str = "random_"
+    wandb_project: Optional[str] = f"{PREFIX}eval_random"
+
+    dataset_reward_enum: Optional[int] = 0        # 0=region
+    eval_games: str = 'all'
+
+    # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
+    eval_samples_per_group: Optional[int] = 200
+
+    # 평가 시 복수 reward_enum 지정. None이면 dataset_reward_enum 단일값 사용.
+    # 숫자 연결 문자열로 지정 가능: "12" → [1,2],  "012" → [0,1,2]
+    # 리스트/튜플도 허용: [0,1,2]
+    eval_dataset_reward_enums: Optional[str] = None
+
 
 
 @dataclass
@@ -335,7 +365,7 @@ class CPCGRLEvalConfig(EvalConfig):
 
     # 평가 대상 게임 (None이면 game과 동일). 체크포인트 로딩은 game 기준, 평가 데이터는 eval_games 기준.
     # 예: game="all" 로 학습된 모델을 특정 게임만 평가할 때 eval_games="dg" 처럼 지정.
-    eval_games: Optional[str] = None
+    eval_games: str = 'all'
 
     vec_cont: bool = True
     raw_obs: bool = True
@@ -355,7 +385,10 @@ class CPCGRLEvalConfig(EvalConfig):
     # 리스트/튜플도 허용: [0,1,2]
     eval_dataset_reward_enums: Optional[str] = None
 
-    wandb_project: Optional[str] = "eval_cpcgrl"
+    # True이면 체크포인트 없어도 진행 (WARNING 출력). False(기본)이면 체크포인트 없을 시 에러.
+    ignore_checkpoint: bool = False
+
+    wandb_project: Optional[str] = f"{PREFIX}eval_cpcgrl"
 
 
 @dataclass
@@ -611,6 +644,7 @@ cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
+cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 

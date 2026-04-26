@@ -11,12 +11,16 @@ import os
 import logging
 import time
 from datetime import datetime
-
+import numpy as np
+import pandas as pd
 import jax
 import wandb
 
+from instruct_rl.utils.env_loader import get_wandb_key
 from instruct_rl.utils.path_utils import init_config
 from instruct_rl.utils.logger import get_wandb_name_eval
+from instruct_rl.utils.dataset_loader import load_dataset_instruct
+from envs.probs.multigame import render_multigame_maps_batch
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +32,24 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
 
     if not config.random_agent:
         _, restored_ckpt, encoder_param = init_checkpointer(config)
+
+        # ── 체크포인트 로드 보장 ──────────────────────────────────────────────
+        if restored_ckpt is None:
+            if getattr(config, 'ignore_checkpoint', False):
+                logger.warning(
+                    "⚠️  No checkpoint found at '%s'. "
+                    "Proceeding with randomly-initialized weights (ignore_checkpoint=True).",
+                    config.exp_dir,
+                )
+            else:
+                raise FileNotFoundError(
+                    f"No checkpoint found at '{config.exp_dir}'. "
+                    "Ensure the model has been trained before running evaluation. "
+                    "To skip this check and use random weights, set ignore_checkpoint=True."
+                )
+        else:
+            ckpt_step = restored_ckpt.get("steps_prev_complete", "?")
+            logger.info("✅  Checkpoint loaded — step=%s  (path: %s)", ckpt_step, config.exp_dir)
     else:
         restored_ckpt, encoder_param = None, None
 
@@ -37,9 +59,7 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
     gt_levels = None
     gt_images = None
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:
-        from instruct_rl.utils.dataset_loader import load_dataset_instruct
-        import numpy as np
-        import pandas as pd
+
         _, eval_inst, samples = load_dataset_instruct(config)  # test split 사용
         logger.info(f"Loaded eval instruct from dataset: {eval_inst.reward_i.shape[0]} samples")
 
@@ -57,13 +77,13 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
         gt_levels = np.repeat(_gt_raw, _n_eps, axis=0)                   # (M*n_eps, H, W)
         logger.info(f"GT levels: {_gt_raw.shape} × n_eps={_n_eps} → {gt_levels.shape}")
 
-        # GT 렌더링 이미지: dataset의 render_unified_rgb 사용 (통일된 팔레트)
-        from dataset.multigame.tile_utils import render_unified_rgb
+        # GT 렌더링 이미지: 스프라이트 타일 배치 렌더링 (render_multigame_maps_batch)
         _tile_size = getattr(config, 'vit_tile_size', 16)
         logger.info(f"Rendering GT images (tile_size={_tile_size}) ...")
-        _gt_images_raw = np.stack([
-            render_unified_rgb(s.array, tile_size=_tile_size) for s in samples
-        ])  # (M, H*ts, W*ts, 3)
+        _gt_images_raw = render_multigame_maps_batch(
+            np.stack([s.array.astype(np.int32) for s in samples]),  # (M, H, W)
+            tile_size=_tile_size,
+        )  # (M, H*ts, W*ts, 3)
         gt_images = np.repeat(_gt_images_raw, _n_eps, axis=0)  # (M*n_eps, H*ts, W*ts, 3)
         logger.info(f"GT images: {_gt_images_raw.shape} × n_eps={_n_eps} → {gt_images.shape}")
 
@@ -121,7 +141,17 @@ def main_eval_entry(config, *, inject_obs_fn=None):
     logger.info(f"Running experiment at {exp_dir}")
 
     _re = getattr(config, 'dataset_reward_enum', None)
-    _re_suffix = f"_re-{_re}" if _re is not None else ""
+    _re_enums = getattr(config, 'eval_dataset_reward_enums', None)
+
+    # eval_dataset_reward_enums 가 지정된 경우 → 그 값을 그대로 suffix로 사용
+    # e.g. "01234" → "_re-01234", [0,1,2] → "_re-012"
+    if _re_enums is not None:
+        _re_enums_str = ''.join(str(x) for x in _re_enums) if not isinstance(_re_enums, str) else _re_enums
+        _re_suffix = f"_re-{_re_enums_str}"
+    elif _re is not None:
+        _re_suffix = f"_re-{_re}"
+    else:
+        _re_suffix = ""
 
     # eval_games 가 지정된 경우 약어를 폴더명에 포함 (없으면 game 사용)
     _eval_games = getattr(config, 'eval_games', None) or getattr(config, 'game', None)
@@ -149,10 +179,13 @@ def main_eval_entry(config, *, inject_obs_fn=None):
     os.makedirs(eval_dir, exist_ok=True)
     logger.info(f"Running evaluation at {eval_dir}")
 
-    if config.wandb_key:
+
+    wandb_key = get_wandb_key()
+
+    if wandb_key:
         dt = datetime.now().strftime("%Y%m%d%H%M%S")
         wandb_id = f"{get_wandb_name_eval(config)}-{dt}"
-        wandb.login(key=config.wandb_key)
+        wandb.login(key=wandb_key)
         wandb.init(
             project=config.wandb_project,
             entity=config.wandb_entity,

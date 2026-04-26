@@ -157,6 +157,11 @@ def get_short_target(target: str) -> str:
 
 
 def get_exp_name(config):
+    # ── Random policy 모드: random_exp-{exp_name}_s-{seed} ──
+    if getattr(config, 'random_agent', False):
+        exp_str = getattr(config, 'exp_name', 'def') or 'def'
+        return f'random_exp-{exp_str}_s-{config.seed}'
+
     # ── CPCGRL 모드: cpcgrl_game-{game}_re-{re}_s-{seed}_exp-{exp_name} ──
     _is_cpcgrl = (
         hasattr(config, 'dataset_game') and config.dataset_game is not None
@@ -187,7 +192,8 @@ def get_exp_name(config):
 
 
 def get_exp_dir(config):
-    return os.path.join('saves', get_exp_name(config))
+    saves_dir = getattr(config, 'saves_dir', 'saves')
+    return os.path.join(saves_dir, get_exp_name(config))
 
 
 def init_config(config: Config):

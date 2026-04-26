@@ -10,6 +10,7 @@ from collections import Counter
 
 import jax
 import jax.numpy as jnp
+import hashlib
 
 from instruct_rl.dataclass import Instruct
 from instruct_rl.utils.log_utils import get_logger
@@ -175,7 +176,11 @@ def _subsample_per_group(samples, n_per_group: int, seed: int = 0):
 
     for (game, re) in sorted(by_group.keys()):
         # 그룹별로 독립 시드 사용 → eval_games가 달라도 같은 게임은 같은 샘플이 뽑힘
-        group_seed = seed ^ hash((game, re)) & 0xFFFFFFFF
+        # NOTE: Python built-in hash() is randomized per-process (PYTHONHASHSEED).
+        #       hashlib 기반 결정론적 해시 사용.
+        _key_bytes = f"{game}_{re}".encode()
+        _key_hash = int(hashlib.md5(_key_bytes).hexdigest(), 16) & 0xFFFFFFFF
+        group_seed = seed ^ _key_hash
         group_rng = _random.Random(group_seed)
         pool = by_group[(game, re)][:]
         group_rng.shuffle(pool)

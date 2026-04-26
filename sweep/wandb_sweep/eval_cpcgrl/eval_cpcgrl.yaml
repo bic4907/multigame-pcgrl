@@ -1,4 +1,4 @@
-program: train_cpcgrl.py
+program: eval_cpcgrl.py
 method: grid
 metric:
   goal: minimize
@@ -10,14 +10,10 @@ parameters:
     values: [0, 1, 2, 3, 4]
   seed:
     values: [0]
-  n_envs:
-    value: 600
-  overwrite:
+  reevaluate:
     value: true
-  special_tile_penalty_weight:
-    value: 0.01
-  exp_name:
-    value: 'stpw001'
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/cpcgrl'
 command:
   - ${interpreter}
   - ${program}

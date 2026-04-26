@@ -9,15 +9,13 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0]
+    values: [0, 1]
   n_envs:
     value: 600
   overwrite:
     value: true
-  special_tile_penalty_weight:
-    value: 0.1
-  exp_name:
-    value: 'stpw01'
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/cpcgrl'
 command:
   - ${interpreter}
   - ${program}

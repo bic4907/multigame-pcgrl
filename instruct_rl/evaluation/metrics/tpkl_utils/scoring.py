@@ -13,7 +13,8 @@ from instruct_rl.evaluation.metrics.tpkl_utils.patch import MAX_TILE, extract_wi
 def compute_jsd_scores(pred_levels: np.ndarray,
                        gt_dists: list[dict],
                        window_sizes: tuple,
-                       epsilon: float) -> np.ndarray:
+                       epsilon: float,
+                       _pbar=None) -> np.ndarray:
     """
     pred_levels 각각에 대해 GT 분포와의 JSD를 계산.
 
@@ -87,6 +88,9 @@ def compute_jsd_scores(pred_levels: np.ndarray,
             kl_pm = np.where(p > 0, p * np.log(p / m), np.float32(0.0)).sum(axis=1)
             kl_qm = np.where(q > 0, q * np.log(q / m), np.float32(0.0)).sum(axis=1)
         scores += 0.5 * (kl_pm + kl_qm)
+        if _pbar is not None:
+            _pbar.set_postfix_str(f"JSD w={k} N={N}")
+            _pbar.update(1)
 
     return scores
 

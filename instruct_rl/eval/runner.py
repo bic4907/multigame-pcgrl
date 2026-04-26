@@ -8,13 +8,11 @@ make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None)
 """
 import logging
 import math
-import os
 import time
 
-import cv2
-import imageio
 import jax
 import jax.numpy as jnp
+import os
 import numpy as np
 import optax
 import pandas as pd
@@ -24,15 +22,16 @@ from flax.training.train_state import TrainState
 from tqdm import tqdm
 
 from envs.pcgrl_env import gen_dummy_queued_state
-from evaluator import get_reward_batch
-from instruct_rl import NUM_FEATURES, FEATURE_NAMES
 from instruct_rl.dataclass import Instruct
-from instruct_rl.eval.embedding import prepare_instruct
-from instruct_rl.eval.metrics import run_post_eval
+from instruct_rl.eval.wrappers import DiversityWrapper, ViTScoreWrapper, TPKLWrapper
+from instruct_rl.eval.wrappers.progress import ProgressWrapper
+from instruct_rl.eval.agg import iqr_mean
+from instruct_rl.eval.batch_save import save_batch_results
 from instruct_rl.evaluate import get_loss_batch
 from instruct_rl.utils.path_utils import gymnax_pcgrl_make, init_network
+from instruct_rl.eval.hdf5_store import AsyncH5Writer
+from instruct_rl.eval.image_utils import sample_wandb_images
 from purejaxrl.experimental.s5.wrappers import LogWrapper
-from instruct_rl.utils.checkpointer import init_checkpointer
 from purejaxrl.structures import Transition, RunnerState
 
 logger = logging.getLogger(__name__)
@@ -84,9 +83,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 optax.adam(config.lr, eps=1e-5),
             )
 
-        train_state = TrainState.create(
-            apply_fn=network.apply, params=network_params, tx=tx
-        )
+        train_state = TrainState.create(apply_fn=network.apply, params=network_params, tx=tx)
 
         # ── 환경 초기화 ───────────────────────────────────────────────────────
         rng, _rng = jax.random.split(rng)
@@ -106,51 +103,38 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             runner_state.train_state.params['params']['subnet']['encoder'] = encoder_params
 
         # ── Instruct 준비 (dataset 모드 or CSV 모드) ──────────────────────────
-        if eval_inst is not None:
-            # train과 동일한 MultiGameDataset test split 사용
-            instruct = eval_inst
-            n_inst = instruct.reward_i.shape[0]
-            # 출력용 DataFrame 생성
-            reward_i_flat = instruct.reward_i[:, 0].tolist()
-            instruct_df = pd.DataFrame({
-                'row_i': list(range(n_inst)),
-                'reward_enum': reward_i_flat,
-            })
-            # 샘플 메타데이터 (game, instruction) 병합
-            if eval_inst_meta is not None:
-                instruct_df['game']        = eval_inst_meta['game'].values[:n_inst]
-                instruct_df['instruction'] = eval_inst_meta['instruction'].values[:n_inst]
-            else:
-                instruct_df['game']        = 'unknown'
-                instruct_df['instruction'] = None
-            for c_i in range(instruct.condition.shape[1]):
-                instruct_df[f'condition_{c_i}'] = instruct.condition[:, c_i].tolist()
-            # 컬럼 순서 정렬: game, instruction, reward_enum, condition_*
-            cond_cols = [c for c in instruct_df.columns if c.startswith('condition_')]
-            ordered_cols = ['row_i', 'game', 'instruction', 'reward_enum'] + cond_cols
-            instruct_df = instruct_df[[c for c in ordered_cols if c in instruct_df.columns]]
-            # -1 (null 센티널) → NaN (CSV 빈값)
-            instruct_df['reward_enum'] = instruct_df['reward_enum'].replace(-1, float('nan'))
-            for c in cond_cols:
-                instruct_df[c] = instruct_df[c].replace(-1.0, float('nan'))
-            instruct_df.to_csv(join(config.eval_dir, 'input.csv'), index=False)
+        instruct = eval_inst
+        n_inst = instruct.reward_i.shape[0]
+        # 출력용 DataFrame 생성
+        reward_i_flat = instruct.reward_i[:, 0].tolist()
+        instruct_df = pd.DataFrame({
+            'row_i': list(range(n_inst)),
+            'reward_enum': reward_i_flat,
+        })
+        # 샘플 메타데이터 (game, instruction) 병합
+        if eval_inst_meta is not None:
+            instruct_df['game']        = eval_inst_meta['game'].values[:n_inst]
+            instruct_df['instruction'] = eval_inst_meta['instruction'].values[:n_inst]
         else:
-            # CSV 모드 (NLP/CLIP 기반 모델)
-            from os.path import abspath, dirname
-            csv_path = abspath(join(dirname(__file__), "..", "..", "instruct",
-                                    f"{config.eval_instruct_csv}.csv"))
-            instruct_df = pd.read_csv(csv_path).reset_index().rename(columns={'index': 'row_i'})
-            instruct_df.to_csv(join(config.eval_dir, 'input.csv'), index=False)
-            instruct = prepare_instruct(config, network, runner_state, instruct_df, init_x)
-            logger.info(f"[CSV mode] eval instruct: {len(instruct_df)} samples")
+            instruct_df['game']        = 'unknown'
+            instruct_df['instruction'] = None
+        for c_i in range(instruct.condition.shape[1]):
+            instruct_df[f'condition_{c_i}'] = instruct.condition[:, c_i].tolist()
+        # 컬럼 순서 정렬: game, instruction, reward_enum, condition_*
+        cond_cols = [c for c in instruct_df.columns if c.startswith('condition_')]
+        ordered_cols = ['row_i', 'game', 'instruction', 'reward_enum'] + cond_cols
+        instruct_df = instruct_df[[c for c in ordered_cols if c in instruct_df.columns]]
+        # -1 (null 센티널) → NaN (CSV 빈값)
+        instruct_df['reward_enum'] = instruct_df['reward_enum'].replace(-1, float('nan'))
+        for c in cond_cols:
+            instruct_df[c] = instruct_df[c].replace(-1.0, float('nan'))
+        instruct_df.to_csv(join(config.eval_dir, 'input.csv'), index=False)
 
         # ── 배치 구성 ─────────────────────────────────────────────────────────
         n_envs = config.n_envs
         n_eps = config.n_eps
-        eval_batches = jnp.array(
-            sorted(np.tile(list(range(len(instruct_df))), n_eps))
-        )
-        repetitions = np.tile(list(range(1, n_eps + 1)), len(instruct_df))
+        eval_batches = jnp.array(sorted(np.tile(list(range(len(instruct_df))), n_eps)))
+        repetitions = np.tile(list(range(n_eps)), len(instruct_df))
         n_rows = len(eval_batches)
 
         if len(eval_batches) != len(repetitions):
@@ -161,6 +145,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
 
         n_batches = math.ceil(n_rows / n_envs)
         losses, values, features = [], [], []
+        losses_s0, features_s0 = [], []
         eval_rendered = []
         loop_start_time = time.time()
 
@@ -172,8 +157,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         )
 
         # ── 평가 루프 ─────────────────────────────────────────────────────────
-        from instruct_rl.eval.hdf5_store import open_eval_store
-        with open_eval_store(config.eval_dir, mode="a") as h5_store, \
+        with AsyncH5Writer(config.eval_dir) as h5_writer, \
              tqdm(total=n_batches, desc="Rollout Batches") as pbar:
             for batch_i in range(n_batches):
                 batch_start_time = time.time()
@@ -209,31 +193,44 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 done = jnp.zeros((n_envs,), dtype=bool)
 
                 # ── 단일 스텝 ─────────────────────────────────────────────────
+                is_random_agent: bool = getattr(config, 'random_agent', False)
+
                 def _env_step(carry, _):
                     rng, last_obs, state, done = carry
 
-                    if inject_obs_fn is not None:
-                        last_obs = inject_obs_fn(last_obs, state, batch_instruct, config, env)
-                    else:
-                        if config.use_nlp or config.use_clip:
-                            last_obs = last_obs.replace(nlp_obs=batch_instruct.embedding)
-                        if config.vec_cont:
-                            vmap_cont = jax.vmap(env.prob.get_cont_obs, in_axes=(0, 0, None))
-                            cont_obs = vmap_cont(
-                                state.env_state.env_map,
-                                batch_instruct.condition,
-                                config.raw_obs,
-                            )
-                            last_obs = last_obs.replace(nlp_obs=cont_obs)
+                    if not is_random_agent:
+                        # ── NN policy: obs 주입 후 forward pass ──────────────
+                        if inject_obs_fn is not None:
+                            last_obs = inject_obs_fn(last_obs, state, batch_instruct, config, env)
+                        else:
+                            if config.use_nlp or config.use_clip:
+                                last_obs = last_obs.replace(nlp_obs=batch_instruct.embedding)
+                            if config.vec_cont:
+                                vmap_cont = jax.vmap(env.prob.get_cont_obs, in_axes=(0, 0, None))
+                                cont_obs = vmap_cont(
+                                    state.env_state.env_map,
+                                    batch_instruct.condition,
+                                    config.raw_obs,
+                                )
+                                last_obs = last_obs.replace(nlp_obs=cont_obs)
 
-                    rng, _rng = jax.random.split(rng)
-                    pi, value, _, _, _ = network.apply(
-                        runner_state.train_state.params, last_obs,
-                        return_text_embed=False,
-                        return_state_embed=False,
-                    )
-                    action = pi.sample(seed=_rng)
-                    log_prob = pi.log_prob(action)
+                        rng, _rng = jax.random.split(rng)
+                        pi, value, _, _, _ = network.apply(
+                            runner_state.train_state.params, last_obs,
+                            return_text_embed=False,
+                            return_state_embed=False,
+                        )
+                        action = pi.sample(seed=_rng)
+                        log_prob = pi.log_prob(action)
+                    else:
+                        # ── 완전 random policy: NN 없이 uniform random action ──
+                        # (초기화된 가중치가 아닌 진짜 random)
+                        rng, _rng = jax.random.split(rng)
+                        act_rngs = jax.random.split(_rng, config.n_envs)
+                        # sample_action은 [None, ...] 로 배치 차원을 추가하므로 [0]으로 제거
+                        action = jax.vmap(lambda r: env._env.sample_action(r)[0])(act_rngs)
+                        value = jnp.zeros(config.n_envs)
+                        log_prob = jnp.zeros(config.n_envs)
 
                     rng, _rng = jax.random.split(rng)
                     rng_step = jax.random.split(_rng, config.n_envs)
@@ -241,23 +238,8 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                         env.step, in_axes=(0, 0, 0, None)
                     )(rng_step, state, action, env_params)
 
-                    cond_reward = get_reward_batch(
-                        batch_instruct.reward_i,
-                        batch_instruct.condition,
-                        state.env_state.env_map,
-                        next_state.env_state.env_map,
-                    )
-                    reward = jnp.where(done, reward_env, cond_reward)
-
-                    next_state = next_state.replace(
-                        returned_episode_returns=(
-                            next_state.returned_episode_returns - reward_env + reward
-                        )
-                    )
-                    info["returned_episode_returns"] = next_state.returned_episode_returns
-
                     transition = Transition(
-                        done, action, value, reward, log_prob, obsv, info,
+                        done, action, value, reward_env, log_prob, obsv, info,
                         next_state.env_state, None,
                     )
                     return (rng, obsv, next_state, done), (transition, state)
@@ -280,42 +262,42 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                     )
                     last_states = jax.tree.map(lambda x: x[[-1], ...], states)
 
-                    rendered = jax.vmap(
-                        lambda s: jax.vmap(env.render)(s.env_state)
-                    )(last_states).transpose(1, 0, 2, 3, 4)
-
-                    rendered_raw = jax.vmap(
-                        lambda s: jax.vmap(env.render_env_map)(s.env_state.env_map)
-                    )(last_states)
-                    _n_row, _n_eps, _h, _w, _c = rendered_raw.shape
-                    rendered_raw = rendered_raw.reshape(-1, _h, _w, _c)
 
                     result = get_loss_batch(
                         reward_i=batch_instruct.reward_i,
                         condition=batch_instruct.condition,
                         env_maps=states.env_state.env_map[-1, :, :, :],
                     )
-                    return result, rendered, rendered_raw, last_states
+                    result_s0 = get_loss_batch(
+                        reward_i=batch_instruct.reward_i,
+                        condition=batch_instruct.condition,
+                        env_maps=init_state.env_state.env_map,
+                    )
+                    return result, result_s0, last_states
 
                 rng_eval = jax.random.PRNGKey(30)
-                result, rendered, raw_rendered, last_states = run_eval_step(
+                result, result_s0, last_states = run_eval_step(
                     rng_eval, init_obs, init_state, done
                 )
 
                 result = jax.device_get(result)
+                result_s0 = jax.device_get(result_s0)
                 losses.append(result.loss)
                 values.append(result.value)
                 features.append(result.feature)
-                eval_rendered.append(jax.device_get(raw_rendered))
-                rendered = jax.device_get(rendered)
+                losses_s0.append(result_s0.loss)
+                features_s0.append(result_s0.feature)
+                # env_map만 보관 (렌더링은 wandb 업로드 시 on-demand)
+                env_maps_batch = jax.device_get(last_states.env_state.env_map[0])  # (n_envs, H, W)
+                eval_rendered.append(env_maps_batch)
 
                 # ── 이미지/상태 저장 ─────────────────────────────────────────
-                _save_batch_results(
-                    config, idxes, batch_valid_size,
+                save_batch_results(
+                    idxes, batch_valid_size,
                     batch_reward_i, batch_repetition,
-                    result, rendered, jax.device_get(raw_rendered), last_states,
+                    result, last_states,
                     instruct_df=instruct_df,
-                    h5=h5_store,
+                    h5_writer=h5_writer,
                 )
                 batch_elapsed = time.time() - batch_start_time
                 logger.debug(
@@ -324,6 +306,11 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 )
                 pbar.update(1)
 
+            # ── 루프 완료 후 HDF5 큐 완전 소진 확인 ─────────────────────────
+            # ViTScore / TPKL / Diversity 등이 HDF5를 읽기 전에 모든 쓰기가
+            # 디스크에 반영됐음을 보장한다.
+            h5_writer.flush()
+
         # ── 결과 DataFrame 구성 ───────────────────────────────────────────────
         total_elapsed = time.time() - loop_start_time
         logger.info(
@@ -331,126 +318,167 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             f"total: {total_elapsed:.1f}s  "
             f"(avg per batch: {total_elapsed/n_batches:.1f}s)"
         )
-        losses_arr = np.stack(losses, axis=0).reshape(-1)[:n_rows]
 
-        # feature 차원을 실제 결과에서 동적으로 결정 (get_loss_batch는 5개 반환)
+        # ── HDF5 artifact 업로드 (rollout 완료 직후, 메트릭 계산과 병렬 진행) ─
+        h5_path = join(config.eval_dir, "eval.h5")
+        if wandb.run and os.path.exists(h5_path):
+            # run마다 고유한 artifact name 생성 (동일 내용 dedup 방지)
+            import uuid
+            _uid = uuid.uuid4().hex[:8]
+            h5_artifact = wandb.Artifact(name=f"eval_h5_{_uid}", type="dataset")
+            h5_artifact.add_file(h5_path, name="eval.h5")
+            wandb.log_artifact(h5_artifact)
+            logger.info("[Eval] Started eval.h5 upload → wandb artifact (name=eval_h5_%s)", _uid)
+
+        df_ctrl_sim = instruct_df.iloc[eval_batches].copy()
+        df_ctrl_sim['seed'] = repetitions
+        df_ctrl_sim = df_ctrl_sim.reset_index(drop=True)
+
+        ##################################
+        # Append the controllability loss#
+        ##################################
+        losses_arr = np.stack(losses, axis=0).reshape(-1)[:n_rows]
+        losses_s0_arr = np.stack(losses_s0, axis=0).reshape(-1)[:n_rows]
+
+        # features: list of (n_envs, feat_dim) → (n_rows, feat_dim)
         features_stacked = np.stack(features, axis=0)          # (n_batches, n_envs, feat_dim)
         actual_feat_dim = features_stacked.shape[-1]
-        features_arr = features_stacked.reshape(-1, actual_feat_dim)[:n_rows]
+        features_arr = features_stacked.reshape(-1, actual_feat_dim)[:n_rows]  # (n_rows, feat_dim)
 
-        # FEATURE_NAMES 길이가 실제 feat_dim보다 클 수 있으므로 맞춰서 자름
-        feat_col_names = FEATURE_NAMES[:actual_feat_dim]
-        if len(feat_col_names) < actual_feat_dim:
-            feat_col_names = feat_col_names + [
-                f"feat_{i}" for i in range(len(feat_col_names), actual_feat_dim)
-            ]
+        features_s0_stacked = np.stack(features_s0, axis=0)
+        features_s0_arr = features_s0_stacked.reshape(-1, actual_feat_dim)[:n_rows]
 
-        df_output = instruct_df.iloc[eval_batches].copy()
-        df_output = df_output.loc[:, ~df_output.columns.str.startswith("embed")]
-        df_output['seed'] = repetitions
-        df_output['loss'] = losses_arr
-        df_output = df_output.reset_index()
+        df_ctrl_sim['loss'] = losses_arr
+        df_ctrl_sim['loss_s0'] = losses_s0_arr
 
+        # condition_* 컬럼 수만큼 feat 컬럼 생성 (e.g. feat_region, feat_plength, ...)
+        cond_cols = [c for c in df_ctrl_sim.columns if c.startswith('condition_')]
+        n_cond = len(cond_cols)
+
+        # reward_enum에 해당하는 feat 컬럼에만 측정값을 채우고 나머지는 NaN
+        reward_enum_arr = df_ctrl_sim['reward_enum'].values  # (n_rows,)
         feat_df = pd.DataFrame(
-            features_arr, columns=[f"feat_{n}" for n in feat_col_names]
-        ).reset_index()
-        df_output = pd.concat([df_output, feat_df], axis=1)
-
-        # ── 후처리 메트릭 ─────────────────────────────────────────────────────
-        df_output = run_post_eval(
-            config, instruct_df, df_output, eval_rendered, n_rows, n_eps,
-            gt_levels=gt_levels,
-            gt_images=gt_images,
+            np.full((n_rows, n_cond), np.nan),
+            columns=[f"feat_{i}" for i in range(n_cond)],
         )
+        feat_s0_df = pd.DataFrame(
+            np.full((n_rows, n_cond), np.nan),
+            columns=[f"feat_{i}_s0" for i in range(n_cond)],
+        )
+        for col_i in range(min(n_cond, actual_feat_dim)):
+            mask = (reward_enum_arr == col_i)   # reward_enum은 0-based
+            feat_df.loc[mask, f"feat_{col_i}"] = features_arr[mask, col_i]
+            feat_s0_df.loc[mask, f"feat_{col_i}_s0"] = features_s0_arr[mask, col_i]
+
+        df_ctrl_sim = pd.concat([df_ctrl_sim.reset_index(drop=True), feat_df, feat_s0_df], axis=1)
+
+        # progress 측정: condition_* (cont_value), feat_*, feat_*_s0 → progress_*
+        df_ctrl_sim = ProgressWrapper(n_cond=n_cond).run(df_ctrl_sim)
+
+        ##################################
+        # Similarity scores              #
+        ##################################
+
+        if config.vit_score:
+            vit_scores = ViTScoreWrapper(config).run(
+                instruct_df=instruct_df, n_eps=n_eps, gt_images=gt_images
+            )
+            df_ctrl_sim['vit_score'] = vit_scores
+
+        if config.tpkldiv:
+            tpkl_scores = TPKLWrapper(config).run(
+                instruct_df=instruct_df, n_eps=n_eps, gt_levels=gt_levels
+            )
+            df_ctrl_sim['tpkldiv'] = tpkl_scores
 
         # ── wandb / CSV 출력 ──────────────────────────────────────────────────
-        df_output.to_csv(f"{config.eval_dir}/loss.csv", index=False)
+        ctrl_sim_path = join(config.eval_dir, "ctrl_sim.csv")
+        df_ctrl_sim.to_csv(ctrl_sim_path, index=False)
+        logger.info("[Eval] Saved ctrl_sim → %s", ctrl_sim_path)
+
+        ##################################
+        # Diversity scores               #
+        ##################################
+
+        # ── 후처리 메트릭 ─────────────────────────────────────────────────────
+        if config.diversity:
+            diversity_df = DiversityWrapper(config).run(instruct_df=instruct_df, n_eps=n_eps)
+            diversity_path = join(config.eval_dir, "diversity.csv")
+            diversity_df.to_csv(diversity_path, index=False)
+            logger.info("[Eval] Saved diversity → %s", diversity_path)
+        else:
+            diversity_df = None
+
+        # ── row_i 단위 mean DataFrame 생성 ───────────────────────────────────
+        mean_cols = (['progress'] if 'progress' in df_ctrl_sim.columns else [])
+        if 'vit_score' in df_ctrl_sim.columns:
+            mean_cols.append('vit_score')
+        if 'tpkldiv' in df_ctrl_sim.columns:
+            mean_cols.append('tpkldiv')
+
+        # row_i 기준 IQR-trimmed mean (seed 축 집계)
+        meta_cols = ['row_i', 'game', 'instruction', 'reward_enum']
+        df_results = df_ctrl_sim.groupby('row_i', sort=True)[mean_cols].agg(iqr_mean).reset_index()
+        # 메타데이터 병합 (row_i당 첫 번째 행 사용)
+        meta_df = df_ctrl_sim[meta_cols].drop_duplicates(subset='row_i').reset_index(drop=True)
+        df_results = meta_df.merge(df_results, on='row_i')
+
+        # diversity 있으면 옆에 붙이기
+        if diversity_df is not None:
+            df_results = df_results.merge(
+                diversity_df[['row_i', 'diversity']],
+                on='row_i',
+                how='left',
+            )
+
+        results_path = join(config.eval_dir, "results.csv")
+        df_results.to_csv(results_path, index=False)
+        logger.info("[Eval] Saved results → %s", results_path)
+
+        # ── 전체 mean 요약 CSV 생성 및 wandb 업로드 ─────────────────────────────
+        summary_metric_cols = [c for c in ['progress', 'vit_score', 'tpkldiv', 'diversity'] if c in df_results.columns]
+        if summary_metric_cols:
+            summary_series = df_results[summary_metric_cols].mean()
+            df_summary = summary_series.reset_index()
+            df_summary.columns = ['metric', 'mean']
+            summary_path = join(config.eval_dir, "summary.csv")
+            df_summary.to_csv(summary_path, index=False)
+            logger.info("[Eval] Saved summary → %s", summary_path)
 
         if wandb.run:
-            mean_loss = (
-                df_output.groupby('reward_enum')['loss']
-                .mean()
-                .reset_index()
-            )
-            wandb.log({
-                f"Loss/{int(row['reward_enum'])}": row['loss']
-                for _, row in mean_loss.iterrows()
-            })
-            wandb.log({'raw': wandb.Table(dataframe=df_output)})
+            log_dict = {
+                'ctrl_sim_tb': wandb.Table(dataframe=df_ctrl_sim),
+                'results_tb': wandb.Table(dataframe=df_results),
+            }
+            if diversity_df is not None:
+                log_dict['diversity_tb'] = wandb.Table(dataframe=diversity_df)
+            if summary_metric_cols:
+                log_dict.update({row['metric']: row['mean'] for _, row in df_summary.iterrows()})
+            wandb.log(log_dict)
 
-        if wandb.run and config.flush:
-            for row_i, row in instruct_df.iterrows():
-                game      = row.get('game', 'unknown')
-                re_val    = int(row.get('reward_enum', row_i))
-                folder_name = f"{game}_re{re_val}_{int(row_i):04d}"
-                os.system(f"rm -r {config.eval_dir}/{folder_name}")
+            # ── 샘플 이미지 wandb 업로드 (N개, 조건 다양성 확보) ────────────────
+            wandb_images = sample_wandb_images(
+                df_ctrl_sim, eval_rendered, n_rows,
+                n_samples=getattr(config, 'n_sample_images', 10),
+                tile_size=getattr(config, 'vit_tile_size', 16),
+            )
+            if wandb_images:
+                wandb.log({f'images/{i}': img for i, img in enumerate(wandb_images)})
+                logger.info("[Eval] Uploaded %d sample images → wandb", len(wandb_images))
+
+            # ── CSV artifact 업로드 ───────────────────────────────────────────
+            csv_artifact = wandb.Artifact(name="eval_csv", type="dataset")
+            csv_artifact.add_file(ctrl_sim_path, name="ctrl_sim.csv")
+            csv_artifact.add_file(results_path, name="results.csv")
+            if diversity_df is not None:
+                csv_artifact.add_file(diversity_path, name="diversity.csv")
+            if summary_metric_cols:
+                csv_artifact.add_file(summary_path, name="summary.csv")
+            wandb.log_artifact(csv_artifact)
+            logger.info("[Eval] Uploaded CSV files → wandb artifact (eval_csv)")
+
 
         return losses_arr
 
     return eval_fn
-
-
-# ── 이미지 저장 헬퍼 ──────────────────────────────────────────────────────────
-
-def _save_batch_results(
-    config, idxes, batch_valid_size,
-    batch_reward_i, batch_repetition,
-    result, rendered, raw_rendered, last_states,
-    instruct_df=None,
-    h5=None,
-):
-    from instruct_rl.eval.hdf5_store import write_sample, write_rendered_image
-
-    for idx, (row_i, reward_i, repeat_i, feature, state) in enumerate(zip(
-        idxes,
-        batch_reward_i[:batch_valid_size],
-        batch_repetition[:batch_valid_size],
-        result.feature[:batch_valid_size],
-        last_states.env_state.env_map[0, :][:batch_valid_size],
-    )):
-        # 폴더명: {game}_re{re}_{row_i:04d}  (메타 없으면 기존 reward_{row_i} 유지)
-        if instruct_df is not None and row_i < len(instruct_df):
-            meta = instruct_df.iloc[int(row_i)]
-            game   = str(meta.get('game', 'unknown'))
-            re_val = int(meta.get('reward_enum', int(reward_i[0]) if hasattr(reward_i, '__len__') else int(reward_i)))
-            folder_name = f"{game}_re{re_val}_{int(row_i):04d}"
-        else:
-            folder_name = f"reward_{row_i}"
-
-        # ── 프레임 배열 조합 (RGBA→RGB, 텍스트 오버레이) ──────────────────
-        frames_rgb = []
-        for frame in rendered[idx]:
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
-            task_text = _build_task_text(reward_i, feature)
-            frame = cv2.putText(
-                frame, task_text, (20, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA,
-            )
-            frames_rgb.append(frame)
-        frames_rgb = np.array(frames_rgb, dtype=np.uint8)  # (n_frames, H, W, 3)
-
-        # ── HDF5 저장 ─────────────────────────────────────────────────────
-        if h5 is not None:
-            write_sample(h5, folder_name, int(repeat_i), frames_rgb, np.array(state))
-            # raw rendered image (텍스트 오버레이 없는 순수 렌더링) 별도 저장
-            raw_img = raw_rendered[idx]
-            if raw_img.shape[-1] == 4:   # RGBA → RGB
-                raw_img = cv2.cvtColor(raw_img, cv2.COLOR_RGBA2RGB)
-            write_rendered_image(h5, folder_name, int(repeat_i), raw_img)
-
-        # ── wandb 로깅 (메모리에서 직접) ──────────────────────────────────
-        if wandb.run:
-            wandb.log({f"RawImage/{folder_name}/seed_{repeat_i}": wandb.Image(raw_rendered[idx])})
-            for frame in frames_rgb:
-                wandb.log({f"Image/{folder_name}/seed_{repeat_i}": wandb.Image(frame)})
-
-
-def _build_task_text(reward_i, feature) -> str:
-    labels = {1: f"RG: {int(feature[0])} | ",
-              2: f"PL: {int(feature[1])} | ",
-              3: f"WC: {int(feature[2])} | ",
-              4: f"BC: {int(feature[3])} | ",
-              5: "BD | "}
-    return "".join(v for k, v in labels.items() if k in reward_i)
-
 

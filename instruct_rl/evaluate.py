@@ -33,7 +33,7 @@ def get_loss_batch(
     reward_i: chex.Array,
     condition: chex.Array,
     env_maps: chex.Array,
-    map_size: chex.Array = 16,
+    map_size: int = 16,
 ) -> chex.Array:
     """
     Compute batch rewards by mapping indices to reward functions and executing them in parallel.
@@ -51,17 +51,14 @@ def get_loss_batch(
     # map size
 
     aggregate_funcs = [
-        lambda cond, env_map: jnp.array(default_loss),  # 0 (no function)
         lambda cond, env_map: get_region(env_map),  # 1 (region)
         lambda cond, env_map: get_path_length(env_map),  # 2 (path_length)
         lambda cond, env_map: get_interactive_count(env_map),  # 3 (interactive)
         lambda cond, env_map: get_hazard_count(env_map),  # 4 (hazard)
         lambda cond, env_map: get_collectable_count(env_map),  # 5 (collectable)
-        lambda cond, env_map: jnp.array(default_loss),  # 6+ (no function)
     ]
 
     loss_funcs = [
-        lambda cond, env_map: jnp.array(default_loss),  # 0 (no function)
         lambda cond, env_map: region_loss(env_map, cond[0]),  # 1 (region)
         lambda cond, env_map: path_length_loss(
             env_map, cond[1]
@@ -75,7 +72,6 @@ def get_loss_batch(
         lambda cond, env_map: multigame_amount_loss(
             env_map, "collectable", cond[4], absolute=True
         ),  # 5 (collectable)
-        lambda cond, env_map: jnp.array(default_loss),  # 6+ (no function)
     ]
 
 
@@ -83,7 +79,6 @@ def get_loss_batch(
         reward_values = jax.vmap(
             lambda idx: jax.lax.switch(idx, aggregate_funcs, cond_value, env_map).ravel())(func_idx)
         return jnp.sum(reward_values)
-
 
     # Map indices to functions using `switch`
     def compute_loss(func_idx, cond_value, env_map):

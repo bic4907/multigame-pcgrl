@@ -239,20 +239,77 @@ def render_multigame_map(env_map: np.ndarray, tile_size: int = _TILE_SIZE) -> Im
     -------
     PIL.Image.Image  (RGB)
     """
-    H, W = env_map.shape
-    canvas = Image.new("RGBA", (W * tile_size, H * tile_size), (0, 0, 0, 255))
+    arr = render_multigame_map_np(env_map, tile_size)  # (H*ts, W*ts, 3) uint8
+    return Image.fromarray(arr, mode="RGB")
 
-    tile_imgs = {0: _load_tile_image(_BORDER_IMAGE, tile_size)}
+
+# ── 타일 배열 캐시 ─────────────────────────────────────────────────────────────
+_tile_array_cache: dict[int, np.ndarray] = {}
+
+
+def _get_tile_array(tile_size: int = _TILE_SIZE) -> np.ndarray:
+    """타일 인덱스별 RGBA numpy 배열을 반환. tile_size별로 캐싱.
+
+    Returns
+    -------
+    tile_array : (num_tiles, tile_size, tile_size, 4) uint8
+                 index 0 = BORDER, 1..NUM_CATEGORIES = categories
+    """
+    if tile_size in _tile_array_cache:
+        return _tile_array_cache[tile_size]
+
+    num_tiles = 1 + NUM_CATEGORIES  # BORDER + categories
+    tile_arr = np.zeros((num_tiles, tile_size, tile_size, 4), dtype=np.uint8)
+
+    border_img = _load_tile_image(_BORDER_IMAGE, tile_size)
+    tile_arr[0] = np.array(border_img.convert("RGBA"))
+
     for cat_idx in _CATEGORIES:
-        tile_imgs[cat_idx + 1] = _load_or_color_tile(cat_idx, tile_size)
+        img = _load_or_color_tile(cat_idx, tile_size)
+        tile_arr[cat_idx + 1] = np.array(img.convert("RGBA"))
 
-    for y in range(H):
-        for x in range(W):
-            t = int(env_map[y, x])
-            img = tile_imgs.get(t, _make_color_tile((200, 0, 200), tile_size))
-            canvas.paste(img, (x * tile_size, y * tile_size))
+    _tile_array_cache[tile_size] = tile_arr
+    return tile_arr
 
-    return canvas.convert("RGB")
+
+def render_multigame_map_np(env_map: np.ndarray, tile_size: int = _TILE_SIZE) -> np.ndarray:
+    """env_map (H, W) → numpy RGB 배열 (H*ts, W*ts, 3).
+
+    PIL paste 루프 대신 numpy fancy-indexing 으로 O(1) 조립.
+    타일 배열은 tile_size별로 캐싱되어 반복 호출 시 로딩 비용 없음.
+    """
+    tile_arr = _get_tile_array(tile_size)  # (T, ts, ts, 4)
+
+    H, W = env_map.shape
+    # 범위 밖 인덱스는 fallback (보라색 = index 0으로 clamp, 실제로는 존재하는 인덱스)
+    idx = np.clip(env_map.astype(np.int32), 0, len(tile_arr) - 1)  # (H, W)
+
+    # fancy indexing: (H, W, ts, ts, 4) → transpose → (H*ts, W*ts, 4)
+    canvas = tile_arr[idx]                       # (H, W, ts, ts, 4)
+    canvas = canvas.transpose(0, 2, 1, 3, 4)    # (H, ts, W, ts, 4)
+    canvas = canvas.reshape(H * tile_size, W * tile_size, 4)
+
+    return canvas[:, :, :3]  # RGB
+
+
+def render_multigame_maps_batch(
+    env_maps: np.ndarray,
+    tile_size: int = _TILE_SIZE,
+) -> np.ndarray:
+    """(N, H, W) 배열을 한 번에 렌더링 → (N, H*ts, W*ts, 3) uint8.
+
+    numpy fancy-indexing + reshape 만 사용하므로 for 루프 없음.
+    """
+    tile_arr = _get_tile_array(tile_size)  # (T, ts, ts, 4)
+
+    N, H, W = env_maps.shape
+    idx = np.clip(env_maps.astype(np.int32), 0, len(tile_arr) - 1)  # (N, H, W)
+
+    canvas = tile_arr[idx]                           # (N, H, W, ts, ts, 4) — 큰 경우 메모리 주의
+    canvas = canvas.transpose(0, 1, 3, 2, 4, 5)    # (N, H, ts, W, ts, 4)
+    canvas = canvas.reshape(N, H * tile_size, W * tile_size, 4)
+
+    return canvas[:, :, :, :3]  # RGB, (N, H*ts, W*ts, 3)
 
 
 # ── 팩토리 함수 ─────────────────────────────────────────────────────────────────

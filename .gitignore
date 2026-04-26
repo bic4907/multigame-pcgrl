@@ -60,3 +60,4 @@ dataset/reward_annotations/batches/*
 CLAUDE.md
 
 wandb_download
+.eval_cache

@@ -320,6 +320,33 @@ class EvalConfig(TrainConfig):
     metrics_to_keep: Tuple[str] = ("mean_ep_reward",)
     flush: bool = True
 
+    problem: str = "multigame"
+
+
+
+@dataclass
+class RandomEvalConfig(EvalConfig):
+    """완전 랜덤 정책 평가용 Config.
+
+    NN 없이 uniform random action을 사용하며,
+    exp_dir 이름이 "random_" 으로 시작한다 (cpcgrl_ 접두사와 대응).
+    """
+
+    random_agent: bool = True
+    dir_prefix: str = "random_"
+    wandb_project: Optional[str] = f"{PREFIX}eval_random"
+
+    dataset_reward_enum: Optional[int] = 0        # 0=region
+    eval_games: str = 'all'
+
+    # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
+    eval_samples_per_group: Optional[int] = 200
+
+    # 평가 시 복수 reward_enum 지정. None이면 dataset_reward_enum 단일값 사용.
+    # 숫자 연결 문자열로 지정 가능: "12" → [1,2],  "012" → [0,1,2]
+    # 리스트/튜플도 허용: [0,1,2]
+    eval_dataset_reward_enums: Optional[str] = None
+
 
 
 @dataclass
@@ -617,6 +644,7 @@ cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
+cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 

@@ -193,31 +193,44 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 done = jnp.zeros((n_envs,), dtype=bool)
 
                 # ── 단일 스텝 ─────────────────────────────────────────────────
+                is_random_agent: bool = getattr(config, 'random_agent', False)
+
                 def _env_step(carry, _):
                     rng, last_obs, state, done = carry
 
-                    if inject_obs_fn is not None:
-                        last_obs = inject_obs_fn(last_obs, state, batch_instruct, config, env)
-                    else:
-                        if config.use_nlp or config.use_clip:
-                            last_obs = last_obs.replace(nlp_obs=batch_instruct.embedding)
-                        if config.vec_cont:
-                            vmap_cont = jax.vmap(env.prob.get_cont_obs, in_axes=(0, 0, None))
-                            cont_obs = vmap_cont(
-                                state.env_state.env_map,
-                                batch_instruct.condition,
-                                config.raw_obs,
-                            )
-                            last_obs = last_obs.replace(nlp_obs=cont_obs)
+                    if not is_random_agent:
+                        # ── NN policy: obs 주입 후 forward pass ──────────────
+                        if inject_obs_fn is not None:
+                            last_obs = inject_obs_fn(last_obs, state, batch_instruct, config, env)
+                        else:
+                            if config.use_nlp or config.use_clip:
+                                last_obs = last_obs.replace(nlp_obs=batch_instruct.embedding)
+                            if config.vec_cont:
+                                vmap_cont = jax.vmap(env.prob.get_cont_obs, in_axes=(0, 0, None))
+                                cont_obs = vmap_cont(
+                                    state.env_state.env_map,
+                                    batch_instruct.condition,
+                                    config.raw_obs,
+                                )
+                                last_obs = last_obs.replace(nlp_obs=cont_obs)
 
-                    rng, _rng = jax.random.split(rng)
-                    pi, value, _, _, _ = network.apply(
-                        runner_state.train_state.params, last_obs,
-                        return_text_embed=False,
-                        return_state_embed=False,
-                    )
-                    action = pi.sample(seed=_rng)
-                    log_prob = pi.log_prob(action)
+                        rng, _rng = jax.random.split(rng)
+                        pi, value, _, _, _ = network.apply(
+                            runner_state.train_state.params, last_obs,
+                            return_text_embed=False,
+                            return_state_embed=False,
+                        )
+                        action = pi.sample(seed=_rng)
+                        log_prob = pi.log_prob(action)
+                    else:
+                        # ── 완전 random policy: NN 없이 uniform random action ──
+                        # (초기화된 가중치가 아닌 진짜 random)
+                        rng, _rng = jax.random.split(rng)
+                        act_rngs = jax.random.split(_rng, config.n_envs)
+                        # sample_action은 [None, ...] 로 배치 차원을 추가하므로 [0]으로 제거
+                        action = jax.vmap(lambda r: env._env.sample_action(r)[0])(act_rngs)
+                        value = jnp.zeros(config.n_envs)
+                        log_prob = jnp.zeros(config.n_envs)
 
                     rng, _rng = jax.random.split(rng)
                     rng_step = jax.random.split(_rng, config.n_envs)

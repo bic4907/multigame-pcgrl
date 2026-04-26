@@ -141,7 +141,17 @@ def main_eval_entry(config, *, inject_obs_fn=None):
     logger.info(f"Running experiment at {exp_dir}")
 
     _re = getattr(config, 'dataset_reward_enum', None)
-    _re_suffix = f"_re-{_re}" if _re is not None else ""
+    _re_enums = getattr(config, 'eval_dataset_reward_enums', None)
+
+    # eval_dataset_reward_enums 가 지정된 경우 → 그 값을 그대로 suffix로 사용
+    # e.g. "01234" → "_re-01234", [0,1,2] → "_re-012"
+    if _re_enums is not None:
+        _re_enums_str = ''.join(str(x) for x in _re_enums) if not isinstance(_re_enums, str) else _re_enums
+        _re_suffix = f"_re-{_re_enums_str}"
+    elif _re is not None:
+        _re_suffix = f"_re-{_re}"
+    else:
+        _re_suffix = ""
 
     # eval_games 가 지정된 경우 약어를 폴더명에 포함 (없으면 game 사용)
     _eval_games = getattr(config, 'eval_games', None) or getattr(config, 'game', None)

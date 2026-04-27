@@ -126,6 +126,24 @@ BORDER=0, EMPTY=1, WALL=2, ..., HAZARD=7  (총 8개)
 에서 BORDER 를 제외하면 editable = 7 = NUM_CATEGORIES.
 """
 
+# 길찾기/region/path-length 메트릭에서 "통과 가능"으로 간주할 타일.
+# 멀티게임 카테고리가 바뀌어도 이름이 존재하는 항목만 자동 포함한다.
+_PASSABLE_TILE_NAMES = (
+    "EMPTY",
+    "FLOOR",
+    "INTERACTIVE",
+    "INTERACTABLE",
+    "HAZARD",
+    "OBJECT",
+    "SPAWN",
+    "COLLECTABLE",
+    "COLLECTIBLE",
+)
+_passable_tiles = [getattr(MultigameTiles, n) for n in _PASSABLE_TILE_NAMES if hasattr(MultigameTiles, n)]
+if not _passable_tiles and hasattr(MultigameTiles, "EMPTY"):
+    _passable_tiles = [MultigameTiles.EMPTY]
+MultigamePassable = jnp.array(_passable_tiles, dtype=jnp.int32)
+
 
 class MultigameMetrics(IntEnum):
     """멀티게임 env 는 별도 통계 지표를 사용하지 않는다. dummy 1-element."""
@@ -150,10 +168,11 @@ class MultigameProblem(Problem):
     metrics_enum = MultigameMetrics
     region_metrics_enum = Placeholder
 
-    # tile 생성 확률: BORDER 0, 나머지 균등
+    # tile 생성 확률: BORDER=0, EMPTY=0.60, WALL=0.40, 나머지 각 0.01 (정규화)
+    _p_norm = 0.60 + 0.40 + 0.01 * (NUM_CATEGORIES - 2)
     tile_probs = tuple(
-        [0.0]                                            # BORDER
-        + [1.0 / NUM_CATEGORIES] * NUM_CATEGORIES        # 7 categories
+        [0.0, 0.60 / _p_norm, 0.40 / _p_norm]
+        + [0.01 / _p_norm] * (NUM_CATEGORIES - 2)
     )
 
     # 고정 개수 없음 (모두 자유 배치)
@@ -166,6 +185,7 @@ class MultigameProblem(Problem):
 
     tile_size = _TILE_SIZE
     unavailable_tiles: list = []
+    passable_tiles = MultigamePassable
 
     def __init__(self, map_shape: Tuple[int, int], ctrl_metrics: Tuple, pinpoints: bool):
         super().__init__(map_shape, ctrl_metrics, pinpoints)
@@ -362,4 +382,3 @@ def make_multigame_env(
     )
     env = PCGRLEnv(env_params)
     return env, env_params
-

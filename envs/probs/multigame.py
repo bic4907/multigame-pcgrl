@@ -150,10 +150,11 @@ class MultigameProblem(Problem):
     metrics_enum = MultigameMetrics
     region_metrics_enum = Placeholder
 
-    # tile 생성 확률: BORDER 0, 나머지 균등
+    # tile 생성 확률: BORDER=0, EMPTY=0.60, WALL=0.40, 나머지 각 0.01 (정규화)
+    _p_norm = 0.60 + 0.40 + 0.01 * (NUM_CATEGORIES - 2)
     tile_probs = tuple(
-        [0.0]                                            # BORDER
-        + [1.0 / NUM_CATEGORIES] * NUM_CATEGORIES        # 7 categories
+        [0.0, 0.60 / _p_norm, 0.40 / _p_norm]
+        + [0.01 / _p_norm] * (NUM_CATEGORIES - 2)
     )
 
     # 고정 개수 없음 (모두 자유 배치)
@@ -362,4 +363,3 @@ def make_multigame_env(
     )
     env = PCGRLEnv(env_params)
     return env, env_params
-

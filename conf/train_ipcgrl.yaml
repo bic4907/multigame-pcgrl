@@ -5,6 +5,7 @@ defaults:
 use_nlp: true
 render_freq: -1
 saves_dir: saves
+init_ckpt_path: null
 encoder:
   trainable: true
 

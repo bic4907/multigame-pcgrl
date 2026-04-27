@@ -94,6 +94,9 @@ class Config:
     # mutation rate initial map generation
     map_mutation_rate: float = 0.1
 
+    # 다른 경로의 체크포인트에서 학습을 시작할 때 지정. None이면 exp_dir/ckpts에서 자동 복원.
+    init_ckpt_path: Optional[str] = None
+
     """ DO NOT USE. WILL BE OVERWRITTEN. """
     exp_dir: Optional[str] = None
     n_gpus: int = 1

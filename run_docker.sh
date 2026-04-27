@@ -98,7 +98,7 @@ docker_command="docker run --rm -it
     -w /workspace
     --gpus all
     -e CUDA_VISIBLE_DEVICES=$available_gpu
-    -e XLA_PYTHON_CLIENT_PREALLOCATE=true
+    -e XLA_PYTHON_CLIENT_PREALLOCATE=false
     -e XLA_PYTHON_CLIENT_MEM_FRACTION=.95
     -v /mnt/nas:/mnt/nas
     -v /raid:/raid

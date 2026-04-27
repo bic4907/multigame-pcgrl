@@ -5,6 +5,8 @@ defaults:
 use_nlp: true
 render_freq: -1
 saves_dir: saves
+encoder:
+  trainable: true
 
 hydra:
   sweeper:

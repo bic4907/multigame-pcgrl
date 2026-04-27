@@ -15,11 +15,20 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+# Ensure project root is importable even when run from "results/".
+_HERE = Path(__file__).resolve().parent
+_ROOT = _HERE.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from envs.probs.multigame import render_multigame_map_np
 
 
 NUM_SLOTS = 4
@@ -67,13 +76,32 @@ def parse_args() -> argparse.Namespace:
         default="results/wandb_download/reward_enum_viz_report.md",
         help="Markdown report path.",
     )
+    parser.add_argument(
+        "--render-tile-size",
+        type=int,
+        default=16,
+        help="Tile size used by env renderer (actual tile image rendering).",
+    )
     return parser.parse_args()
 
 
 def resolve_paths(root_arg: str, output_dir_arg: str, output_md_arg: str) -> tuple[Path, Path, Path]:
-    root = Path(root_arg).resolve()
-    out_dir = Path(output_dir_arg).resolve()
-    out_md = Path(output_md_arg).resolve()
+    def _resolve_project_path(path_arg: str, prefer_existing: bool = False) -> Path:
+        raw = Path(path_arg)
+        if raw.is_absolute():
+            return raw.resolve()
+        proj = (_ROOT / raw).resolve()
+        cwd = (Path.cwd() / raw).resolve()
+        if prefer_existing:
+            if proj.exists():
+                return proj
+            if cwd.exists():
+                return cwd
+        return proj
+
+    root = _resolve_project_path(root_arg, prefer_existing=True)
+    out_dir = _resolve_project_path(output_dir_arg, prefer_existing=False)
+    out_md = _resolve_project_path(output_md_arg, prefer_existing=False)
     return root, out_dir, out_md
 
 
@@ -193,6 +221,7 @@ def draw_reward_figure(
     selections: list[Selection],
     h5_file: h5py.File,
     output_path: Path,
+    render_tile_size: int,
 ) -> None:
     fig = plt.figure(figsize=(16, 6.5))
     gs = fig.add_gridspec(2, 4, height_ratios=[1.0, 1.5])
@@ -224,7 +253,8 @@ def draw_reward_figure(
             continue
         sel = selections[i]
         state = h5_file[sel.h5_key][sel.seed_key]["state"][()]
-        ax.imshow(state, cmap="tab20", interpolation="nearest", vmin=0, vmax=max(1, int(state.max())))
+        rendered = render_multigame_map_np(np.asarray(state), tile_size=render_tile_size)
+        ax.imshow(rendered, interpolation="nearest")
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_title(
@@ -253,7 +283,8 @@ def build_markdown(
     lines.append("선정 방식:")
     lines.append("- 각 `reward_enum`에서 `condition_{reward_enum}` 전체 범위를 4개 구간으로 균등 분할")
     lines.append("- 각 구간 중심값에 가장 가까운 샘플을 선택하고, 동률이면 `progress` 평균이 높은 샘플 우선")
-    lines.append("- 각 샘플의 타일맵은 `eval.h5`의 해당 그룹에서 `seed_0`(없으면 첫 seed) 상태를 사용")
+    lines.append("- 각 샘플의 타일맵은 `envs.probs.multigame.render_multigame_map_np`로 실제 타일 이미지 렌더")
+    lines.append("- `eval.h5`의 해당 그룹에서 `seed_0`(없으면 첫 seed) 상태를 사용")
     lines.append("")
 
     for reward_enum, grouped, selections, image_name in all_entries:
@@ -304,6 +335,7 @@ def main() -> None:
                 selections=selections,
                 h5_file=h5_file,
                 output_path=output_dir / image_name,
+                render_tile_size=args.render_tile_size,
             )
         all_entries.append((reward_enum, grouped, selections, image_name))
         print(

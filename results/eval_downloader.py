@@ -62,8 +62,7 @@ class _ProjectSummary:
 # 다운받을 프로젝트 목록
 TARGET_PROJECTS = [
     "aaai27_eval_cpcgrl",
-    "aaai27_eval_cpcgrl_vanilla",
-    "aaai27_eval_cpcgrl_spread",
+    "aaai27_eval_random"
 ]
 
 # ---------------------------------------------------------------------------

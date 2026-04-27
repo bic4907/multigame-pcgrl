@@ -5,11 +5,45 @@ from jax import vmap
 import chex
 import jax.numpy as jnp
 
+from envs.probs.multigame import MultigameTiles
 
 from .rewards import *
 from .rewards.multigame_placement import get_multigame_tile_placement_reward
 from .rewards.special_tile_penalty import get_special_tile_penalty
 from .weights import RewardWeight, RewardBias
+
+
+def _tile_value_or_default(*names: str, default: int = -1) -> int:
+    for name in names:
+        if hasattr(MultigameTiles, name):
+            return int(getattr(MultigameTiles, name))
+    return default
+
+
+_INTERACTIVE_TILE = _tile_value_or_default("INTERACTIVE", "INTERACTABLE")
+_HAZARD_TILE = _tile_value_or_default("HAZARD")
+_COLLECTABLE_TILE = _tile_value_or_default("COLLECTABLE", "COLLECTIBLE")
+
+
+def _build_penalty_exclude_tiles(reward_idx_row: chex.Array) -> chex.Array:
+    """reward_i(0-based)에서 현재 학습 타일을 골라 패널티 제외 목록으로 변환."""
+    reward_idx_row = jnp.ravel(reward_idx_row).astype(jnp.int32)
+
+    ex_interactive = jnp.any(reward_idx_row == 2)
+    ex_hazard = jnp.any(reward_idx_row == 3)
+    ex_collectable = jnp.any(reward_idx_row == 4)
+
+    exclude_tiles = jnp.full((3,), -1, dtype=jnp.int32)
+    exclude_tiles = exclude_tiles.at[0].set(
+        jnp.where(ex_interactive, jnp.int32(_INTERACTIVE_TILE), -1)
+    )
+    exclude_tiles = exclude_tiles.at[1].set(
+        jnp.where(ex_hazard, jnp.int32(_HAZARD_TILE), -1)
+    )
+    exclude_tiles = exclude_tiles.at[2].set(
+        jnp.where(ex_collectable, jnp.int32(_COLLECTABLE_TILE), -1)
+    )
+    return exclude_tiles
 
 
 @partial(jax.jit, static_argnums=(4,))
@@ -75,10 +109,16 @@ def get_reward_batch(
     compute_reward_vmap = vmap(compute_value, in_axes=(0, 0, 0, 0))
     rewards = compute_reward_vmap(reward_i, condition, prev_env_map, curr_env_map)
 
-    # special tile (interactive/hazard/collectable) 존재 자체에 소량 패널티 (delta)
+    # special tile (interactive/hazard/collectable) 패널티.
+    # 단, 현재 학습 대상 타일(reward_i 2/3/4)은 패널티에서 제외.
+    penalty_exclude_tiles = vmap(_build_penalty_exclude_tiles)(reward_i)  # (batch, 3)
     special_penalty = vmap(
-        lambda p, c: get_special_tile_penalty(p, c, weight=special_tile_penalty_weight)
-    )(prev_env_map, curr_env_map)  # (batch,)
+        lambda p, c, ex: get_special_tile_penalty(
+            p, c,
+            weight=special_tile_penalty_weight,
+            exclude_tiles=ex,
+        )
+    )(prev_env_map, curr_env_map, penalty_exclude_tiles)  # (batch,)
     rewards = rewards - special_penalty
 
     # clip

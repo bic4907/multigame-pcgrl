@@ -3,7 +3,7 @@ name = "instructed-pcg"
 version = "0.1.0"
 description = "Add your description here"
 authors = [
-    { name = "devcomfort", email = "im@devcomfort.me" }
+    { name = "Anonymous", email = "anonymous@example.com" }
 ]
 dependencies = [
     "absl-py==2.1.0",

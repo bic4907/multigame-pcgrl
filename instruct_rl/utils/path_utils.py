@@ -426,8 +426,6 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         logger.warning("Setting model to `contconv` due to the vec_cont flag")
         config.model = 'contconv'
 
-    print( config.model, hasattr(config, 'decoder'))
-
     if config.encoder.model is not None:
         # dataset 기반 모드에서는 model이 이미 설정되어 있으므로 스킵
         _is_dataset_mode = hasattr(config, 'dataset_game') and config.dataset_game is not None
@@ -482,7 +480,6 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         )
 
     elif config.model == "cnnclipconv" and hasattr(config, 'decoder'):
-        print('this is decoder encoder ')
         network = EncoderCLIPConvForward(
             config=config.encoder,
             encoder=get_cnnclip_decoder_encoder(config.encoder)[0],

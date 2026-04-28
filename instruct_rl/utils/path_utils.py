@@ -482,7 +482,10 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     elif config.model == "cnnclipconv" and hasattr(config, 'decoder'):
         network = EncoderCLIPConvForward(
             config=config.encoder,
-            encoder=get_cnnclip_decoder_encoder(config.encoder)[0],
+            encoder=get_cnnclip_decoder_encoder(
+                config.encoder,
+                decoder_config=config.decoder,
+            )[0],
             train_encoder=config.encoder.trainable,
             nlp_conv_forward=NLPConvForward(
                 action_dim=action_dim, activation=config.activation,

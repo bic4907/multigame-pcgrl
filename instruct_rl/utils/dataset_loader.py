@@ -27,6 +27,98 @@ REWARD_ENUM_NAMES = {
 }
 
 
+def _parse_dataset_reward_enum_filter(raw_value, *, field_name: str = "dataset_reward_enum"):
+    """dataset_reward_enum 설정을 정규화한다.
+
+    Returns
+    -------
+    list[int] | None
+        None 이면 필터 비활성화(=전체 reward_enum 허용).
+        예: "01" -> [0, 1], "0,1" -> [0, 1], 2 -> [2]
+    """
+    if raw_value is None:
+        return None
+
+    parsed = None
+    if isinstance(raw_value, str):
+        v = raw_value.strip().lower()
+        if v in ("", "none", "all"):
+            return None
+        try:
+            if "," in v:
+                parsed = [int(x.strip()) for x in v.split(",") if x.strip()]
+            else:
+                parsed = [int(c) for c in v]
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid {field_name}='{raw_value}'. "
+                f"Use digits like '01', comma list like '0,1', or 'all'."
+            ) from e
+    elif isinstance(raw_value, int):
+        parsed = [int(c) for c in str(raw_value)]
+    else:
+        try:
+            parsed = [int(x) for x in raw_value]
+        except (TypeError, ValueError) as e:
+            raise ValueError(
+                f"Invalid {field_name}={raw_value!r}. "
+                f"Use int/list, digits-string, comma-list, or 'all'."
+            ) from e
+
+    valid = set(REWARD_ENUM_NAMES.keys())
+    normalized = []
+    seen = set()
+    for re in parsed:
+        if re not in valid:
+            raise ValueError(
+                f"Invalid {field_name} value: {re}. "
+                f"Valid enums are {sorted(valid)}."
+            )
+        if re not in seen:
+            normalized.append(re)
+            seen.add(re)
+    return normalized if normalized else None
+
+
+def _parse_reward_enum_list(raw_value, *, field_name: str = "eval_dataset_reward_enums"):
+    """복수 reward_enum 설정을 int 리스트로 정규화한다.
+
+    None/'none'/'' -> None
+    'all'          -> [0,1,2,3,4]
+    '012'          -> [0,1,2]   (기존 동작 유지)
+    '0,2,4'        -> [0,2,4]
+    """
+    if raw_value is None:
+        return None
+
+    if isinstance(raw_value, str):
+        v = raw_value.strip().lower()
+        if v in ("", "none"):
+            return None
+        if v == "all":
+            return sorted(REWARD_ENUM_NAMES.keys())
+        try:
+            if "," in v:
+                return [int(x.strip()) for x in v.split(",") if x.strip()]
+            return [int(c) for c in v]
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid {field_name}='{raw_value}'. "
+                f"Use digits like '012', comma list like '0,1,2', or 'all'."
+            ) from e
+
+    if isinstance(raw_value, int):
+        return [int(c) for c in str(raw_value)]
+
+    try:
+        return [int(x) for x in raw_value]
+    except (TypeError, ValueError) as e:
+        raise ValueError(
+            f"Invalid {field_name}={raw_value!r}. "
+            f"Use iterable of ints, digits-string, comma-list, or 'all'."
+        ) from e
+
+
 def load_dataset_instruct(config):
     """MultiGameDataset에서 Instruct 객체를 빌드한다.
 
@@ -45,18 +137,15 @@ def load_dataset_instruct(config):
     _eval_games_str = getattr(config, 'eval_games', None)
     _load_game = _eval_games_str if _eval_games_str is not None else config.dataset_game
 
-    # eval_dataset_reward_enums 파싱 (로딩 로그·필터링·테이블 표시에서 공통 사용)
+    # reward_enum 파싱 (로딩 로그·필터링·테이블 표시에서 공통 사용)
     _eval_re_raw = getattr(config, 'eval_dataset_reward_enums', None)
-    if _eval_re_raw is not None:
-        if isinstance(_eval_re_raw, (str, int)):
-            _eval_re_list = [int(c) for c in str(_eval_re_raw)]
-        else:
-            _eval_re_list = [int(x) for x in _eval_re_raw]
-    else:
-        _eval_re_list = None
-
-    _effective_re = _eval_re_list if _eval_re_list else (
-        [config.dataset_reward_enum] if config.dataset_reward_enum is not None else None
+    _eval_re_list = _parse_reward_enum_list(_eval_re_raw, field_name="eval_dataset_reward_enums")
+    _dataset_re_filter_list = _parse_dataset_reward_enum_filter(
+        getattr(config, "dataset_reward_enum", None),
+        field_name="dataset_reward_enum",
+    )
+    _effective_re = _eval_re_list if _eval_re_list is not None else (
+        _dataset_re_filter_list
     )
 
     logger.info(
@@ -65,7 +154,7 @@ def load_dataset_instruct(config):
     )
 
     # 'all'이면 전체 게임 로드, 약어면 역매핑으로 full name 리스트 획득
-    from conf.game_utils import GAME_ABBR, GAME_ABBR_INV, ALL_GAMES, parse_game_str
+    from conf.game_utils import GAME_ABBR, ALL_GAMES, parse_game_str
     _dg = _load_game
     if _dg == 'all':
         _game_names = ALL_GAMES  # ['dungeon', 'pokemon', 'sokoban', 'doom', 'doom2', 'zelda']
@@ -97,12 +186,14 @@ def load_dataset_instruct(config):
     # ── 게임별 처리 통계 표 출력 (분할/샘플링 후 최종 정보 포함) ──────────────
 
     # reward_enum 필터링 — 위에서 파싱한 _eval_re_list / _effective_re 사용
-    if _eval_re_list:
+    if _eval_re_list is not None:
         _re_set = set(_eval_re_list)
         samples = [s for s in samples if s.meta.get("reward_enum") in _re_set]
         logger.info(f"eval_dataset_reward_enums={_eval_re_list}: {len(samples)} samples")
-    elif config.dataset_reward_enum is not None:
-        samples = [s for s in samples if s.meta.get("reward_enum") == config.dataset_reward_enum]
+    elif _dataset_re_filter_list is not None:
+        _re_set = set(_dataset_re_filter_list)
+        samples = [s for s in samples if s.meta.get("reward_enum") in _re_set]
+        logger.info(f"dataset_reward_enum={_dataset_re_filter_list}: {len(samples)} samples")
 
     # reward annotation이 있는 샘플만
     samples = [s for s in samples if "reward_enum" in s.meta and "conditions" in s.meta]
@@ -117,7 +208,7 @@ def load_dataset_instruct(config):
 
     assert len(samples) > 0, (
         f"No samples found for game={_load_game}, "
-        f"reward_enum={config.dataset_reward_enum}. "
+        f"reward_enum={getattr(config, 'dataset_reward_enum', None)}. "
         f"Check that reward annotations exist."
     )
 
@@ -472,8 +563,11 @@ def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None,
         _re_filter_set = set(re_filter_list)
         re_filter = None  # highlight 판단에 set 사용
     else:
-        _re_filter_set = None
-        re_filter = config.dataset_reward_enum
+        re_filter = _parse_dataset_reward_enum_filter(
+            getattr(config, "dataset_reward_enum", None),
+            field_name="dataset_reward_enum",
+        )
+        _re_filter_set = set(re_filter) if re_filter is not None else None
 
     col_game  = "Game"
     col_re    = "re(name)"
@@ -493,7 +587,7 @@ def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None,
             if _re_filter_set is not None:
                 highlight = re in _re_filter_set
             else:
-                highlight = (re_filter is None) or (re == re_filter)
+                highlight = True
             arr = _np.array(c["cond_vals"]) if c["cond_vals"] else None
             rows_data.append({
                 "game":     g,
@@ -728,4 +822,3 @@ def _apply_condition_filters(samples, filters: _List[_ConditionFilter]):
             return True
         samples = [s for s in samples if _keep(s)]
     return samples
-

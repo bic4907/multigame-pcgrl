@@ -148,7 +148,7 @@ class Config:
 
     # MultiGameDataset-based filtering (for CPCGRL)
     dataset_game: Optional[str] = None          # e.g. "dungeon", "pokemon", "doom"
-    dataset_reward_enum: Optional[int] = None   # e.g. 0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable
+    dataset_reward_enum: Optional[Union[int, str]] = None   # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
 
     # Multigame tile placement reward 가중치 (sweep 대상)
@@ -235,7 +235,7 @@ class CPCGRLConfig(TrainConfig):
     game: str = "all"
 
     dataset_game: Optional[str] = "all"
-    dataset_reward_enum: Optional[int] = 0        # 0=region
+    dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
     # condition 값 기반 필터: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
     # 여러 필터는 쉼표 구분: "enum_0_min_3_max_10,enum_2_max_50"
@@ -336,7 +336,7 @@ class RandomEvalConfig(EvalConfig):
     dir_prefix: str = "random_"
     wandb_project: Optional[str] = f"{PREFIX}eval_random"
 
-    dataset_reward_enum: Optional[int] = 0        # 0=region
+    dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
     eval_games: str = 'all'
 
     # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
@@ -360,7 +360,7 @@ class CPCGRLEvalConfig(EvalConfig):
     # ── CPCGRLConfig 와 동일한 game / dataset 기본값 → exp_dir 이름 일치 ──
     game: str = "all"
     dataset_game: Optional[str] = "all"
-    dataset_reward_enum: Optional[int] = 0        # 0=region
+    dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
 
     # 평가 대상 게임 (None이면 game과 동일). 체크포인트 로딩은 game 기준, 평가 데이터는 eval_games 기준.
@@ -658,4 +658,3 @@ cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)
 
 cs.store(name="train_reward", node=RewardTrainConfig)
-

@@ -7,6 +7,8 @@ from conf.game_utils import (                       # noqa: F401  — re-export
     parse_game_str, build_game_str,
 )
 
+PREFIX = "aaai27_"
+
 @dataclass
 class Config:
     lr: float = 1.0e-4
@@ -31,6 +33,7 @@ class Config:
     exp_name: str = "def"
     random_exp_name: bool = False
     seed: int = 0
+    saves_dir: str = "saves"
 
     # Game selection — 2글자 약어 조합 (dg=dungeon, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
     # 예: "dg" (dungeon만), "dgdm" (dungeon+doom+doom2), "all" (전체)
@@ -150,10 +153,10 @@ class Config:
 
     # Multigame tile placement reward 가중치 (sweep 대상)
     placement_w_amount: float = 1.0
-    placement_w_spread: float = 0.1
+    placement_w_spread: float = 0.0
 
     # Special tile (interactive/hazard/collectable) 존재 패널티 가중치
-    special_tile_penalty_weight: float = 0.3
+    special_tile_penalty_weight: float = 0.05
 
 @dataclass
 class CLIPConfig:
@@ -230,7 +233,10 @@ class TrainConfig(Config):
 @dataclass
 class CPCGRLConfig(TrainConfig):
     problem: str = "multigame"
-    dataset_game: Optional[str] = "dungeon"
+
+    game: str = "all"
+
+    dataset_game: Optional[str] = "all"
     dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
     # condition 값 기반 필터: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
@@ -322,7 +328,7 @@ class EvalConfig(TrainConfig):
     eval_human_demo_path: str = './human_dataset'
 
     diversity: bool = True
-    human_likeness: bool = True
+    vit_score: bool = True
     vit_normalize: bool = False
     tpkldiv: bool = True
 
@@ -331,6 +337,75 @@ class EvalConfig(TrainConfig):
     metrics_to_keep: Tuple[str] = ("mean_ep_reward",)
     flush: bool = True
 
+    problem: str = "multigame"
+
+
+
+@dataclass
+class RandomEvalConfig(EvalConfig):
+    """완전 랜덤 정책 평가용 Config.
+
+    NN 없이 uniform random action을 사용하며,
+    exp_dir 이름이 "random_" 으로 시작한다 (cpcgrl_ 접두사와 대응).
+    """
+
+    random_agent: bool = True
+    dir_prefix: str = "random_"
+    wandb_project: Optional[str] = f"{PREFIX}eval_random"
+
+    dataset_reward_enum: Optional[int] = 0        # 0=region
+    eval_games: str = 'all'
+
+    # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
+    eval_samples_per_group: Optional[int] = 200
+
+    # 평가 시 복수 reward_enum 지정. None이면 dataset_reward_enum 단일값 사용.
+    # 숫자 연결 문자열로 지정 가능: "12" → [1,2],  "012" → [0,1,2]
+    # 리스트/튜플도 허용: [0,1,2]
+    eval_dataset_reward_enums: Optional[str] = None
+
+
+
+@dataclass
+class CPCGRLEvalConfig(EvalConfig):
+    """CPCGRL 평가용 Config.
+
+    CPCGRLConfig 와 동일한 모델/환경 설정을 EvalConfig 위에 덮어쓴다.
+    """
+    problem: str = "multigame"
+
+    # ── CPCGRLConfig 와 동일한 game / dataset 기본값 → exp_dir 이름 일치 ──
+    game: str = "all"
+    dataset_game: Optional[str] = "all"
+    dataset_reward_enum: Optional[int] = 0        # 0=region
+    dataset_train_ratio: float = 0.95
+
+    # 평가 대상 게임 (None이면 game과 동일). 체크포인트 로딩은 game 기준, 평가 데이터는 eval_games 기준.
+    # 예: game="all" 로 학습된 모델을 특정 게임만 평가할 때 eval_games="dg" 처럼 지정.
+    eval_games: str = 'all'
+
+    vec_cont: bool = True
+    raw_obs: bool = True
+    model: str = "contconv"
+    use_nlp: bool = False
+    use_clip: bool = False
+    vec_input_dim: Optional[int] = 5
+    nlp_input_dim: int = 0
+
+    max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+
+    # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
+    eval_samples_per_group: Optional[int] = 200
+
+    # 평가 시 복수 reward_enum 지정. None이면 dataset_reward_enum 단일값 사용.
+    # 숫자 연결 문자열로 지정 가능: "12" → [1,2],  "012" → [0,1,2]
+    # 리스트/튜플도 허용: [0,1,2]
+    eval_dataset_reward_enums: Optional[str] = None
+
+    # True이면 체크포인트 없어도 진행 (WARNING 출력). False(기본)이면 체크포인트 없을 시 에러.
+    ignore_checkpoint: bool = False
+
+    wandb_project: Optional[str] = f"{PREFIX}eval_cpcgrl"
 
 
 @dataclass
@@ -470,7 +545,7 @@ class CLIPTrainConfig(Config):
     seed: int = 0
     
     overwrite: bool = False
-    ckpt_freq: int = int(5)
+    ckpt_freq: int = int(60)
 
     # Goal img path
     img_data_path: str = "./human_dataset"
@@ -499,10 +574,13 @@ class CLIPTrainConfig(Config):
     # instruction 앞에 게임 이름 prefix를 붙일지 여부 (e.g. "In Zelda, ...")
     prepend_game_prefix: bool = False
     # instruction 앞에 게임 설명 prefix를 붙일지 여부 (e.g. "In a top-down dungeon adventure, ...")
-    prepend_game_desc: bool = False
+    prepend_game_desc: bool = True
 
     # overwrite
     embed_type: str = "humanai"
+
+    # ── long-tail cutting ──
+    longtail_cut: bool = True
 
 @dataclass
 class CLIPEvalConfig(EvalConfig):
@@ -537,9 +615,6 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
     regression_loss: str = "mae"
 
-    # ── long-tail cutting ──
-    longtail_cut: bool = True
-
 
 @dataclass
 class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
@@ -554,9 +629,9 @@ class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
     # ── Unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda) ──
     unseen_games: str = "zd"
 
-    # ── Few-shot ratio sweep 설정 ──
+    # ── Few-shot ratio (단일 실행용) ──
     # 0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen 학습 풀 전부 사용
-    unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1, 0.15, 0.2, 0.3, 1.0)
+    unseen_ratio: float = 0.0
 
     # ── Seen 게임 데이터 비율 ──
     # 1.0 = seen 학습 풀 전부 사용 (기본값), 0.0 = seen 학습 데이터 0%
@@ -567,6 +642,18 @@ class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
     unseen_test_seed: int = 42        # 테스트셋 분할 시드 (재현 가능)
 
 
+@dataclass
+class CLIPDecoderUnseenSweepConfig(CLIPDecoderUnseenConfig):
+    """Seen/Unseen 게임 분리 + Few-shot Ratio **Sweep** Config.
+
+    CLIPDecoderUnseenConfig 를 상속하며, unseen_ratios 리스트를 추가로 정의한다.
+    sweep/runnable_sweep/unseen_games.py 에서 사용한다.
+    """
+    # ── Few-shot ratio sweep 설정 ──
+    # 0.0 = zero-shot, 1.0 = unseen 학습 풀 전부 사용
+    unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1)
+
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
@@ -575,12 +662,15 @@ cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="pretrained_clip_pcgrl", node=Pretrained_CLIP_PCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
+cs.store(name="eval_random_schema", node=RandomEvalConfig)
+cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs
 cs.store(name="train_clip", node=CLIPTrainConfig)
 cs.store(name="train_clip_decoder_schema", node=CLIPDecoderTrainConfig)
 cs.store(name="train_clip_decoder_unseen_schema", node=CLIPDecoderUnseenConfig)
+cs.store(name="train_clip_decoder_unseen_sweep_schema", node=CLIPDecoderUnseenSweepConfig)
 
 cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)

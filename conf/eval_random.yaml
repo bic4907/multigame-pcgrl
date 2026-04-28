@@ -1,0 +1,9 @@
+defaults:
+  - eval_random_schema
+  - _self_
+
+hydra:
+  sweeper:
+    params: {}
+
+n_envs: 600

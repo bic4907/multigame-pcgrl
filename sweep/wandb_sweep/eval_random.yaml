@@ -1,0 +1,21 @@
+program: eval_random.py
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all']
+  eval_dataset_reward_enums:
+    value: '01234'
+  seed:
+    values: [0]
+  reevaluate:
+    value: true
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/random'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+  - "overwrite=true"

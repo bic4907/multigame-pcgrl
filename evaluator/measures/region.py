@@ -1,14 +1,14 @@
 import chex
 
 from envs.pathfinding import calc_diameter
-from envs.probs.dungeon3 import Dungeon3Passible
+from envs.probs.multigame import MultigamePassable
 
 from ..utils import init_flood_net
 
 
 def get_region(
     env_map: chex.Array,
-    passable_tiles: chex.Array = Dungeon3Passible,
+    passable_tiles: chex.Array = MultigamePassable,
 ):
     region_network, path_network = init_flood_net(env_map.shape)
     _, _, n_regions, _ = calc_diameter(

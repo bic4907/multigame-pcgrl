@@ -9,7 +9,7 @@ from os.path import abspath, join
 from encoder.model import apply_encoder_model
 from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder
 from conf.config import Config, TrainConfig, EncoderConfig
-from conf.game_utils import parse_game_str
+from conf.game_utils import parse_game_str, GAME_ABBR
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
@@ -157,6 +157,32 @@ def get_short_target(target: str) -> str:
 
 
 def get_exp_name(config):
+    # ── Random policy 모드: random_exp-{exp_name}_s-{seed} ──
+    if getattr(config, 'random_agent', False):
+        exp_str = getattr(config, 'exp_name', 'def') or 'def'
+        return f'random_exp-{exp_str}_s-{config.seed}'
+
+    # ── CPCGRL 모드: cpcgrl_game-{game}_re-{re}_s-{seed}_exp-{exp_name} ──
+    _is_cpcgrl = (
+        hasattr(config, 'dataset_game') and config.dataset_game is not None
+        and getattr(config, 'vec_cont', False)
+        and not getattr(config, 'use_clip', False)
+        and not getattr(config, 'use_nlp', False)
+    )
+    if _is_cpcgrl:
+        from conf.game_utils import GAME_ABBR_INV
+        # 약어 입력이면 첫 번째 full name 으로, 이미 full name 이면 그대로 사용
+        _dg = config.dataset_game
+        if _dg in GAME_ABBR:
+            game_full = GAME_ABBR[_dg][0]   # e.g. "dg" → "dungeon"
+        else:
+            game_full = _dg                  # e.g. "dungeon" → "dungeon"
+        game_abbr = GAME_ABBR_INV.get(game_full, game_full)
+        re = getattr(config, 'dataset_reward_enum', None)
+        re_str = f'_re-{re}' if re is not None else ''
+        exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
+        return f'cpcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
+
     exp_group = get_exp_group(config)
 
     # target_character = get_short_target(config.target_character) if config.task == 'scenario' else config.target_character
@@ -166,7 +192,8 @@ def get_exp_name(config):
 
 
 def get_exp_dir(config):
-    return os.path.join('saves', get_exp_name(config))
+    saves_dir = getattr(config, 'saves_dir', 'saves')
+    return os.path.join(saves_dir, get_exp_name(config))
 
 
 def init_config(config: Config):
@@ -182,6 +209,19 @@ def init_config(config: Config):
         includes = parse_game_str(config.game)
         for key, val in includes.items():
             setattr(config, key, val)
+
+        # ── dataset_game 동기화: game 파라미터가 명시적으로 전달된 경우 dataset_game을 override ──
+        # dataset_game이 None이거나 기본값("all")인 경우 game 값으로 덮어씌운다.
+        if hasattr(config, 'dataset_game'):
+            _dg_val = getattr(config, 'dataset_game', None)
+            if _dg_val is None or _dg_val == 'all':
+                # 약어(dg 등)를 정식 게임명으로 변환
+                _game_key = config.game.lower()
+                if _game_key in GAME_ABBR:
+                    config.dataset_game = GAME_ABBR[_game_key][0]
+                else:
+                    config.dataset_game = config.game
+                logger.debug(f"[init_config] dataset_game overridden by game='{config.game}' → '{config.dataset_game}'")
 
     # ── MultiGameDataset 기반 CPCGRL / IPCGRL / VIPCGRL 모드 ─────────────
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:

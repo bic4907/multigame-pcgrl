@@ -46,9 +46,12 @@ if __name__ == '__main__':
     scores = list()
 
     for row_i, row in instruct_df.iterrows():
+        game    = row.get('game', 'unknown')
+        re_val  = int(row.get('reward_enum', row_i))
+        folder_name = f"{game}_re{re_val}_{int(row_i):04d}"
         states = list()
         for seed_i in range(1, 7):
-            state = np.load(f"{eval_dir}/reward_{row_i}/seed_{seed_i}/state_0.npy")
+            state = np.load(f"{eval_dir}/{folder_name}/seed_{seed_i}/state_0.npy")
             states.append(state)
         states = np.array(states)
         score = compute_hamming_distance(states)

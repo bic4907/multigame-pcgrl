@@ -154,6 +154,11 @@ def split_dataset_by_game(
         n_test = max(1, int(len(perm) * test_ratio))
         game_test[game] = perm[:n_test]
         game_train_pool[game] = perm[n_test:]  # 고정 순서 (ratio 서브셋은 prefix)
+        tag = "(unseen)" if game in unseen_game_names else "(seen)"
+        logger.debug(
+            "split_dataset_by_game [%s] %s: total=%d, train_pool=%d, test=%d",
+            game, tag, len(game_indices), len(game_train_pool[game]), len(game_test[game]),
+        )
 
     return game_train_pool, game_test, all_game_names
 
@@ -960,7 +965,10 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         logger.info("  Total test: %d", len(test_indices))
 
         # ── 4. Few-shot ratio sweep ──
-        ratios = list(config.unseen_ratios)
+        if hasattr(config, "unseen_ratios"):
+            ratios = list(config.unseen_ratios)
+        else:
+            ratios = [config.unseen_ratio]
         results: Dict[float, Dict[str, float]] = {}
         reg_results: Dict[float, Dict[str, float]] = {}
         enum_diff_results: Dict[float, Dict[str, Dict[int, float]]] = {}

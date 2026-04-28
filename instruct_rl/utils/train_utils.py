@@ -72,6 +72,7 @@ def make_train(
     *,
     inject_obs_fn: Callable | None = None,
     inject_reward_fn: Callable | None = None,
+    map_size: Optional[int] = None,
 ):
     """PPO 학습 함수를 생성한다.
 
@@ -675,7 +676,7 @@ def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None, inject_reward_fn=Non
 
     train_inst, test_inst = None, None
     if hasattr(config, "dataset_game") and config.dataset_game is not None:
-        train_inst, test_inst = load_dataset_instruct(config)
+        train_inst, test_inst, _ = load_dataset_instruct(config)
 
     train_jit = jax.jit(
         make_train(
@@ -715,10 +716,10 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
             name=get_wandb_name(config),
             id=wandb_id,
             save_code=True,
-            config_exclude_keys=[
-                "_vid_dir", "_img_dir",
-                "_numpy_dir", "_traj_dir", "overwrite", "initialize",
-            ],
+            config=wandb.helper.parse_config(
+                dict(config),
+                exclude=("_vid_dir", "_img_dir", "_numpy_dir", "_traj_dir", "overwrite", "initialize"),
+            ),
         )
         wandb.config.update(dict(config), allow_val_change=True)
 

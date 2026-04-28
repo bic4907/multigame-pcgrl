@@ -1,0 +1,13 @@
+defaults:
+  - pretrained_clip_pcgrl
+  - _self_
+
+render_freq: -1
+
+encoder:
+  model: clip
+  ckpt_path: null   # pretrained CLIP encoder 체크포인트 경로 (필요 시 설정)
+
+hydra:
+  sweeper:
+    params: {}

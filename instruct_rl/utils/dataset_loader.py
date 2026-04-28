@@ -138,11 +138,18 @@ def _build_instruct(sample_list, config):
 
     condition_id = jnp.arange(n, dtype=jnp.int32).reshape(-1, 1)
 
+    # ── CLIP 이미지 임베딩: human_level을 224x224 렌더링 후 pretrained CLIP state encoder 통과 ──
+    if getattr(config, 'use_sim_reward', False):
+        image_embed = _compute_clip_image_embeddings(sample_list, config)
+    else:
+        image_embed = jnp.zeros((n, max(1, config.nlp_input_dim)), dtype=jnp.float32)
+
     return Instruct(
         reward_i=reward_i,
         condition=condition,
         embedding=embedding,
         condition_id=condition_id,
+        image_embed=image_embed,
     )
 
 
@@ -290,6 +297,106 @@ def _compute_clip_embeddings(sample_list, config):
 
     logger.info(f"CLIP latent embeddings shape: {clip_embeddings.shape}")
     return jnp.array(clip_embeddings, dtype=jnp.float32)
+
+
+def _compute_clip_image_embeddings(sample_list, config):
+    """각 GameSample.array를 224x224로 렌더링하고 pretrained CLIP state encoder로 임베딩을 계산한다.
+
+    파이프라인:
+      sample.array (H, W) int32
+        → render_multigame_map → PIL 256x256 RGB
+        → resize 224x224 → CLIP 정규화
+        → ContrastiveModule.encode_state (FlaxCLIPVisionTransformer)
+        → L2-normalized embedding (output_dim)
+    """
+    import numpy as np
+    from glob import glob
+    from os.path import basename, join
+
+    from instruct_rl.utils.render_clip_224 import render_maps_numpy_224
+
+    encoder_config = config.encoder
+    nlp_input_dim = config.nlp_input_dim
+
+    n = len(sample_list)
+    logger.info(f"Computing CLIP image embeddings (224x224) for {n} samples")
+
+    # ── 1) 224x224 렌더링 ───────────────────────────────────────────────────
+    arrays = np.array([np.asarray(s.array, dtype=np.int32) for s in sample_list])
+    pixel_values_np = render_maps_numpy_224(arrays)   # (N, 224, 224, 3) float32
+
+    # ── 2) Encoder 로드 (CLIP state encoder) ─────────────────────────────────
+    from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder
+    from flax.training import checkpoints as flax_ckpts
+
+    _use_decoder = getattr(config, "use_decoder_reward_shaping", False)
+    if _use_decoder or getattr(encoder_config, 'model', None) == 'cnnclip':
+        module, _ = get_cnnclip_encoder(encoder_config, RL_training=True)
+        dummy_pix = jnp.ones((1, 16, 16, 6), dtype=jnp.float32)
+    else:
+        module, _ = get_clip_encoder(encoder_config, RL_training=True)
+        dummy_pix = jnp.ones((1, 224, 224, 3), dtype=jnp.float32)
+
+    # dummy init
+    rng = jax.random.PRNGKey(0)
+    dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
+    dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
+    variables = module.init(rng, dummy_ids, dummy_mask, dummy_pix,
+                            mode="text_state", training=False)
+
+    # ── 3) 체크포인트 복원 ─────────────────────────────────────────────────
+    ckpt_path = encoder_config.ckpt_path
+    if ckpt_path is not None:
+        ckpt_subdirs = glob(join(ckpt_path, '*'))
+        ckpt_steps = sorted(
+            [int(basename(d)) for d in ckpt_subdirs if basename(d).isdigit()],
+            reverse=True,
+        )
+        if ckpt_steps:
+            ckpt_dir = join(ckpt_path, str(ckpt_steps[0]))
+            enc_state = flax_ckpts.restore_checkpoint(ckpt_dir, target=None, prefix="")
+            if enc_state is not None:
+                if "params" in enc_state and "params" in enc_state["params"]:
+                    variables = enc_state["params"]
+                    logger.info(f"Image encoder checkpoint loaded from {ckpt_dir}")
+                else:
+                    variables = enc_state
+                    logger.info(f"Image encoder checkpoint loaded from {ckpt_dir}")
+            else:
+                logger.warning(f"Checkpoint restore returned None from {ckpt_dir}")
+        else:
+            logger.warning(f"No checkpoint steps found in {ckpt_path}")
+    else:
+        logger.warning("encoder.ckpt_path is None — using random weights for image embedding")
+
+    # ── 4) encode_state 배치 처리 ─────────────────────────────────────────
+    @jax.jit
+    def _encode_state_batch(variables, pixel_values):
+        return module.apply(
+            variables, None, None, pixel_values,
+            mode="state", training=False,
+        )
+
+    batch_size = 32   # CLIP ViT는 메모리 사용량이 크므로 작은 배치 사용
+    all_embeddings = []
+
+    for start in range(0, n, batch_size):
+        end = min(start + batch_size, n)
+        pv = jnp.array(pixel_values_np[start:end])
+        out = _encode_state_batch(variables, pv)
+        all_embeddings.append(np.array(out["state_embed"]))   # (batch, output_dim), L2-normalized
+
+    image_embeddings = np.concatenate(all_embeddings, axis=0)  # (N, output_dim)
+
+    # nlp_input_dim 에 맞게 패딩/절삭
+    embed_dim = image_embeddings.shape[1]
+    if nlp_input_dim > embed_dim:
+        image_embeddings = np.pad(image_embeddings, ((0, 0), (0, nlp_input_dim - embed_dim)))
+    elif nlp_input_dim < embed_dim:
+        image_embeddings = image_embeddings[:, :nlp_input_dim]
+
+    logger.info(f"CLIP image embeddings shape: {image_embeddings.shape}")
+    return jnp.array(image_embeddings, dtype=jnp.float32)
 
 
 def _compute_bert_embeddings(sample_list, nlp_input_dim):

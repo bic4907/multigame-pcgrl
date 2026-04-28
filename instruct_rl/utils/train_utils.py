@@ -96,6 +96,13 @@ def make_train(
     env = LogWrapper(env)
     env.init_graphics()
 
+    # ── 224x224 CLIP 렌더링 함수 준비 (use_sim_reward 시 사용) ─────────────
+    _render_to_clip_224_batch = None
+    if getattr(config, 'use_sim_reward', False):
+        from instruct_rl.utils.render_clip_224 import build_jax_render_224_fn
+        _tile_tensor = jnp.array(env.prob.graphics)   # (num_tiles, ts, ts, 4) uint8
+        _render_to_clip_224_batch = build_jax_render_224_fn(_tile_tensor, map_size=config.map_width)
+
     def linear_schedule(count):
         frac = (
             1.0
@@ -292,6 +299,30 @@ def make_train(
                     reward_batch = reward_env
 
                 reward = jnp.where(done, reward_env, reward_batch)
+
+                # Similarity reward: 224x224 렌더링 → pretrained CLIP state encoder → cosine similarity
+                if config.use_sim_reward and train_inst is not None:
+                    # current state: env_map → 224x224 → CLIP state encoder
+                    current_images = _render_to_clip_224_batch(env_state.env_state.env_map)
+                    _enc_params = jax.lax.stop_gradient(
+                        {"params": train_state.params["params"]["subnet"]["encoder"]}
+                    )
+                    current_embed = network.subnet.encoder.apply(
+                        _enc_params, pixel_values=current_images, mode='state', training=False
+                    )["state_embed"]
+                    # goal: 사전 계산된 CLIP 이미지 임베딩 (L2-normalized)
+                    goal_embed = jax.lax.stop_gradient(instruct_sample.image_embed)
+                    # 두 임베딩 모두 L2-normalized → dot product = cosine similarity
+                    sim = jnp.sum(current_embed * goal_embed, axis=-1)  # (n_envs,)
+                    sim_reward = config.SIM_COEF * sim
+                    reward = reward + sim_reward
+                    return_info = ReturnInfo(
+                        cond_return=return_info.cond_return,
+                        sim_return=return_info.sim_return + sim,
+                        coef_sim_return=return_info.coef_sim_return + sim_reward,
+                        total_return=return_info.total_return,
+                        prev_done=return_info.prev_done,
+                    )
 
                 env_state = env_state.replace(
                     returned_episode_returns=(

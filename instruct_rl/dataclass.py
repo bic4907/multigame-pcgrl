@@ -12,6 +12,7 @@ class Instruct:
     condition: chex.Array
     embedding: chex.Array
     condition_id: int
+    image_embed: chex.Array  # pretrained CLIP image embedding of goal level (224x224)
 
 
 @struct.dataclass

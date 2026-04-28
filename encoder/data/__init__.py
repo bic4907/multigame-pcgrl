@@ -6,6 +6,7 @@ from .pairing_maps import pairing_maps
 
 from .batch import *
 from .clip_batch import *
+from .mlp_batch import MLPDataset, MLPDatasetBuilder, create_mlp_batches
 
 
 __all__ = [
@@ -13,4 +14,7 @@ __all__ = [
     "get_unique_pair_indices",
     "generate_pair_indices",
     "pairing_maps",
+    "MLPDataset",
+    "MLPDatasetBuilder",
+    "create_mlp_batches",
 ]

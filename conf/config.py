@@ -640,6 +640,41 @@ class CLIPDecoderUnseenSweepConfig(CLIPDecoderUnseenConfig):
     unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1)
 
 
+@dataclass
+class IPCGRLEncoderMGConfig(RewardConfig):
+    """IPCGRL MLP 인코더 멀티게임 사전학습 Config.
+
+    Annotation 형식 MultiGameDataset 기반.
+    - 입력: BERT(instruction) → 768-dim embedding
+    - 모델: MLP 인코더 + MLP 디코더
+    - 출력: condition value 회귀 (log1p + per-enum min-max 정규화)
+    - unseen_games: 학습에서 제외할 게임 지정 (zero-shot 평가용)
+
+    Usage:
+        python train_ipcgrl_encoder_mg.py game=all
+        python train_ipcgrl_encoder_mg.py game=all unseen_games=zd
+    """
+    wandb_project: str = "ipcgrl_encoder_mg"
+    dir_prefix: str = "ipcgrl-enc-mg-"
+    ckpt_freq: int = 10
+
+    # BERT 설정
+    use_nlp: bool = True
+    nlp_input_dim: int = 768
+
+    # Unseen 게임 설정 (2글자 약어, e.g. "zd"=zelda, "pkzd"=pokemon+zelda)
+    # 빈 문자열 = 제외 없음 (전체 게임 학습)
+    unseen_games: str = ""
+
+    # Annotation 데이터셋 설정 (CLIPTrainConfig 와 동일한 변인 통제)
+    longtail_cut: bool = True
+    prepend_game_prefix: bool = False
+    prepend_game_desc: bool = False
+
+    # MLP 인코더 (apply_encoder_model 에서 model='mlp' 분기 사용)
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
+
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
@@ -661,4 +696,4 @@ cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)
 
 cs.store(name="train_reward", node=RewardTrainConfig)
-
+cs.store(name="train_ipcgrl_encoder_mg_schema", node=IPCGRLEncoderMGConfig)

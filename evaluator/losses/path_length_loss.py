@@ -1,7 +1,7 @@
 import chex
 import jax.numpy as jnp
 
-from envs.probs.dungeon3 import Dungeon3Passible
+from envs.probs.multigame import MultigamePassable
 
 from ..measures import get_path_length
 
@@ -9,7 +9,7 @@ from ..measures import get_path_length
 def path_length_loss(
     env_map: chex.Array,
     cond: chex.Array,
-    passable_tiles: chex.Array = Dungeon3Passible,
+    passable_tiles: chex.Array = MultigamePassable,
 ):
     """
     Loss function for path length.

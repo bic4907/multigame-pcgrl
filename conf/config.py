@@ -156,7 +156,7 @@ class Config:
 
     # Multigame tile placement reward 가중치 (sweep 대상)
     placement_w_amount: float = 1.0
-    placement_w_spread: float = 0.1
+    placement_w_spread: float = 0.0
 
     # Special tile (interactive/hazard/collectable) 존재 패널티 가중치
     special_tile_penalty_weight: float = 0.05

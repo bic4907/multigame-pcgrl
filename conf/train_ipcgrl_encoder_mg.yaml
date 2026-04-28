@@ -23,7 +23,7 @@ encoder:
   num_layers: 2
   hidden_dim: 256
   output_dim: 64
-  dropout_rate: 0.1
+  dropout_rate: 0.0
   token_max_len: 77
 
 # ── MLP 디코더 설정 ──
@@ -39,7 +39,7 @@ batch_size: 64
 weight_decay: 1.0e-4
 train_ratio: 0.8
 
-dropout_rate: 0.1
+dropout_rate: 0.0
 broadcast_dropout: false
 deterministic: true
 

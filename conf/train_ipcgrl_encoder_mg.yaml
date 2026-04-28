@@ -47,7 +47,7 @@ deterministic: true
 longtail_cut: true
 prepend_game_prefix: false
 prepend_game_desc: false
-max_samples_per_game: 0   # 0 = 무제한
+max_samples_per_game: 1000
 max_samples: null          # dry-run용 (null = 전체 사용)
 
 # ── 체크포인트 / 로깅 ──

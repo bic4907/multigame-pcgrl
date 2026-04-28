@@ -405,7 +405,19 @@ def _compute_clip_image_embeddings(sample_list, config):
     logger.info(f"Computing CLIP image embeddings (224x224) for {n} samples")
 
     # ── 1) 224x224 렌더링 ───────────────────────────────────────────────────
-    arrays = np.array([np.asarray(s.array, dtype=np.int32) for s in sample_list])
+    # Raw per-game tile IDs → multigame unified tile IDs (cat_idx+1; BORDER=0 unused here)
+    from envs.probs.multigame import _MAPPING_CONFIG
+    raw_arrays = [np.asarray(s.array, dtype=np.int32) for s in sample_list]
+    mapped_arrays = []
+    for s, raw_arr in zip(sample_list, raw_arrays):
+        game_cfg = _MAPPING_CONFIG.get(s.game, {})
+        game_mapping = {int(k): int(v) for k, v in game_cfg.get("mapping", {}).items()}
+        if game_mapping:
+            mapped = np.vectorize(lambda x: game_mapping.get(int(x), 0) + 1)(raw_arr)
+        else:
+            mapped = raw_arr
+        mapped_arrays.append(mapped.astype(np.int32))
+    arrays = np.stack(mapped_arrays)
     pixel_values_np = render_maps_numpy_224(arrays)   # (N, 224, 224, 3) float32
 
     # ── 2) Encoder 로드 (CLIP state encoder) ─────────────────────────────────

@@ -7,7 +7,7 @@ import yaml
 from os.path import abspath, join
 
 from encoder.model import apply_encoder_model
-from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder
+from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder, get_cnnclip_decoder_encoder
 from conf.config import Config, TrainConfig, EncoderConfig
 from conf.game_utils import parse_game_str, GAME_ABBR
 from envs.candy import Candy, CandyParams
@@ -426,6 +426,8 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         logger.warning("Setting model to `contconv` due to the vec_cont flag")
         config.model = 'contconv'
 
+    print( config.model, hasattr(config, 'decoder'))
+
     if config.encoder.model is not None:
         # dataset 기반 모드에서는 model이 이미 설정되어 있으므로 스킵
         _is_dataset_mode = hasattr(config, 'dataset_game') and config.dataset_game is not None
@@ -478,6 +480,24 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
             action_dim=action_dim,
             act_shape=config.act_shape,
         )
+
+    elif config.model == "cnnclipconv" and hasattr(config, 'decoder'):
+        print('this is decoder encoder ')
+        network = EncoderCLIPConvForward(
+            config=config.encoder,
+            encoder=get_cnnclip_decoder_encoder(config.encoder)[0],
+            train_encoder=config.encoder.trainable,
+            nlp_conv_forward=NLPConvForward(
+                action_dim=action_dim, activation=config.activation,
+                arf_size=config.arf_size, act_shape=config.act_shape,
+                vrf_size=config.vrf_size,
+                nlp_input_dim=config.nlp_input_dim,
+                hidden_dims=config.hidden_dims
+            ),
+            action_dim=action_dim,
+            act_shape=config.act_shape,
+        )
+
     elif config.model == "cnnclipconv":
         network = EncoderCLIPConvForward(
             config=config.encoder,

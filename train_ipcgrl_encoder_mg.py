@@ -169,7 +169,7 @@ def make_train(config: IPCGRLEncoderMGConfig):
             train_games_all: list[np.ndarray] = []
             train_enums_all: list[np.ndarray] = []
 
-            for bert_emb, cond_t, g_names, re_t in create_mlp_batches(
+            for bert_emb, _, cond_t, g_names, re_t in create_mlp_batches(
                 mlp_ds, config.batch_size, train=True, rng=train_key
             ):
                 rng, step_key = jax.random.split(rng)
@@ -193,7 +193,7 @@ def make_train(config: IPCGRLEncoderMGConfig):
             val_games_all: list[np.ndarray] = []
             val_enums_all: list[np.ndarray] = []
 
-            for bert_emb, cond_t, g_names, re_t in create_mlp_batches(
+            for bert_emb, _, cond_t, g_names, re_t in create_mlp_batches(
                 mlp_ds, config.batch_size, train=False, rng=val_key
             ):
                 rng, step_key = jax.random.split(rng)

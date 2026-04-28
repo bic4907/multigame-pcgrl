@@ -96,12 +96,13 @@ def make_train(
     env = LogWrapper(env)
     env.init_graphics()
 
-    # ── 224x224 CLIP 렌더링 함수 준비 (use_sim_reward 시 사용) ─────────────
+    # ── 224x224 CLIP sim-reward 준비 ──────────────────────────────────────
     _render_to_clip_224_batch = None
     if getattr(config, 'use_sim_reward', False):
         from instruct_rl.utils.render_clip_224 import build_jax_render_224_fn
-        _tile_tensor = jnp.array(env.prob.graphics)   # (num_tiles, ts, ts, 4) uint8
+        _tile_tensor = jnp.array(env.prob.graphics)
         _render_to_clip_224_batch = build_jax_render_224_fn(_tile_tensor, map_size=config.map_width)
+        logger.info("Built 224x224 CLIP render function for sim-reward")
 
     def linear_schedule(count):
         frac = (
@@ -310,8 +311,8 @@ def make_train(
                     current_embed = network.subnet.encoder.apply(
                         _enc_params, pixel_values=current_images, mode='state', training=False
                     )["state_embed"]
-                    # goal: 사전 계산된 CLIP 이미지 임베딩 (L2-normalized)
-                    goal_embed = jax.lax.stop_gradient(instruct_sample.image_embed)
+                    # goal: text embedding (L2-normalized)
+                    goal_embed = jax.lax.stop_gradient(instruct_sample.embedding)
                     # 두 임베딩 모두 L2-normalized → dot product = cosine similarity
                     sim = jnp.sum(current_embed * goal_embed, axis=-1)  # (n_envs,)
                     sim_reward = config.SIM_COEF * sim

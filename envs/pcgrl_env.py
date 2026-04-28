@@ -434,7 +434,8 @@ class PCGRLEnv(Environment):
             nlp_obs = jnp.zeros(self.nlp_input_dim)
             clip_input_ids = jnp.zeros((77), dtype=jnp.int32)
             clip_attention_mask = jnp.zeros((77), dtype=jnp.int32)
-            clip_pixel_values = jnp.zeros((16, 16, self.clip_input_channel))
+            _pix_hw = 224 if self.clip_input_channel == 3 else 16
+            clip_pixel_values = jnp.zeros((_pix_hw, _pix_hw, self.clip_input_channel))
             obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=nlp_obs,
                            input_ids=clip_input_ids, attention_mask=clip_attention_mask, pixel_values=clip_pixel_values)
         elif self.nlp_input_dim > 0:
@@ -448,7 +449,8 @@ class PCGRLEnv(Environment):
             nlp_obs = jnp.zeros(64)
             clip_input_ids = jnp.zeros((77), dtype=jnp.int32)
             clip_attention_mask = jnp.zeros((77), dtype=jnp.int32)
-            clip_pixel_values = jnp.zeros((16, 16, self.clip_input_channel))
+            _pix_hw = 224 if self.clip_input_channel == 3 else 16
+            clip_pixel_values = jnp.zeros((_pix_hw, _pix_hw, self.clip_input_channel))
             obs = PCGRLObs(map_obs=rep_obs, past_map_obs=rep_obs, flat_obs=prob_obs, nlp_obs=nlp_obs,
                            input_ids=clip_input_ids, attention_mask=clip_attention_mask, pixel_values=clip_pixel_values,
                            )
@@ -574,7 +576,8 @@ class PCGRLEnv(Environment):
             nlp_obs = jnp.zeros((1, env_params.nlp_input_dim))
             clip_input_ids = jnp.zeros((1, 77), dtype=jnp.int32)
             clip_attention_mask = jnp.zeros((1, 77), dtype=jnp.int32)
-            clip_pixel_values = jnp.zeros((1, 16, 16, env_params.clip_input_channel))
+            _pix_hw = 224 if env_params.clip_input_channel == 3 else 16
+            clip_pixel_values = jnp.zeros((1, _pix_hw, _pix_hw, env_params.clip_input_channel))
             return PCGRLObs(map_x, map_x, ctrl_x, nlp_obs, clip_input_ids,
                             clip_attention_mask, clip_pixel_values)
         elif env_params.nlp_input_dim > 0:
@@ -587,7 +590,8 @@ class PCGRLEnv(Environment):
             nlp_obs = jnp.zeros((1, 64))
             clip_input_ids = jnp.zeros((1, 77), dtype=jnp.int32)
             clip_attention_mask = jnp.zeros((1, 77), dtype=jnp.int32)
-            clip_pixel_values = jnp.zeros((1, 16, 16, env_params.clip_input_channel))
+            _pix_hw = 224 if env_params.clip_input_channel == 3 else 16
+            clip_pixel_values = jnp.zeros((1, _pix_hw, _pix_hw, env_params.clip_input_channel))
             return PCGRLObs(map_x, map_x, ctrl_x, nlp_obs, clip_input_ids,
                             clip_attention_mask,
                             clip_pixel_values,

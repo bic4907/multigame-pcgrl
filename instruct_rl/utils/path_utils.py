@@ -276,8 +276,9 @@ def init_config(config: Config):
         logger.info(f'Loading checkpoint for the encoder model: {config.encoder.model} '
                     f'(embed size: {config.encoder.output_dim}, buffer_ratio: {config.buffer_ratio})')
 
-        # For coord Channel(x,y)
-        config.clip_input_channel = config.clip_input_channel + 2
+        # For coord Channel(x,y) — skip for pretrained CLIP ViT (3-ch RGB only)
+        if getattr(config.encoder, 'model', None) != "clip":
+            config.clip_input_channel = config.clip_input_channel + 2
         config.text_ratio = min([0.25, 0.5, 0.75, 1.0], key=lambda x: abs(x - config.text_ratio))
 
         # ── encoder.ckpt_path 가 이미 지정된 경우 스킵 ──

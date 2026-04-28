@@ -1,0 +1,57 @@
+# conf/train_ipcgrl_encoder_mg.yaml
+# IPCGRL MLP 인코더 멀티게임 사전학습 설정
+#
+# Usage:
+#   python train_ipcgrl_encoder_mg.py game=all
+#   python train_ipcgrl_encoder_mg.py game=all unseen_games=zd
+#   python train_ipcgrl_encoder_mg.py game=all unseen_games=pkzd n_epochs=200
+
+defaults:
+  - train_ipcgrl_encoder_mg_schema
+  - _self_
+
+# 학습할 게임 (2글자 약어 조합: dg=dungeon, pk=pokemon, sk=sokoban, dm=doom, zd=zelda, all=전체)
+game: "all"
+
+# Unseen 게임 지정 (학습에서 제외, zero-shot 평가용)
+# 빈 문자열 = 제외 없음
+unseen_games: ""
+
+# ── MLP 인코더 설정 ──
+encoder:
+  model: mlp
+  num_layers: 2
+  hidden_dim: 256
+  output_dim: 64
+  dropout_rate: 0.1
+  token_max_len: 77
+
+# ── MLP 디코더 설정 ──
+decoder:
+  hidden_dim: 128
+  num_layers: 2
+  output_dim: 1
+
+# ── 학습 하이퍼파라미터 ──
+n_epochs: 100
+lr: 1.0e-4
+batch_size: 64
+weight_decay: 1.0e-4
+train_ratio: 0.8
+
+dropout_rate: 0.1
+broadcast_dropout: false
+deterministic: true
+
+# ── 데이터셋 설정 (CLIPDecoderTrainConfig 와 동일한 변인 통제) ──
+longtail_cut: true
+prepend_game_prefix: false
+prepend_game_desc: false
+max_samples_per_game: 0   # 0 = 무제한
+max_samples: null          # dry-run용 (null = 전체 사용)
+
+# ── 체크포인트 / 로깅 ──
+ckpt_freq: 10
+overwrite: true
+n_max_points: 500
+embed_visualize_freq: 20

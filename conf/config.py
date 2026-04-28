@@ -283,10 +283,11 @@ class MGPCGRLConfig(VIPCGRLConfig):
     # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
     use_decoder_reward_shaping: bool = True
     decoder_ckpt_path: Optional[str] = None
-    
+
     decoder_reward_classes: int = 5
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
 
+    ignore_checkpoint: bool = False
 
 
 @dataclass

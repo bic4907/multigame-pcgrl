@@ -301,25 +301,39 @@ def make_train(
 
                 reward = jnp.where(done, reward_env, reward_batch)
 
-                # Similarity reward: 224x224 렌더링 → pretrained CLIP state encoder → cosine similarity
+                # Similarity reward: potential-based shaping — reward = prev_gap - current_gap
+                # gap = goal_sim - state_sim, so reward = current_sim - prev_sim (masked at episode end)
                 if config.use_sim_reward and train_inst is not None:
-                    # current state: env_map → 224x224 → CLIP state encoder
-                    current_images = _render_to_clip_224_batch(env_state.env_state.env_map)
                     _enc_params = jax.lax.stop_gradient(
                         {"params": train_state.params["params"]["subnet"]["encoder"]}
                     )
+                    # prev state sim
+                    prev_images = _render_to_clip_224_batch(prev_env_state.env_state.env_map)
+                    prev_embed = network.subnet.encoder.apply(
+                        _enc_params, pixel_values=prev_images, mode='state', training=False
+                    )["state_embed"]
+                    # current state sim
+                    current_images = _render_to_clip_224_batch(env_state.env_state.env_map)
                     current_embed = network.subnet.encoder.apply(
                         _enc_params, pixel_values=current_images, mode='state', training=False
                     )["state_embed"]
-                    # goal: text embedding (L2-normalized)
+                    # text embedding (goal)
                     goal_embed = jax.lax.stop_gradient(instruct_sample.embedding)
-                    # 두 임베딩 모두 L2-normalized → dot product = cosine similarity
-                    sim = jnp.sum(current_embed * goal_embed, axis=-1)  # (n_envs,)
-                    sim_reward = config.SIM_COEF * sim
+                    # goal_sim: precomputed similarity between goal image and text (학습 전 계산된 값)
+                    goal_sim = jnp.sum(
+                        jax.lax.stop_gradient(instruct_sample.image_embed) * goal_embed, axis=-1
+                    )
+                    sim_prev = jnp.sum(prev_embed * goal_embed, axis=-1)
+                    sim_current = jnp.sum(current_embed * goal_embed, axis=-1)
+                    prev_gap = goal_sim - sim_prev
+                    current_gap = goal_sim - sim_current
+                    delta_sim = prev_gap - current_gap  # = sim_current - sim_prev
+                    # 에피소드 종료 시 마스킹 (reset 상태 간 delta는 의미없음)
+                    sim_reward = config.SIM_COEF * jnp.where(done, jnp.zeros_like(delta_sim), delta_sim)
                     reward = reward + sim_reward
                     return_info = ReturnInfo(
                         cond_return=return_info.cond_return,
-                        sim_return=return_info.sim_return + sim,
+                        sim_return=return_info.sim_return + delta_sim,
                         coef_sim_return=return_info.coef_sim_return + sim_reward,
                         total_return=return_info.total_return,
                         prev_done=return_info.prev_done,

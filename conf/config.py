@@ -397,6 +397,26 @@ class CPCGRLEvalConfig(EvalConfig):
 
 
 @dataclass
+class IPCGRLEvalConfig(CPCGRLEvalConfig):
+    """IPCGRL 평가용 Config.
+
+    CPCGRLEvalConfig 를 상속하고 BERT 임베딩 + MLP 인코더 설정을 추가한다.
+    """
+    use_nlp: bool = True
+    vec_cont: bool = False
+    model: str = "nlpconv"
+    nlp_input_dim: int = 768
+
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
+
+    longtail_cut: bool = True
+    max_samples_per_game: int = 1000
+    dataset_reward_enum: Optional[int] = None
+
+    wandb_project: Optional[str] = f"{PREFIX}eval_ipcgrl"
+
+
+@dataclass
 class CollectBufferConfig(CPCGRLConfig):
     """학습 중 trajectory 버퍼를 수집하는 Config.
 
@@ -685,6 +705,7 @@ cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
+cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs

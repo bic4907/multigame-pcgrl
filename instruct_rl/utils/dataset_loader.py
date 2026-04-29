@@ -331,6 +331,7 @@ def _build_instruct(sample_list, config):
     )
     reward_i, condition = _build_reward_and_condition(
         sample_list, config,
+        text_embeddings=embedding,
         shared_module=shared_module, shared_variables=shared_variables,
     )
     logger.info(
@@ -391,12 +392,14 @@ def _build_instruct_embedding(sample_list, config, *,
 
 
 def _build_reward_and_condition(sample_list, config, *,
+                                text_embeddings=None,
                                 shared_module=None, shared_variables=None):
     """reward_i 및 condition 벡터를 생성한다."""
     if getattr(config, "use_clip", False) and hasattr(config, "decoder"):
         logger.info("Reward/Condition mode: CLIP decoder prediction path")
         return _build_reward_and_condition_with_decoder(
             sample_list, config,
+            text_embeddings=text_embeddings,
             module=shared_module, variables=shared_variables,
         )
 
@@ -419,6 +422,7 @@ def _build_reward_and_condition(sample_list, config, *,
 
 
 def _build_reward_and_condition_with_decoder(sample_list, config, *,
+                                              text_embeddings=None,
                                               module=None, variables=None):
     """CLIP decoder 추론으로 reward_i/condition을 생성한다.
 
@@ -429,10 +433,6 @@ def _build_reward_and_condition_with_decoder(sample_list, config, *,
         제공되면 ckpt 를 다시 읽지 않고 그대로 재사용한다.
     """
     from conf.config import DecoderConfig
-    from instruct_rl.utils.level_processing_utils import (
-        add_coord_channel_batch,
-        map2onehot_batch,
-    )
     from tqdm import tqdm
 
     n = len(sample_list)
@@ -517,30 +517,28 @@ def _build_reward_and_condition_with_decoder(sample_list, config, *,
                 e,
             )
 
-    input_ids, attention_mask, _ = _tokenize_texts(sample_list, config.encoder)
-    input_ids = jnp.array(input_ids)
-    attention_mask = jnp.array(attention_mask)
-
-    level_arrays = jnp.array([s.array for s in sample_list], dtype=jnp.int32)
-    pixel_values = map2onehot_batch(level_arrays)
-    pixel_values = add_coord_channel_batch(pixel_values)
-    pixel_values = jnp.array(pixel_values, dtype=jnp.float32)
+    if text_embeddings is None:
+        raise ValueError(
+            "Decoder reward prediction requires precomputed text embeddings "
+            "from Instruct. Got text_embeddings=None."
+        )
+    text_embeddings = jnp.array(text_embeddings, dtype=jnp.float32)
+    if text_embeddings.shape[0] != n:
+        raise ValueError(
+            f"text_embeddings batch mismatch: got={text_embeddings.shape[0]}, expected={n}"
+        )
 
     @jax.jit
-    def _decode_batch(ids, mask, pixels):
-        # reward branch는 state embedding 사용 (mode="text_state").
-        # reward_enum이 None 이면 CNN one-hot concat이 모두 0으로 들어가며, train 시와 동일 처리
-        out = decoder_apply_fn(
+    def _decode_batch(text_embed_batch):
+        # reward branch는 text embedding을 사용한다.
+        # ContrastiveDecoderModule.decoder 를 직접 호출해
+        # reward logits / condition_pred_raw 를 얻는다.
+        reward_logits, _, condition_pred_raw = decoder_apply_fn(
             decoder_vars,
-            ids,
-            mask,
-            pixels,
-            reward_enum=None,
-            mode="text_state",
+            text_embed_batch,
             training=False,
+            method=lambda m, embed, training=False: m.decoder(embed, training=training),
         )
-        reward_logits = out["reward_logits"]
-        condition_pred_raw = out["condition_pred_raw"]
 
         reward_enum_i = jnp.argmax(reward_logits, axis=-1).astype(jnp.int32)
         pred_cond = condition_pred_raw[
@@ -561,17 +559,8 @@ def _build_reward_and_condition_with_decoder(sample_list, config, *,
     )
     for start_idx in pbar:
         end_idx = min(start_idx + batch_size, n)
-        ids = input_ids[start_idx:end_idx]
-        mask = attention_mask[start_idx:end_idx]
-        pix = pixel_values[start_idx:end_idx]
-
-        # 텍스트가 비어있는 배치도 model input shape만 유지
-        if ids.ndim == 1:
-            ids = ids[None, :]
-        if mask.ndim == 1:
-            mask = mask[None, :]
-
-        reward_enum_i, pred_cond = _decode_batch(ids, mask, pix)
+        embed_batch = text_embeddings[start_idx:end_idx]
+        reward_enum_i, pred_cond = _decode_batch(embed_batch)
         reward_i_list.append(np.array(reward_enum_i))
         cond_list.append(np.array(pred_cond))
 
@@ -780,7 +769,7 @@ def _build_clip_embedding_cache_path(sample_list, *, ckpt_signature: str) -> tup
 def _build_decoder_reward_cache_path(sample_list, *, ckpt_signature: str) -> tuple[str, Path]:
     """디코더 reward/condition 예측 캐시 키와 저장 경로를 생성한다."""
     hasher = hashlib.sha256()
-    hasher.update(b"decoder-reward-cache-v3")
+    hasher.update(b"decoder-reward-cache-v4-text-embed")
     hasher.update(f"|ckpt_signature={ckpt_signature}".encode("utf-8"))
 
     for s in sample_list:

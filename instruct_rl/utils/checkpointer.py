@@ -274,7 +274,15 @@ def apply_encoder_params(runner_state, encoder_params, config):
     logger.info(
         f"Parameters loaded from encoder checkpoint ({config.encoder.ckpt_path})"
     )
-    runner_state.train_state.params["params"]["subnet"]["encoder"] = encoder_params
+    # Preserve params that exist in the initialised model but may be absent from the
+    # pretrained checkpoint (e.g. text_state_temperature from ContrastiveModule.setup()).
+    existing = runner_state.train_state.params["params"]["subnet"]["encoder"]
+    merged = dict(encoder_params)
+    for key, val in existing.items():
+        if key not in merged:
+            merged[key] = val
+            logger.info(f"Preserved initialised param '{key}' (not in checkpoint)")
+    runner_state.train_state.params["params"]["subnet"]["encoder"] = merged
 
     logger.info("-" * 80)
     for key, enc_param in encoder_params.items():

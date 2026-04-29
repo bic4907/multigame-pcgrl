@@ -148,7 +148,7 @@ class Config:
 
     # MultiGameDataset-based filtering (for CPCGRL)
     dataset_game: Optional[str] = None          # e.g. "dungeon", "pokemon", "doom"
-    dataset_reward_enum: Optional[int] = None   # e.g. 0=region, 1=path_length, 2=interactable, 3=hazard, 4=collectable
+    dataset_reward_enum: Optional[Union[int, str]] = None   # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
 
     # Multigame tile placement reward 가중치 (sweep 대상)
@@ -195,7 +195,7 @@ class DecoderConfig:
     hidden_dim: int = 128
     num_layers: int = 2
     output_dim: int = 1
-    num_reward_classes: int = 6
+    num_reward_classes: int = 5
     # CNN 입력에 reward_enum one-hot 채널을 추가할지 여부
     # True이면 pixel_values에 (B, H, W, num_reward_classes) one-hot을 concat
     cnn_reward_enum_onehot: bool = False
@@ -237,7 +237,7 @@ class CPCGRLConfig(TrainConfig):
     game: str = "all"
 
     dataset_game: Optional[str] = "all"
-    dataset_reward_enum: Optional[int] = 0        # 0=region
+    dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
     # condition 값 기반 필터: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
     # 여러 필터는 쉼표 구분: "enum_0_min_3_max_10,enum_2_max_50"
@@ -297,11 +297,11 @@ class Pretrained_CLIP_PCGRLConfig(CPCGRLConfig):
 class MGPCGRLConfig(VIPCGRLConfig):
     wandb_project: Optional[str] = "mgpcgrl"
 
-    # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
     use_decoder_reward_shaping: bool = True
-    decoder_ckpt_path: Optional[str] = None
-    decoder_reward_classes: int = 5
-    dummy_decoder: bool = False
+
+    decoder: DecoderConfig = field(default_factory=DecoderConfig)
+
+    ignore_checkpoint: bool = False
 
 
 @dataclass
@@ -353,7 +353,7 @@ class RandomEvalConfig(EvalConfig):
     dir_prefix: str = "random_"
     wandb_project: Optional[str] = f"{PREFIX}eval_random"
 
-    dataset_reward_enum: Optional[int] = 0        # 0=region
+    dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
     eval_games: str = 'all'
 
     # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
@@ -377,7 +377,7 @@ class CPCGRLEvalConfig(EvalConfig):
     # ── CPCGRLConfig 와 동일한 game / dataset 기본값 → exp_dir 이름 일치 ──
     game: str = "all"
     dataset_game: Optional[str] = "all"
-    dataset_reward_enum: Optional[int] = 0        # 0=region
+    dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
 
     # 평가 대상 게임 (None이면 game과 동일). 체크포인트 로딩은 game 기준, 평가 데이터는 eval_games 기준.
@@ -406,6 +406,26 @@ class CPCGRLEvalConfig(EvalConfig):
     ignore_checkpoint: bool = False
 
     wandb_project: Optional[str] = f"{PREFIX}eval_cpcgrl"
+
+@dataclass
+class MGPCGRLEvalConfig(CPCGRLEvalConfig):
+    """MGPCGRL 평가용 Config.
+
+    CPCGRLConfig 와 동일한 모델/환경 설정을 EvalConfig 위에 덮어쓴다.
+    """
+    wandb_project: Optional[str] = f"{PREFIX}eval_mgpcgrl"
+
+    use_decoder_reward_shaping: bool = True
+
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="cnnclip"))
+    decoder: DecoderConfig = field(default_factory=DecoderConfig)
+
+    use_clip: bool = True
+    nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
+
+    wandb_project: Optional[str] = "vipcgrl"
+
+    ignore_checkpoint: bool = False
 
 
 @dataclass
@@ -664,6 +684,7 @@ cs.store(name="pretrained_clip_pcgrl", node=Pretrained_CLIP_PCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
+cs.store(name="eval_mgpcgrl_schema", node=MGPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs
@@ -676,4 +697,3 @@ cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)
 
 cs.store(name="train_reward", node=RewardTrainConfig)
-

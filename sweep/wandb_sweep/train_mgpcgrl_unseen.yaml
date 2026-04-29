@@ -1,0 +1,58 @@
+program: train_mgpcgrl.py
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0]
+  n_envs:
+    value: 600
+  overwrite:
+    value: true
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/decoder_unseen'
+  encoder.ckpt_name:
+    values: [
+      "clipdec-unseen-game-all_unseen-dg_md-ts_exp-1game_0",
+      "clipdec-unseen-game-all_unseen-dgdm_md-ts_exp-2game_0",
+      "clipdec-unseen-game-all_unseen-dgdmsk_md-ts_exp-3game_0",
+      "clipdec-unseen-game-all_unseen-dgsk_md-ts_exp-2game_0",
+      "clipdec-unseen-game-all_unseen-dgzd_md-ts_exp-2game_0",
+      "clipdec-unseen-game-all_unseen-dgzddm_md-ts_exp-3game_0",
+      "clipdec-unseen-game-all_unseen-dgzddmsk_md-ts_exp-4game_0",
+      "clipdec-unseen-game-all_unseen-dgzdsk_md-ts_exp-3game_0",
+      "clipdec-unseen-game-all_unseen-dm_md-ts_exp-1game_0",
+      "clipdec-unseen-game-all_unseen-dmsk_md-ts_exp-2game_0",
+      "clipdec-unseen-game-all_unseen-pk_md-ts_exp-1game_0",
+      "clipdec-unseen-game-all_unseen-pkdg_md-ts_exp-2game_0",
+      "clipdec-unseen-game-all_unseen-pkdgdm_md-ts_exp-3game_0",
+      "clipdec-unseen-game-all_unseen-pkdgdmsk_md-ts_exp-4game_0",
+      "clipdec-unseen-game-all_unseen-pkdgsk_md-ts_exp-3game_0",
+      "clipdec-unseen-game-all_unseen-pkdgzd_md-ts_exp-3game_0",
+      "clipdec-unseen-game-all_unseen-pkdgzddm_md-ts_exp-4game_0",
+      "clipdec-unseen-game-all_unseen-pkdgzdsk_md-ts_exp-4game_0",
+      "clipdec-unseen-game-all_unseen-pkdm_md-ts_exp-2game_0",
+      "clipdec-unseen-game-all_unseen-pkdmsk_md-ts_exp-3game_0",
+      "clipdec-unseen-game-all_unseen-pksk_md-ts_exp-2game_0",
+      "clipdec-unseen-game-all_unseen-pkzd_md-ts_exp-2game_0",
+      "clipdec-unseen-game-all_unseen-pkzddm_md-ts_exp-3game_0",
+      "clipdec-unseen-game-all_unseen-pkzddmsk_md-ts_exp-4game_0",
+      "clipdec-unseen-game-all_unseen-pkzdsk_md-ts_exp-3game_0",
+      "clipdec-unseen-game-all_unseen-sk_md-ts_exp-1game_0",
+      "clipdec-unseen-game-all_unseen-zd_md-ts_exp-1game_0",
+      "clipdec-unseen-game-all_unseen-zddm_md-ts_exp-2game_0",
+      "clipdec-unseen-game-all_unseen-zddmsk_md-ts_exp-3game_0",
+      "clipdec-unseen-game-all_unseen-zdsk_md-ts_exp-2game_0"
+    ]
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+  - "overwrite=true"

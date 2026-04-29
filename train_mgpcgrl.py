@@ -10,12 +10,12 @@ MGPCGRL (MultiGame PCGRL) — pretrained CLIP 임베딩을 입력 피처로 사�
     python -m train_mg_pcgrl [overrides]
     python -m train_mg_pcgrl dataset_game=dungeon dataset_reward_enum=1 SIM_COEF=3.5
 """
+import hashlib
 import hydra
 
 from conf.config import MGPCGRLConfig
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.train_utils import main_entry
-from encoder.utils.decoder_reward import build_decoder_reward_inject_fn
 
 suppress_jax_debug_logs()
 
@@ -31,15 +31,13 @@ def inject_vipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
 
 @hydra.main(version_base=None, config_path="./conf", config_name="train_mgpcgrl")
 def main(config: MGPCGRLConfig):
-    if not config.decoder_ckpt_path and not config.dummy_decoder:
-        raise ValueError("decoder_ckpt_path must be set for MGPCGRL unless dummy_decoder=true")
 
-    inject_reward_fn = build_decoder_reward_inject_fn(config)
+    if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
+        raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
     main_entry(
         config,
         inject_obs_fn=inject_vipcgrl_obs,
-        inject_reward_fn=inject_reward_fn,
     )
 
 

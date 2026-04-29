@@ -1,8 +1,12 @@
 defaults:
-  - mgpcgrl
+  - eval_mgpcgrl_schema
   - _self_
 
-render_freq: -1
+hydra:
+  sweeper:
+    params: {}
+
+n_envs: 600
 
 encoder:
   model: cnnclip
@@ -12,8 +16,3 @@ decoder:
   num_layers: 2
   num_reward_classes: 5
   cnn_reward_enum_onehot: true
-
-hydra:
-  sweeper:
-    params: {}
-

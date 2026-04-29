@@ -326,19 +326,19 @@ def log_encoder_params_summary(encoder_params, config):
         logger.info(f"   encoder   : {config.encoder.model}")
         if isinstance(encoder_params, dict):
             logger.info(f"   top-level keys: {list(encoder_params.keys())}")
-            for k, v in encoder_params.items():
-                if isinstance(v, dict):
-                    _flat = flatten_dict(v, sep="/")
-                    _n = sum(a.size for a in _flat.values())
-                    logger.info(f"     [{k}] sub-keys={len(_flat)}, params={_n:,d}")
-                    for _path, _arr in list(_flat.items())[:5]:
-                        logger.info(f"       {_path}: shape={_arr.shape}, dtype={_arr.dtype}")
-                    if len(_flat) > 5:
-                        logger.info(f"       ... and {len(_flat) - 5} more")
-                elif hasattr(v, 'shape'):
-                    logger.info(f"     [{k}] shape={v.shape}, dtype={v.dtype}")
-                else:
-                    logger.info(f"     [{k}] type={type(v).__name__}")
+            # for k, v in encoder_params.items():
+            #     if isinstance(v, dict):
+            #         _flat = flatten_dict(v, sep="/")
+            #         _n = sum(a.size for a in _flat.values())
+            #         logger.info(f"     [{k}] sub-keys={len(_flat)}, params={_n:,d}")
+            #         for _path, _arr in list(_flat.items())[:5]:
+            #             logger.info(f"       {_path}: shape={_arr.shape}, dtype={_arr.dtype}")
+            #         if len(_flat) > 5:
+            #             logger.info(f"       ... and {len(_flat) - 5} more")
+            #     elif hasattr(v, 'shape'):
+            #         logger.info(f"     [{k}] shape={v.shape}, dtype={v.dtype}")
+            #     else:
+            #         logger.info(f"     [{k}] type={type(v).__name__}")
         else:
             logger.info(f"   encoder_params type: {type(encoder_params).__name__}")
         logger.info("=" * 80)

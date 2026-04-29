@@ -297,8 +297,30 @@ def _build_instruct(sample_list, config):
         getattr(config, "use_nlp", False),
         hasattr(config, "decoder"),
     )
-    embedding = _build_instruct_embedding(sample_list, config)
-    reward_i, condition = _build_reward_and_condition(sample_list, config)
+
+    # ── CLIP 모듈/체크포인트는 임베딩 계산과 디코더 리워드 예측에서 공유될 수 있다.
+    # 두 경로가 모두 필요할 때 ckpt 를 한 번만 로드해 재사용한다.
+    use_clip = getattr(config, "use_clip", False)
+    needs_clip_embed   = use_clip and config.nlp_input_dim > 0
+    needs_decoder_pred = use_clip and hasattr(config, "decoder")
+
+    shared_module, shared_variables = None, None
+    if needs_clip_embed or needs_decoder_pred:
+        logger.info(
+            "Loading shared CLIP module + checkpoint once "
+            "(needs_embed=%s, needs_decoder=%s)",
+            needs_clip_embed, needs_decoder_pred,
+        )
+        shared_module, shared_variables = _load_shared_clip_module_and_ckpt(config)
+
+    embedding = _build_instruct_embedding(
+        sample_list, config,
+        shared_module=shared_module, shared_variables=shared_variables,
+    )
+    reward_i, condition = _build_reward_and_condition(
+        sample_list, config,
+        shared_module=shared_module, shared_variables=shared_variables,
+    )
     logger.info(
         "Built Instruct tensors: embedding=%s, reward_i=%s, condition=%s",
         embedding.shape,
@@ -315,11 +337,32 @@ def _build_instruct(sample_list, config):
     )
 
 
-def _build_instruct_embedding(sample_list, config):
+def _load_shared_clip_module_and_ckpt(config):
+    """CLIP 인코더 모듈을 init 하고 encoder.ckpt_path 의 체크포인트를 1회 복원한다.
+
+    임베딩 계산(`_compute_clip_embeddings`)과 디코더 리워드 예측
+    (`_build_reward_and_condition_with_decoder`) 양쪽에서 동일한 모듈/파라미터를
+    재사용하기 위한 헬퍼.
+
+    Returns
+    -------
+    (module, variables)
+    """
+    encoder_config = config.encoder
+    module, variables = _load_clip_encoder_module(config, encoder_config)
+    variables = _restore_encoder_checkpoint(encoder_config, variables)
+    return module, variables
+
+
+def _build_instruct_embedding(sample_list, config, *,
+                              shared_module=None, shared_variables=None):
     """설정값에 따라 텍스트 임베딩을 계산한다."""
     n = len(sample_list)
     if getattr(config, "use_clip", False) and config.nlp_input_dim > 0:
-        embedding = _compute_clip_embeddings(sample_list, config)
+        embedding = _compute_clip_embeddings(
+            sample_list, config,
+            module=shared_module, variables=shared_variables,
+        )
         logger.info("Embedding done: shape=%s", embedding.shape)
         return embedding
     if getattr(config, "use_nlp", False) and config.nlp_input_dim > 0:
@@ -332,11 +375,15 @@ def _build_instruct_embedding(sample_list, config):
     return jnp.zeros(fallback_shape, dtype=jnp.float32)
 
 
-def _build_reward_and_condition(sample_list, config):
+def _build_reward_and_condition(sample_list, config, *,
+                                shared_module=None, shared_variables=None):
     """reward_i 및 condition 벡터를 생성한다."""
     if getattr(config, "use_clip", False) and hasattr(config, "decoder"):
         logger.info("Reward/Condition mode: CLIP decoder prediction path")
-        return _build_reward_and_condition_with_decoder(sample_list, config)
+        return _build_reward_and_condition_with_decoder(
+            sample_list, config,
+            module=shared_module, variables=shared_variables,
+        )
 
     logger.info("Reward/Condition mode: metadata fallback path")
     reward_i_list = []
@@ -356,47 +403,59 @@ def _build_reward_and_condition(sample_list, config):
     return reward_i, condition
 
 
-def _build_reward_and_condition_with_decoder(sample_list, config):
-    """CLIP decoder 추론으로 reward_i/condition을 생성한다."""
+def _build_reward_and_condition_with_decoder(sample_list, config, *,
+                                              module=None, variables=None):
+    """CLIP decoder 추론으로 reward_i/condition을 생성한다.
+
+    Parameters
+    ----------
+    module, variables : optional
+        `_load_shared_clip_module_and_ckpt` 에서 미리 로드된 모듈과 파라미터.
+        제공되면 ckpt 를 다시 읽지 않고 그대로 재사용한다.
+    """
     from conf.config import DecoderConfig
     from instruct_rl.utils.level_processing_utils import (
         add_coord_channel_batch,
         map2onehot_batch,
     )
-    from encoder.utils.decoder_reward import load_decoder
+    from tqdm import tqdm
 
     n = len(sample_list)
     num_classes = config.decoder.num_reward_classes
     logger.info(
-        "Decoder reward prediction: n=%d, num_classes=%d, ckpt=%s",
+        "Decoder reward prediction: n=%d, num_classes=%d, ckpt=%s, reuse_ckpt=%s",
         n,
         num_classes,
         config.encoder.ckpt_path,
-    )
-    # NOTE: ckpt 와 동일한 구조로 디코더 모듈을 초기화해야 한다.
-    # cnn_reward_enum_onehot 을 빠뜨리면 학습 시 (예: True → +5 channel) 와
-    # 입력 채널 수가 달라져 Conv_0 에서 ScopeParamShapeError 가 발생한다.
-    # hidden_dim/num_layers 등 다른 디코더 파라미터도 기본값과 다를 수 있으므로
-    # 사용자 config 의 decoder 설정을 그대로 전달한다.
-    decoder_cfg = DecoderConfig(
-        num_reward_classes=num_classes,
-        hidden_dim=getattr(config.decoder, "hidden_dim", DecoderConfig.hidden_dim),
-        num_layers=getattr(config.decoder, "num_layers", DecoderConfig.num_layers),
-        output_dim=getattr(config.decoder, "output_dim", DecoderConfig.output_dim),
-        cnn_reward_enum_onehot=getattr(
-            config.decoder, "cnn_reward_enum_onehot",
-            DecoderConfig.cnn_reward_enum_onehot,
-        ),
+        module is not None and variables is not None,
     )
 
-    # 디코더 학습 ckpt로 추론.
-    # - reward_logits: (B, num_classes)
-    # - condition_pred_raw: (B, num_classes)  (original scale)
-    decoder_apply_fn, decoder_vars = load_decoder(
-        ckpt_dir=config.encoder.ckpt_path,
-        encoder_config=config.encoder,
-        decoder_config=decoder_cfg,
-    )
+    # ── 모듈/파라미터 준비 ──
+    # 외부에서 공유 인코더가 주어지면 그대로 사용하고, 그렇지 않으면
+    # `load_decoder` 로 단독 로드한다 (이전 동작과 호환).
+    if module is not None and variables is not None:
+        decoder_apply_fn = module.apply
+        decoder_vars = variables
+    else:
+        from encoder.utils.decoder_reward import load_decoder
+        # NOTE: ckpt 와 동일한 구조로 디코더 모듈을 초기화해야 한다.
+        # cnn_reward_enum_onehot 을 빠뜨리면 학습 시 (예: True → +5 channel) 와
+        # 입력 채널 수가 달라져 Conv_0 에서 ScopeParamShapeError 가 발생한다.
+        decoder_cfg = DecoderConfig(
+            num_reward_classes=num_classes,
+            hidden_dim=getattr(config.decoder, "hidden_dim", DecoderConfig.hidden_dim),
+            num_layers=getattr(config.decoder, "num_layers", DecoderConfig.num_layers),
+            output_dim=getattr(config.decoder, "output_dim", DecoderConfig.output_dim),
+            cnn_reward_enum_onehot=getattr(
+                config.decoder, "cnn_reward_enum_onehot",
+                DecoderConfig.cnn_reward_enum_onehot,
+            ),
+        )
+        decoder_apply_fn, decoder_vars = load_decoder(
+            ckpt_dir=config.encoder.ckpt_path,
+            encoder_config=config.encoder,
+            decoder_config=decoder_cfg,
+        )
 
     input_ids, attention_mask, _ = _tokenize_texts(sample_list, config.encoder)
     input_ids = jnp.array(input_ids)
@@ -434,15 +493,13 @@ def _build_reward_and_condition_with_decoder(sample_list, config):
     logger.info("Decoder batching: batch_size=%d, total_batches=%d", batch_size, total_batches)
     reward_i_list = []
     cond_list = []
-    for start_idx in range(0, n, batch_size):
-        batch_idx = start_idx // batch_size
-        logger.debug(
-            "Decoder batch %d/%d: idx=%d:%d",
-            batch_idx + 1,
-            total_batches,
-            start_idx,
-            min(start_idx + batch_size, n),
-        )
+    pbar = tqdm(
+        range(0, n, batch_size),
+        total=total_batches,
+        desc="Decoder reward",
+        unit="batch",
+    )
+    for start_idx in pbar:
         end_idx = min(start_idx + batch_size, n)
         ids = input_ids[start_idx:end_idx]
         mask = attention_mask[start_idx:end_idx]
@@ -600,6 +657,8 @@ def _encode_texts_batched(module, variables, input_ids, attention_mask, batch_si
     -------
     embeddings : np.ndarray  (N, output_dim)
     """
+    from tqdm import tqdm
+
     @jax.jit
     def _encode_batch(variables, ids, mask):
         return module.apply(
@@ -608,8 +667,15 @@ def _encode_texts_batched(module, variables, input_ids, attention_mask, batch_si
         )
 
     n = input_ids.shape[0]
+    total_batches = (n + batch_size - 1) // batch_size if n > 0 else 0
     all_embeddings = []
-    for start in range(0, n, batch_size):
+    pbar = tqdm(
+        range(0, n, batch_size),
+        total=total_batches,
+        desc="CLIP text embed",
+        unit="batch",
+    )
+    for start in pbar:
         end = min(start + batch_size, n)
         out = _encode_batch(variables, input_ids[start:end], attention_mask[start:end])
         all_embeddings.append(np.array(out["text_embed"]))  # (batch, output_dim)
@@ -638,12 +704,18 @@ def _postprocess_embeddings(embeddings, has_text, nlp_input_dim):
     return jnp.array(embeddings, dtype=jnp.float32)
 
 
-def _compute_clip_embeddings(sample_list, config):
+def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None):
     """사전학습된 CLIP encoder를 통해 instruction 텍스트 → latent embedding을 계산한다.
 
     1) openai/clip-vit-base-patch32 로 토크나이즈
     2) 사전학습된 ContrastiveModule 의 encode_text 를 사용하여
        512-dim raw CLIP → output_dim (e.g. 64) latent space 로 projection
+
+    Parameters
+    ----------
+    module, variables : optional
+        `_load_shared_clip_module_and_ckpt` 에서 미리 로드된 모듈/파라미터.
+        제공되면 ckpt 를 다시 읽지 않고 그대로 재사용한다.
     """
     nlp_input_dim  = config.nlp_input_dim
     encoder_config = config.encoder
@@ -657,18 +729,18 @@ def _compute_clip_embeddings(sample_list, config):
         ) from e
 
     logger.info(
-        f"Computing CLIP latent embeddings (output_dim={encoder_config.output_dim}) "
-        f"for {len(sample_list)} samples"
+        "Computing CLIP latent embeddings (output_dim=%d) for %d samples (reuse_ckpt=%s)",
+        encoder_config.output_dim, len(sample_list),
+        module is not None and variables is not None,
     )
 
     # 1) 토크나이즈
     input_ids, attention_mask, has_text = _tokenize_texts(sample_list, encoder_config)
 
-    # 2) 인코더 모듈 로드 + 초기화
-    module, variables = _load_clip_encoder_module(config, encoder_config)
-
-    # 3) 체크포인트 복원
-    variables = _restore_encoder_checkpoint(encoder_config, variables)
+    # 2-3) 모듈/체크포인트: 외부 공유본이 있으면 그대로, 없으면 단독 로드
+    if module is None or variables is None:
+        module, variables = _load_clip_encoder_module(config, encoder_config)
+        variables = _restore_encoder_checkpoint(encoder_config, variables)
 
     # 4) 배치 인코딩
     clip_embeddings = _encode_texts_batched(module, variables, input_ids, attention_mask)

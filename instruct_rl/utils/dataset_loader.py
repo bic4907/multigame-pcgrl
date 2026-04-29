@@ -12,6 +12,8 @@ import jax
 import jax.numpy as jnp
 import hashlib
 import numpy as np
+import os
+from pathlib import Path
 from glob import glob
 from os.path import basename, join
 
@@ -23,6 +25,15 @@ from dataset.multigame import MultiGameDataset
 from flax.training import checkpoints as flax_ckpts
 
 logger = get_logger(__file__)
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_EVAL_CACHE_ROOT = Path(
+    os.environ.get(
+        "EVAL_CACHE_DIR",
+        os.path.join(os.path.dirname(__file__), "..", "..", ".eval_cache"),
+    )
+).resolve()
+_CLIP_EMBED_CACHE_DIR = _EVAL_CACHE_ROOT / "clip_latent_embeddings"
+_DECODER_REWARD_CACHE_DIR = _EVAL_CACHE_ROOT / "decoder_reward_predictions"
 
 # reward_enum → 사람이 읽을 수 있는 이름
 REWARD_ENUM_NAMES = {
@@ -313,6 +324,7 @@ def _build_instruct(sample_list, config):
         )
         shared_module, shared_variables = _load_shared_clip_module_and_ckpt(config)
 
+
     embedding = _build_instruct_embedding(
         sample_list, config,
         shared_module=shared_module, shared_variables=shared_variables,
@@ -329,13 +341,16 @@ def _build_instruct(sample_list, config):
     )
     condition_id = jnp.arange(len(sample_list), dtype=jnp.int32).reshape(-1, 1)
 
+    if shared_module is not None or shared_variables is not None:
+        del shared_module
+        del shared_variables
+
     return Instruct(
         reward_i=reward_i,
         condition=condition,
         embedding=embedding,
         condition_id=condition_id,
     )
-
 
 def _load_shared_clip_module_and_ckpt(config):
     """CLIP 인코더 모듈을 init 하고 encoder.ckpt_path 의 체크포인트를 1회 복원한다.
@@ -422,6 +437,7 @@ def _build_reward_and_condition_with_decoder(sample_list, config, *,
 
     n = len(sample_list)
     num_classes = config.decoder.num_reward_classes
+
     logger.info(
         "Decoder reward prediction: n=%d, num_classes=%d, ckpt=%s, reuse_ckpt=%s",
         n,
@@ -457,6 +473,50 @@ def _build_reward_and_condition_with_decoder(sample_list, config, *,
             decoder_config=decoder_cfg,
         )
 
+    ckpt_signature = _checkpoint_signature_for_cache(decoder_vars)
+    cache_key, cache_path = _build_decoder_reward_cache_path(
+        sample_list, ckpt_signature=ckpt_signature
+    )
+    if cache_path.exists():
+        try:
+            cached = np.load(cache_path)
+            reward_i_cached = cached["reward_i"]
+            condition_cached = cached["condition"]
+            expected_reward_shape = (n, 1)
+            expected_condition_shape = (n, num_classes)
+            if (
+                reward_i_cached.shape == expected_reward_shape
+                and condition_cached.shape == expected_condition_shape
+            ):
+                logger.info(
+                    "Decoder reward cache HIT (hash=%s) — loaded from %s",
+                    cache_key[:12],
+                    cache_path,
+                )
+                logger.info(
+                    "Decoder reward prediction done: reward_i=%s, condition=%s",
+                    reward_i_cached.shape,
+                    condition_cached.shape,
+                )
+                return (
+                    jnp.array(reward_i_cached, dtype=jnp.int32),
+                    jnp.array(condition_cached, dtype=jnp.float32),
+                )
+            logger.warning(
+                "Decoder reward cache invalid shape at %s: reward_i=%s (expected=%s), condition=%s (expected=%s). Recomputing.",
+                cache_path,
+                reward_i_cached.shape,
+                expected_reward_shape,
+                condition_cached.shape,
+                expected_condition_shape,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to load decoder reward cache from %s: %s. Recomputing.",
+                cache_path,
+                e,
+            )
+
     input_ids, attention_mask, _ = _tokenize_texts(sample_list, config.encoder)
     input_ids = jnp.array(input_ids)
     attention_mask = jnp.array(attention_mask)
@@ -482,11 +542,11 @@ def _build_reward_and_condition_with_decoder(sample_list, config, *,
         reward_logits = out["reward_logits"]
         condition_pred_raw = out["condition_pred_raw"]
 
-        pred_reward = jnp.argmax(reward_logits, axis=-1).astype(jnp.int32)
+        reward_enum_i = jnp.argmax(reward_logits, axis=-1).astype(jnp.int32)
         pred_cond = condition_pred_raw[
-            jnp.arange(condition_pred_raw.shape[0]), pred_reward
+            jnp.arange(condition_pred_raw.shape[0]), reward_enum_i
         ]
-        return pred_reward, pred_cond
+        return reward_enum_i, pred_cond
 
     batch_size = 256
     total_batches = (n + batch_size - 1) // batch_size if n > 0 else 0
@@ -511,8 +571,8 @@ def _build_reward_and_condition_with_decoder(sample_list, config, *,
         if mask.ndim == 1:
             mask = mask[None, :]
 
-        pred_reward, pred_cond = _decode_batch(ids, mask, pix)
-        reward_i_list.append(np.array(pred_reward))
+        reward_enum_i, pred_cond = _decode_batch(ids, mask, pix)
+        reward_i_list.append(np.array(reward_enum_i))
         cond_list.append(np.array(pred_cond))
 
     reward_i_flat = np.concatenate(reward_i_list, axis=0)
@@ -520,6 +580,7 @@ def _build_reward_and_condition_with_decoder(sample_list, config, *,
 
     reward_i = jnp.array(reward_i_flat, dtype=jnp.int32).reshape(-1, 1)
 
+    # reward_enum_i 컬럼만 condition 값을 채우고, 나머지는 -1 sentinel 유지
     condition = jnp.full((n, num_classes), -1.0, dtype=jnp.float32)
     row_idx = jnp.arange(n)
     condition = condition.at[row_idx, reward_i_flat].set(jnp.array(pred_cond_raw))
@@ -528,6 +589,20 @@ def _build_reward_and_condition_with_decoder(sample_list, config, *,
         reward_i.shape,
         condition.shape,
     )
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            cache_path,
+            reward_i=np.asarray(reward_i, dtype=np.int32),
+            condition=np.asarray(condition, dtype=np.float32),
+        )
+        logger.info(
+            "Decoder reward cache saved (hash=%s): %s",
+            cache_key[:12],
+            cache_path,
+        )
+    except Exception as e:
+        logger.warning("Failed to save decoder reward cache to %s: %s", cache_path, e)
 
     return reward_i, condition
 
@@ -611,6 +686,137 @@ def _load_clip_encoder_module(config, encoder_config):
     return module, variables
 
 
+def _format_num_bytes(num_bytes: int) -> str:
+    """바이트 수를 사람이 읽기 쉬운 문자열로 변환한다."""
+    if num_bytes < 1024:
+        return f"{num_bytes} B"
+    if num_bytes < 1024 ** 2:
+        return f"{num_bytes / 1024:.1f} KB"
+    return f"{num_bytes / 1024 ** 2:.2f} MB"
+
+
+def _compute_tree_signature_hash(tree, *, algo: str = "sha256"):
+    """중첩 dict/PyTree의 결정론적 signature hash를 계산한다.
+
+    Returns
+    -------
+    (signature_hex, leaf_count, total_bytes)
+    """
+    from flax.core import FrozenDict
+    from flax.traverse_util import flatten_dict
+
+    if isinstance(tree, FrozenDict):
+        tree = tree.unfreeze()
+
+    if isinstance(tree, dict):
+        flat = flatten_dict(tree)
+    else:
+        flat = {("root",): tree}
+
+    hasher = hashlib.new(algo)
+    leaf_count = 0
+    total_bytes = 0
+
+    for path in sorted(flat.keys(), key=lambda p: tuple(str(k) for k in p)):
+        leaf = flat[path]
+        path_str = "/".join(str(k) for k in path)
+        hasher.update(path_str.encode("utf-8"))
+        hasher.update(b"\0")
+
+        if leaf is None:
+            hasher.update(b"NONE")
+            leaf_count += 1
+            continue
+
+        try:
+            arr = np.asarray(leaf)
+            if arr.dtype == np.dtype("O"):
+                raise TypeError("object dtype")
+            arr = np.ascontiguousarray(arr)
+            hasher.update(str(arr.shape).encode("utf-8"))
+            hasher.update(b"|")
+            hasher.update(str(arr.dtype).encode("utf-8"))
+            hasher.update(b"|")
+            hasher.update(memoryview(arr.reshape(-1).view(np.uint8)))
+            leaf_count += 1
+            total_bytes += int(arr.nbytes)
+            continue
+        except Exception:
+            pass
+
+        hasher.update(type(leaf).__name__.encode("utf-8"))
+        hasher.update(b"|")
+        hasher.update(repr(leaf).encode("utf-8"))
+        leaf_count += 1
+
+    return hasher.hexdigest(), leaf_count, total_bytes
+
+
+def _checkpoint_signature_for_cache(variables) -> str:
+    """캐시 키 생성을 위한 체크포인트 시그니처(hex)를 계산한다."""
+    try:
+        signature_hex, _, _ = _compute_tree_signature_hash(variables)
+        return signature_hex
+    except Exception:
+        return "unknown"
+
+
+def _build_clip_embedding_cache_path(sample_list, *, ckpt_signature: str) -> tuple[str, Path]:
+    """CLIP 임베딩 캐시 키와 저장 경로를 생성한다."""
+    hasher = hashlib.sha256()
+    hasher.update(b"clip-latent-embedding-cache-v2")
+    hasher.update(f"|ckpt_signature={ckpt_signature}".encode("utf-8"))
+
+    for s in sample_list:
+        hasher.update(f"|game={getattr(s, 'game', '')}".encode("utf-8"))
+        hasher.update(f"|source_id={getattr(s, 'source_id', '')}".encode("utf-8"))
+        instr = s.instruction.strip() if (s.instruction and s.instruction.strip()) else ""
+        hasher.update(f"|instruction={instr}".encode("utf-8"))
+
+    cache_key = hasher.hexdigest()
+    return cache_key, _CLIP_EMBED_CACHE_DIR / f"{cache_key}.npy"
+
+
+def _build_decoder_reward_cache_path(sample_list, *, ckpt_signature: str) -> tuple[str, Path]:
+    """디코더 reward/condition 예측 캐시 키와 저장 경로를 생성한다."""
+    hasher = hashlib.sha256()
+    hasher.update(b"decoder-reward-cache-v3")
+    hasher.update(f"|ckpt_signature={ckpt_signature}".encode("utf-8"))
+
+    for s in sample_list:
+        hasher.update(f"|game={getattr(s, 'game', '')}".encode("utf-8"))
+        hasher.update(f"|source_id={getattr(s, 'source_id', '')}".encode("utf-8"))
+        instr = s.instruction.strip() if (s.instruction and s.instruction.strip()) else ""
+        hasher.update(f"|instruction={instr}".encode("utf-8"))
+        arr = np.asarray(s.array, dtype=np.int32)
+        hasher.update(f"|array_shape={arr.shape}".encode("utf-8"))
+        hasher.update(memoryview(np.ascontiguousarray(arr).reshape(-1).view(np.uint8)))
+
+    cache_key = hasher.hexdigest()
+    return cache_key, _DECODER_REWARD_CACHE_DIR / f"{cache_key}.npz"
+
+
+def _log_checkpoint_signature_hash(state, *, ckpt_dir: str, step: int, fmt: str):
+    """복원된 체크포인트 state의 signature hash를 로그로 출력한다."""
+    try:
+        signature_hex, leaf_count, total_bytes = _compute_tree_signature_hash(state)
+        logger.info(
+            "Encoder checkpoint signature hash: %s (algo=sha256, step=%d, format=%s, leaves=%d, bytes=%s)",
+            signature_hex,
+            step,
+            fmt,
+            leaf_count,
+            _format_num_bytes(total_bytes),
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to compute checkpoint signature hash (step=%s, dir=%s): %s",
+            step,
+            ckpt_dir,
+            e,
+        )
+
+
 def _restore_encoder_checkpoint(encoder_config, variables):
     """encoder_config.ckpt_path 에서 가장 최신 체크포인트를 복원한다.
 
@@ -644,9 +850,22 @@ def _restore_encoder_checkpoint(encoder_config, variables):
     # module.apply 에는 {"params": {...}} 를 넘겨야 한다.
     if "params" in enc_state and "params" in enc_state["params"]:
         logger.info(f"Encoder checkpoint loaded (TrainState format) from {ckpt_dir} (step {ckpt_steps[0]})")
-        return enc_state["params"]
+        restored_state = enc_state["params"]
+        _log_checkpoint_signature_hash(
+            restored_state,
+            ckpt_dir=ckpt_dir,
+            step=ckpt_steps[0],
+            fmt="TrainState.params",
+        )
+        return restored_state
 
     logger.info(f"Encoder checkpoint loaded from {ckpt_dir} (step {ckpt_steps[0]})")
+    _log_checkpoint_signature_hash(
+        enc_state,
+        ckpt_dir=ckpt_dir,
+        step=ckpt_steps[0],
+        fmt="raw",
+    )
     return enc_state
 
 
@@ -720,6 +939,40 @@ def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None
     nlp_input_dim  = config.nlp_input_dim
     encoder_config = config.encoder
 
+    # 모듈/체크포인트: 외부 공유본이 있으면 그대로, 없으면 단독 로드
+    if module is None or variables is None:
+        module, variables = _load_clip_encoder_module(config, encoder_config)
+        variables = _restore_encoder_checkpoint(encoder_config, variables)
+
+    ckpt_signature = _checkpoint_signature_for_cache(variables)
+    cache_key, cache_path = _build_clip_embedding_cache_path(
+        sample_list, ckpt_signature=ckpt_signature
+    )
+    if cache_path.exists():
+        try:
+            cached = np.load(cache_path)
+            expected_shape = (len(sample_list), nlp_input_dim)
+            if cached.shape == expected_shape:
+                logger.info(
+                    "CLIP latent embedding cache HIT (hash=%s) — loaded from %s",
+                    cache_key[:12],
+                    cache_path,
+                )
+                logger.info(f"CLIP latent embeddings shape: {cached.shape}")
+                return jnp.array(cached, dtype=jnp.float32)
+            logger.warning(
+                "CLIP latent embedding cache invalid shape at %s: got=%s, expected=%s. Recomputing.",
+                cache_path,
+                cached.shape,
+                expected_shape,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to load CLIP latent embedding cache from %s: %s. Recomputing.",
+                cache_path,
+                e,
+            )
+
     try:
         from transformers import CLIPProcessor  # noqa: F401 (import 가능 여부 확인)
     except ImportError as e:
@@ -737,11 +990,6 @@ def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None
     # 1) 토크나이즈
     input_ids, attention_mask, has_text = _tokenize_texts(sample_list, encoder_config)
 
-    # 2-3) 모듈/체크포인트: 외부 공유본이 있으면 그대로, 없으면 단독 로드
-    if module is None or variables is None:
-        module, variables = _load_clip_encoder_module(config, encoder_config)
-        variables = _restore_encoder_checkpoint(encoder_config, variables)
-
     # 4) 배치 인코딩
     clip_embeddings = _encode_texts_batched(module, variables, input_ids, attention_mask)
 
@@ -749,6 +997,16 @@ def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None
     result = _postprocess_embeddings(clip_embeddings, has_text, nlp_input_dim)
 
     logger.info(f"CLIP latent embeddings shape: {result.shape}")
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(cache_path, np.asarray(result, dtype=np.float32))
+        logger.info(
+            "CLIP latent embedding cache saved (hash=%s): %s",
+            cache_key[:12],
+            cache_path,
+        )
+    except Exception as e:
+        logger.warning("Failed to save CLIP latent embedding cache to %s: %s", cache_path, e)
 
     return result
 

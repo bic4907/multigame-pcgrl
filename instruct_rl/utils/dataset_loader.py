@@ -290,8 +290,55 @@ def _subsample_per_group(samples, n_per_group: int, seed: int = 0):
 
 def _build_instruct(sample_list, config):
     """샘플 리스트에서 Instruct 객체를 빌드한다."""
-    n = len(sample_list)
+    logger.info(
+        "Building Instruct: samples=%d, use_clip=%s, use_nlp=%s, use_decoder=%s",
+        len(sample_list),
+        getattr(config, "use_clip", False),
+        getattr(config, "use_nlp", False),
+        hasattr(config, "decoder"),
+    )
+    embedding = _build_instruct_embedding(sample_list, config)
+    reward_i, condition = _build_reward_and_condition(sample_list, config)
+    logger.info(
+        "Built Instruct tensors: embedding=%s, reward_i=%s, condition=%s",
+        embedding.shape,
+        reward_i.shape,
+        condition.shape,
+    )
+    condition_id = jnp.arange(len(sample_list), dtype=jnp.int32).reshape(-1, 1)
 
+    return Instruct(
+        reward_i=reward_i,
+        condition=condition,
+        embedding=embedding,
+        condition_id=condition_id,
+    )
+
+
+def _build_instruct_embedding(sample_list, config):
+    """설정값에 따라 텍스트 임베딩을 계산한다."""
+    n = len(sample_list)
+    if getattr(config, "use_clip", False) and config.nlp_input_dim > 0:
+        embedding = _compute_clip_embeddings(sample_list, config)
+        logger.info("Embedding done: shape=%s", embedding.shape)
+        return embedding
+    if getattr(config, "use_nlp", False) and config.nlp_input_dim > 0:
+        embedding = _compute_bert_embeddings(sample_list, config.nlp_input_dim)
+        logger.info("Embedding done: shape=%s", embedding.shape)
+        return embedding
+
+    fallback_shape = (n, max(1, config.nlp_input_dim))
+    logger.info("Embedding disabled: using zeros %s", fallback_shape)
+    return jnp.zeros(fallback_shape, dtype=jnp.float32)
+
+
+def _build_reward_and_condition(sample_list, config):
+    """reward_i 및 condition 벡터를 생성한다."""
+    if getattr(config, "use_clip", False) and hasattr(config, "decoder"):
+        logger.info("Reward/Condition mode: CLIP decoder prediction path")
+        return _build_reward_and_condition_with_decoder(sample_list, config)
+
+    logger.info("Reward/Condition mode: metadata fallback path")
     reward_i_list = []
     for s in sample_list:
         reward_i_list.append([s.meta["reward_enum"]])
@@ -306,23 +353,126 @@ def _build_instruct(sample_list, config):
             row.append(float(val))
         condition_list.append(row)
     condition = jnp.array(condition_list, dtype=jnp.float32)
+    return reward_i, condition
 
-    # ── 임베딩 계산 ──────────────────────────────────────────────────────
-    if getattr(config, "use_clip", False) and config.nlp_input_dim > 0:
-        embedding = _compute_clip_embeddings(sample_list, config)
-    elif getattr(config, "use_nlp", False) and config.nlp_input_dim > 0:
-        embedding = _compute_bert_embeddings(sample_list, config.nlp_input_dim)
-    else:
-        embedding = jnp.zeros((n, max(1, config.nlp_input_dim)), dtype=jnp.float32)
 
-    condition_id = jnp.arange(n, dtype=jnp.int32).reshape(-1, 1)
-
-    return Instruct(
-        reward_i=reward_i,
-        condition=condition,
-        embedding=embedding,
-        condition_id=condition_id,
+def _build_reward_and_condition_with_decoder(sample_list, config):
+    """CLIP decoder 추론으로 reward_i/condition을 생성한다."""
+    from conf.config import DecoderConfig
+    from instruct_rl.utils.level_processing_utils import (
+        add_coord_channel_batch,
+        map2onehot_batch,
     )
+    from encoder.utils.decoder_reward import load_decoder
+
+    n = len(sample_list)
+    num_classes = config.decoder.num_reward_classes
+    logger.info(
+        "Decoder reward prediction: n=%d, num_classes=%d, ckpt=%s",
+        n,
+        num_classes,
+        config.encoder.ckpt_path,
+    )
+    # NOTE: ckpt 와 동일한 구조로 디코더 모듈을 초기화해야 한다.
+    # cnn_reward_enum_onehot 을 빠뜨리면 학습 시 (예: True → +5 channel) 와
+    # 입력 채널 수가 달라져 Conv_0 에서 ScopeParamShapeError 가 발생한다.
+    # hidden_dim/num_layers 등 다른 디코더 파라미터도 기본값과 다를 수 있으므로
+    # 사용자 config 의 decoder 설정을 그대로 전달한다.
+    decoder_cfg = DecoderConfig(
+        num_reward_classes=num_classes,
+        hidden_dim=getattr(config.decoder, "hidden_dim", DecoderConfig.hidden_dim),
+        num_layers=getattr(config.decoder, "num_layers", DecoderConfig.num_layers),
+        output_dim=getattr(config.decoder, "output_dim", DecoderConfig.output_dim),
+        cnn_reward_enum_onehot=getattr(
+            config.decoder, "cnn_reward_enum_onehot",
+            DecoderConfig.cnn_reward_enum_onehot,
+        ),
+    )
+
+    # 디코더 학습 ckpt로 추론.
+    # - reward_logits: (B, num_classes)
+    # - condition_pred_raw: (B, num_classes)  (original scale)
+    decoder_apply_fn, decoder_vars = load_decoder(
+        ckpt_dir=config.encoder.ckpt_path,
+        encoder_config=config.encoder,
+        decoder_config=decoder_cfg,
+    )
+
+    input_ids, attention_mask, _ = _tokenize_texts(sample_list, config.encoder)
+    input_ids = jnp.array(input_ids)
+    attention_mask = jnp.array(attention_mask)
+
+    level_arrays = jnp.array([s.array for s in sample_list], dtype=jnp.int32)
+    pixel_values = map2onehot_batch(level_arrays)
+    pixel_values = add_coord_channel_batch(pixel_values)
+    pixel_values = jnp.array(pixel_values, dtype=jnp.float32)
+
+    @jax.jit
+    def _decode_batch(ids, mask, pixels):
+        # reward branch는 state embedding 사용 (mode="text_state").
+        # reward_enum이 None 이면 CNN one-hot concat이 모두 0으로 들어가며, train 시와 동일 처리
+        out = decoder_apply_fn(
+            decoder_vars,
+            ids,
+            mask,
+            pixels,
+            reward_enum=None,
+            mode="text_state",
+            training=False,
+        )
+        reward_logits = out["reward_logits"]
+        condition_pred_raw = out["condition_pred_raw"]
+
+        pred_reward = jnp.argmax(reward_logits, axis=-1).astype(jnp.int32)
+        pred_cond = condition_pred_raw[
+            jnp.arange(condition_pred_raw.shape[0]), pred_reward
+        ]
+        return pred_reward, pred_cond
+
+    batch_size = 256
+    total_batches = (n + batch_size - 1) // batch_size if n > 0 else 0
+    logger.info("Decoder batching: batch_size=%d, total_batches=%d", batch_size, total_batches)
+    reward_i_list = []
+    cond_list = []
+    for start_idx in range(0, n, batch_size):
+        batch_idx = start_idx // batch_size
+        logger.debug(
+            "Decoder batch %d/%d: idx=%d:%d",
+            batch_idx + 1,
+            total_batches,
+            start_idx,
+            min(start_idx + batch_size, n),
+        )
+        end_idx = min(start_idx + batch_size, n)
+        ids = input_ids[start_idx:end_idx]
+        mask = attention_mask[start_idx:end_idx]
+        pix = pixel_values[start_idx:end_idx]
+
+        # 텍스트가 비어있는 배치도 model input shape만 유지
+        if ids.ndim == 1:
+            ids = ids[None, :]
+        if mask.ndim == 1:
+            mask = mask[None, :]
+
+        pred_reward, pred_cond = _decode_batch(ids, mask, pix)
+        reward_i_list.append(np.array(pred_reward))
+        cond_list.append(np.array(pred_cond))
+
+    reward_i_flat = np.concatenate(reward_i_list, axis=0)
+    pred_cond_raw = np.concatenate(cond_list, axis=0)
+
+    reward_i = jnp.array(reward_i_flat, dtype=jnp.int32).reshape(-1, 1)
+
+    condition = jnp.full((n, num_classes), -1.0, dtype=jnp.float32)
+    row_idx = jnp.arange(n)
+    condition = condition.at[row_idx, reward_i_flat].set(jnp.array(pred_cond_raw))
+    logger.info(
+        "Decoder reward prediction done: reward_i=%s, condition=%s",
+        reward_i.shape,
+        condition.shape,
+    )
+
+    return reward_i, condition
 
 
 def _tokenize_texts(sample_list, encoder_config):
@@ -348,6 +498,14 @@ def _tokenize_texts(sample_list, encoder_config):
             texts.append("")  # placeholder
             has_text.append(False)
 
+    num_valid = sum(1 for flag in has_text if flag)
+    logger.debug(
+        "Tokenize CLIP texts: total=%d, non_empty=%d, max_len=%d",
+        len(sample_list),
+        num_valid,
+        encoder_config.token_max_len,
+    )
+
     inputs = processor(
         text=texts, return_tensors="jax",
         padding="max_length", truncation=True, max_length=encoder_config.token_max_len,
@@ -372,7 +530,10 @@ def _load_clip_encoder_module(config, encoder_config):
     _use_decoder = hasattr(config, "decoder")
     if _use_decoder:
         from conf.config import DecoderConfig
-        decoder_cfg = DecoderConfig(num_reward_classes=config.decoder.num_reward_classes)
+        decoder_cfg = DecoderConfig(
+            num_reward_classes=config.decoder.num_reward_classes,
+            cnn_reward_enum_onehot=config.decoder.cnn_reward_enum_onehot
+        )
         module, _ = get_cnnclip_decoder_encoder(
             encoder_config, decoder_config=decoder_cfg, RL_training=True,
         )

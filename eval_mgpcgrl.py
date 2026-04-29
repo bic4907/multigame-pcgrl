@@ -12,7 +12,7 @@ import hydra
 from conf.config import MGPCGRLEvalConfig
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.eval_utils import main_eval_entry
-from train_mg_pcgrl import inject_vipcgrl_obs
+from train_mgpcgrl import inject_vipcgrl_obs
 
 suppress_jax_debug_logs()
 
@@ -22,6 +22,10 @@ suppress_jax_debug_logs()
 
 @hydra.main(version_base=None, config_path="./conf", config_name="eval_mgpcgrl")
 def main(config: MGPCGRLEvalConfig):
+
+    if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
+        raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
+
     main_eval_entry(config, inject_obs_fn=inject_vipcgrl_obs)
 
 

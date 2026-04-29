@@ -441,11 +441,8 @@ def get_clip_hf_pretrained_params(config: EncoderConfig):
     }
 
     if config.state:
-        # patch_embedding.kernel은 입력 채널 수가 다르므로 (HF=3ch, 게임=5ch) 제외
-        vision_params = dict(vision_model_vars["params"])
-        vision_embeddings = dict(vision_params["embeddings"])
-        del vision_embeddings["patch_embedding"]
-        vision_params = {**vision_params, "embeddings": vision_embeddings}
+        # clipconv uses 224×224×3 RGB input, fully compatible with HF patch_embedding (3ch)
+        vision_params = vision_model_vars["params"]
         pretrained_params["encoders_state"] = {
             "pretrained_state_encoder": vision_params,
             "pretrained_image_projection": clip_variables["params"]["visual_projection"],

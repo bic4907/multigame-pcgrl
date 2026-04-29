@@ -149,7 +149,7 @@ class TestMGPCGRLWithDecoderCheckpoint:
             [
                 sys.executable,
                 "-m",
-                "train_mg_pcgrl",
+                "train_mgpcgrl",
                 # game=dg : 디코더 ckpt 가 game=dg 환경에서 학습되었으므로
                 # train_mg_pcgrl 도 동일한 게임으로 인코더를 초기화해야
                 # Conv_0 입력 채널 수(=base+onehot=10) 가 일치한다.

@@ -317,8 +317,8 @@ def make_train(
                         current_pixels = _render_to_clip_224_batch(env_state.env_state.env_map)
                     else:
                         # cnnclipconv: obs의 raw state pixels 그대로 사용
-                        prev_pixels = last_obs["clip_pixel_values"]
-                        current_pixels = obsv["clip_pixel_values"]
+                        prev_pixels = last_obs.pixel_values
+                        current_pixels = obsv.pixel_values
                     prev_embed = network.subnet.encoder.apply(
                         _enc_params, pixel_values=prev_pixels, mode='state', training=False
                     )["state_embed"]

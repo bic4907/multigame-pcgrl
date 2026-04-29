@@ -1,3 +1,4 @@
+import hashlib
 import os
 import uuid
 import gymnax
@@ -156,6 +157,12 @@ def get_short_target(target: str) -> str:
     return f"{words[0]}X{words[-1]}{len(target)}"
 
 
+def encoder_hash(config):
+    enc_hash = hashlib.md5(config.encoder.ckpt_name.encode()).hexdigest()[:6]  # 해시 생성 후 앞 8자리만 사용
+    config.exp_name = f"{config.exp_name}-{enc_hash}"
+
+    return config
+
 def get_exp_name(config):
     # ── Random policy 모드: random_exp-{exp_name}_s-{seed} ──
     if getattr(config, 'random_agent', False):
@@ -182,6 +189,27 @@ def get_exp_name(config):
         re_str = f'_re-{re}' if re is not None else ''
         exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
         return f'cpcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
+
+    _is_mgpcgrl = (
+        hasattr(config, 'encoder') and hasattr(config, 'decoder')
+    )
+    if _is_mgpcgrl:
+        from conf.game_utils import GAME_ABBR_INV
+        # 약어 입력이면 첫 번째 full name 으로, 이미 full name 이면 그대로 사용
+        _dg = config.dataset_game
+        if _dg in GAME_ABBR:
+            game_full = GAME_ABBR[_dg][0]   # e.g. "dg" → "dungeon"
+        else:
+            game_full = _dg                  # e.g. "dungeon" → "dungeon"
+        game_abbr = GAME_ABBR_INV.get(game_full, game_full)
+        re = getattr(config, 'dataset_reward_enum', None)
+        re_str = f'_re-{re}' if re is not None else ''
+        exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
+
+        enc_hash = hashlib.md5(config.encoder.ckpt_name.encode()).hexdigest()[:6]  # 해시 생성 후 앞 8자리만 사용
+        enc_str = f'_enc-{enc_hash}' if enc_hash is not None else ''
+
+        return f'vipcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
 
     exp_group = get_exp_group(config)
 

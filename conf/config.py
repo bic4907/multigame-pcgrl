@@ -403,6 +403,11 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="cnnclip"))
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
 
+    use_clip: bool = True
+    nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
+
+    wandb_project: Optional[str] = "vipcgrl"
+
     ignore_checkpoint: bool = False
 
 

@@ -107,6 +107,21 @@ def load_dataset_instruct(config):
     # reward annotation이 있는 샘플만
     samples = [s for s in samples if "reward_enum" in s.meta and "conditions" in s.meta]
 
+    # invalid instruction 필터 (인코더 학습과 동일 조건)
+    def _invalid_instruction(inst) -> bool:
+        if inst is None:
+            return True
+        s = str(inst).strip()
+        return s == "" or s.lower() == "none" or s.lower() == "nan"
+    samples = [s for s in samples if not _invalid_instruction(s.instruction)]
+
+    # longtail cut (인코더 학습과 동일 조건)
+    if getattr(config, "longtail_cut", False):
+        from encoder.data.clip_batch import apply_longtail_cut
+        n_before = len(samples)
+        samples = apply_longtail_cut(samples)
+        logger.info(f"Longtail cut: {n_before} → {len(samples)} samples")
+
     # condition 값 기반 필터링
     cond_filter = getattr(config, "dataset_condition_filter", None)
     if cond_filter:

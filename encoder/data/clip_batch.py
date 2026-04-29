@@ -27,6 +27,28 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 logging.getLogger('absl').setLevel(logging.ERROR)
 
 
+# (game, reward_enum, cutoff): condition >= cutoff 인 샘플 제거
+LONGTAIL_CUTOFF = [
+    ("dungeon", 1, 80),   # path_length >= 80
+    ("pokemon", 2, 150),  # interactive_count >= 150
+    ("pokemon", 4, 29),   # collectable_count >= 29
+]
+
+
+def apply_longtail_cut(samples: list) -> list:
+    """LONGTAIL_CUTOFF 기준으로 극단적 condition 값의 샘플을 제거한다."""
+    def _is_longtail(s) -> bool:
+        reward_enum = s.meta.get("reward_enum")
+        condition_value = s.meta.get("conditions", {}).get(reward_enum)
+        if condition_value is None:
+            return False
+        return any(
+            s.game == game and reward_enum == enum and condition_value >= cutoff
+            for game, enum, cutoff in LONGTAIL_CUTOFF
+        )
+    return [s for s in samples if not _is_longtail(s)]
+
+
 @dataclass
 class CLIPDataset:
     class_ids: np.ndarray
@@ -253,23 +275,8 @@ class CLIPDatasetBuilder:
 
         # ── Long-tail cutting: 극단적 condition 값 제거 ──
         if self.longtail_cut:
-            _LONGTAIL_CUTOFF = [
-                ("dungeon",  1, 80),    # enum1 (path_length), dg: condition >= 80
-                ("pokemon",  2, 150),   # enum2 (interactive_count), pk: condition >= 150
-                ("pokemon",  4, 29),    # enum4 (collectable_count), pk: condition >= 29
-            ]
             n_before_lt = len(samples)
-            def _is_longtail(s):
-                reward_enum = s.meta.get("reward_enum")
-                conditions = s.meta.get("conditions", {})
-                condition_value = conditions.get(reward_enum)
-                if condition_value is None:
-                    return False
-                for game, enum, cutoff in _LONGTAIL_CUTOFF:
-                    if s.game == game and reward_enum == enum and condition_value >= cutoff:
-                        return True
-                return False
-            samples = [s for s in samples if not _is_longtail(s)]
+            samples = apply_longtail_cut(samples)
             logger.info(f"Long-tail cutting: {n_before_lt} → {len(samples)} "
                         f"(removed {n_before_lt - len(samples)} samples)")
 

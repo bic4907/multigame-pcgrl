@@ -9,6 +9,7 @@ init_ckpt_path: null
 
 # dataset_reward_enum: 0  # 단일 enum (0=region). null이면 전체 5종 로드.
 dataset_reward_enum: null
+longtail_cut: true
 
 encoder:
   model: mlp

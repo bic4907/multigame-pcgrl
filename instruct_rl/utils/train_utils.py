@@ -304,8 +304,8 @@ def make_train(
 
                 reward = jnp.where(done, reward_env, reward_batch)
 
-                # Similarity reward: potential-based shaping — reward = prev_gap - current_gap
-                # gap = goal_sim - state_sim, so reward = current_sim - prev_sim (masked at episode end)
+                # Potential-based sim reward: delta = |goal_sim - sim_prev| - |goal_sim - sim_current|
+                # Positive when state moves closer to goal_sim; zero at episode end.
                 if config.use_sim_reward and train_inst is not None:
                     _enc_params = jax.lax.stop_gradient(
                         {"params": train_state.params["params"]["subnet"]["encoder"]}
@@ -327,9 +327,11 @@ def make_train(
                     )["state_embed"]
                     # text embedding (goal)
                     goal_embed = jax.lax.stop_gradient(instruct_sample.embedding)
+                    goal_sim = jax.lax.stop_gradient(instruct_sample.goal_sim).squeeze(-1)
                     sim_prev = jnp.sum(prev_embed * goal_embed, axis=-1)
                     sim_current = jnp.sum(current_embed * goal_embed, axis=-1)
-                    delta_sim = sim_current - sim_prev
+                    # potential-based shaping: reward = prev_gap - current_gap
+                    delta_sim = jnp.abs(goal_sim - sim_prev) - jnp.abs(goal_sim - sim_current)
                     masked_delta = jnp.where(done, jnp.zeros_like(delta_sim), delta_sim)
                     sim_reward = config.SIM_COEF * masked_delta
                     reward = reward + sim_reward

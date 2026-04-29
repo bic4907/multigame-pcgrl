@@ -619,6 +619,29 @@ def _restore_encoder_checkpoint(encoder_config, variables):
     """encoder_config.ckpt_path 에서 가장 최신 체크포인트를 복원한다."""
     ckpt_path = encoder_config.ckpt_path
     if ckpt_path is None:
+        if getattr(encoder_config, "model", None) == "clip":
+            logger.info(
+                "encoder.ckpt_path is None + model=clip — loading HuggingFace pretrained CLIP weights"
+            )
+            from encoder.clip_model import get_clip_hf_pretrained_params
+            hf_params = get_clip_hf_pretrained_params(encoder_config)
+            # hf_params: {"encoders_text": {...}, "encoders_state": {...}}
+            # variables["params"] has the same structure; deep-merge HF weights in
+            def _deep_merge(src, dst):
+                if not isinstance(src, dict) or not isinstance(dst, dict):
+                    return src
+                merged = dict(dst)
+                for k, v in src.items():
+                    if k not in merged:
+                        merged[k] = v
+                    elif isinstance(merged[k], dict) and isinstance(v, dict):
+                        merged[k] = _deep_merge(v, merged[k])
+                    else:
+                        merged[k] = v
+                return merged
+
+            merged_params = _deep_merge(hf_params, dict(variables.get("params", {})))
+            return {"params": merged_params}
         logger.warning(
             "encoder.ckpt_path is None — using randomly initialized encoder for text projection"
         )

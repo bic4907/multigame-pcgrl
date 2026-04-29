@@ -243,8 +243,6 @@ class CPCGRLConfig(TrainConfig):
     # condition 값 기반 필터: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
     # 여러 필터는 쉼표 구분: "enum_0_min_3_max_10,enum_2_max_50"
     dataset_condition_filter: Optional[str] = None
-    longtail_cut: bool = False
-    max_samples_per_game: int = 0   # 0 = 제한 없음. 인코더와 동일하게 맞추려면 1000
 
     vec_cont: bool = True
     raw_obs: bool = True
@@ -263,6 +261,23 @@ class CPCGRLConfig(TrainConfig):
     use_sim_reward: bool = False
     only_sim_reward: bool = False
     human_demo: bool = False
+
+    wandb_project: Optional[str] = "cpcgrl"
+
+
+@dataclass
+class IPCGRLConfig(CPCGRLConfig):
+    """IPCGRL (Instructed PCGRL) — BERT 임베딩 → MLP 인코더."""
+    use_nlp: bool = True
+    vec_cont: bool = False
+    model: str = "nlpconv"
+    nlp_input_dim: int = 768
+
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
+
+    longtail_cut: bool = True
+    max_samples_per_game: int = 1000
+    dataset_reward_enum: Optional[int] = None
 
     wandb_project: Optional[str] = "cpcgrl"
 
@@ -700,6 +715,7 @@ cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="cpcgrl", node=CPCGRLConfig)
+cs.store(name="ipcgrl", node=IPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)

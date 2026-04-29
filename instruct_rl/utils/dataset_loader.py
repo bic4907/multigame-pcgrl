@@ -179,7 +179,7 @@ def load_dataset_instruct(config):
         include_doom=('doom' in _game_names),
         include_doom2=('doom2' in _game_names),
         include_zelda=('zelda' in _game_names),
-        use_tile_mapping=False, # TODO check with GH
+        use_tile_mapping=False,
     )
 
     # 게임별 필터링 ('all'이면 전체 사용)

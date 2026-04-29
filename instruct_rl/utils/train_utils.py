@@ -154,8 +154,6 @@ def make_train(
         if encoder_params is not None:
             log_encoder_params_summary(encoder_params, config)
             runner_state = apply_encoder_params(runner_state, encoder_params, config)
-        elif getattr(config, "use_clip", False) or getattr(config, "use_nlp", False):
-            log_encoder_params_summary(encoder_params, config)
 
         multiple_handler = create_log_handler(
             config,
@@ -628,9 +626,11 @@ def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None, inject_reward_fn=Non
         with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
             f.write("timestep,ep_return\n")
 
-    train_inst, test_inst = None, None
-    if hasattr(config, "dataset_game") and config.dataset_game is not None:
-        train_inst, test_inst, _ = load_dataset_instruct(config)
+
+    assert hasattr(config, "dataset_game") and config.dataset_game is not None, \
+        "Config must specify dataset_game for loading instruction dataset."
+
+    train_inst, test_inst, _ = load_dataset_instruct(config)
 
     train_jit = jax.jit(
         make_train(

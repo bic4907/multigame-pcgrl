@@ -31,7 +31,6 @@ def load_decoder(
     decoder_config,
     cond_norm_min: jnp.ndarray | None = None,
     cond_norm_max: jnp.ndarray | None = None,
-    dummy_decoder: bool = False,
 ) -> Tuple:
     """CLIP Decoder 체크포인트를 로드한다.
 
@@ -66,13 +65,6 @@ def load_decoder(
         reward_enum=dummy_reward_enum,
         mode=mode, training=False,
     )
-
-    if dummy_decoder:
-        logger.warning("dummy_decoder=True: using randomly initialized decoder (checkpoint restore skipped)")
-        return module.apply, variables_template
-
-    if not ckpt_dir:
-        raise ValueError("ckpt_dir must be provided unless dummy_decoder=True")
 
     ckpt_dir = os.path.abspath(ckpt_dir)
     if not os.path.exists(ckpt_dir):
@@ -197,12 +189,11 @@ def build_decoder_reward_inject_fn(config) -> Callable:
     """train_utils.inject_reward_fn 시그니처에 맞는 콜백을 생성한다."""
     from conf.config import DecoderConfig
 
-    decoder_cfg = DecoderConfig(num_reward_classes=config.decoder_reward_classes)
+    decoder_cfg = DecoderConfig(num_reward_classes=config.decoder.num_reward_classes)
     apply_fn, variables = load_decoder(
-        ckpt_dir=config.decoder_ckpt_path,
+        ckpt_dir=config.encoder.ckpt_path,
         encoder_config=config.encoder,
         decoder_config=decoder_cfg,
-        dummy_decoder=getattr(config, "dummy_decoder", False),
     )
 
     def _inject_reward_fn(prev_env_state, curr_env_state, last_obs, curr_obs, instruct_sample, config, env):

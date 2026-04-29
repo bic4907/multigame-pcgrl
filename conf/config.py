@@ -172,8 +172,6 @@ class EncoderConfig(CLIPConfig):
     state: bool = True
     mode: str = "text_state"
 
-    pretrained_clip_model: str = "openai/clip-vit-base-patch32"
-
     deterministic: bool = True
     num_layers: int = 2
     hidden_dim: int = 256

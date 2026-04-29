@@ -43,6 +43,12 @@ def decoder_ckpt_dir(tmp_base):
     """train_clip_decoder.py dry-run 후 디코더 ckpt 디렉토리 경로를 반환."""
     hydra_run_dir = os.path.join(tmp_base, "hydra_clip_decoder")
 
+    # NOTE: 사용자가 검증한 working 설정 (`train_clip_decoder game=dg ...`) 을 그대로 따른다.
+    #   - game=dg  : seen 게임을 dungeon 으로 고정 (실제 학습 샘플 발생)
+    #   - unseen_games 는 schema 기본값(zd) 그대로 사용
+    # (기존 unseen_games=dg 는 seen_games=[] 가 되어 train pool 이 비고,
+    #  결과 디코더 ckpt 의 인코더 채널 수가 train_mg_pcgrl 의 game=dg 초기화와
+    #  일치하지 않아 train_mg_pcgrl JIT 단계에서 실패한다.)
     result = subprocess.run(
         [
             sys.executable,
@@ -57,7 +63,7 @@ def decoder_ckpt_dir(tmp_base):
             "encoder.model=cnnclip",
             "encoder.state=true",
             "decoder.num_reward_classes=5",
-            "unseen_games=dg",
+            "game=dg",
             f"hydra.run.dir={hydra_run_dir}",
         ],
         cwd=_ROOT,
@@ -75,20 +81,35 @@ def decoder_ckpt_dir(tmp_base):
         f"stderr:\n{result.stderr[-3000:]}"
     )
 
+    # train_clip_decoder 가 새로 저장한 ckpt 만 찾는다.
+    # 주의: _ROOT 전체를 탐색하면 `pretrained_encoders/vipcgrl/default2/ckpts`
+    # 같은 기존 ckpt 가 먼저 매칭되어 train_mg_pcgrl 에서 채널/구조 불일치로 실패한다.
+    # 따라서 (1) train_clip_decoder 의 출력 루트인 `saves/`,
+    # (2) hydra.run.dir 두 곳만 탐색한다.
     found_ckpts = None
-    for search_root in [_ROOT, hydra_run_dir]:
+    candidates = []
+    for search_root in [os.path.join(_ROOT, "saves"), hydra_run_dir]:
+        if not os.path.isdir(search_root):
+            continue
         for dirpath, _, _ in os.walk(search_root):
-            if os.path.basename(dirpath) == "ckpts":
-                entries = os.listdir(dirpath)
-                if any(e.isdigit() for e in entries):
-                    found_ckpts = dirpath
-                    break
-        if found_ckpts:
-            break
+            if os.path.basename(dirpath) != "ckpts":
+                continue
+            entries = os.listdir(dirpath)
+            if not any(e.isdigit() for e in entries):
+                continue
+            # train_clip_decoder 가 만든 디렉토리만 (clipdec prefix) 받아들인다.
+            if "clipdec" not in dirpath:
+                continue
+            candidates.append((os.path.getmtime(dirpath), dirpath))
+
+    if candidates:
+        # 가장 최근에 생성된 ckpt 디렉토리를 선택
+        candidates.sort(reverse=True)
+        found_ckpts = candidates[0][1]
 
     assert found_ckpts is not None, (
         "train_clip_decoder.py 가 체크포인트를 저장하지 않았습니다.\n"
-        f"searched: {_ROOT}, {hydra_run_dir}"
+        f"searched: {os.path.join(_ROOT, 'saves')}, {hydra_run_dir}"
     )
 
     dst = os.path.join(tmp_base, "pretrained_decoders", "test_decoder", "ckpts")
@@ -129,8 +150,12 @@ class TestMGPCGRLWithDecoderCheckpoint:
                 sys.executable,
                 "-m",
                 "train_mg_pcgrl",
+                # game=dg : 디코더 ckpt 가 game=dg 환경에서 학습되었으므로
+                # train_mg_pcgrl 도 동일한 게임으로 인코더를 초기화해야
+                # Conv_0 입력 채널 수(=base+onehot=10) 가 일치한다.
+                "game=dg",
                 "overwrite=true",
-                "total_timesteps=200",
+                "total_timesteps=100",
                 "n_envs=4",
                 "num_steps=4",
                 "update_epochs=1",

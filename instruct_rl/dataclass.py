@@ -12,7 +12,7 @@ class Instruct:
     condition: chex.Array
     embedding: chex.Array
     condition_id: int
-    image_embed: chex.Array  # pretrained CLIP image embedding of goal level (224x224)
+    goal_sim: chex.Array          # cos_sim(goal_state_embed, text_embed), precomputed offline
 
 
 @struct.dataclass

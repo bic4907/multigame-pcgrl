@@ -97,9 +97,13 @@ def make_train(
     env = LogWrapper(env)
     env.init_graphics()
 
-    # ── 224x224 CLIP sim-reward 준비 ──────────────────────────────────────
+    # ── 224x224 CLIP sim-reward 준비 (clipconv 전용) ──────────────────────
     _render_to_clip_224_batch = None
-    if getattr(config, 'use_sim_reward', False):
+    _sim_reward_is_clip_vit = (
+        getattr(config, 'use_sim_reward', False)
+        and getattr(config.encoder, 'model', None) == 'clip'
+    )
+    if _sim_reward_is_clip_vit:
         from instruct_rl.utils.render_clip_224 import build_jax_render_224_fn
         _tile_tensor = jnp.array(env.prob.graphics)
         _render_to_clip_224_batch = build_jax_render_224_fn(_tile_tensor, map_size=config.map_width)
@@ -308,31 +312,35 @@ def make_train(
                     _enc_params = jax.lax.stop_gradient(
                         {"params": train_state.params["params"]["subnet"]["encoder"]}
                     )
-                    # prev state sim
-                    prev_images = _render_to_clip_224_batch(prev_env_state.env_state.env_map)
+                    _is_clip_vit = getattr(config.encoder, 'model', None) == 'clip'
+                    if _is_clip_vit:
+                        # clipconv: env_map → 224x224 CLIP-normalized RGB → encode
+                        prev_pixels = _render_to_clip_224_batch(prev_env_state.env_state.env_map)
+                        current_pixels = _render_to_clip_224_batch(env_state.env_state.env_map)
+                    else:
+                        # cnnclipconv: obs의 raw state pixels 그대로 사용
+                        prev_pixels = last_obs["clip_pixel_values"]
+                        current_pixels = obsv["clip_pixel_values"]
                     prev_embed = network.subnet.encoder.apply(
-                        _enc_params, pixel_values=prev_images, mode='state', training=False
+                        _enc_params, pixel_values=prev_pixels, mode='state', training=False
                     )["state_embed"]
-                    # current state sim
-                    current_images = _render_to_clip_224_batch(env_state.env_state.env_map)
                     current_embed = network.subnet.encoder.apply(
-                        _enc_params, pixel_values=current_images, mode='state', training=False
+                        _enc_params, pixel_values=current_pixels, mode='state', training=False
                     )["state_embed"]
                     # text embedding (goal)
                     goal_embed = jax.lax.stop_gradient(instruct_sample.embedding)
-                    # goal_sim: cos_sim(goal_image_embed, text_embed) — 목표 유사도 (정규화 분모)
-                    # goal_sim = jnp.sum(
-                    #     jax.lax.stop_gradient(instruct_sample.image_embed) * goal_embed, axis=-1
-                    # )
+                    # goal_sim: cos_sim(goal_state_embed, text_embed) — 학습 전 precomputed
+                    goal_sim = jax.lax.stop_gradient(instruct_sample.goal_sim).squeeze(-1)
                     sim_prev = jnp.sum(prev_embed * goal_embed, axis=-1)
                     sim_current = jnp.sum(current_embed * goal_embed, axis=-1)
                     # goal_sim으로 정규화: 목표 대비 상대적 진전량
-                    delta_sim = (sim_current - sim_prev)
-                    sim_reward = config.SIM_COEF * jnp.where(done, jnp.zeros_like(delta_sim), delta_sim)
+                    delta_sim = jnp.abs(goal_sim - sim_prev) - jnp.abs(goal_sim - sim_current)
+                    masked_delta = jnp.where(done, jnp.zeros_like(delta_sim), delta_sim)
+                    sim_reward = config.SIM_COEF * masked_delta
                     reward = reward + sim_reward
                     return_info = ReturnInfo(
                         cond_return=return_info.cond_return + jnp.where(done, jnp.zeros_like(cond_reward_batch), cond_reward_batch),
-                        sim_return=return_info.sim_return + delta_sim,
+                        sim_return=return_info.sim_return + masked_delta,
                         coef_sim_return=return_info.coef_sim_return + sim_reward,
                         total_return=return_info.total_return,
                         prev_done=return_info.prev_done,
@@ -351,7 +359,7 @@ def make_train(
 
                 info["returned_episode_returns"] = env_state.returned_episode_returns
 
-                _store_env_map = config.use_sim_reward or getattr(config, 'collect_env_map', False)
+                _store_env_map = _sim_reward_is_clip_vit or getattr(config, 'collect_env_map', False)
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info,
                     env_state.env_state.env_map if _store_env_map else None,

@@ -221,18 +221,21 @@ def _build_instruct(sample_list, config):
 
     condition_id = jnp.arange(n, dtype=jnp.int32).reshape(-1, 1)
 
-    # ── CLIP 이미지 임베딩: human_level을 224x224 렌더링 후 pretrained CLIP state encoder 통과 ──
+    # ── goal state 임베딩 + goal_sim 사전 계산 ────────────────────────────
     if getattr(config, 'use_sim_reward', False):
-        image_embed = _compute_clip_image_embeddings(sample_list, config)
+        goal_state_embed = _compute_goal_state_embeddings(sample_list, config)
+        # cos_sim(goal_state_embed, text_embed) — 매 step 계산 없이 저장해두고 꺼내서 사용
+        goal_sim = jnp.sum(goal_state_embed * embedding, axis=-1, keepdims=True)  # (n, 1)
     else:
-        image_embed = jnp.zeros((n, max(1, config.nlp_input_dim)), dtype=jnp.float32)
+        goal_state_embed = jnp.zeros((n, max(1, config.nlp_input_dim)), dtype=jnp.float32)
+        goal_sim = jnp.zeros((n, 1), dtype=jnp.float32)
 
     return Instruct(
         reward_i=reward_i,
         condition=condition,
         embedding=embedding,
         condition_id=condition_id,
-        image_embed=image_embed,
+        goal_sim=goal_sim,
     )
 
 
@@ -382,31 +385,25 @@ def _compute_clip_embeddings(sample_list, config):
     return jnp.array(clip_embeddings, dtype=jnp.float32)
 
 
-def _compute_clip_image_embeddings(sample_list, config):
-    """각 GameSample.array를 224x224로 렌더링하고 pretrained CLIP state encoder로 임베딩을 계산한다.
+def _compute_goal_state_embeddings(sample_list, config):
+    """goal level의 state embedding을 계산한다.
 
-    파이프라인:
-      sample.array (H, W) int32
-        → render_multigame_map → PIL 256x256 RGB
-        → resize 224x224 → CLIP 정규화
-        → ContrastiveModule.encode_state (FlaxCLIPVisionTransformer)
-        → L2-normalized embedding (output_dim)
+    encoder.model == 'clip'    → 224x224 렌더링 후 CLIP ViT encoder
+    encoder.model == 'cnnclip' → raw tile map (16x16 one-hot) 후 CNN encoder
     """
     import numpy as np
     from glob import glob
     from os.path import basename, join
 
-    from instruct_rl.utils.render_clip_224 import render_maps_numpy_224
-
     encoder_config = config.encoder
     nlp_input_dim = config.nlp_input_dim
+    _is_cnnclip = getattr(encoder_config, 'model', None) == 'cnnclip'
 
     n = len(sample_list)
-    logger.info(f"Computing CLIP image embeddings (224x224) for {n} samples")
+    logger.info(f"Computing goal state embeddings ({'cnnclip 16x16' if _is_cnnclip else 'clip 224x224'}) for {n} samples")
 
-    # ── 1) 224x224 렌더링 ───────────────────────────────────────────────────
-    # Raw per-game tile IDs → multigame unified tile IDs (cat_idx+1; BORDER=0 unused here)
-    from envs.probs.multigame import _MAPPING_CONFIG
+    # ── 1) per-game tile IDs → multigame unified tile IDs ──────────────────
+    from envs.probs.multigame import _MAPPING_CONFIG, NUM_CATEGORIES
     raw_arrays = [np.asarray(s.array, dtype=np.int32) for s in sample_list]
     mapped_arrays = []
     for s, raw_arr in zip(sample_list, raw_arrays):
@@ -417,17 +414,26 @@ def _compute_clip_image_embeddings(sample_list, config):
         else:
             mapped = raw_arr
         mapped_arrays.append(mapped.astype(np.int32))
-    arrays = np.stack(mapped_arrays)
-    pixel_values_np = render_maps_numpy_224(arrays)   # (N, 224, 224, 3) float32
+    arrays = np.stack(mapped_arrays)   # (N, H, W) unified tile IDs
 
-    # ── 2) Encoder 로드 (CLIP state encoder) ─────────────────────────────────
+    # ── 2) pixel_values 준비 (encoder type별 분기) ─────────────────────────
+    if _is_cnnclip:
+        # cnnclip: tile ID one-hot → (N, 16, 16, NUM_CATEGORIES+1) float32
+        n_tiles = NUM_CATEGORIES + 1  # BORDER + categories
+        pixel_values_np = (arrays[:, :, :, None] == np.arange(n_tiles)).astype(np.float32)
+    else:
+        # clip: 224x224 CLIP-normalized RGB render
+        from instruct_rl.utils.render_clip_224 import render_maps_numpy_224
+        pixel_values_np = render_maps_numpy_224(arrays)   # (N, 224, 224, 3)
+
+    # ── 3) Encoder 로드 ───────────────────────────────────────────────────
     from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder
     from flax.training import checkpoints as flax_ckpts
 
     _use_decoder = getattr(config, "use_decoder_reward_shaping", False)
-    if _use_decoder or getattr(encoder_config, 'model', None) == 'cnnclip':
+    if _use_decoder or _is_cnnclip:
         module, _ = get_cnnclip_encoder(encoder_config, RL_training=True)
-        dummy_pix = jnp.ones((1, 16, 16, 6), dtype=jnp.float32)
+        dummy_pix = jnp.ones((1,) + pixel_values_np.shape[1:], dtype=jnp.float32)
     else:
         module, _ = get_clip_encoder(encoder_config, RL_training=True)
         dummy_pix = jnp.ones((1, 224, 224, 3), dtype=jnp.float32)
@@ -481,17 +487,17 @@ def _compute_clip_image_embeddings(sample_list, config):
         out = _encode_state_batch(variables, pv)
         all_embeddings.append(np.array(out["state_embed"]))   # (batch, output_dim), L2-normalized
 
-    image_embeddings = np.concatenate(all_embeddings, axis=0)  # (N, output_dim)
+    goal_embeddings = np.concatenate(all_embeddings, axis=0)  # (N, output_dim)
 
     # nlp_input_dim 에 맞게 패딩/절삭
-    embed_dim = image_embeddings.shape[1]
+    embed_dim = goal_embeddings.shape[1]
     if nlp_input_dim > embed_dim:
-        image_embeddings = np.pad(image_embeddings, ((0, 0), (0, nlp_input_dim - embed_dim)))
+        goal_embeddings = np.pad(goal_embeddings, ((0, 0), (0, nlp_input_dim - embed_dim)))
     elif nlp_input_dim < embed_dim:
-        image_embeddings = image_embeddings[:, :nlp_input_dim]
+        goal_embeddings = goal_embeddings[:, :nlp_input_dim]
 
-    logger.info(f"CLIP image embeddings shape: {image_embeddings.shape}")
-    return jnp.array(image_embeddings, dtype=jnp.float32)
+    logger.info(f"Goal state embeddings shape: {goal_embeddings.shape}")
+    return jnp.array(goal_embeddings, dtype=jnp.float32)
 
 
 def _compute_bert_embeddings(sample_list, nlp_input_dim):

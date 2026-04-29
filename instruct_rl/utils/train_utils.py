@@ -327,12 +327,9 @@ def make_train(
                     )["state_embed"]
                     # text embedding (goal)
                     goal_embed = jax.lax.stop_gradient(instruct_sample.embedding)
-                    # goal_sim: cos_sim(goal_state_embed, text_embed) — 학습 전 precomputed
-                    goal_sim = jax.lax.stop_gradient(instruct_sample.goal_sim).squeeze(-1)
                     sim_prev = jnp.sum(prev_embed * goal_embed, axis=-1)
                     sim_current = jnp.sum(current_embed * goal_embed, axis=-1)
-                    # goal_sim으로 정규화: 목표 대비 상대적 진전량
-                    delta_sim = jnp.abs(goal_sim - sim_prev) - jnp.abs(goal_sim - sim_current)
+                    delta_sim = sim_current - sim_prev
                     masked_delta = jnp.where(done, jnp.zeros_like(delta_sim), delta_sim)
                     sim_reward = config.SIM_COEF * masked_delta
                     reward = reward + sim_reward

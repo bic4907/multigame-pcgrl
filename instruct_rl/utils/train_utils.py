@@ -321,20 +321,18 @@ def make_train(
                     # text embedding (goal)
                     goal_embed = jax.lax.stop_gradient(instruct_sample.embedding)
                     # goal_sim: cos_sim(goal_image_embed, text_embed) — 목표 유사도 (정규화 분모)
-                    goal_sim = jnp.sum(
-                        jax.lax.stop_gradient(instruct_sample.image_embed) * goal_embed, axis=-1
-                    )
+                    # goal_sim = jnp.sum(
+                    #     jax.lax.stop_gradient(instruct_sample.image_embed) * goal_embed, axis=-1
+                    # )
                     sim_prev = jnp.sum(prev_embed * goal_embed, axis=-1)
                     sim_current = jnp.sum(current_embed * goal_embed, axis=-1)
                     # goal_sim으로 정규화: 목표 대비 상대적 진전량
-                    delta_sim = (sim_current - sim_prev) / jnp.maximum(goal_sim+1, 1e-8)
-                    # 에피소드 종료 시 마스킹 (reset 상태 간 delta는 의미없음)
-                    masked_delta = jnp.where(done, jnp.zeros_like(delta_sim), delta_sim)
-                    sim_reward = config.SIM_COEF * masked_delta
+                    delta_sim = (sim_current - sim_prev)
+                    sim_reward = config.SIM_COEF * jnp.where(done, jnp.zeros_like(delta_sim), delta_sim)
                     reward = reward + sim_reward
                     return_info = ReturnInfo(
                         cond_return=return_info.cond_return + jnp.where(done, jnp.zeros_like(cond_reward_batch), cond_reward_batch),
-                        sim_return=return_info.sim_return + masked_delta,
+                        sim_return=return_info.sim_return + delta_sim,
                         coef_sim_return=return_info.coef_sim_return + sim_reward,
                         total_return=return_info.total_return,
                         prev_done=return_info.prev_done,

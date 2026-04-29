@@ -209,7 +209,7 @@ def get_exp_name(config):
         enc_hash = hashlib.md5(config.encoder.ckpt_name.encode()).hexdigest()[:6]  # 해시 생성 후 앞 8자리만 사용
         enc_str = f'_enc-{enc_hash}' if enc_hash is not None else ''
 
-        return f'vipcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
+        return f'mgpcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
 
     exp_group = get_exp_group(config)
 

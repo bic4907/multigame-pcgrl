@@ -21,11 +21,12 @@ logger = get_logger(__file__)
 def _build_instruct(sample_list, config):
     """샘플 리스트에서 Instruct 객체를 빌드한다."""
     logger.info(
-        "Building Instruct: samples=%d, use_clip=%s, use_nlp=%s, use_decoder=%s",
+        "Building Instruct: samples=%d, use_clip=%s, use_nlp=%s, use_decoder=%s, use_sim_reward=%s",
         len(sample_list),
         getattr(config, "use_clip", False),
         getattr(config, "use_nlp", False),
         hasattr(config, "decoder"),
+        getattr(config, "use_sim_reward", False),
     )
 
     use_clip = getattr(config, "use_clip", False)
@@ -63,6 +64,16 @@ def _build_instruct(sample_list, config):
     )
     condition_id = jnp.arange(len(sample_list), dtype=jnp.int32).reshape(-1, 1)
 
+    n = len(sample_list)
+    if getattr(config, "use_sim_reward", False):
+        goal_sim = _compute_goal_sim(
+            sample_list, config, embedding,
+            shared_module=shared_module,
+            shared_variables=shared_variables,
+        )
+    else:
+        goal_sim = jnp.zeros((n, 1), dtype=jnp.float32)
+
     if shared_module is not None or shared_variables is not None:
         del shared_module
         del shared_variables
@@ -72,7 +83,112 @@ def _build_instruct(sample_list, config):
         condition=condition,
         embedding=embedding,
         condition_id=condition_id,
+        goal_sim=goal_sim,
     )
+
+
+def _compute_goal_sim(sample_list, config, text_embedding, *, shared_module=None, shared_variables=None):
+    """각 샘플의 goal_state_embed와 text_embedding의 cosine similarity를 계산한다."""
+    encoder_model = getattr(config.encoder, "model", "cnnclip")
+    is_clip_vit = encoder_model == "clip"
+
+    logger.info(
+        "Computing goal_sim: n=%d, encoder_model=%s",
+        len(sample_list),
+        encoder_model,
+    )
+
+    if is_clip_vit:
+        state_module, state_variables = _load_clip_vit_state_module(config.encoder)
+        state_variables = _restore_encoder_checkpoint(config.encoder, state_variables)
+        goal_state_embed = _compute_goal_state_embed_clip_vit(sample_list, state_module, state_variables)
+        del state_module, state_variables
+    else:
+        if shared_module is not None and shared_variables is not None:
+            state_module, state_variables = shared_module, shared_variables
+        else:
+            state_module, state_variables = _load_clip_encoder_module(config, config.encoder)
+            state_variables = _restore_encoder_checkpoint(config.encoder, state_variables)
+        goal_state_embed = _compute_goal_state_embed_cnnclip(sample_list, state_module, state_variables, config)
+
+    goal_state_embed = jnp.array(goal_state_embed, dtype=jnp.float32)
+    goal_sim = jnp.sum(goal_state_embed * text_embedding, axis=-1, keepdims=True)
+    logger.info("goal_sim: shape=%s, mean=%.4f", goal_sim.shape, float(jnp.mean(goal_sim)))
+    return goal_sim
+
+
+def _load_clip_vit_state_module(encoder_config):
+    """clip ViT ContrastiveModule을 초기화한다 (state encoder만 사용)."""
+    from encoder.clip_model import get_clip_encoder
+
+    module, _ = get_clip_encoder(encoder_config, RL_training=True)
+
+    rng = jax.random.PRNGKey(0)
+    dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
+    dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
+    dummy_pix = jnp.ones((1, 224, 224, 3), dtype=jnp.float32)
+    variables = module.init(rng, dummy_ids, dummy_mask, dummy_pix, mode="text_state", training=False)
+    return module, variables
+
+
+def _compute_goal_state_embed_clip_vit(sample_list, module, variables, batch_size=32):
+    """clip ViT로 goal map을 224×224 이미지로 렌더링 후 state embedding을 계산한다."""
+    from tqdm import tqdm
+
+    from dataset.multigame.tile_utils import to_unified
+    from instruct_rl.utils.render_clip_224 import render_maps_numpy_224
+
+    arrays = []
+    for sample in sample_list:
+        game = getattr(sample, "game", "")
+        unified = to_unified(np.asarray(sample.array, dtype=np.int32), game, warn_unmapped=False)
+        arrays.append(unified + 1)  # 0=BORDER(unused), 1..N=categories
+    env_maps = np.stack(arrays, axis=0)  # (N, H, W)
+
+    images = render_maps_numpy_224(env_maps)  # (N, 224, 224, 3)
+
+    @jax.jit
+    def _encode_batch(pix):
+        return module.apply(variables, pixel_values=pix, mode="state", training=False)["state_embed"]
+
+    n = len(sample_list)
+    state_embeds = []
+    for start in tqdm(range(0, n, batch_size), desc="Goal CLIP ViT embed", unit="batch"):
+        end = min(start + batch_size, n)
+        embed = _encode_batch(jnp.array(images[start:end]))
+        state_embeds.append(np.array(embed))
+
+    return np.concatenate(state_embeds, axis=0)
+
+
+def _compute_goal_state_embed_cnnclip(sample_list, module, variables, config, batch_size=256):
+    """cnnclip CNN encoder로 goal map을 one-hot 인코딩 후 state embedding을 계산한다."""
+    from tqdm import tqdm
+
+    from dataset.multigame.tile_utils import NUM_CATEGORIES, to_unified
+
+    arrays = []
+    for sample in sample_list:
+        game = getattr(sample, "game", "")
+        unified = to_unified(np.asarray(sample.array, dtype=np.int32), game, warn_unmapped=False)
+        h, w = unified.shape
+        onehot = np.zeros((h, w, NUM_CATEGORIES), dtype=np.float32)
+        onehot[np.arange(h)[:, None], np.arange(w)[None, :], unified] = 1.0
+        arrays.append(onehot)
+    pixel_values = np.stack(arrays, axis=0)  # (N, H, W, NUM_CATEGORIES)
+
+    @jax.jit
+    def _encode_batch(pix):
+        return module.apply(variables, pixel_values=pix, mode="state", training=False)["state_embed"]
+
+    n = len(sample_list)
+    state_embeds = []
+    for start in tqdm(range(0, n, batch_size), desc="Goal CNN embed", unit="batch"):
+        end = min(start + batch_size, n)
+        embed = _encode_batch(jnp.array(pixel_values[start:end]))
+        state_embeds.append(np.array(embed))
+
+    return np.concatenate(state_embeds, axis=0)
 
 
 def _load_shared_clip_module_and_ckpt(config):

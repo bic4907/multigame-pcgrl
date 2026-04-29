@@ -7,6 +7,12 @@ render_freq: -1
 encoder:
   model: cnnclip
 
+decoder:
+  hidden_dim: 128
+  num_layers: 2
+  num_reward_classes: 5
+  cnn_reward_enum_onehot: true
+
 hydra:
   sweeper:
     params: {}

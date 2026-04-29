@@ -274,14 +274,21 @@ def apply_encoder_params(runner_state, encoder_params, config):
     logger.info(
         f"Parameters loaded from encoder checkpoint ({config.encoder.ckpt_path})"
     )
-    # Preserve params that exist in the initialised model but may be absent from the
-    # pretrained checkpoint (e.g. text_state_temperature from ContrastiveModule.setup()).
+    # Deep-merge: checkpoint takes priority; initialised params fill in any keys
+    # that the checkpoint doesn't have (e.g. text_state_temperature, final_image_projection).
+    def _deep_merge(ckpt, init):
+        if not isinstance(ckpt, dict) or not isinstance(init, dict):
+            return ckpt
+        merged = dict(ckpt)
+        for k, v in init.items():
+            if k not in merged:
+                merged[k] = v
+            elif isinstance(merged[k], dict) and isinstance(v, dict):
+                merged[k] = _deep_merge(merged[k], v)
+        return merged
+
     existing = runner_state.train_state.params["params"]["subnet"]["encoder"]
-    merged = dict(encoder_params)
-    for key, val in existing.items():
-        if key not in merged:
-            merged[key] = val
-            logger.info(f"Preserved initialised param '{key}' (not in checkpoint)")
+    merged = _deep_merge(encoder_params, existing)
     runner_state.train_state.params["params"]["subnet"]["encoder"] = merged
 
     logger.info("-" * 80)

@@ -498,7 +498,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     elif config.model == "clipconv":
         network = EncoderCLIPConvForward(
             config=config.encoder,
-            encoder=get_clip_encoder(config.encoder) if config.encoder.model else None,
+            encoder=get_clip_encoder(config.encoder)[0] if config.encoder.model else None,
             train_encoder=config.encoder.trainable,
             nlp_conv_forward=NLPConvForward(
                 action_dim=action_dim, activation=config.activation,

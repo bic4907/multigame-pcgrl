@@ -327,7 +327,7 @@ def init_config(config: Config):
         # ── encoder.ckpt_name 으로 pretrained_encoders/ 에서 직접 로드 ──
         elif config.encoder.ckpt_name is not None:
             _project_root = os.path.dirname(os.path.dirname(os.path.dirname(abspath(__file__))))
-            _pretrained_dir = join(_project_root, "pretrained_encoders", config.encoder.ckpt_name, "ckpts")
+            _pretrained_dir = join(_project_root, config.encoder.ckpt_dir, config.encoder.ckpt_name, "ckpts")
             if not os.path.isdir(_pretrained_dir):
                 logger.error(f"Pretrained encoder checkpoint not found: {_pretrained_dir}")
                 exit(-1)

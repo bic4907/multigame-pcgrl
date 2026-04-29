@@ -11,9 +11,16 @@ from collections import Counter
 import jax
 import jax.numpy as jnp
 import hashlib
+import numpy as np
+from glob import glob
+from os.path import basename, join
 
 from instruct_rl.dataclass import Instruct
 from instruct_rl.utils.log_utils import get_logger
+
+from dataset.multigame import MultiGameDataset
+
+from flax.training import checkpoints as flax_ckpts
 
 logger = get_logger(__file__)
 
@@ -131,8 +138,6 @@ def load_dataset_instruct(config):
     -------
     (train_inst, test_inst) : tuple[Instruct, Instruct]
     """
-    from dataset.multigame import MultiGameDataset
-
     # eval_games가 지정된 경우 평가 데이터 로딩에 우선 사용 (체크포인트 경로는 game 기준 유지)
     _eval_games_str = getattr(config, 'eval_games', None)
     _load_game = _eval_games_str if _eval_games_str is not None else config.dataset_game
@@ -174,7 +179,7 @@ def load_dataset_instruct(config):
         include_doom=('doom' in _game_names),
         include_doom2=('doom2' in _game_names),
         include_zelda=('zelda' in _game_names),
-        use_tile_mapping=False,
+        use_tile_mapping=False, # TODO check with GH
     )
 
     # 게임별 필터링 ('all'이면 전체 사용)
@@ -320,37 +325,21 @@ def _build_instruct(sample_list, config):
     )
 
 
-def _compute_clip_embeddings(sample_list, config):
-    """사전학습된 CLIP encoder를 통해 instruction 텍스트 → latent embedding을 계산한다.
+def _tokenize_texts(sample_list, encoder_config):
+    """샘플 리스트에서 CLIP 토크나이저로 input_ids / attention_mask 를 반환한다.
 
-    1) openai/clip-vit-base-patch32 로 토크나이즈
-    2) 사전학습된 ContrastiveModule 의 encode_text 를 사용하여
-       512-dim raw CLIP → output_dim (e.g. 64) latent space 로 projection
-
-    instruction이 None인 샘플은 zeros 임베딩으로 대체한다.
+    Returns
+    -------
+    input_ids      : jnp.ndarray  (N, token_max_len)
+    attention_mask : jnp.ndarray  (N, token_max_len)
+    has_text       : list[bool]   instruction 유무 플래그
     """
-    import numpy as np
-    from glob import glob
-    from os.path import basename, join
+    from transformers import CLIPProcessor
 
-    nlp_input_dim = config.nlp_input_dim
-    encoder_config = config.encoder
-
-    try:
-        from transformers import CLIPProcessor
-    except ImportError:
-        logger.warning("transformers not installed — falling back to zero embeddings")
-        return jnp.zeros((len(sample_list), nlp_input_dim), dtype=jnp.float32)
-
-    # ── 1) 토크나이즈 ──────────────────────────────────────────────────────
     model_name = "openai/clip-vit-base-patch32"
-    logger.info(f"Computing CLIP latent embeddings (output_dim={encoder_config.output_dim}) "
-                f"for {len(sample_list)} samples")
-
     processor = CLIPProcessor.from_pretrained(model_name)
 
-    texts = []
-    has_text = []
+    texts, has_text = [], []
     for s in sample_list:
         if s.instruction is not None and len(s.instruction.strip()) > 0:
             texts.append(s.instruction)
@@ -363,107 +352,172 @@ def _compute_clip_embeddings(sample_list, config):
         text=texts, return_tensors="jax",
         padding="max_length", truncation=True, max_length=encoder_config.token_max_len,
     )
-    input_ids = jnp.array(inputs["input_ids"])            # (N, token_max_len)
-    attention_mask = jnp.array(inputs["attention_mask"])   # (N, token_max_len)
+    return (
+        jnp.array(inputs["input_ids"]),
+        jnp.array(inputs["attention_mask"]),
+        has_text,
+    )
 
-    # ── 2) 사전학습된 encoder 로드 ────────────────────────────────────────
+
+def _load_clip_encoder_module(config, encoder_config):
+    """config에 따라 ContrastiveModule 또는 ContrastiveDecoderModule을 초기화한다.
+
+    Returns
+    -------
+    module    : flax.linen.Module
+    variables : dict  (random initialized params)
+    """
     from encoder.clip_model import get_cnnclip_encoder, get_cnnclip_decoder_encoder
-    from flax.training import checkpoints as flax_ckpts
 
-    # decoder 모드 (MGPCGRL) 인 경우 ContrastiveDecoderModule 사용
-    _use_decoder = getattr(config, "use_decoder_reward_shaping", False)
+    _use_decoder = hasattr(config, "decoder")
     if _use_decoder:
         from conf.config import DecoderConfig
-        decoder_cfg = DecoderConfig(
-            num_reward_classes=getattr(config, "decoder_reward_classes", 5)
-        )
+        decoder_cfg = DecoderConfig(num_reward_classes=config.decoder.num_reward_classes)
         module, _ = get_cnnclip_decoder_encoder(
             encoder_config, decoder_config=decoder_cfg, RL_training=True,
         )
     else:
         module, _ = get_cnnclip_encoder(encoder_config, RL_training=True)
 
-    # dummy init
+    # dummy forward 로 파라미터 형상 초기화
     rng = jax.random.PRNGKey(0)
-    dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
+    dummy_ids  = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
     dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
-    dummy_pix = jnp.ones((1, 16, 16, 6), dtype=jnp.float32)
-    dummy_reward_enum = jnp.zeros((1,), dtype=jnp.int32)
+    dummy_pix  = jnp.ones((1, 16, 16, 6), dtype=jnp.float32)
     mode = "text_state" if encoder_config.state else "text"
-    # ContrastiveDecoderModule은 reward_enum kwarg를 지원; ContrastiveModule은 무시
-    _init_kwargs = dict(mode=mode, training=False)
+    init_kwargs = dict(mode=mode, training=False)
     if _use_decoder:
-        _init_kwargs["reward_enum"] = dummy_reward_enum
-    variables = module.init(rng, dummy_ids, dummy_mask, dummy_pix, **_init_kwargs)
+        init_kwargs["reward_enum"] = jnp.zeros((1,), dtype=jnp.int32)
 
-    # 체크포인트 복원
+    variables = module.init(rng, dummy_ids, dummy_mask, dummy_pix, **init_kwargs)
+    return module, variables
+
+
+def _restore_encoder_checkpoint(encoder_config, variables):
+    """encoder_config.ckpt_path 에서 가장 최신 체크포인트를 복원한다.
+
+    체크포인트가 없거나 로드 실패 시 초기 variables 를 그대로 반환한다.
+
+    Returns
+    -------
+    variables : dict  (restored or original params)
+    """
     ckpt_path = encoder_config.ckpt_path
-    if ckpt_path is not None:
-        ckpt_subdirs = glob(join(ckpt_path, '*'))
-        ckpt_steps = sorted(
-            [int(basename(d)) for d in ckpt_subdirs if basename(d).isdigit()],
-            reverse=True,
-        )
-        if ckpt_steps:
-            ckpt_dir = join(ckpt_path, str(ckpt_steps[0]))
-            enc_state = flax_ckpts.restore_checkpoint(ckpt_dir, target=None, prefix="")
-            if enc_state is not None:
-                # train_clip 체크포인트는 TrainState 형태로 저장되므로
-                # {"step": ..., "params": {"params": {...}}, "opt_state": ...}
-                # module.apply 에는 {"params": {...}} 를 넘겨야 한다.
-                if "params" in enc_state and "params" in enc_state["params"]:
-                    variables = enc_state["params"]  # {"params": {encoders, temperature, ...}}
-                    logger.info(f"Encoder checkpoint loaded (TrainState format) from {ckpt_dir} (step {ckpt_steps[0]})")
-                else:
-                    variables = enc_state
-                    logger.info(f"Encoder checkpoint loaded from {ckpt_dir} (step {ckpt_steps[0]})")
-            else:
-                logger.warning(f"Checkpoint restore returned None from {ckpt_dir}")
-        else:
-            logger.warning(f"No checkpoint steps found in {ckpt_path}")
-    else:
+    if ckpt_path is None:
         logger.warning("encoder.ckpt_path is None — using randomly initialized encoder for text projection")
+        return variables
 
-    # ── 3) encode_text 로 latent embedding 계산 ───────────────────────────
+    ckpt_subdirs = glob(join(ckpt_path, '*'))
+    ckpt_steps = sorted(
+        [int(basename(d)) for d in ckpt_subdirs if basename(d).isdigit()],
+        reverse=True,
+    )
+    if not ckpt_steps:
+        logger.warning(f"No checkpoint steps found in {ckpt_path}")
+        return variables
+
+    ckpt_dir = join(ckpt_path, str(ckpt_steps[0]))
+    enc_state = flax_ckpts.restore_checkpoint(ckpt_dir, target=None, prefix="")
+    if enc_state is None:
+        logger.warning(f"Checkpoint restore returned None from {ckpt_dir}")
+        return variables
+
+    # TrainState 형태: {"step": ..., "params": {"params": {...}}, "opt_state": ...}
+    # module.apply 에는 {"params": {...}} 를 넘겨야 한다.
+    if "params" in enc_state and "params" in enc_state["params"]:
+        logger.info(f"Encoder checkpoint loaded (TrainState format) from {ckpt_dir} (step {ckpt_steps[0]})")
+        return enc_state["params"]
+
+    logger.info(f"Encoder checkpoint loaded from {ckpt_dir} (step {ckpt_steps[0]})")
+    return enc_state
+
+
+def _encode_texts_batched(module, variables, input_ids, attention_mask, batch_size=256):
+    """module.apply 를 배치 단위로 호출해 text_embed 를 수집한다.
+
+    Returns
+    -------
+    embeddings : np.ndarray  (N, output_dim)
+    """
     @jax.jit
-    def _encode_text_batch(variables, input_ids, attention_mask):
+    def _encode_batch(variables, ids, mask):
         return module.apply(
-            variables, input_ids, attention_mask, None,
+            variables, ids, mask, None,
             mode="text", training=False,
         )
 
-    # 배치 단위로 처리 (OOM 방지)
-    batch_size = 256
-    n = len(sample_list)
+    n = input_ids.shape[0]
     all_embeddings = []
-
     for start in range(0, n, batch_size):
         end = min(start + batch_size, n)
-        out = _encode_text_batch(
-            variables,
-            input_ids[start:end],
-            attention_mask[start:end],
-        )
-        text_embed = np.array(out["text_embed"])  # (batch, output_dim)
-        all_embeddings.append(text_embed)
+        out = _encode_batch(variables, input_ids[start:end], attention_mask[start:end])
+        all_embeddings.append(np.array(out["text_embed"]))  # (batch, output_dim)
 
-    clip_embeddings = np.concatenate(all_embeddings, axis=0)  # (N, output_dim)
+    return np.concatenate(all_embeddings, axis=0)  # (N, output_dim)
 
-    # instruction 없는 샘플은 zeros
+
+def _postprocess_embeddings(embeddings, has_text, nlp_input_dim):
+    """instruction 없는 행을 zeros 로 채우고, nlp_input_dim 에 맞게 패딩/절삭한다.
+
+    Returns
+    -------
+    embeddings : jnp.ndarray  (N, nlp_input_dim)
+    """
     for i, ht in enumerate(has_text):
         if not ht:
-            clip_embeddings[i] = 0.0
+            embeddings[i] = 0.0
 
-    # nlp_input_dim에 맞게 패딩 또는 절삭
-    embed_dim = clip_embeddings.shape[1]
+    embed_dim = embeddings.shape[1]
     if nlp_input_dim > embed_dim:
         pad_width = ((0, 0), (0, nlp_input_dim - embed_dim))
-        clip_embeddings = np.pad(clip_embeddings, pad_width, mode="constant")
+        embeddings = np.pad(embeddings, pad_width, mode="constant")
     elif nlp_input_dim < embed_dim:
-        clip_embeddings = clip_embeddings[:, :nlp_input_dim]
+        embeddings = embeddings[:, :nlp_input_dim]
 
-    logger.info(f"CLIP latent embeddings shape: {clip_embeddings.shape}")
-    return jnp.array(clip_embeddings, dtype=jnp.float32)
+    return jnp.array(embeddings, dtype=jnp.float32)
+
+
+def _compute_clip_embeddings(sample_list, config):
+    """사전학습된 CLIP encoder를 통해 instruction 텍스트 → latent embedding을 계산한다.
+
+    1) openai/clip-vit-base-patch32 로 토크나이즈
+    2) 사전학습된 ContrastiveModule 의 encode_text 를 사용하여
+       512-dim raw CLIP → output_dim (e.g. 64) latent space 로 projection
+    """
+    nlp_input_dim  = config.nlp_input_dim
+    encoder_config = config.encoder
+
+    try:
+        from transformers import CLIPProcessor  # noqa: F401 (import 가능 여부 확인)
+    except ImportError as e:
+        raise ImportError(
+            "use_clip=True requires the `transformers` package. "
+            "Install it with: pip install transformers"
+        ) from e
+
+    logger.info(
+        f"Computing CLIP latent embeddings (output_dim={encoder_config.output_dim}) "
+        f"for {len(sample_list)} samples"
+    )
+
+    # 1) 토크나이즈
+    input_ids, attention_mask, has_text = _tokenize_texts(sample_list, encoder_config)
+
+    # 2) 인코더 모듈 로드 + 초기화
+    module, variables = _load_clip_encoder_module(config, encoder_config)
+
+    # 3) 체크포인트 복원
+    variables = _restore_encoder_checkpoint(encoder_config, variables)
+
+    # 4) 배치 인코딩
+    clip_embeddings = _encode_texts_batched(module, variables, input_ids, attention_mask)
+
+    # 5) 후처리 (zeros for no-text, pad/truncate to nlp_input_dim)
+    result = _postprocess_embeddings(clip_embeddings, has_text, nlp_input_dim)
+
+    logger.info(f"CLIP latent embeddings shape: {result.shape}")
+
+    return result
 
 
 def _compute_bert_embeddings(sample_list, nlp_input_dim):
@@ -475,9 +529,11 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
 
     try:
         from transformers import AutoTokenizer, FlaxAutoModel
-    except ImportError:
-        logger.warning("transformers not installed — falling back to zero embeddings")
-        return jnp.zeros((len(sample_list), nlp_input_dim), dtype=jnp.float32)
+    except ImportError as e:
+        raise ImportError(
+            "use_nlp=True requires the `transformers` package. "
+            "Install it with: pip install transformers"
+        ) from e
 
     model_name = "bert-base-uncased"  # 768-dim
     logger.info(f"Computing BERT embeddings with {model_name} for {len(sample_list)} samples")

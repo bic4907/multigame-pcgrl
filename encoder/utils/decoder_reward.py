@@ -189,9 +189,9 @@ def build_decoder_reward_inject_fn(config) -> Callable:
     """train_utils.inject_reward_fn 시그니처에 맞는 콜백을 생성한다."""
     from conf.config import DecoderConfig
 
-    decoder_cfg = DecoderConfig(num_reward_classes=config.decoder_reward_classes)
+    decoder_cfg = DecoderConfig(num_reward_classes=config.decoder.num_reward_classes)
     apply_fn, variables = load_decoder(
-        ckpt_dir=config.decoder_ckpt_path,
+        ckpt_dir=config.encoder.ckpt_path,
         encoder_config=config.encoder,
         decoder_config=decoder_cfg,
     )

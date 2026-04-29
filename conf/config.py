@@ -193,7 +193,7 @@ class DecoderConfig:
     hidden_dim: int = 128
     num_layers: int = 2
     output_dim: int = 1
-    num_reward_classes: int = 6
+    num_reward_classes: int = 5
     # CNN 입력에 reward_enum one-hot 채널을 추가할지 여부
     # True이면 pixel_values에 (B, H, W, num_reward_classes) one-hot을 concat
     cnn_reward_enum_onehot: bool = False
@@ -280,11 +280,9 @@ class VIPCGRLConfig(CPCGRLConfig):
 class MGPCGRLConfig(VIPCGRLConfig):
     wandb_project: Optional[str] = "mgpcgrl"
 
-    # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
+    # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)고싶어
     use_decoder_reward_shaping: bool = True
-    decoder_ckpt_path: Optional[str] = None
 
-    decoder_reward_classes: int = 5
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
 
     ignore_checkpoint: bool = False

@@ -15,7 +15,6 @@ import hydra
 from conf.config import MGPCGRLConfig
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.train_utils import main_entry
-from encoder.utils.decoder_reward import build_decoder_reward_inject_fn
 
 suppress_jax_debug_logs()
 

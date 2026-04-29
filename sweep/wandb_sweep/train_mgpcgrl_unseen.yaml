@@ -1,4 +1,4 @@
-program: train_cpcgrl.py
+program: train_mg_pcgrl.py
 method: grid
 metric:
   goal: minimize

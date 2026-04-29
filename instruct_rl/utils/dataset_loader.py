@@ -78,17 +78,20 @@ def load_dataset_instruct(config):
     else:
         _game_names = [_dg]  # 이미 full name
 
+    # 샘플링 일관성을 위해 항상 전체 게임으로 로드한 뒤 게임 필터링
+    # (일부 게임만 로드하면 max_samples_per_game의 RNG 소비 순서가 달라져 샘플이 달라짐)
     ds = MultiGameDataset(
-        include_dungeon=('dungeon' in _game_names),
-        include_pokemon=('pokemon' in _game_names),
-        include_sokoban=('sokoban' in _game_names),
-        include_doom=('doom' in _game_names),
-        include_doom2=('doom2' in _game_names),
-        include_zelda=('zelda' in _game_names),
+        include_dungeon=True,
+        include_pokemon=True,
+        include_sokoban=True,
+        include_doom=True,
+        include_doom2=True,
+        include_zelda=True,
         use_tile_mapping=False,
+        max_samples_per_game=getattr(config, 'max_samples_per_game', 0),
     )
 
-    # 게임별 필터링 ('all'이면 전체 사용)
+    # 샘플링 이후 게임 필터링
     if _dg == 'all':
         samples = list(ds)
     else:

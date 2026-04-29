@@ -244,6 +244,7 @@ class CPCGRLConfig(TrainConfig):
     # 여러 필터는 쉼표 구분: "enum_0_min_3_max_10,enum_2_max_50"
     dataset_condition_filter: Optional[str] = None
     longtail_cut: bool = False
+    max_samples_per_game: int = 0   # 0 = 제한 없음. 인코더와 동일하게 맞추려면 1000
 
     vec_cont: bool = True
     raw_obs: bool = True

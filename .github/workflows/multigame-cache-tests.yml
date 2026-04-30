@@ -15,7 +15,7 @@ name: dataset validation
       - "train_ipcgrl.py"
       - "train_ipcgrl_encoder.py"
       - "train_vipcgrl.py"
-      - "train_mg_pcgrl.py"
+      - "train_mgpcgrl.py"
       - ".github/workflows/multigame-cache-tests.yml"
   pull_request:
     paths:
@@ -31,7 +31,7 @@ name: dataset validation
       - "train_ipcgrl.py"
       - "train_ipcgrl_encoder.py"
       - "train_vipcgrl.py"
-      - "train_mg_pcgrl.py"
+      - "train_mgpcgrl.py"
       - ".github/workflows/multigame-cache-tests.yml"
   workflow_dispatch:
 

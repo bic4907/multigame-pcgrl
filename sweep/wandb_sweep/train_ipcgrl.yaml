@@ -1,4 +1,4 @@
-program: train_vipcgrl.py
+program: train_ipcgrl.py
 method: grid
 metric:
   goal: minimize
@@ -15,13 +15,13 @@ parameters:
   overwrite:
     value: true
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/vipcgrl_encoder'
+    value: '/mnt/nas/mgpcgrl/ipcgrl_encoder'
   encoder.ckpt_name:
     values: [
-      "clip-game-dg_md-ts_exp-def_0",
+      "ipcgrl-enc-mg-game-all_enc-mlp_exp-def_0",
     ]
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/vipcgrl'
+    value: '/mnt/nas/mgpcgrl/ipcgrl'
 command:
   - ${interpreter}
   - ${program}

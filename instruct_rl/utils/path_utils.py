@@ -191,13 +191,11 @@ def get_exp_name(config):
         exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
         return f'cpcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
 
-
     # ── IPCGRL 모드: ipcgrl_game-{game}_re-{re}_s-{seed}_exp-{exp_name} ──
     _is_ipcgrl = (
-        hasattr(config, 'dataset_game') and config.dataset_game is not None
-        and getattr(config, 'vec_cont', False)
+        not getattr(config, 'vec_cont', False)
         and not getattr(config, 'use_clip', False)
-        and not getattr(config, 'use_nlp', True)
+        and getattr(config, 'use_nlp', False)
     )
     if _is_ipcgrl:
         from conf.game_utils import GAME_ABBR_INV

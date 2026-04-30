@@ -311,6 +311,13 @@ class MultiGameDataset:
         if use_cache and self._game_cache_keys:
             self._ensure_and_load_all_annotations()
 
+        # ── raw counts 기록 (max_samples_per_game 적용 전, (game, reward_enum) 기준) ──
+        self._raw_game_re_counts: dict = {}
+        for s in self._samples:
+            re = s.meta.get("reward_enum")
+            if re is not None:
+                self._raw_game_re_counts[(s.game, re)] = self._raw_game_re_counts.get((s.game, re), 0) + 1
+
         # ── 게임별 베이스 샘플 수 제한 (source_id 기준, annotation 복제 이후) ──
         # source_id 단위로 선택하므로 모든 reward_enum 복제본이 함께 유지됨
         if max_samples_per_game >= 1:

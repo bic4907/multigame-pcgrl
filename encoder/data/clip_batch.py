@@ -49,6 +49,44 @@ def apply_longtail_cut(samples: list) -> list:
     return [s for s in samples if not _is_longtail(s)]
 
 
+def _invalid_instruction(inst) -> bool:
+    if inst is None:
+        return True
+    s = str(inst).strip()
+    return s == "" or s.lower() == "none" or s.lower() == "nan"
+
+
+def preprocess_samples(samples: list, *, longtail_cut: bool = True) -> list:
+    """공통 샘플 전처리: invalid instruction 필터 + longtail cut.
+
+    인코더 학습과 RL 학습 모두에서 동일하게 적용한다.
+    """
+    n_before = len(samples)
+    dropped_combos = sorted(set(
+        (s.game, s.meta.get("reward_enum"))
+        for s in samples if _invalid_instruction(s.instruction)
+    ))
+    samples = [s for s in samples if not _invalid_instruction(s.instruction)]
+    n_dropped = n_before - len(samples)
+    if n_dropped > 0:
+        logger.info(
+            "Instruction filter: %d → %d (dropped %d). Dropped (game, re) combos: %s",
+            n_before, len(samples), n_dropped, dropped_combos,
+        )
+    else:
+        logger.info("Instruction filter: all %d samples valid.", n_before)
+
+    if longtail_cut:
+        n_before_lt = len(samples)
+        samples = apply_longtail_cut(samples)
+        logger.info(
+            "Longtail cut: %d → %d (removed %d)",
+            n_before_lt, len(samples), n_before_lt - len(samples),
+        )
+
+    return samples
+
+
 @dataclass
 class CLIPDataset:
     class_ids: np.ndarray
@@ -249,36 +287,19 @@ class CLIPDatasetBuilder:
                         f"samples {len(samples)} → {self.max_samples}")
             samples = samples[:self.max_samples]
 
-        # Filter out samples with missing/invalid instruction
-        # Catches: None, "None" string, empty string, whitespace-only, NaN float
-        def _invalid_instruction(inst) -> bool:
-            if inst is None:
-                return True
-            s = str(inst).strip()
-            return s == "" or s.lower() == "none" or s.lower() == "nan"
+        samples = preprocess_samples(samples, longtail_cut=self.longtail_cut)
 
-        n_before = len(samples)
-        dropped_combos = sorted(set(
-            (s.game, s.meta.get("reward_enum"))
-            for s in samples if _invalid_instruction(s.instruction)
-        ))
-        samples = [s for s in samples if not _invalid_instruction(s.instruction)]
-        n_dropped = n_before - len(samples)
-        if n_dropped > 0:
-            logger.info(
-                "Instruction filter: %d → %d (dropped %d samples). "
-                "Dropped (game, reward_enum) combos: %s",
-                n_before, len(samples), n_dropped, dropped_combos,
+        try:
+            from instruct_rl.utils.dataset_loader_helpers.reporting import _log_dataset_table
+            import types
+            _cfg = types.SimpleNamespace(
+                dataset_game=getattr(self.paired_data, "_game_str", "all"),
+                dataset_reward_enum=None,
+                dataset_train_ratio=self.train_ratio,
             )
-        else:
-            logger.info("Instruction filter: all %d samples have valid instructions.", n_before)
-
-        # ── Long-tail cutting: 극단적 condition 값 제거 ──
-        if self.longtail_cut:
-            n_before_lt = len(samples)
-            samples = apply_longtail_cut(samples)
-            logger.info(f"Long-tail cutting: {n_before_lt} → {len(samples)} "
-                        f"(removed {n_before_lt - len(samples)} samples)")
+            _log_dataset_table(self.paired_data, samples, _cfg)
+        except Exception:
+            pass
 
         # Extract game types and create mapping to integer IDs (필터 이후 기준)
         games_type = [s.game for s in samples]  # N is the number of samples
@@ -392,12 +413,6 @@ class CLIPDatasetBuilder:
             n_train = max(1, int(len(idx_of_game) * self.train_ratio))
             perm = np.array(jax.random.permutation(subkey, idx_of_game))
             is_train[perm[:n_train]] = True
-        n_filtered = n_before - len(samples)
-        if n_filtered > 0:
-            logger.info(
-                f"Filtered out {n_filtered}/{n_before} samples with invalid reward. "
-                f"(game, reward_enum): {dropped_combos}"
-            )
         logger.info(f"Train: {is_train.sum()} samples, Val: {(~is_train).sum()} samples")
 
         # ── 디코더 학습용 타겟 ──

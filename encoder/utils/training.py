@@ -55,6 +55,7 @@ def build_multigame_dataset(config: Config) -> MultiGameDataset:
         max_samples_per_game=getattr(config, "max_samples_per_game", 0),
         max_samples_seed=getattr(config, "max_samples_seed", 42),
     )
+    dataset._game_str = getattr(config, "game", "all")
     logger.info(f"MultiGameDataset: {dataset}")
     return dataset
 

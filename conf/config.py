@@ -154,6 +154,11 @@ class Config:
     dataset_reward_enum: Optional[Union[int, str]] = None   # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
 
+    # 공통 데이터 전처리 (모든 파이프라인에 동일하게 적용)
+    longtail_cut: bool = True          # 극단적 condition 값 샘플 제거
+    max_samples_per_game: int = 1000   # 게임별 source_id 상한 (0=무제한)
+    max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
+
     # Multigame tile placement reward 가중치 (sweep 대상)
     placement_w_amount: float = 1.0
     placement_w_spread: float = 0.0
@@ -275,8 +280,6 @@ class IPCGRLConfig(CPCGRLConfig):
 
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
-    longtail_cut: bool = True
-    max_samples_per_game: int = 1000
     dataset_reward_enum: Optional[int] = None
 
     wandb_project: Optional[str] = "cpcgrl"
@@ -317,7 +320,7 @@ class VIPCGRLConfig(CPCGRLConfig):
 class MGPCGRLConfig(VIPCGRLConfig):
     wandb_project: Optional[str] = "mgpcgrl"
 
-    # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)고싶어
+    # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
     use_decoder_reward_shaping: bool = True
 
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
@@ -462,8 +465,6 @@ class IPCGRLEvalConfig(CPCGRLEvalConfig):
 
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
-    longtail_cut: bool = True
-    max_samples_per_game: int = 1000
     dataset_reward_enum: Optional[int] = None
 
     wandb_project: Optional[str] = f"{PREFIX}eval_ipcgrl"
@@ -581,8 +582,6 @@ class RewardConfig(Config):
     warmup_epochs: int = 10  # set 10% of the total timesteps
 
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
-    max_samples_per_game: int = 1000  # 게임별 베이스 샘플 상한 (0=무제한)
-    max_samples_seed: int = 42  # max_samples_per_game 서브샘플링 시드
 
 @dataclass
 class RewardTrainConfig(RewardConfig):
@@ -628,8 +627,6 @@ class CLIPTrainConfig(Config):
     
     steps_per_epoch: Optional[int] = None
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
-    max_samples_per_game: int = 1000   # 게임별 베이스 샘플 상한 (0=무제한)
-    max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
 
     # instruction 앞에 게임 이름 prefix를 붙일지 여부 (e.g. "In Zelda, ...")
@@ -639,9 +636,6 @@ class CLIPTrainConfig(Config):
 
     # overwrite
     embed_type: str = "humanai"
-
-    # ── long-tail cutting ──
-    longtail_cut: bool = True
 
 @dataclass
 class CLIPEvalConfig(EvalConfig):
@@ -742,7 +736,6 @@ class IPCGRLEncoderMGConfig(RewardConfig):
     unseen_games: str = ""
 
     # Annotation 데이터셋 설정 (CLIPTrainConfig 와 동일한 변인 통제)
-    longtail_cut: bool = True
     prepend_game_prefix: bool = False
     prepend_game_desc: bool = False
 

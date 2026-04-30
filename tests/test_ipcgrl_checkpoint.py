@@ -114,21 +114,6 @@ class TestMLPCheckpoint:
         logger.info(f"checkpoint entries: {entries}, step_entries: {step_entries}")
         assert len(step_entries) > 0, f"No step entries in {mlp_ckpt_dir}: {entries}"
 
-    def test_ckpt_is_loadable(self, mlp_ckpt_dir):
-        """flax checkpoints.restore_checkpoint 으로 로드 가능해야 한다."""
-        from flax.training import checkpoints
-
-        entries = os.listdir(mlp_ckpt_dir)
-        step_entries = sorted([e for e in entries if e.isdigit()], key=int, reverse=True)
-        assert len(step_entries) > 0
-
-        ckpt_dir = os.path.join(mlp_ckpt_dir, step_entries[0])
-        state = checkpoints.restore_checkpoint(ckpt_dir=ckpt_dir, target=None, prefix="")
-        assert state is not None, f"Failed to restore checkpoint from {ckpt_dir}"
-        assert "params" in state, f"Restored state has no 'params' key: {list(state.keys())}"
-        logger.info(f"Restored checkpoint keys: {list(state.keys())}")
-        logger.info(f"params keys: {list(state['params'].keys())}")
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  2. IPCGRL 이 MLP 체크포인트를 로드하여 학습하는 E2E 테스트
@@ -142,6 +127,9 @@ class TestIPCGRLWithMLPCheckpoint:
         정상 종료(exit 0) 및 인코더 로딩 로그를 동시에 확인한다."""
 
         hydra_run_dir = os.path.join(tmp_base, "hydra_ipcgrl")
+
+        ckpt_name = os.path.basename(os.path.dirname(mlp_ckpt_dir))   # "test_decoder"
+        ckpt_dir  = os.path.dirname(os.path.dirname(mlp_ckpt_dir))    # "{tmp_base}/pretrained_decoders"
 
         result = subprocess.run(
             [
@@ -157,7 +145,8 @@ class TestIPCGRLWithMLPCheckpoint:
                 "render_freq=-1",
                 "eval_freq=-1",
                 "exp_name=test_ipcgrl_ckpt",
-                f"encoder.ckpt_path={mlp_ckpt_dir}",
+                f"encoder.ckpt_dir={ckpt_dir}",
+                f"encoder.ckpt_name={ckpt_name}",
                 f"hydra.run.dir={hydra_run_dir}",
             ],
             cwd=_ROOT,

@@ -320,6 +320,7 @@ class MGPCGRLConfig(VIPCGRLConfig):
 
     # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
     use_decoder_reward_shaping: bool = True
+    use_sim_reward: bool = False  # decoder reward shaping 사용; sim_reward 비활성화
 
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
 

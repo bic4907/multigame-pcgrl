@@ -158,7 +158,8 @@ def get_short_target(target: str) -> str:
 
 
 def encoder_hash(config):
-    enc_hash = hashlib.md5(config.encoder.ckpt_name.encode()).hexdigest()[:6]  # 해시 생성 후 앞 8자리만 사용
+    _ckpt_name = config.encoder.ckpt_name or config.encoder.ckpt_path or ""
+    enc_hash = hashlib.md5(_ckpt_name.encode()).hexdigest()[:6] if _ckpt_name else "scratch"
     config.exp_name = f"{config.exp_name}-{enc_hash}"
 
     return config
@@ -229,8 +230,9 @@ def get_exp_name(config):
         re_str = f'_re-{re}' if re is not None else ''
         exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
 
-        enc_hash = hashlib.md5(config.encoder.ckpt_name.encode()).hexdigest()[:6]  # 해시 생성 후 앞 8자리만 사용
-        enc_str = f'_enc-{enc_hash}' if enc_hash is not None else ''
+        _ckpt_name = config.encoder.ckpt_name or config.encoder.ckpt_path or ""
+        enc_hash = hashlib.md5(_ckpt_name.encode()).hexdigest()[:6] if _ckpt_name else "scratch"
+        enc_str = f'_enc-{enc_hash}'
 
         return f'vipcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
 
@@ -251,8 +253,9 @@ def get_exp_name(config):
         re_str = f'_re-{re}' if re is not None else ''
         exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
 
-        enc_hash = hashlib.md5(config.encoder.ckpt_name.encode()).hexdigest()[:6]  # 해시 생성 후 앞 8자리만 사용
-        enc_str = f'_enc-{enc_hash}' if enc_hash is not None else ''
+        _ckpt_name = config.encoder.ckpt_name or config.encoder.ckpt_path or ""
+        enc_hash = hashlib.md5(_ckpt_name.encode()).hexdigest()[:6] if _ckpt_name else "scratch"
+        enc_str = f'_enc-{enc_hash}'
 
         return f'mgpcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
 

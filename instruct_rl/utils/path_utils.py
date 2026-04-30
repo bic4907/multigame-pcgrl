@@ -209,7 +209,7 @@ def get_exp_name(config):
         enc_hash = hashlib.md5(config.encoder.ckpt_name.encode()).hexdigest()[:6]  # 해시 생성 후 앞 8자리만 사용
         enc_str = f'_enc-{enc_hash}' if enc_hash is not None else ''
 
-        return f'vipcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
+        return f'mgpcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
 
     exp_group = get_exp_group(config)
 
@@ -315,26 +315,29 @@ def init_config(config: Config):
         config.use_clip = True
         config.use_sim_reward = True
 
-    if config.instruct_csv is not None:
-        if hasattr(config, 'vec_cont') and config.vec_cont is True:
-            config.use_nlp = False
-            config.vec_input_dim = 5
-            config.nlp_input_dim = 0
-        elif hasattr(config, 'use_clip') and config.use_clip is True:
-            config.use_nlp = False
-            if config.model == 'conv':
-                if config.encoder.model == 'clip':
-                    config.model = 'clipconv'
-                    logger.info("Setting model to `clipconv` due to the instruct set")
-                elif config.encoder.model == 'cnnclip':
-                    config.model = 'cnnclipconv'
-                    logger.info("Setting model to `cnnclipconv` due to the instruct set")
+    if hasattr(config, 'vec_cont') and config.vec_cont is True:
+        config.use_nlp = False
+        config.vec_input_dim = 5
+        config.nlp_input_dim = 0
+    elif hasattr(config, 'use_clip') and config.use_clip is True:
+        config.use_nlp = False
 
-        else:
-            config.use_nlp = True
-            if config.model == 'conv':
-                config.model = 'nlpconv'
-                logger.info("Setting model to `nlpconv` due to the instruct set")
+        if hasattr(config, 'decoder'):
+            config.model = 'cnnclipconv'
+
+        elif config.model == 'conv':
+            if config.encoder.model == 'clip':
+                config.model = 'clipconv'
+                logger.info("Setting model to `clipconv` due to the instruct set")
+            elif config.encoder.model == 'cnnclip':
+                config.model = 'cnnclipconv'
+                logger.info("Setting model to `cnnclipconv` due to the instruct set")
+
+    else:
+        config.use_nlp = True
+        if config.model == 'conv':
+            config.model = 'nlpconv'
+            logger.info("Setting model to `nlpconv` due to the instruct set")
 
     if config.vec_cont is True and config.model != 'contconv':
         config.model = 'contconv'

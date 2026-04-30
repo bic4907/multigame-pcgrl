@@ -300,7 +300,6 @@ class VIPCGRLConfig(CPCGRLConfig):
 class MGPCGRLConfig(VIPCGRLConfig):
     wandb_project: Optional[str] = "mgpcgrl"
 
-    # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)고싶어
     use_decoder_reward_shaping: bool = True
 
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
@@ -410,6 +409,26 @@ class CPCGRLEvalConfig(EvalConfig):
     ignore_checkpoint: bool = False
 
     wandb_project: Optional[str] = f"{PREFIX}eval_cpcgrl"
+
+@dataclass
+class MGPCGRLEvalConfig(CPCGRLEvalConfig):
+    """MGPCGRL 평가용 Config.
+
+    CPCGRLConfig 와 동일한 모델/환경 설정을 EvalConfig 위에 덮어쓴다.
+    """
+    wandb_project: Optional[str] = f"{PREFIX}eval_mgpcgrl"
+
+    use_decoder_reward_shaping: bool = True
+
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="cnnclip"))
+    decoder: DecoderConfig = field(default_factory=DecoderConfig)
+
+    use_clip: bool = True
+    nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
+
+    wandb_project: Optional[str] = "vipcgrl"
+
+    ignore_checkpoint: bool = False
 
 
 @dataclass
@@ -724,6 +743,7 @@ cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
 cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
+cs.store(name="eval_mgpcgrl_schema", node=MGPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs

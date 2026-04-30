@@ -129,9 +129,6 @@ def main_eval_entry(config, *, inject_obs_fn=None):
 
     config = init_config(config)
 
-    if config.eval_aug_type is not None and config.eval_embed_type is not None and config.eval_instruct is not None:
-        config.eval_instruct_csv = f'{config.eval_aug_type}/{config.eval_embed_type}/{config.eval_instruct}'
-
     if config.n_eps < 2 and config.diversity:
         raise Exception("Diversity evaluation requires n_eps > 1")
 

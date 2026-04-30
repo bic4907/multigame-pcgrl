@@ -32,6 +32,9 @@ def inject_vipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
 @hydra.main(version_base=None, config_path="./conf", config_name="train_mgpcgrl")
 def main(config: MGPCGRLConfig):
 
+    if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
+        raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
+
     main_entry(
         config,
         inject_obs_fn=inject_vipcgrl_obs,

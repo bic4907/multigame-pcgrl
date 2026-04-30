@@ -283,6 +283,23 @@ class IPCGRLConfig(CPCGRLConfig):
 
 
 @dataclass
+class IPCGRLConfig(CPCGRLConfig):
+    """IPCGRL (Instructed PCGRL) — BERT 임베딩 → MLP 인코더."""
+    use_nlp: bool = True
+    vec_cont: bool = False
+    model: str = "nlpconv"
+    nlp_input_dim: int = 768
+
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
+
+    longtail_cut: bool = True
+    max_samples_per_game: int = 1000
+    dataset_reward_enum: Optional[int] = None
+
+    wandb_project: Optional[str] = "cpcgrl"
+
+
+@dataclass
 class VIPCGRLConfig(CPCGRLConfig):
     use_clip: bool = True
     model: str = "cnnclipconv"
@@ -381,7 +398,7 @@ class CPCGRLEvalConfig(EvalConfig):
     # ── CPCGRLConfig 와 동일한 game / dataset 기본값 → exp_dir 이름 일치 ──
     game: str = "all"
     dataset_game: Optional[str] = "all"
-    dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
+    dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
 
     # 평가 대상 게임 (None이면 game과 동일). 체크포인트 로딩은 game 기준, 평가 데이터는 eval_games 기준.
@@ -743,6 +760,7 @@ cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
+cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="eval_mgpcgrl_schema", node=MGPCGRLEvalConfig)
 cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)

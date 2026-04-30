@@ -280,25 +280,6 @@ class IPCGRLConfig(CPCGRLConfig):
 
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
-    dataset_reward_enum: Optional[int] = None
-
-    wandb_project: Optional[str] = "cpcgrl"
-
-
-@dataclass
-class IPCGRLConfig(CPCGRLConfig):
-    """IPCGRL (Instructed PCGRL) — BERT 임베딩 → MLP 인코더."""
-    use_nlp: bool = True
-    vec_cont: bool = False
-    model: str = "nlpconv"
-    nlp_input_dim: int = 768
-
-    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
-
-    longtail_cut: bool = True
-    max_samples_per_game: int = 1000
-    dataset_reward_enum: Optional[int] = None
-
     wandb_project: Optional[str] = "cpcgrl"
 
 

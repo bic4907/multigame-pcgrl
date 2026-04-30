@@ -584,7 +584,7 @@ class RewardTrainConfig(RewardConfig):
 class CLIPTrainConfig(Config):
     exp_name: str = "def"
     
-    wandb_project: str = 'train_clip'
+    wandb_project: str = f"{PREFIX}_train_vipcgrl_encoder"
     seed: int = 0
     
     overwrite: bool = False

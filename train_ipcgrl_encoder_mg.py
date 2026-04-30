@@ -55,7 +55,7 @@ from encoder.schedular import create_learning_rate_fn
 from encoder.utils.path import get_ckpt_dir, init_config
 from encoder.utils.training import build_multigame_dataset, save_encoder_checkpoint, setup_wandb
 from instruct_rl.utils.logger import get_wandb_name
-from train_clip_decoder import parse_unseen_game_names
+from conf.game_utils import parse_unseen_game_names
 
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logger = logging.getLogger(basename(__file__))
@@ -135,6 +135,7 @@ def make_train(config: IPCGRLEncoderMGConfig):
             prepend_game_prefix=getattr(config, "prepend_game_prefix", False),
             prepend_game_desc=getattr(config, "prepend_game_desc", False),
             longtail_cut=config.longtail_cut,
+            tile_offset=getattr(config.encoder, 'tile_offset', 0),
             exclude_games=unseen_game_set,
             nlp_input_dim=config.nlp_input_dim,
         )

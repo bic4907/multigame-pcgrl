@@ -158,6 +158,7 @@ class Config:
     longtail_cut: bool = True          # 극단적 condition 값 샘플 제거
     max_samples_per_game: int = 1000   # 게임별 source_id 상한 (0=무제한)
     max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
+    rl_tile_offset: int = 1            # 타일 enum 값에 더할 오프셋 (RL 데이터로더용)
 
     # Multigame tile placement reward 가중치 (sweep 대상)
     placement_w_amount: float = 1.0
@@ -194,6 +195,7 @@ class EncoderConfig(CLIPConfig):
     ckpt_name: Optional[str] = None
     ckpt_path: Optional[str] = None
     trainable: bool = False
+    tile_offset: int = 0               # 타일 enum 값에 더할 오프셋 (인코더)
 
 
 @dataclass
@@ -723,7 +725,7 @@ class IPCGRLEncoderMGConfig(RewardConfig):
         python train_ipcgrl_encoder_mg.py game=all
         python train_ipcgrl_encoder_mg.py game=all unseen_games=zd
     """
-    wandb_project: str = "ipcgrl_encoder_mg"
+    wandb_project: Optional[str] = "ipcgrl_encoder_mg"
     dir_prefix: str = "ipcgrl-enc-mg-"
     ckpt_freq: int = 10
 

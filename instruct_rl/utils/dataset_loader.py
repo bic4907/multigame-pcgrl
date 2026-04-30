@@ -89,11 +89,12 @@ def load_dataset_instruct(config):
 
     samples = list(ds) if load_game == "all" else ds.by_games(game_names)
 
-    from encoder.data.clip_batch import preprocess_samples
+    from instruct_rl.utils.dataset_loader_helpers.preprocessing import preprocess_samples, apply_tile_offset
     samples = preprocess_samples(
         samples,
         longtail_cut=getattr(config, "longtail_cut", True),
     )
+    samples = apply_tile_offset(samples, getattr(config, "rl_tile_offset", 0))
 
     if eval_re_list is not None:
         re_set = set(eval_re_list)

@@ -94,6 +94,9 @@ class Config:
     # mutation rate initial map generation
     map_mutation_rate: float = 0.1
 
+    # 다른 경로의 체크포인트에서 학습을 시작할 때 지정. None이면 exp_dir/ckpts에서 자동 복원.
+    init_ckpt_path: Optional[str] = None
+
     """ DO NOT USE. WILL BE OVERWRITTEN. """
     exp_dir: Optional[str] = None
     n_gpus: int = 1
@@ -151,6 +154,12 @@ class Config:
     dataset_reward_enum: Optional[Union[int, str]] = None   # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
 
+    # 공통 데이터 전처리 (모든 파이프라인에 동일하게 적용)
+    longtail_cut: bool = True          # 극단적 condition 값 샘플 제거
+    max_samples_per_game: int = 1000   # 게임별 source_id 상한 (0=무제한)
+    max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
+    rl_tile_offset: int = 1            # 타일 enum 값에 더할 오프셋 (RL 데이터로더용)
+
     # Multigame tile placement reward 가중치 (sweep 대상)
     placement_w_amount: float = 1.0
     placement_w_spread: float = 0.0
@@ -186,6 +195,7 @@ class EncoderConfig(CLIPConfig):
     ckpt_name: Optional[str] = None
     ckpt_path: Optional[str] = None
     trainable: bool = False
+    tile_offset: int = 0               # 타일 enum 값에 더할 오프셋 (인코더)
 
 
 @dataclass
@@ -263,6 +273,19 @@ class CPCGRLConfig(TrainConfig):
 
 
 @dataclass
+class IPCGRLConfig(CPCGRLConfig):
+    """IPCGRL (Instructed PCGRL) — BERT 임베딩 → MLP 인코더."""
+    use_nlp: bool = True
+    vec_cont: bool = False
+    model: str = "nlpconv"
+    nlp_input_dim: int = 768
+
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
+
+    wandb_project: Optional[str] = "cpcgrl"
+
+
+@dataclass
 class VIPCGRLConfig(CPCGRLConfig):
     use_clip: bool = True
     model: str = "cnnclipconv"
@@ -295,6 +318,7 @@ class Pretrained_CLIP_PCGRLConfig(CPCGRLConfig):
 class MGPCGRLConfig(VIPCGRLConfig):
     wandb_project: Optional[str] = "mgpcgrl"
 
+    # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
     use_decoder_reward_shaping: bool = True
 
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
@@ -375,7 +399,7 @@ class CPCGRLEvalConfig(EvalConfig):
     # ── CPCGRLConfig 와 동일한 game / dataset 기본값 → exp_dir 이름 일치 ──
     game: str = "all"
     dataset_game: Optional[str] = "all"
-    dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
+    dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
 
     # 평가 대상 게임 (None이면 game과 동일). 체크포인트 로딩은 game 기준, 평가 데이터는 eval_games 기준.
@@ -424,6 +448,24 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     wandb_project: Optional[str] = "vipcgrl"
 
     ignore_checkpoint: bool = False
+
+
+@dataclass
+class IPCGRLEvalConfig(CPCGRLEvalConfig):
+    """IPCGRL 평가용 Config.
+
+    CPCGRLEvalConfig 를 상속하고 BERT 임베딩 + MLP 인코더 설정을 추가한다.
+    """
+    use_nlp: bool = True
+    vec_cont: bool = False
+    model: str = "nlpconv"
+    nlp_input_dim: int = 768
+
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
+
+    dataset_reward_enum: Optional[int] = None
+
+    wandb_project: Optional[str] = f"{PREFIX}eval_ipcgrl"
 
 
 @dataclass
@@ -538,8 +580,6 @@ class RewardConfig(Config):
     warmup_epochs: int = 10  # set 10% of the total timesteps
 
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
-    max_samples_per_game: int = 1000  # 게임별 베이스 샘플 상한 (0=무제한)
-    max_samples_seed: int = 42  # max_samples_per_game 서브샘플링 시드
 
 @dataclass
 class RewardTrainConfig(RewardConfig):
@@ -585,8 +625,6 @@ class CLIPTrainConfig(Config):
     
     steps_per_epoch: Optional[int] = None
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
-    max_samples_per_game: int = 1000   # 게임별 베이스 샘플 상한 (0=무제한)
-    max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
 
     # instruction 앞에 게임 이름 prefix를 붙일지 여부 (e.g. "In Zelda, ...")
@@ -596,9 +634,6 @@ class CLIPTrainConfig(Config):
 
     # overwrite
     embed_type: str = "humanai"
-
-    # ── long-tail cutting ──
-    longtail_cut: bool = True
 
 @dataclass
 class CLIPEvalConfig(EvalConfig):
@@ -672,17 +707,54 @@ class CLIPDecoderUnseenSweepConfig(CLIPDecoderUnseenConfig):
     unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1)
 
 
+@dataclass
+class IPCGRLEncoderMGConfig(RewardConfig):
+    """IPCGRL MLP 인코더 멀티게임 사전학습 Config.
+
+    Annotation 형식 MultiGameDataset 기반.
+    - 입력: BERT(instruction) → 768-dim embedding
+    - 모델: MLP 인코더 + MLP 디코더
+    - 출력: condition value 회귀 (log1p + per-enum min-max 정규화)
+    - unseen_games: 학습에서 제외할 게임 지정 (zero-shot 평가용)
+
+    Usage:
+        python train_ipcgrl_encoder_mg.py game=all
+        python train_ipcgrl_encoder_mg.py game=all unseen_games=zd
+    """
+    wandb_project: Optional[str] = "ipcgrl_encoder_mg"
+    dir_prefix: str = "ipcgrl-enc-mg-"
+    ckpt_freq: int = 10
+
+    # BERT 설정
+    use_nlp: bool = True
+    nlp_input_dim: int = 768
+
+    # Unseen 게임 설정 (2글자 약어, e.g. "zd"=zelda, "pkzd"=pokemon+zelda)
+    # 빈 문자열 = 제외 없음 (전체 게임 학습)
+    unseen_games: str = ""
+
+    # Annotation 데이터셋 설정 (CLIPTrainConfig 와 동일한 변인 통제)
+    prepend_game_prefix: bool = False
+    prepend_game_desc: bool = False
+
+    # MLP 인코더 (apply_encoder_model 에서 model='mlp' 분기 사용)
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
+
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="cpcgrl", node=CPCGRLConfig)
+cs.store(name="ipcgrl", node=IPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="pretrained_clip_pcgrl", node=Pretrained_CLIP_PCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
+cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="eval_mgpcgrl_schema", node=MGPCGRLEvalConfig)
+cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs
@@ -695,3 +767,5 @@ cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)
 
 cs.store(name="train_reward", node=RewardTrainConfig)
+cs.store(name="train_ipcgrl_encoder_mg_schema", node=IPCGRLEncoderMGConfig)
+

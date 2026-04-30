@@ -10,7 +10,7 @@ runner.py 에서 업로드한 eval 결과물을 W&B에서 로컬로 다운받는
 사용 예
 -------
     python sweep/wandb_sweep/eval_downloader.py
-    python sweep/wandb_sweep/eval_downloader.py --no-h5    # h5 생략
+    python sweep/wandb_sweep/eval_downloader.py --h5       # h5 포함 (기본은 생략)
     python sweep/wandb_sweep/eval_downloader.py --output results/eval_download
     python sweep/wandb_sweep/eval_downloader.py --finished-only --workers 4
 """
@@ -62,7 +62,7 @@ class _ProjectSummary:
 # 다운받을 프로젝트 목록
 TARGET_PROJECTS = [
     "aaai27_eval_cpcgrl",
-    "aaai27_eval_random"
+    "aaai27_eval_cpcgrl_all"
 ]
 
 # ---------------------------------------------------------------------------
@@ -78,14 +78,12 @@ def _download_run(
     skip_if_exists: bool = True,
 ) -> _RunResult:
     """단일 W&B run 에서 eval artifact 를 다운로드한다.
-
     Returns
     -------
     _RunResult  with status "ok" | "skipped" | "error"
     """
-    # run 별 저장 폴더: exp_dir basename 또는 run.id
-    folder_name = os.path.basename(run.config.get("exp_dir", None) or run.id)
-    run_dir = os.path.join(output_dir, folder_name)
+    train_dir, eval_dir = run.name.split("--")
+    run_dir = os.path.join(output_dir, train_dir, eval_dir)
 
     # ── 스킵 체크 ─────────────────────────────────────────────────────────
     if skip_if_exists:
@@ -239,7 +237,14 @@ def parse_args():
     parser.add_argument(
         "--no-h5",
         action="store_true",
-        help="eval_h5 artifact(eval.h5) 다운로드 생략",
+        default=True,
+        help="eval_h5 artifact(eval.h5) 다운로드 생략 (기본값)",
+    )
+    parser.add_argument(
+        "--h5",
+        action="store_false",
+        dest="no_h5",
+        help="eval_h5 artifact(eval.h5) 다운로드 포함",
     )
     parser.add_argument(
         "--force",
@@ -308,4 +313,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

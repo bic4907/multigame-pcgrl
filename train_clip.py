@@ -165,13 +165,14 @@ def make_train(config: CLIPTrainConfig):
 
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         dataset_builder = CLIPDatasetBuilder(
-            processor=processor, 
+            processor=processor,
             paired_data=dataset,
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
             prepend_game_prefix=config.prepend_game_prefix,
             prepend_game_desc=config.prepend_game_desc,
+            tile_offset=getattr(config.encoder, 'tile_offset', 0),
         )
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()

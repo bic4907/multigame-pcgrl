@@ -86,14 +86,16 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
         options=options,
     )
 
-    def try_load_ckpt(steps_prev_complete, target):
+    def try_load_ckpt(steps_prev_complete, target, mgr=None):
+        if mgr is None:
+            mgr = checkpoint_manager
         runner_state = target["runner_state"]
         try:
-            restored_ckpt = checkpoint_manager.restore(
+            restored_ckpt = mgr.restore(
                 steps_prev_complete,
                 args=ocp.args.StandardRestore(target),
             )
-        except KeyError:
+        except (KeyError, ValueError):
             runner_state = runner_state.replace(
                 env_state=runner_state.env_state.replace(
                     env_state=runner_state.env_state.env_state.replace(
@@ -102,7 +104,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                 )
             )
             target = {"runner_state": runner_state, "step_i": 0}
-            restored_ckpt = checkpoint_manager.restore(
+            restored_ckpt = mgr.restore(
                 steps_prev_complete, items=target
             )
 
@@ -134,8 +136,35 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
 
         return restored_ckpt
 
+    # init_ckpt_path: 다른 실험의 체크포인트에서 시작할 때 사용.
+    # exp_dir/ckpts에 기존 체크포인트가 없을 때만 적용 (resume이 우선).
+    _init_ckpt_path = getattr(config, 'init_ckpt_path', None)
+
     if checkpoint_manager.latest_step() is None:
         restored_ckpt = None
+
+        if _init_ckpt_path is not None:
+            init_ckpt_dir = os.path.abspath(_init_ckpt_path)
+            logger.info(f"init_ckpt_path 지정됨 — {init_ckpt_dir} 에서 초기 체크포인트 로드")
+            init_ckpt_manager = ocp.CheckpointManager(
+                init_ckpt_dir,
+                options=ocp.CheckpointManagerOptions(max_to_keep=2, create=False),
+            )
+            init_ckpt_steps = sorted(
+                [int(cs) for cs in os.listdir(init_ckpt_dir) if cs.isdigit()],
+                reverse=True,
+            )
+            for steps_prev_complete in init_ckpt_steps:
+                try:
+                    restored_ckpt = try_load_ckpt(steps_prev_complete, target, mgr=init_ckpt_manager)
+                    if restored_ckpt is None:
+                        raise TypeError("Restored checkpoint is None")
+                    restored_ckpt["steps_prev_complete"] = 0  # 새 실험이므로 step 카운트는 0부터
+                    logger.info(f"  ✅ init checkpoint loaded (source step={steps_prev_complete}, training restarts from 0)")
+                    break
+                except (TypeError, ValueError) as e:
+                    logger.warning(f"Failed to load init checkpoint at step {steps_prev_complete}. Error: {e}")
+                    continue
     else:
         ckpt_subdirs = os.listdir(ckpt_dir)
         ckpt_steps = [int(cs) for cs in ckpt_subdirs if cs.isdigit()]

@@ -83,10 +83,18 @@ def load_dataset_instruct(config):
         include_doom=("doom" in game_names),
         include_doom2=("doom2" in game_names),
         include_zelda=("zelda" in game_names),
-        use_tile_mapping=False,
+        use_tile_mapping=True,
+        max_samples_per_game=getattr(config, "max_samples_per_game", 0),
     )
 
     samples = list(ds) if load_game == "all" else ds.by_games(game_names)
+
+    from instruct_rl.utils.dataset_loader_helpers.preprocessing import preprocess_samples, apply_tile_offset
+    samples = preprocess_samples(
+        samples,
+        longtail_cut=getattr(config, "longtail_cut", True),
+    )
+    samples = apply_tile_offset(samples, getattr(config, "rl_tile_offset", 0))
 
     if eval_re_list is not None:
         re_set = set(eval_re_list)

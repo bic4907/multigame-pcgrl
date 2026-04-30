@@ -158,7 +158,8 @@ def get_short_target(target: str) -> str:
 
 
 def encoder_hash(config):
-    enc_hash = hashlib.md5(config.encoder.ckpt_name.encode()).hexdigest()[:6]  # 해시 생성 후 앞 8자리만 사용
+    _ckpt_name = config.encoder.ckpt_name or config.encoder.ckpt_path or ""
+    enc_hash = hashlib.md5(_ckpt_name.encode()).hexdigest()[:6] if _ckpt_name else "scratch"
     config.exp_name = f"{config.exp_name}-{enc_hash}"
 
     return config
@@ -190,6 +191,50 @@ def get_exp_name(config):
         exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
         return f'cpcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
 
+    # ── IPCGRL 모드: ipcgrl_game-{game}_re-{re}_s-{seed}_exp-{exp_name} ──
+    _is_ipcgrl = (
+        not getattr(config, 'vec_cont', False)
+        and not getattr(config, 'use_clip', False)
+        and getattr(config, 'use_nlp', False)
+    )
+    if _is_ipcgrl:
+        from conf.game_utils import GAME_ABBR_INV
+        # 약어 입력이면 첫 번째 full name 으로, 이미 full name 이면 그대로 사용
+        _dg = config.dataset_game
+        if _dg in GAME_ABBR:
+            game_full = GAME_ABBR[_dg][0]   # e.g. "dg" → "dungeon"
+        else:
+            game_full = _dg                  # e.g. "dungeon" → "dungeon"
+        game_abbr = GAME_ABBR_INV.get(game_full, game_full)
+        re = getattr(config, 'dataset_reward_enum', None)
+        re_str = f'_re-{re}' if re is not None else ''
+        exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
+        return f'ipcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
+
+
+    _is_vipcgrl = (
+        hasattr(config, 'encoder') and not hasattr(config, 'decoder')
+    )
+    if _is_vipcgrl:
+        from conf.game_utils import GAME_ABBR_INV
+        # 약어 입력이면 첫 번째 full name 으로, 이미 full name 이면 그대로 사용
+        _dg = config.dataset_game
+        if _dg in GAME_ABBR:
+            game_full = GAME_ABBR[_dg][0]   # e.g. "dg" → "dungeon"
+        else:
+            game_full = _dg                  # e.g. "dungeon" → "dungeon"
+        game_abbr = GAME_ABBR_INV.get(game_full, game_full)
+        re = getattr(config, 'dataset_reward_enum', None)
+        re_str = f'_re-{re}' if re is not None else ''
+        exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
+
+        _ckpt_name = config.encoder.ckpt_name or config.encoder.ckpt_path or ""
+        enc_hash = hashlib.md5(_ckpt_name.encode()).hexdigest()[:6] if _ckpt_name else "scratch"
+        enc_str = f'_enc-{enc_hash}'
+
+        return f'vipcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
+
+
     _is_mgpcgrl = (
         hasattr(config, 'encoder') and hasattr(config, 'decoder')
     )
@@ -206,8 +251,9 @@ def get_exp_name(config):
         re_str = f'_re-{re}' if re is not None else ''
         exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
 
-        enc_hash = hashlib.md5(config.encoder.ckpt_name.encode()).hexdigest()[:6]  # 해시 생성 후 앞 8자리만 사용
-        enc_str = f'_enc-{enc_hash}' if enc_hash is not None else ''
+        _ckpt_name = config.encoder.ckpt_name or config.encoder.ckpt_path or ""
+        enc_hash = hashlib.md5(_ckpt_name.encode()).hexdigest()[:6] if _ckpt_name else "scratch"
+        enc_str = f'_enc-{enc_hash}'
 
         return f'mgpcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
 

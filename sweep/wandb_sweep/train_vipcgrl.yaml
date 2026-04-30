@@ -1,0 +1,29 @@
+program: train_vipcgrl.py
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all', 'dg', 'pk', 'sk', 'dm', 'zd']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0]
+  n_envs:
+    value: 600
+  overwrite:
+    value: true
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/vipcgrl_encoder'
+  encoder.ckpt_name:
+    values: [
+      "clip-game-dg_md-ts_exp-def_0",
+    ]
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/vipcgrl'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+  - "overwrite=true"

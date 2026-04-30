@@ -27,6 +27,15 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 logging.getLogger('absl').setLevel(logging.ERROR)
 
 
+from instruct_rl.utils.dataset_loader_helpers.preprocessing import (
+    LONGTAIL_CUTOFF,
+    _invalid_instruction,
+    apply_longtail_cut,
+    apply_tile_offset,
+    preprocess_samples,
+)
+
+
 @dataclass
 class CLIPDataset:
     class_ids: np.ndarray
@@ -180,6 +189,7 @@ class CLIPDatasetBuilder:
                  prepend_game_prefix: bool = False,
                  prepend_game_desc: bool = False,
                  longtail_cut: bool = True,
+                 tile_offset: int = 0,
                  ):
         self.processor = processor
         self.paired_data = paired_data
@@ -187,6 +197,7 @@ class CLIPDatasetBuilder:
 
         self.max_len = max_len
         self.train_ratio = train_ratio
+        self.tile_offset = tile_offset
         self.max_samples = max_samples
         self.prepend_game_prefix = prepend_game_prefix
         self.prepend_game_desc = prepend_game_desc
@@ -227,51 +238,20 @@ class CLIPDatasetBuilder:
                         f"samples {len(samples)} → {self.max_samples}")
             samples = samples[:self.max_samples]
 
-        # Filter out samples with missing/invalid instruction
-        # Catches: None, "None" string, empty string, whitespace-only, NaN float
-        def _invalid_instruction(inst) -> bool:
-            if inst is None:
-                return True
-            s = str(inst).strip()
-            return s == "" or s.lower() == "none" or s.lower() == "nan"
+        samples = preprocess_samples(samples, longtail_cut=self.longtail_cut)
+        samples = apply_tile_offset(samples, self.tile_offset)
 
-        n_before = len(samples)
-        dropped_combos = sorted(set(
-            (s.game, s.meta.get("reward_enum"))
-            for s in samples if _invalid_instruction(s.instruction)
-        ))
-        samples = [s for s in samples if not _invalid_instruction(s.instruction)]
-        n_dropped = n_before - len(samples)
-        if n_dropped > 0:
-            logger.info(
-                "Instruction filter: %d → %d (dropped %d samples). "
-                "Dropped (game, reward_enum) combos: %s",
-                n_before, len(samples), n_dropped, dropped_combos,
+        try:
+            from instruct_rl.utils.dataset_loader_helpers.reporting import _log_dataset_table
+            import types
+            _cfg = types.SimpleNamespace(
+                dataset_game=getattr(self.paired_data, "_game_str", "all"),
+                dataset_reward_enum=None,
+                dataset_train_ratio=self.train_ratio,
             )
-        else:
-            logger.info("Instruction filter: all %d samples have valid instructions.", n_before)
-
-        # ── Long-tail cutting: 극단적 condition 값 제거 ──
-        if self.longtail_cut:
-            _LONGTAIL_CUTOFF = [
-                ("dungeon",  1, 80),    # enum1 (path_length), dg: condition >= 80
-                ("pokemon",  2, 150),   # enum2 (interactive_count), pk: condition >= 150
-                ("pokemon",  4, 29),    # enum4 (collectable_count), pk: condition >= 29
-            ]
-            n_before_lt = len(samples)
-            def _is_longtail(s):
-                reward_enum = s.meta.get("reward_enum")
-                conditions = s.meta.get("conditions", {})
-                condition_value = conditions.get(reward_enum)
-                if condition_value is None:
-                    return False
-                for game, enum, cutoff in _LONGTAIL_CUTOFF:
-                    if s.game == game and reward_enum == enum and condition_value >= cutoff:
-                        return True
-                return False
-            samples = [s for s in samples if not _is_longtail(s)]
-            logger.info(f"Long-tail cutting: {n_before_lt} → {len(samples)} "
-                        f"(removed {n_before_lt - len(samples)} samples)")
+            _log_dataset_table(self.paired_data, samples, _cfg)
+        except Exception:
+            pass
 
         # Extract game types and create mapping to integer IDs (필터 이후 기준)
         games_type = [s.game for s in samples]  # N is the number of samples
@@ -385,12 +365,6 @@ class CLIPDatasetBuilder:
             n_train = max(1, int(len(idx_of_game) * self.train_ratio))
             perm = np.array(jax.random.permutation(subkey, idx_of_game))
             is_train[perm[:n_train]] = True
-        n_filtered = n_before - len(samples)
-        if n_filtered > 0:
-            logger.info(
-                f"Filtered out {n_filtered}/{n_before} samples with invalid reward. "
-                f"(game, reward_enum): {dropped_combos}"
-            )
         logger.info(f"Train: {is_train.sum()} samples, Val: {(~is_train).sum()} samples")
 
         # ── 디코더 학습용 타겟 ──

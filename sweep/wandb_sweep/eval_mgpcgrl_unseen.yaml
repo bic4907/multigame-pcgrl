@@ -1,4 +1,4 @@
-program: train_mgpcgrl.py
+program: eval_mgpcgrl.py
 method: grid
 metric:
   goal: minimize
@@ -10,9 +10,7 @@ parameters:
     values: [0]
   seed:
     values: [0]
-  n_envs:
-    value: 600
-  overwrite:
+  reevaluate:
     value: true
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/decoder_unseen'

@@ -829,7 +829,7 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
 
     from tqdm import tqdm
 
-    bert_batch_size = 64
+    bert_batch_size = 256
     all_cls = []
     batches = range(0, len(texts), bert_batch_size)
     for i in tqdm(batches, desc="BERT embeddings", unit="batch"):

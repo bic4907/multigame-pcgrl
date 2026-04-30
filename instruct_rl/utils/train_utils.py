@@ -320,10 +320,10 @@ def make_train(
                         prev_pixels = last_obs.pixel_values
                         current_pixels = obsv.pixel_values
                     prev_embed = network.subnet.encoder.apply(
-                        _enc_params, pixel_values=prev_pixels, mode='state', training=False
+                        _enc_params, pixel_values=prev_pixels, mode='state', training=False, decode=False
                     )["state_embed"]
                     current_embed = network.subnet.encoder.apply(
-                        _enc_params, pixel_values=current_pixels, mode='state', training=False
+                        _enc_params, pixel_values=current_pixels, mode='state', training=False, decode=False
                     )["state_embed"]
                     # text embedding (goal)
                     goal_embed = jax.lax.stop_gradient(instruct_sample.embedding)

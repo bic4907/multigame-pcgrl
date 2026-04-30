@@ -342,6 +342,7 @@ class ContrastiveDecoderModule(nn.Module):
             reward_enum: jnp.ndarray = None,
             mode: str = "text_state",
             training: bool = False,
+            decode: bool = True,
     ):
         output_dict = dict()
         modes = mode.split("_")
@@ -361,7 +362,8 @@ class ContrastiveDecoderModule(nn.Module):
         output_dict['text_state_temperature'] = self.text_state_temperature
 
         # ── 디코더: state embedding 으로부터 reward_enum & condition 예측 ──
-        if "state" in modes:
+        # decode=False 로 호출하면 decoder를 건너뜀 (norm_stats 없이 state embed만 필요한 경우)
+        if "state" in modes and decode:
             reward_logits, condition_pred, condition_pred_raw = self.decoder(
                 output_dict["state_embed"], training=training
             )

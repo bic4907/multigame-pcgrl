@@ -27,64 +27,13 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 logging.getLogger('absl').setLevel(logging.ERROR)
 
 
-# (game, reward_enum, cutoff): condition >= cutoff 인 샘플 제거
-LONGTAIL_CUTOFF = [
-    ("dungeon", 1, 80),   # path_length >= 80
-    ("pokemon", 2, 150),  # interactive_count >= 150
-    ("pokemon", 4, 29),   # collectable_count >= 29
-]
-
-
-def apply_longtail_cut(samples: list) -> list:
-    """LONGTAIL_CUTOFF 기준으로 극단적 condition 값의 샘플을 제거한다."""
-    def _is_longtail(s) -> bool:
-        reward_enum = s.meta.get("reward_enum")
-        condition_value = s.meta.get("conditions", {}).get(reward_enum)
-        if condition_value is None:
-            return False
-        return any(
-            s.game == game and reward_enum == enum and condition_value >= cutoff
-            for game, enum, cutoff in LONGTAIL_CUTOFF
-        )
-    return [s for s in samples if not _is_longtail(s)]
-
-
-def _invalid_instruction(inst) -> bool:
-    if inst is None:
-        return True
-    s = str(inst).strip()
-    return s == "" or s.lower() == "none" or s.lower() == "nan"
-
-
-def preprocess_samples(samples: list, *, longtail_cut: bool = True) -> list:
-    """공통 샘플 전처리: invalid instruction 필터 + longtail cut.
-
-    인코더 학습과 RL 학습 모두에서 동일하게 적용한다.
-    """
-    n_before = len(samples)
-    dropped_combos = sorted(set(
-        (s.game, s.meta.get("reward_enum"))
-        for s in samples if _invalid_instruction(s.instruction)
-    ))
-    samples = [s for s in samples if not _invalid_instruction(s.instruction)]
-    n_dropped = n_before - len(samples)
-    if n_dropped > 0:
-        logger.info(
-            "Instruction filter: %d → %d (dropped %d). Dropped (game, re) combos: %s",
-            n_before, len(samples), n_dropped, dropped_combos,
-        )
-    else:
-        logger.info("Instruction filter: all %d samples valid.", n_before)
-
-    if longtail_cut:
-        n_before_lt = len(samples)
-        samples = apply_longtail_cut(samples)
-        logger.info(
-            "Longtail cut: %d → %d (removed %d)",
-            n_before_lt, len(samples), n_before_lt - len(samples),
-        )
-
-    return samples
+from instruct_rl.utils.dataset_loader_helpers.preprocessing import (
+    LONGTAIL_CUTOFF,
+    _invalid_instruction,
+    apply_longtail_cut,
+    apply_tile_offset,
+    preprocess_samples,
+)
 
 
 @dataclass
@@ -240,6 +189,7 @@ class CLIPDatasetBuilder:
                  prepend_game_prefix: bool = False,
                  prepend_game_desc: bool = False,
                  longtail_cut: bool = True,
+                 tile_offset: int = 0,
                  ):
         self.processor = processor
         self.paired_data = paired_data
@@ -247,6 +197,7 @@ class CLIPDatasetBuilder:
 
         self.max_len = max_len
         self.train_ratio = train_ratio
+        self.tile_offset = tile_offset
         self.max_samples = max_samples
         self.prepend_game_prefix = prepend_game_prefix
         self.prepend_game_desc = prepend_game_desc
@@ -288,6 +239,7 @@ class CLIPDatasetBuilder:
             samples = samples[:self.max_samples]
 
         samples = preprocess_samples(samples, longtail_cut=self.longtail_cut)
+        samples = apply_tile_offset(samples, self.tile_offset)
 
         try:
             from instruct_rl.utils.dataset_loader_helpers.reporting import _log_dataset_table

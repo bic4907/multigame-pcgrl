@@ -84,6 +84,21 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
     return includes
 
 
+def parse_unseen_game_names(unseen_str: str) -> set:
+    """2글자 약어 문자열 → full game name set.
+
+    Examples
+    --------
+    parse_unseen_game_names("zd")   -> {'zelda'}
+    parse_unseen_game_names("pkzd") -> {'pokemon', 'zelda'}
+    """
+    names: set = set()
+    for i in range(0, len(unseen_str), 2):
+        abbr = unseen_str[i:i + 2]
+        names.update(GAME_ABBR.get(abbr, []))
+    return names
+
+
 def build_game_str(
     include_dungeon: bool = False,
     include_pokemon: bool = False,

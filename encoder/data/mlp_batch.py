@@ -95,6 +95,7 @@ class MLPDatasetBuilder:
         prepend_game_prefix: bool = False,
         prepend_game_desc: bool = False,
         longtail_cut: bool = True,
+        tile_offset: int = 0,
         # MLP 전용
         exclude_games: Optional[Set[str]] = None,
         nlp_input_dim: int = 768,
@@ -115,6 +116,7 @@ class MLPDatasetBuilder:
             prepend_game_prefix=prepend_game_prefix,
             prepend_game_desc=prepend_game_desc,
             longtail_cut=longtail_cut,
+            tile_offset=tile_offset,
         )
         clip_ds = self._clip_builder.get_dataset()
         d = self._clip_builder.preprocessed_dataset_dict

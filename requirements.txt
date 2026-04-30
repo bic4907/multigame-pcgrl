@@ -46,6 +46,7 @@ iniconfig==2.0.0
 iterable-io==1.0.0
 jax==0.5.0
 jaxlib==0.5.0
+jax-cuda12-pjrt==0.5.0
 kiwisolver==1.4.8
 magic-wormhole==0.17.0
 markdown-it-py==3.0.0

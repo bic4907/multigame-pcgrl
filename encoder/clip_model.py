@@ -166,6 +166,7 @@ class ContrastiveModule(nn.Module):
             pixel_values: jnp.ndarray = None,
             mode: str = "text_state",
             training: bool = False,
+            decode: bool = True,
     ):
 
         output_dict = dict()

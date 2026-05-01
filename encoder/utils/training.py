@@ -8,6 +8,7 @@ train_ipcgrl_encoder / train_clip / train_clip_decoder 에서 공유하는
 from __future__ import annotations
 
 import datetime
+import json
 import logging
 import os
 from os.path import basename
@@ -72,6 +73,35 @@ def save_encoder_checkpoint(config: Config, state, step: int) -> None:
         ckpt_dir, target=state, prefix="", step=step, overwrite=True, keep=3,
     )
     logger.info(f"Checkpoint saved at step {step}")
+
+
+def save_norm_stats(config: Config, cond_norm_min: dict, cond_norm_max: dict) -> None:
+    """Save condition normalization statistics (log + min-max) to a JSON file.
+
+    Saved path: <exp_dir>/norm_stats.json  (sibling of the ckpts/ directory,
+    so that Flax checkpoint cleanup does not remove it)
+
+    Parameters
+    ----------
+    config : Config
+        Configuration object used to derive the checkpoint directory path.
+    cond_norm_min : dict[int, float]
+        Per-reward_enum log-space min values.
+    cond_norm_max : dict[int, float]
+        Per-reward_enum log-space max values.
+    """
+    # Save next to ckpts/ (not inside it) so Flax checkpoint management won't remove it
+    exp_dir = os.path.abspath(config.exp_dir)
+    os.makedirs(exp_dir, exist_ok=True)
+
+    stats = {
+        "cond_norm_min": {str(k): float(v) for k, v in cond_norm_min.items()},
+        "cond_norm_max": {str(k): float(v) for k, v in cond_norm_max.items()},
+    }
+    path = os.path.join(exp_dir, "norm_stats.json")
+    with open(path, "w") as f:
+        json.dump(stats, f, indent=2)
+    logger.info(f"Norm stats saved to {path}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

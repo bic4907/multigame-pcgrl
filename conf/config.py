@@ -296,12 +296,12 @@ class VIPCGRLConfig(CPCGRLConfig):
     nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
 
     use_sim_reward: bool = True
-    wandb_project: Optional[str] = "vipcgrl"
+    wandb_project: Optional[str] = f"{PREFIX}train_vipcgrl"
 
 
 @dataclass
 class MGPCGRLConfig(VIPCGRLConfig):
-    wandb_project: Optional[str] = "mgpcgrl"
+    wandb_project: Optional[str] = f"{PREFIX}train_mgpcgrl"
 
     # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
     use_decoder_reward_shaping: bool = True
@@ -543,7 +543,7 @@ class RewardConfig(Config):
     figure_dir: str = "figures"
     buffer_dir: str = "./dataset"
     buffer_raio: float = 1.0
-    train_ratio: float = 0.8
+    train_ratio: float = 0.95
     n_epochs: int = 100
 
     dropout_rate: float = 0.0
@@ -597,11 +597,11 @@ class CLIPTrainConfig(Config):
     n_max_points: int = 1000
     embed_visualize_freq: int = 500
 
-    n_epochs: int = 500
+    n_epochs: int = 5000
     lr: float = 1.0e-3
     weight_decay: float = 1e-5
     train_ratio: float = 0.99
-    batch_size: int = 256
+    batch_size: int = 1024
     buffer_ratio: float = 1.0 # Not implemented for clip yet.
     train_shuffle: bool = False
     
@@ -638,7 +638,7 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     기존 contrastive loss에 더해 디코더 브랜치를 추가하여
     state embedding으로부터 reward_enum(분류)과 condition(회귀)을 예측한다.
     """
-    wandb_project: str = 'train_clip_decoder'
+    wandb_project: str = f'{PREFIX}train_mgpcgrl_encoder'
     dir_prefix: str = "clipdec-"
 
     # ── 디코더 설정 ──
@@ -653,6 +653,19 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
     regression_loss: str = "mae"
 
+    # ── Seen/Unseen 게임 분리 설정 ──
+    # unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda). None=전체 seen
+    unseen_games: Optional[str] = None
+    # few-shot ratio: unseen 학습 풀 중 사용할 비율 (0.0=zero-shot, 1.0=전부)
+    unseen_ratio: float = 0.01
+    # seen 게임 데이터 비율 (1.0=전부 사용)
+    seen_ratio: float = 1.0
+    # 테스트셋 분할 시드 (재현 가능)
+    split_seed: int = 42
+
+    prepend_game_desc: bool = True
+    n_epochs: int = 5000
+
 
 @dataclass
 class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
@@ -662,22 +675,24 @@ class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
     CLIP Decoder 모델을 학습하고, 고정된 테스트셋에서 게임별 reward_accuracy를 측정한다.
     """
     wandb_project: str = 'train_clip_decoder_unseen'
-    dir_prefix: str = "clipdec-unseen-"
+    dir_prefix: str = "clipdec-"
 
     # ── Unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda) ──
-    unseen_games: str = "zd"
+    unseen_games: Optional[str] = None
 
     # ── Few-shot ratio (단일 실행용) ──
     # 0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen 학습 풀 전부 사용
-    unseen_ratio: float = 0.0
+    unseen_ratio: float = 0.01
 
     # ── Seen 게임 데이터 비율 ──
     # 1.0 = seen 학습 풀 전부 사용 (기본값), 0.0 = seen 학습 데이터 0%
     seen_ratio: float = 1.0
 
     # ── 테스트셋 설정 ──
-    unseen_test_ratio: float = 0.2    # 각 게임 데이터에서 테스트용으로 예약할 비율
-    unseen_test_seed: int = 42        # 테스트셋 분할 시드 (재현 가능)
+    # train_ratio: 학습 데이터 비율 (부모 CLIPTrainConfig 상속, 기본 0.99 → 여기서 0.8로 재정의)
+    # test 비율 = 1.0 - train_ratio
+    train_ratio: float = 0.99
+    split_seed: int = 42              # 테스트셋 분할 시드 (재현 가능)
 
 
 @dataclass

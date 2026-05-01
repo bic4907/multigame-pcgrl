@@ -21,39 +21,27 @@ import math
 import os
 import shutil
 import logging
+from collections import deque
 from functools import partial
 from os.path import basename
-from collections import deque
-from copy import deepcopy
-from tqdm import tqdm
-import wandb
 from typing import Dict, List, Optional, Set, Tuple
-from tabulate import tabulate
+
 import hydra
-import logging
-import shutil
-import numpy as np
-from functools import partial
-import os
-from flax.training import checkpoints
-from flax.training.train_state import TrainState
-from jax import jit
 import jax
 import jax.numpy as jnp
-import optax
 import matplotlib.pyplot as plt
 import numpy as np
 import optax
 import wandb
 from flax.training.train_state import TrainState
 from jax import jit
+from tqdm import tqdm
 from transformers import CLIPProcessor
 
-from dataset.multigame import MultiGameDataset
 from conf.config import CLIPDecoderTrainConfig
 from conf.game_utils import GAME_ABBR
+from dataset.multigame import MultiGameDataset
 from encoder.clip_model import get_cnnclip_decoder_encoder
-from encoder.utils.training import save_encoder_checkpoint
 from encoder.data.clip_batch import (
     CLIPDataset,
     CLIPDecoderBatch,
@@ -62,19 +50,14 @@ from encoder.data.clip_batch import (
 )
 from encoder.schedular import create_learning_rate_fn
 from encoder.utils.path import init_config
-from encoder.utils.training import build_multigame_dataset
+from encoder.utils.training import (
+    build_multigame_dataset,
+    save_encoder_checkpoint,
+    save_norm_stats,
+)
+from instruct_rl.utils.format_utils import simple_table
 from instruct_rl.utils.logger import get_wandb_name
-from encoder.utils.path import get_ckpt_dir, init_config
-from encoder.utils.training import build_multigame_dataset, save_encoder_checkpoint, save_norm_stats, setup_wandb
-from encoder.data import CLIPDatasetBuilder, CLIPEmbedData, CLIPDataset
-from encoder.data.clip_batch import create_clip_decoder_batch, CLIPDecoderBatch
 
-from conf.config import CLIPDecoderTrainConfig
-
-from encoder.utils.visualize import create_clip_embedding_figures
-from encoder.utils.game_palette import palette_for_games
-
-from transformers import CLIPProcessor
 
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logger = logging.getLogger(basename(__file__))
@@ -1041,7 +1024,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             (g, f"{per_game_acc.get(g, float('nan')):.4f}", f"{per_game_reg.get(g, float('nan')):.4f}")
             for g in summary_games
         ]
-        table_str = tabulate(rows, headers=["game", "acc", "reg_loss"], tablefmt="psql")
+        table_str = simple_table(rows, headers=["game", "acc", "reg_loss"])
         for line in table_str.splitlines():
             logger.info(line)
         logger.info("Results saved: %s", results_path)

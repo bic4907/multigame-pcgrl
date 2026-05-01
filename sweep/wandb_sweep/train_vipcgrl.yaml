@@ -18,7 +18,7 @@ parameters:
     value: '/mnt/nas/mgpcgrl/vipcgrl_encoder'
   encoder.ckpt_name:
     values: [
-      "clip-game-dg_md-ts_exp-def_0",
+      "clip-game-all_md-ts_exp-def_0",
     ]
   saves_dir:
     value: '/mnt/nas/mgpcgrl/vipcgrl'

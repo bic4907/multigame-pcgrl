@@ -51,12 +51,15 @@ def get_exp_group(config):
         config_dict = {
             'game': getattr(config, 'game', 'dg'),
         }
-        if hasattr(config, 'unseen_games') and config.unseen_games:
-            config_dict['unseen'] = config.unseen_games
         if hasattr(config, 'seen_ratio') and config.seen_ratio != 1.0:
             config_dict['sr'] = config.seen_ratio
+
+        if hasattr(config, 'unseen_games') and config.unseen_games:
+            config_dict['unseen'] = config.unseen_games
+            if hasattr(config, 'unseen_ratio'):
+                config_dict['ur'] = config.unseen_ratio
+
         config_dict.update({
-            'md': modality,
             'exp': config.exp_name,
         })
     elif config.encoder.model == 'mlp':
@@ -65,6 +68,8 @@ def get_exp_group(config):
         }
         if hasattr(config, 'unseen_games') and config.unseen_games:
             config_dict['unseen'] = config.unseen_games
+            if hasattr(config, 'unseen_ratio'):
+                config_dict['ur'] = config.unseen_ratio
         if hasattr(config, 'seen_ratio') and config.seen_ratio != 1.0:
             config_dict['sr'] = config.seen_ratio
         config_dict.update({
@@ -77,6 +82,8 @@ def get_exp_group(config):
         }
         if hasattr(config, 'unseen_games') and config.unseen_games:
             config_dict['unseen'] = config.unseen_games
+            if hasattr(config, 'unseen_ratio'):
+                config_dict['ur'] = config.unseen_ratio
         if hasattr(config, 'seen_ratio') and config.seen_ratio != 1.0:
             config_dict['sr'] = config.seen_ratio
         config_dict.update({

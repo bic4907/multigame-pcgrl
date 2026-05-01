@@ -109,8 +109,8 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         game_train_pool, game_test, _ = split_dataset_by_game(
             full_dataset,
             unseen_game_set,
-            test_ratio=config.unseen_test_ratio,
-            test_seed=config.unseen_test_seed,
+            test_ratio=1.0 - config.train_ratio,
+            test_seed=config.split_seed,
         )
 
         test_indices = np.concatenate(

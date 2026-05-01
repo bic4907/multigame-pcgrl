@@ -28,6 +28,7 @@ from copy import deepcopy
 from tqdm import tqdm
 import wandb
 from typing import Dict, List, Optional, Set, Tuple
+from tabulate import tabulate
 import hydra
 import logging
 import shutil
@@ -49,7 +50,7 @@ from jax import jit
 from transformers import CLIPProcessor
 
 from dataset.multigame import MultiGameDataset
-from conf.config import CLIPDecoderUnseenConfig
+from conf.config import CLIPDecoderTrainConfig
 from conf.game_utils import GAME_ABBR
 from encoder.clip_model import get_cnnclip_decoder_encoder
 from encoder.utils.training import save_encoder_checkpoint
@@ -700,7 +701,7 @@ def get_train_state(config, rng_key, cond_norm_min=None, cond_norm_max=None):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def train_and_evaluate_ratio(
-    config: CLIPDecoderUnseenConfig,
+    config: CLIPDecoderTrainConfig,
     rng_key: jax.random.PRNGKey,
     train_ds: CLIPDataset,
     test_ds: CLIPDataset,
@@ -743,10 +744,6 @@ def train_and_evaluate_ratio(
         config, init_key, cond_norm_min=norm_min_arr, cond_norm_max=norm_max_arr
     )
 
-    logger.info(
-        "unseen_ratio=%.2f  |  Train samples: %d, Test samples: %d",
-        ratio, n_train, n_test,
-    )
 
     if n_train == 0:
         logger.warning("  ⚠ No training data for ratio=%.2f — skipping training", ratio)
@@ -758,52 +755,69 @@ def train_and_evaluate_ratio(
         return per_game_acc, per_game_reg, per_game_enum_diff
 
     # ── Training Loop ──
+    n_train_batch = math.ceil(len(train_ds.class_ids) / config.batch_size)
     for epoch in range(config.n_epochs):
         rng_key, subkey = jax.random.split(rng_key)
         epoch_loss = 0.0
         epoch_acc = 0.0
+        epoch_reg_loss = 0.0
+        epoch_cls_loss = 0.0
+        epoch_contrastive_loss = 0.0
         n_batches = 0
 
-        for batch in create_clip_decoder_batch(
-            train_ds, config.batch_size, rng_key=subkey
-        ):
-            batch = jax.device_put(batch)
-            train_state, loss, metrics, rng_key = train_step(
-                train_state,
-                batch,
-                rng_key=subkey,
-                is_train=True,
-                mode=mode,
-                contrastive_weight=config.contrastive_weight,
-                cls_weight=config.cls_weight,
-                reg_weight=config.reg_weight,
-                num_reward_classes=num_cls,
-                regression_loss=config.regression_loss,
-                norm_min_arr=norm_min_arr,
-                norm_max_arr=norm_max_arr,
-            )
-            epoch_loss += float(loss)
-            epoch_acc += float(metrics["reward_accuracy"])
-            n_batches += 1
+        with tqdm(total=n_train_batch, desc=f"Epoch {epoch + 1}/{config.n_epochs}", leave=False) as pbar:
+            for batch in create_clip_decoder_batch(
+                train_ds, config.batch_size, rng_key=subkey
+            ):
+                batch = jax.device_put(batch)
+                train_state, loss, metrics, rng_key = train_step(
+                    train_state,
+                    batch,
+                    rng_key=subkey,
+                    is_train=True,
+                    mode=mode,
+                    contrastive_weight=config.contrastive_weight,
+                    cls_weight=config.cls_weight,
+                    reg_weight=config.reg_weight,
+                    num_reward_classes=num_cls,
+                    regression_loss=config.regression_loss,
+                    norm_min_arr=norm_min_arr,
+                    norm_max_arr=norm_max_arr,
+                )
+                epoch_loss += float(loss)
+                epoch_acc += float(metrics["reward_accuracy"])
+                epoch_reg_loss += float(metrics["reg_loss"])
+                epoch_cls_loss += float(metrics["cls_loss"])
+                epoch_contrastive_loss += float(metrics["contrastive_loss"])
+                n_batches += 1
+                pbar.update(1)
+                pbar.set_postfix({"loss": f"{epoch_loss / n_batches:.4f}", "acc": f"{epoch_acc / n_batches:.3f}", "reg": f"{epoch_reg_loss / n_batches:.4f}"})
 
         if n_batches > 0:
             epoch_loss /= n_batches
             epoch_acc /= n_batches
+            epoch_reg_loss /= n_batches
+            epoch_cls_loss /= n_batches
+            epoch_contrastive_loss /= n_batches
 
         if (epoch + 1) % max(1, config.n_epochs // 5) == 0 or epoch == 0:
             logger.info(
-                "  [ratio=%.2f] epoch %d/%d — loss: %.4f, train_acc: %.3f",
+                "  [ratio=%.2f] epoch %d/%d — loss: %.4f, train_acc: %.3f, reg: %.4f, cls: %.4f, contrastive: %.4f",
                 ratio, epoch + 1, config.n_epochs, epoch_loss, epoch_acc,
+                epoch_reg_loss, epoch_cls_loss, epoch_contrastive_loss,
             )
 
         # W&B 로깅 (per-epoch)
         if wandb.run is not None:
             wandb.log(
                 {
-                    f"ratio_{ratio:.2f}/epoch": epoch,
-                    f"ratio_{ratio:.2f}/train_loss": epoch_loss,
-                    f"ratio_{ratio:.2f}/train_reward_acc": epoch_acc,
-                    f"ratio_{ratio:.2f}/lr": lr_sched(train_state.step),
+                    "epoch": epoch,
+                    "train_loss": epoch_loss,
+                    "train_reward_acc": epoch_acc,
+                    "train_reg_loss": epoch_reg_loss,
+                    "train_cls_loss": epoch_cls_loss,
+                    "train_contrastive_loss": epoch_contrastive_loss,
+                    "lr": lr_sched(train_state.step),
                 }
             )
 
@@ -819,13 +833,8 @@ def train_and_evaluate_ratio(
         norm_min_arr=norm_min_arr, norm_max_arr=norm_max_arr,
     )
 
-    logger.info("  [ratio=%.2f] Evaluation results:", ratio)
-    for game in sorted(set(per_game_acc.keys()) | set(per_game_reg.keys())):
-        acc = per_game_acc.get(game, float("nan"))
-        reg = per_game_reg.get(game, float("nan"))
-        logger.info("    %-12s  reward_acc = %.4f  reg_loss = %.4f", game, acc, reg)
-
     return per_game_acc, per_game_reg, per_game_enum_diff
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -900,7 +909,7 @@ def create_fewshot_plot(
 #  Main Sweep
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def make_train_unseen(config: CLIPDecoderUnseenConfig):
+def make_train_unseen(config: CLIPDecoderTrainConfig):
     def train(rng_key):
         rng_key, subkey = jax.random.split(rng_key)
 
@@ -951,8 +960,8 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         game_train_pool, game_test, _ = split_dataset_by_game(
             full_dataset,
             unseen_game_set,
-            test_ratio=config.unseen_test_ratio,
-            test_seed=config.unseen_test_seed,
+            test_ratio=1.0 - config.train_ratio,
+            test_seed=config.split_seed,
         )
 
         # 고정 테스트 인덱스 (모든 게임)
@@ -965,7 +974,7 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         )
 
         # 로깅: 분할 요약
-        logger.info("  Test set (fixed, seed=%d):", config.unseen_test_seed)
+        logger.info("  Test set (fixed, seed=%d):", config.split_seed)
         for g in sorted(game_test.keys()):
             tag = "(unseen)" if g in unseen_game_set else "(seen)"
             logger.info(
@@ -1026,19 +1035,17 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         results_path = os.path.join(config.exp_dir, "fewshot_results.json")
         with open(results_path, "w") as f:
             json.dump(save_data, f, indent=2, ensure_ascii=False)
+        # ── 최종 요약 테이블 ──
+        summary_games = [g for g in sorted(unique_games)] + ["overall", "seen_overall", "unseen_overall"]
+        rows = [
+            (g, f"{per_game_acc.get(g, float('nan')):.4f}", f"{per_game_reg.get(g, float('nan')):.4f}")
+            for g in summary_games
+        ]
+        table_str = tabulate(rows, headers=["game", "acc", "reg_loss"], tablefmt="psql")
+        for line in table_str.splitlines():
+            logger.info(line)
         logger.info("Results saved: %s", results_path)
 
-        # ── 최종 요약 출력 ──
-        logger.info("\n" + "=" * 70)
-        logger.info("  RESULT  (unseen_ratio=%.4f)", ratio)
-        logger.info("=" * 70)
-        for g in sorted(unique_games):
-            logger.info("  %-12s  acc=%.4f  reg=%.4f",
-                        g, per_game_acc.get(g, float('nan')), per_game_reg.get(g, float('nan')))
-        logger.info("  overall        acc=%.4f", per_game_acc.get("overall", float('nan')))
-        logger.info("  seen_overall   acc=%.4f", per_game_acc.get("seen_overall", float('nan')))
-        logger.info("  unseen_overall acc=%.4f", per_game_acc.get("unseen_overall", float('nan')))
-        logger.info("=" * 70)
 
     return lambda rng_key: train(rng_key)
 
@@ -1047,8 +1054,8 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
 #  Entry Point
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@hydra.main(version_base=None, config_path="./conf", config_name="train_clip_decoder_unseen")
-def main(config: CLIPDecoderUnseenConfig):
+@hydra.main(version_base=None, config_path="./conf", config_name="train_clip_decoder")
+def main(config: CLIPDecoderTrainConfig):
     if config.encoder.model is None:
         config.encoder.model = "cnnclip"
         logger.warning("encoder.model is None, using default value: cnnclip")

@@ -97,53 +97,25 @@ def decoder_ckpt_dir(tmp_base):
             break
     logger.info(f"[decoder_ckpt_dir] norm_stats.json saved to (from log): {norm_stats_saved_path}")
 
-    # train_clip_decoder 가 새로 저장한 ckpt 만 찾는다.
-    # 주의: _ROOT 전체를 탐색하면 `pretrained_encoders/vipcgrl/default2/ckpts`
-    # 같은 기존 ckpt 가 먼저 매칭되어 train_mg_pcgrl 에서 채널/구조 불일치로 실패한다.
-    # 따라서 (1) train_clip_decoder 의 출력 루트인 `saves/`,
-    # (2) hydra.run.dir 두 곳만 탐색한다.
-    found_ckpts = None
-    candidates = []
+    # norm_stats.json 로그에서 직접 ckpts 경로를 유도한다.
+    # hydra.run.dir 이 이미 지정되어 있으므로 다른 경로는 탐색하지 않는다.
 
-    # norm_stats.json 의 실제 저장 경로에서 ckpts 디렉토리를 직접 유도
-    if norm_stats_saved_path and os.path.isfile(norm_stats_saved_path):
-        # norm_stats.json 은 exp_dir 에 저장되므로, ckpts 디렉토리는 같은 폴더 하위에 존재
-        norm_stats_dir = os.path.dirname(norm_stats_saved_path)
-        ckpt_dir_from_log = os.path.join(norm_stats_dir, "ckpts")
-        if os.path.isdir(ckpt_dir_from_log) and any(
-            e.isdigit() for e in os.listdir(ckpt_dir_from_log)
-        ):
-            candidates.append((os.path.getmtime(ckpt_dir_from_log), ckpt_dir_from_log))
-            logger.info(f"[decoder_ckpt_dir] using ckpts from norm_stats log path: {ckpt_dir_from_log}")
-
-    # Fallback: 기존 탐색 방식 (norm_stats.json 있는 것만)
-    if not candidates:
-        for search_root in [os.path.join(_ROOT, "saves"), hydra_run_dir]:
-            if not os.path.isdir(search_root):
-                continue
-            for dirpath, _, _ in os.walk(search_root):
-                if os.path.basename(dirpath) != "ckpts":
-                    continue
-                entries = os.listdir(dirpath)
-                if not any(e.isdigit() for e in entries):
-                    continue
-                # train_clip_decoder 가 만든 디렉토리만 (clipdec prefix) 받아들인다.
-                if "clipdec" not in dirpath:
-                    continue
-                if not os.path.isfile(os.path.join(dirpath, "norm_stats.json")):
-                    logger.warning(f"Skipping ckpts dir (no norm_stats.json): {dirpath}")
-                    continue
-                candidates.append((os.path.getmtime(dirpath), dirpath))
-
-    if candidates:
-        # 가장 최근에 생성된 ckpt 디렉토리를 선택
-        candidates.sort(reverse=True)
-        found_ckpts = candidates[0][1]
-
-    assert found_ckpts is not None, (
-        "No valid ckpts directory found (with norm_stats.json) after train_clip_decoder.\n"
-        f"searched: {os.path.join(_ROOT, 'saves')}, {hydra_run_dir}"
+    assert norm_stats_saved_path and os.path.isfile(norm_stats_saved_path), (
+        f"norm_stats.json 파일이 존재하지 않습니다: {norm_stats_saved_path}"
     )
+
+    norm_stats_dir = os.path.dirname(norm_stats_saved_path)
+    ckpt_dir_from_log = os.path.join(norm_stats_dir, "ckpts")
+    assert os.path.isdir(ckpt_dir_from_log), (
+        f"ckpts 디렉토리가 존재하지 않습니다: {ckpt_dir_from_log}"
+    )
+    assert any(e.isdigit() for e in os.listdir(ckpt_dir_from_log)), (
+        f"ckpts 디렉토리에 step 디렉토리(숫자)가 없습니다: {ckpt_dir_from_log}\n"
+        f"내용: {os.listdir(ckpt_dir_from_log)}"
+    )
+    found_ckpts = ckpt_dir_from_log
+    logger.info(f"[decoder_ckpt_dir] ckpts dir from norm_stats path: {found_ckpts}")
+
 
     dst = os.path.join(tmp_base, "pretrained_decoders", "test_decoder", "ckpts")
     if os.path.exists(dst):

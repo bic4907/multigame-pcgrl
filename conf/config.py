@@ -215,7 +215,7 @@ class TrainConfig(Config):
     ckpt_freq: int = int(5e6)
     render_freq: int = 50
     n_render_eps: int = 3
-    eval_freq: int = 5
+    eval_freq: int = 50
     n_eval_maps: int = 6
     eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
 

@@ -29,6 +29,10 @@ wandb sweep --project aaai27_train_ipcgrl --entity st4889ha-gwangju-institute-of
 ```bash
 wandb sweep --project aaai27_train_vipcgrl_encoder --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl_encoder.yaml
 ```
+```bash
+bash run_docker.sh python train_clip.py saves_dir=/mnt/nas/mgpcgrl/vipcgrl_encoder
+```
+
 **Train PCGRL**
 ```bash
 wandb sweep --project aaai27_train_vipcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl.yaml

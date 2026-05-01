@@ -8,5 +8,6 @@ RUN apt-get update && apt-get install -y build-essential
 # update latest wandb
 RUN pip install --upgrade wandb
 
-# install nano, git, tmux, rsync, htop and open ssh server
-RUN apt-get install -y nano git tmux rsync htop
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends nano git tmux rsync htop && \
+    rm -rf /var/lib/apt/lists/*

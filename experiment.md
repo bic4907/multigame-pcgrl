@@ -1,19 +1,16 @@
-
-
-# Train Encoder
-
-### VIPCGRL
-
-
-# Sweep PCGRL
-
 ### CPCGRL
+
+---
+
 ```bash
 wandb sweep --project aaai27_train_cpcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_cpcgrl.yaml
 ```
 
 
 ### IPCGRL
+
+---
+
 **Train Encoder**
 ```bash
 wandb sweep --project aaai27_train_ipcgrl_encoder --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_ipcgrl_encoder.yaml
@@ -25,10 +22,17 @@ wandb sweep --project aaai27_train_ipcgrl --entity st4889ha-gwangju-institute-of
 ```
 
 ### VIPCGRL
+
+---
+
 **Train Encoder**
 ```bash
 wandb sweep --project aaai27_train_vipcgrl_encoder --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl_encoder.yaml
 ```
+```bash
+bash run_docker.sh python train_clip.py saves_dir=/mnt/nas/mgpcgrl/vipcgrl_encoder
+```
+
 **Train PCGRL**
 ```bash
 wandb sweep --project aaai27_train_vipcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl.yaml
@@ -36,6 +40,9 @@ wandb sweep --project aaai27_train_vipcgrl --entity st4889ha-gwangju-institute-o
 
 
 ### MGPCGRL
+
+---
+
 **Train Encoder**
 ```bash
 wandb sweep --project aaai27_train_mgpcgrl_encoder --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder.yaml

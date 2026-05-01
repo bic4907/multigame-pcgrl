@@ -213,6 +213,13 @@ def train_step(
         a2b_loss = -jnp.mean(jax.scipy.special.logsumexp(a2b_pos_logps, axis=1))
         b2a_loss = -jnp.mean(jax.scipy.special.logsumexp(b2a_pos_logps, axis=0))
 
+        a2b_correct_pr = jnp.mean(
+            jnp.sum(jnp.exp(a2b_logps) * batch.duplicate_matrix, axis=1)
+        )
+        b2a_correct_pr = jnp.mean(
+            jnp.sum(jnp.exp(b2a_logps) * batch.duplicate_matrix, axis=0)
+        )
+
         a2b_top1_accuracy = jnp.mean(
             jnp.max(a2b_logps, axis=1) == jnp.max(a2b_pos_logps, axis=1)
         )
@@ -220,7 +227,7 @@ def train_step(
             jnp.max(b2a_logps, axis=0) == jnp.max(b2a_pos_logps, axis=0)
         )
 
-        return a2b_loss, b2a_loss, a2b_top1_accuracy, b2a_top1_accuracy
+        return a2b_loss, b2a_loss, a2b_correct_pr, b2a_correct_pr, a2b_top1_accuracy, b2a_top1_accuracy
 
     def loss_fn(params):
         outputs = train_state.apply_fn(
@@ -241,7 +248,7 @@ def train_step(
 
         # ── Contrastive Loss ──
         temperature = jnp.clip(text_state_temperature, jnp.log(0.01), jnp.log(100))
-        s2t_loss, t2s_loss, s2t_top1, t2s_top1 = pairwise_contrastive_loss_accuracy(
+        s2t_loss, t2s_loss, s2t_correct_pr, t2s_correct_pr, s2t_top1, t2s_top1 = pairwise_contrastive_loss_accuracy(
             state_embed, text_embed, temperature
         )
         contrastive_loss = state_mask * (s2t_loss + t2s_loss) / 2.0
@@ -300,13 +307,18 @@ def train_step(
 
         metrics = {
             "contrastive_loss": contrastive_loss,
+            "state2text_loss": s2t_loss * state_mask,
+            "text2state_loss": t2s_loss * state_mask,
+            "state2text_correct_pr": s2t_correct_pr * state_mask,
+            "text2state_correct_pr": t2s_correct_pr * state_mask,
+            "state2text_top1_accuracy": s2t_top1 * state_mask,
+            "text2state_top1_accuracy": t2s_top1 * state_mask,
+            "text_state_temperature": text_state_temperature,
             "cls_loss": cls_loss,
             "reg_loss": reg_loss,
             "reward_accuracy": reward_accuracy,
             "reward_pred": reward_pred,  # (B,) per-sample predictions
             "abs_diff": abs_diff,        # (B,) per-sample |pred_cond - target_cond|
-            "state2text_top1_accuracy": s2t_top1 * state_mask,
-            "text2state_top1_accuracy": t2s_top1 * state_mask,
         }
         return total_loss, metrics
 
@@ -746,6 +758,11 @@ def train_and_evaluate_ratio(
         epoch_reg_loss = 0.0
         epoch_cls_loss = 0.0
         epoch_contrastive_loss = 0.0
+        epoch_s2t_top1 = 0.0
+        epoch_t2s_top1 = 0.0
+        epoch_s2t_correct_pr = 0.0
+        epoch_t2s_correct_pr = 0.0
+        epoch_temperature = 0.0
         n_batches = 0
 
         with tqdm(total=n_train_batch, desc=f"Epoch {epoch + 1}/{config.n_epochs}", leave=False) as pbar:
@@ -772,6 +789,11 @@ def train_and_evaluate_ratio(
                 epoch_reg_loss += float(metrics["reg_loss"])
                 epoch_cls_loss += float(metrics["cls_loss"])
                 epoch_contrastive_loss += float(metrics["contrastive_loss"])
+                epoch_s2t_top1 += float(metrics["state2text_top1_accuracy"])
+                epoch_t2s_top1 += float(metrics["text2state_top1_accuracy"])
+                epoch_s2t_correct_pr += float(metrics["state2text_correct_pr"])
+                epoch_t2s_correct_pr += float(metrics["text2state_correct_pr"])
+                epoch_temperature += float(metrics["text_state_temperature"])
                 n_batches += 1
                 pbar.update(1)
                 pbar.set_postfix({"loss": f"{epoch_loss / n_batches:.4f}", "acc": f"{epoch_acc / n_batches:.3f}", "reg": f"{epoch_reg_loss / n_batches:.4f}"})
@@ -782,6 +804,11 @@ def train_and_evaluate_ratio(
             epoch_reg_loss /= n_batches
             epoch_cls_loss /= n_batches
             epoch_contrastive_loss /= n_batches
+            epoch_s2t_top1 /= n_batches
+            epoch_t2s_top1 /= n_batches
+            epoch_s2t_correct_pr /= n_batches
+            epoch_t2s_correct_pr /= n_batches
+            epoch_temperature /= n_batches
 
         if (epoch + 1) % max(1, config.n_epochs // 5) == 0 or epoch == 0:
             logger.info(
@@ -790,17 +817,24 @@ def train_and_evaluate_ratio(
                 epoch_reg_loss, epoch_cls_loss, epoch_contrastive_loss,
             )
 
-        # W&B 로깅 (per-epoch)
+        # W&B 로깅 (per-epoch) — train_clip.py 와 동일한 네임스페이스 구조
         if wandb.run is not None:
             wandb.log(
                 {
-                    "epoch": epoch,
-                    "train_loss": epoch_loss,
-                    "train_reward_acc": epoch_acc,
-                    "train_reg_loss": epoch_reg_loss,
-                    "train_cls_loss": epoch_cls_loss,
-                    "train_contrastive_loss": epoch_contrastive_loss,
-                    "lr": lr_sched(train_state.step),
+                    "total/train_loss": epoch_loss,
+                    "total/epoch": epoch,
+                    "total/lr": lr_sched(train_state.step),
+
+                    "train(text-state)/contrastive_loss": epoch_contrastive_loss,
+                    "train(text-state)/state-text_temperature": epoch_temperature,
+                    "train(text-state)/state2text_top1_accuracy": epoch_s2t_top1,
+                    "train(text-state)/text2state_top1_accuracy": epoch_t2s_top1,
+                    "train(text-state)/state2text_correct_pr": epoch_s2t_correct_pr,
+                    "train(text-state)/text2state_correct_pr": epoch_t2s_correct_pr,
+
+                    "train(decoder)/reward_accuracy": epoch_acc,
+                    "train(decoder)/cls_loss": epoch_cls_loss,
+                    "train(decoder)/reg_loss": epoch_reg_loss,
                 }
             )
 

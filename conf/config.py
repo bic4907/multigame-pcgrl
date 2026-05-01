@@ -37,7 +37,7 @@ class Config:
 
     # Game selection — 2글자 약어 조합 (dg=dungeon, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
     # 예: "dg" (dungeon만), "dgdm" (dungeon+doom+doom2), "all" (전체)
-    game: str = "dg"
+    game: str = "all"
 
     # include_* 필드는 game 문자열에서 자동 파싱됨 (하위 호환용으로 유지)
     include_dungeon: bool = True
@@ -584,23 +584,23 @@ class RewardTrainConfig(RewardConfig):
 class CLIPTrainConfig(Config):
     exp_name: str = "def"
     
-    wandb_project: str = f"{PREFIX}_train_vipcgrl_encoder"
+    wandb_project: str = f"{PREFIX}train_vipcgrl_encoder"
     seed: int = 0
     
     overwrite: bool = False
-    ckpt_freq: int = int(60)
+    ckpt_freq: int = int(50)
 
     # Goal img path
     img_data_path: str = "./human_dataset"
     instruct: str = "scn-1_se-whole"
     
     n_max_points: int = 1000
-    embed_visualize_freq: int = 5
+    embed_visualize_freq: int = 500
 
-    n_epochs: int = 100
+    n_epochs: int = 500
     lr: float = 1.0e-3
     weight_decay: float = 1e-5
-    train_ratio: float = 0.8
+    train_ratio: float = 0.99
     batch_size: int = 256
     buffer_ratio: float = 1.0 # Not implemented for clip yet.
     train_shuffle: bool = False

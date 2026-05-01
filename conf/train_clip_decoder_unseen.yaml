@@ -24,14 +24,10 @@ contrastive_weight: 1.0
 cls_weight: 1.0
 reg_weight: 0.1
 
-# instruction prefix 설정
-prepend_game_prefix: true
-prepend_game_desc: false
-
 # ── Seen/Unseen 실험 설정 ──
 # unseen 게임 지정 (2글자 약어: dg=dungeon, pk=pokemon, sk=sokoban, dm=doom, zd=zelda)
 game: "all"
-unseen_games: "zd"
+unseen_games: null
 
 # 테스트셋 비율 및 분할 시드
 unseen_test_ratio: 0.2
@@ -40,5 +36,5 @@ unseen_test_seed: 42
 # seen 게임 데이터 비율 (1.0 = 전부 사용, 0.0 = 미사용)
 seen_ratio: 1.0
 
-n_epochs: 300
+n_epochs: 3000
 

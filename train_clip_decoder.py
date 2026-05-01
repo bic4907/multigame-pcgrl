@@ -27,7 +27,7 @@ from collections import deque
 from copy import deepcopy
 from tqdm import tqdm
 import wandb
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 import hydra
 import logging
 import shutil
@@ -85,14 +85,20 @@ logging.getLogger("absl").setLevel(logging.ERROR)
 #  Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def parse_unseen_game_names(unseen_str: str) -> Set[str]:
+def parse_unseen_game_names(unseen_str: Optional[str]) -> Set[str]:
     """2글자 약어 문자열 → full game name set.
+
+    None 또는 빈 문자열이면 빈 set을 반환한다.
 
     Examples
     --------
+    parse_unseen_game_names(None)   -> set()
+    parse_unseen_game_names("")     -> set()
     parse_unseen_game_names("zd")   -> {'zelda'}
     parse_unseen_game_names("pkzd") -> {'pokemon', 'zelda'}
     """
+    if not unseen_str:
+        return set()
     names: Set[str] = set()
     for i in range(0, len(unseen_str), 2):
         abbr = unseen_str[i : i + 2]
@@ -738,10 +744,8 @@ def train_and_evaluate_ratio(
     )
 
     logger.info(
-        "=" * 70 + "\n"
-        f"  Ratio {ratio_idx + 1}/{total_ratios}: unseen_ratio={ratio:.2f}\n"
-        f"  Train samples: {n_train}, Test samples: {n_test}\n"
-        + "=" * 70
+        "unseen_ratio=%.2f  |  Train samples: %d, Test samples: %d",
+        ratio, n_train, n_test,
     )
 
     if n_train == 0:
@@ -970,192 +974,70 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
             )
         logger.info("  Total test: %d", len(test_indices))
 
-        # ── 4. Few-shot ratio sweep ──
-        if hasattr(config, "unseen_ratios"):
-            ratios = list(config.unseen_ratios)
+        # ── 4. 단일 unseen_ratio 학습 ──
+        ratio = config.unseen_ratio
+
+        train_indices = build_train_indices_for_ratio(
+            game_train_pool, unseen_game_set, ratio,
+            seen_ratio=config.seen_ratio,
+        )
+
+        if len(train_indices) == 0:
+            logger.warning(
+                "ratio=%.2f: 0 training samples — evaluating untrained model",
+                ratio,
+            )
+            train_ds = subset_clip_dataset(full_dataset, np.array([0]))
         else:
-            ratios = [config.unseen_ratio]
-        results: Dict[float, Dict[str, float]] = {}
-        reg_results: Dict[float, Dict[str, float]] = {}
-        enum_diff_results: Dict[float, Dict[str, Dict[int, float]]] = {}
+            train_ds = subset_clip_dataset(full_dataset, train_indices)
 
-        for ratio_idx, ratio in enumerate(ratios):
-            # 학습 인덱스 구성
-            train_indices = build_train_indices_for_ratio(
-                game_train_pool, unseen_game_set, ratio,
-                seen_ratio=config.seen_ratio,
-            )
+        _train_games = np.array(
+            [rc["game_name"] for rc in train_ds.reward_cond]
+        )
+        _game_counts = {g: int(np.sum(_train_games == g)) for g in sorted(set(_train_games))}
+        logger.info("  Train set = %d samples %s", len(train_indices), _game_counts)
 
-            if len(train_indices) == 0:
-                logger.warning(
-                    "ratio=%.2f: 0 training samples — evaluating untrained model",
-                    ratio,
-                )
-                # seen game도 없는 특이 케이스: 최소 1개 샘플로 모델 초기화만 수행
-                train_ds = subset_clip_dataset(full_dataset, np.array([0]))
-            else:
-                train_ds = subset_clip_dataset(full_dataset, train_indices)
+        rng_key, ratio_key = jax.random.split(rng_key)
+        per_game_acc, per_game_reg, per_game_enum_diff = train_and_evaluate_ratio(
+            config=config,
+            rng_key=ratio_key,
+            train_ds=train_ds,
+            test_ds=test_ds,
+            test_game_names=test_game_names,
+            unseen_game_names=unseen_game_set,
+            cond_norm_min=cond_norm_min,
+            cond_norm_max=cond_norm_max,
+            ratio=ratio,
+            ratio_idx=0,
+            total_ratios=1,
+        )
 
-            # train pool 구성 로그
-            _train_games = np.array(
-                [rc["game_name"] for rc in train_ds.reward_cond]
-            )
-            _game_counts = {g: int(np.sum(_train_games == g)) for g in sorted(set(_train_games))}
-            logger.info(
-                "  Ratio %.2f: train set = %d samples %s",
-                ratio, len(train_indices), _game_counts,
-            )
-
-            rng_key, ratio_key = jax.random.split(rng_key)
-            per_game_acc, per_game_reg, per_game_enum_diff = train_and_evaluate_ratio(
-                config=config,
-                rng_key=ratio_key,
-                train_ds=train_ds,
-                test_ds=test_ds,
-                test_game_names=test_game_names,
-                unseen_game_names=unseen_game_set,
-                cond_norm_min=cond_norm_min,
-                cond_norm_max=cond_norm_max,
-                ratio=ratio,
-                ratio_idx=ratio_idx,
-                total_ratios=len(ratios),
-            )
-            results[ratio] = per_game_acc
-            reg_results[ratio] = per_game_reg
-            enum_diff_results[ratio] = per_game_enum_diff
-
-            # W&B 로깅 (per-ratio 최종 결과 + incremental plot)
-            if wandb.run is not None:
-                log_dict = {"unseen/ratio": ratio, "unseen/seen_ratio": config.seen_ratio}
-                for g, acc in per_game_acc.items():
-                    log_dict[f"unseen/acc_{g}"] = acc
-                for g, reg in per_game_reg.items():
-                    log_dict[f"unseen/reg_{g}"] = reg
-                wandb.log(log_dict)
+        # W&B 로깅
+        if wandb.run is not None:
+            log_dict = {"unseen/ratio": ratio, "unseen/seen_ratio": config.seen_ratio}
+            for g, acc in per_game_acc.items():
+                log_dict[f"unseen/acc_{g}"] = acc
+            for g, reg in per_game_reg.items():
+                log_dict[f"unseen/reg_{g}"] = reg
+            wandb.log(log_dict)
 
         # ── 5. 결과 저장 ──
-        save_data = {
-            str(r): {"accuracy": results[r], "reg_loss": reg_results[r]}
-            for r in results
-        }
+        save_data = {str(ratio): {"accuracy": per_game_acc, "reg_loss": per_game_reg}}
         results_path = os.path.join(config.exp_dir, "fewshot_results.json")
         with open(results_path, "w") as f:
             json.dump(save_data, f, indent=2, ensure_ascii=False)
         logger.info("Results saved: %s", results_path)
 
-        # ── 6. 최종 그래프 생성 (결과 디렉토리에 저장) ──
-        plot_path = create_fewshot_plot(
-            results, reg_results, unseen_game_set, config.exp_dir
-        )
-
-        if wandb.run is not None:
-
-            # reward_enum 전체 목록 수집
-            all_enums = sorted({
-                e for ratio_ed in enum_diff_results.values()
-                for game_ed in ratio_ed.values()
-                for e in game_ed.keys()
-            })
-
-            # 게임 이름 (overall 등 제외)
-            game_names_sorted = sorted(
-                {g for r in results.values() for g in r
-                 if g not in ("overall", "seen_overall", "unseen_overall")}
-            )
-
-            # ratio=1.0 baseline diff 계산 (정규화 기준)
-            baseline_ratio = 1.0
-            baseline_seen_diff = None
-            baseline_unseen_diff = None
-            if baseline_ratio in enum_diff_results:
-                _s, _u = [], []
-                for g in game_names_sorted:
-                    game_ed = enum_diff_results[baseline_ratio].get(g, {})
-                    vals = [v for v in game_ed.values() if v is not None]
-                    if vals:
-                        avg = sum(vals) / len(vals)
-                        if g in unseen_game_set:
-                            _u.append(avg)
-                        else:
-                            _s.append(avg)
-                baseline_seen_diff = sum(_s) / len(_s) if _s else None
-                baseline_unseen_diff = sum(_u) / len(_u) if _u else None
-
-            # 테이블: 각 행 = 하나의 ratio
-            # norm_diff = raw_diff / baseline_diff (ratio=1.0 대비 상대 에러)
-            columns = [
-                "ratio", "seen_ratio", "game", "unseen_games",
-                "seen_acc", "unseen_acc",
-                "seen_reg", "unseen_reg",
-                "seen_avg_diff", "unseen_avg_diff",
-                "seen_norm_diff", "unseen_norm_diff",
-            ]
-            for g in game_names_sorted:
-                for e in all_enums:
-                    columns.append(f"{g}_enum_{e}")
-
-            table = wandb.Table(columns=columns)
-            for ratio_val in sorted(results.keys()):
-                # seen/unseen 집계
-                seen_acc = results[ratio_val].get("seen_overall", None)
-                unseen_acc = results[ratio_val].get("unseen_overall", None)
-                seen_reg = reg_results[ratio_val].get("seen_overall", None)
-                unseen_reg = reg_results[ratio_val].get("unseen_overall", None)
-
-                # 게임별 enum diff 평균 → seen/unseen raw avg diff
-                seen_diffs, unseen_diffs = [], []
-                for g in game_names_sorted:
-                    game_ed = enum_diff_results[ratio_val].get(g, {})
-                    vals = [v for v in game_ed.values() if v is not None]
-                    if vals:
-                        avg = sum(vals) / len(vals)
-                        if g in unseen_game_set:
-                            unseen_diffs.append(avg)
-                        else:
-                            seen_diffs.append(avg)
-                seen_avg = sum(seen_diffs) / len(seen_diffs) if seen_diffs else None
-                unseen_avg = sum(unseen_diffs) / len(unseen_diffs) if unseen_diffs else None
-
-                # ratio=1.0 대비 정규화 (1.0 = baseline과 동일, >1.0 = 더 나쁨)
-                seen_norm = (seen_avg / baseline_seen_diff
-                             if seen_avg is not None and baseline_seen_diff else None)
-                unseen_norm = (unseen_avg / baseline_unseen_diff
-                               if unseen_avg is not None and baseline_unseen_diff else None)
-
-                row = [
-                    float(ratio_val), float(config.seen_ratio), config.game, config.unseen_games,
-                    seen_acc, unseen_acc,
-                    seen_reg, unseen_reg,
-                    seen_avg, unseen_avg,
-                    seen_norm, unseen_norm,
-                ]
-                for g in game_names_sorted:
-                    game_ed = enum_diff_results[ratio_val].get(g, {})
-                    for e in all_enums:
-                        row.append(game_ed.get(e, None))
-                table.add_data(*row)
-
-            wandb.log({
-                "table/results": table,
-                "table/fewshot_plot": wandb.Image(plot_path),
-            })
-
         # ── 최종 요약 출력 ──
         logger.info("\n" + "=" * 70)
-        logger.info("  SWEEP COMPLETE — Summary")
+        logger.info("  RESULT  (unseen_ratio=%.4f)", ratio)
         logger.info("=" * 70)
-        header = f"  {'ratio':>6}"
         for g in sorted(unique_games):
-            header += f"  {g:>10}"
-        header += f"  {'overall':>10}"
-        logger.info(header)
-        logger.info("  " + "-" * (len(header) - 2))
-        for ratio_val in sorted(results.keys()):
-            row = f"  {ratio_val:>6.2f}"
-            for g in sorted(unique_games):
-                row += f"  {results[ratio_val].get(g, float('nan')):>10.4f}"
-            row += f"  {results[ratio_val].get('overall', float('nan')):>10.4f}"
-            logger.info(row)
+            logger.info("  %-12s  acc=%.4f  reg=%.4f",
+                        g, per_game_acc.get(g, float('nan')), per_game_reg.get(g, float('nan')))
+        logger.info("  overall        acc=%.4f", per_game_acc.get("overall", float('nan')))
+        logger.info("  seen_overall   acc=%.4f", per_game_acc.get("seen_overall", float('nan')))
+        logger.info("  unseen_overall acc=%.4f", per_game_acc.get("unseen_overall", float('nan')))
         logger.info("=" * 70)
 
     return lambda rng_key: train(rng_key)

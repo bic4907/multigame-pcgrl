@@ -415,6 +415,26 @@ class CPCGRLEvalConfig(EvalConfig):
     wandb_project: Optional[str] = f"{PREFIX}eval_cpcgrl"
 
 @dataclass
+class VIPCGRLEvalConfig(CPCGRLEvalConfig):
+    """VIPCGRL 평가용 Config.
+
+    pretrained CLIP 임베딩을 nlp_obs 에 주입하는 평가 설정.
+    Decoder reward shaping 없이 CLIP embedding만 사용한다.
+    """
+    wandb_project: Optional[str] = f"{PREFIX}eval_vipcgrl"
+
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="cnnclip"))
+
+    use_clip: bool = True
+    vec_cont: bool = False
+    model: str = "cnnclipconv"
+    use_nlp: bool = False
+    nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
+
+    ignore_checkpoint: bool = False
+
+
+@dataclass
 class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     """MGPCGRL 평가용 Config.
 
@@ -752,6 +772,7 @@ cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
 cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
+cs.store(name="eval_vipcgrl_schema", node=VIPCGRLEvalConfig)
 cs.store(name="eval_mgpcgrl_schema", node=MGPCGRLEvalConfig)
 cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)

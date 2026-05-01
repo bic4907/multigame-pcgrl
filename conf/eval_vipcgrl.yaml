@@ -1,0 +1,13 @@
+defaults:
+  - eval_vipcgrl_schema
+  - _self_
+
+hydra:
+  sweeper:
+    params: {}
+
+n_envs: 600
+
+encoder:
+  model: cnnclip
+

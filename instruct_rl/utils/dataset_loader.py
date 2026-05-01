@@ -28,6 +28,8 @@ from instruct_rl.utils.dataset_loader_helpers.embeddings import (
     _postprocess_embeddings,
     _restore_encoder_checkpoint,
     _tokenize_texts,
+    denorm_condition,
+    load_norm_stats,
 )
 from instruct_rl.utils.dataset_loader_helpers.filters import (
     _ConditionFilter,

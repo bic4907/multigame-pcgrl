@@ -296,12 +296,12 @@ class VIPCGRLConfig(CPCGRLConfig):
     nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
 
     use_sim_reward: bool = True
-    wandb_project: Optional[str] = "vipcgrl"
+    wandb_project: Optional[str] = f"{PREFIX}train_vipcgrl"
 
 
 @dataclass
 class MGPCGRLConfig(VIPCGRLConfig):
-    wandb_project: Optional[str] = "mgpcgrl"
+    wandb_project: Optional[str] = f"{PREFIX}train_mgpcgrl"
 
     # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
     use_decoder_reward_shaping: bool = True
@@ -665,7 +665,7 @@ class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
     dir_prefix: str = "clipdec-unseen-"
 
     # ── Unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda) ──
-    unseen_games: str = "zd"
+    unseen_games: Optional[str] = None
 
     # ── Few-shot ratio (단일 실행용) ──
     # 0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen 학습 풀 전부 사용

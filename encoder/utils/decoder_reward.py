@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Callable, Tuple
+from typing import Callable, Dict, Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from flax.training import checkpoints
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,100 @@ def load_decoder(
     logger.info(f"  variables keys: {list(variables.keys())}")
 
     return module.apply, variables
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  배치 추론: text_embeddings → (reward_i, condition)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def reward_decode(
+    text_embeddings: jnp.ndarray,
+    apply_fn,
+    variables: dict,
+    cond_norm_min: Dict[int, float],
+    cond_norm_max: Dict[int, float],
+    num_classes: int,
+    batch_size: int = 256,
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """CLIP 디코더로 텍스트 임베딩에서 reward_i / condition을 배치 예측한다.
+
+    Parameters
+    ----------
+    text_embeddings : (N, D) jnp.ndarray
+        CLIP encoder를 통과한 latent embedding.
+    apply_fn : Callable
+        ContrastiveDecoderModule.apply (또는 동일 시그니처의 함수).
+    variables : dict
+        디코더 파라미터 변수 딕셔너리 (``{"params": ..., "norm_stats": ...}``).
+    cond_norm_min, cond_norm_max : Dict[int, float]
+        reward_enum별 log-space 정규화 min/max 값.
+    num_classes : int
+        reward_enum 클래스 수.
+    batch_size : int
+        배치 크기 (기본값 256).
+
+    Returns
+    -------
+    reward_i : (N, 1) jnp.int32
+        예측된 reward_enum (0-based).
+    condition : (N, num_classes) jnp.float32
+        예측된 condition 벡터. 선택된 enum 슬롯만 값이 채워지고 나머지는 -1.
+    """
+    from tqdm import tqdm
+
+    n = text_embeddings.shape[0]
+    text_embeddings = jnp.array(text_embeddings, dtype=jnp.float32)
+
+    @jax.jit
+    def _decode_batch(embed_batch):
+        reward_logits, condition_pred, _ = apply_fn(
+            variables,
+            embed_batch,
+            training=False,
+            method=lambda m, embed, training=False: m.decoder(embed, training=training),
+        )
+        reward_enum_i = jnp.argmax(reward_logits, axis=-1).astype(jnp.int32)
+        pred_cond_norm = condition_pred[jnp.arange(condition_pred.shape[0]), reward_enum_i]
+        return reward_enum_i, pred_cond_norm
+
+    total_batches = (n + batch_size - 1) // batch_size if n > 0 else 0
+    logger.info("Decoder batching: batch_size=%d, total_batches=%d", batch_size, total_batches)
+
+    reward_i_list: list = []
+    cond_norm_list: list = []
+    pbar = tqdm(range(0, n, batch_size), total=total_batches, desc="Decoder reward", unit="batch")
+    for start_idx in pbar:
+        end_idx = min(start_idx + batch_size, n)
+        reward_enum_i, pred_cond_norm = _decode_batch(text_embeddings[start_idx:end_idx])
+        reward_i_list.append(np.array(reward_enum_i))
+        cond_norm_list.append(np.array(pred_cond_norm))
+
+    reward_i_flat = np.concatenate(reward_i_list, axis=0)       # (N,)
+    pred_cond_norm_all = np.concatenate(cond_norm_list, axis=0)  # (N,)
+
+    # ── Denorm: [0,1] log-space → original linear scale ──
+    min_arr = np.array([cond_norm_min.get(i, 0.0) for i in range(num_classes)], dtype=np.float32)
+    max_arr = np.array([cond_norm_max.get(i, 1.0) for i in range(num_classes)], dtype=np.float32)
+    r_min = min_arr[reward_i_flat]
+    r_max = max_arr[reward_i_flat]
+    log_val = pred_cond_norm_all * (r_max - r_min) + r_min
+    pred_cond_raw = np.expm1(np.maximum(log_val, 0.0))
+    logger.info(
+        "Denorm applied: raw range=[%.4f, %.4f]",
+        float(pred_cond_raw.min()),
+        float(pred_cond_raw.max()),
+    )
+
+    # ── 최종 텐서 조립 ──
+    reward_i = jnp.array(reward_i_flat, dtype=jnp.int32).reshape(-1, 1)
+    condition = jnp.full((n, num_classes), -1.0, dtype=jnp.float32)
+    condition = condition.at[jnp.arange(n), reward_i_flat].set(jnp.array(pred_cond_raw))
+    logger.info(
+        "Decoder reward prediction done: reward_i=%s, condition=%s",
+        reward_i.shape,
+        condition.shape,
+    )
+    return reward_i, condition
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

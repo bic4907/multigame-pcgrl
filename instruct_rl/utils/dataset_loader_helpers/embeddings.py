@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 from glob import glob
 from os.path import basename, join
 from pathlib import Path
+from typing import Dict, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -16,6 +19,87 @@ from instruct_rl.utils.log_utils import get_logger
 from .constants import CLIP_EMBED_CACHE_DIR, DECODER_REWARD_CACHE_DIR
 
 logger = get_logger(__file__)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Norm stats file I/O
+# ═══════════════════════════════════════════════════════════════════════════════
+
+NORM_STATS_FILENAME = "norm_stats.json"
+
+
+def load_norm_stats(ckpt_dir: str) -> Optional[Tuple[Dict[int, float], Dict[int, float]]]:
+    """Load ``norm_stats.json`` from near ckpt_dir.
+
+    Reads the file saved by ``save_norm_stats`` during training and returns a
+    ``(cond_norm_min, cond_norm_max)`` dict pair.
+    Keys are integer reward_enum (0-based), values are float.
+
+    Returns ``None`` if the file is missing or cannot be parsed.
+    """
+    abs_ckpt = os.path.abspath(ckpt_dir)
+    candidates = [
+        # exp_dir level (sibling of ckpts/) — primary location
+        os.path.join(os.path.dirname(abs_ckpt), NORM_STATS_FILENAME),
+        # inside ckpts/ — legacy / fallback
+        os.path.join(abs_ckpt, NORM_STATS_FILENAME),
+        # parent of parent (in case ckpt_dir is a step sub-directory)
+        os.path.join(os.path.dirname(os.path.dirname(abs_ckpt)), NORM_STATS_FILENAME),
+    ]
+
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                with open(path, "r") as f:
+                    data = json.load(f)
+                cond_norm_min = {int(k): float(v) for k, v in data["cond_norm_min"].items()}
+                cond_norm_max = {int(k): float(v) for k, v in data["cond_norm_max"].items()}
+                logger.info("Norm stats loaded from %s", path)
+                return cond_norm_min, cond_norm_max
+            except Exception as e:
+                logger.warning("Failed to load norm stats from %s: %s", path, e)
+
+    logger.warning("norm_stats.json not found near ckpt_dir=%s.", ckpt_dir)
+    return None
+
+
+def denorm_condition(
+    cond_norm: np.ndarray,
+    reward_enum_indices: np.ndarray,
+    cond_norm_min: Dict[int, float],
+    cond_norm_max: Dict[int, float],
+    num_classes: int,
+) -> np.ndarray:
+    """Denormalize condition values from [0,1] log-space back to the original linear scale.
+
+    Inverse of the training-time preprocessing:
+        log_val = cond_norm * (norm_max - norm_min) + norm_min
+        raw     = expm1(max(log_val, 0))
+
+    Parameters
+    ----------
+    cond_norm : (N,) ndarray
+        Normalized condition values selected per reward_enum.
+    reward_enum_indices : (N,) int ndarray
+        Predicted reward_enum (0-based) for each sample.
+    cond_norm_min, cond_norm_max : dict[int, float]
+        Per-reward_enum log-space min/max values.
+    num_classes : int
+        Number of reward classes.
+
+    Returns
+    -------
+    (N,) ndarray — condition values in the original linear scale.
+    """
+    min_arr = np.array([cond_norm_min.get(i, 0.0) for i in range(num_classes)], dtype=np.float32)
+    max_arr = np.array([cond_norm_max.get(i, 1.0) for i in range(num_classes)], dtype=np.float32)
+
+    r_min = min_arr[reward_enum_indices]   # (N,)
+    r_max = max_arr[reward_enum_indices]   # (N,)
+
+    log_val = cond_norm * (r_max - r_min) + r_min
+    raw = np.expm1(np.maximum(log_val, 0.0))
+    return raw
 
 
 def _build_instruct(sample_list, config):
@@ -152,7 +236,6 @@ def _build_reward_and_condition_with_decoder(
 ):
     """CLIP decoder 추론으로 reward_i/condition을 생성한다."""
     from conf.config import DecoderConfig
-    from tqdm import tqdm
 
     n = len(sample_list)
     num_classes = config.decoder.num_reward_classes
@@ -193,6 +276,22 @@ def _build_reward_and_condition_with_decoder(
         sample_list,
         ckpt_signature=ckpt_signature,
     )
+
+    # ── Validate norm stats exist before cache check (required for denorm) ──
+    # Load and validate early so that missing stats are caught regardless of cache state.
+    _loaded_norm_stats = load_norm_stats(config.encoder.ckpt_path)
+    if _loaded_norm_stats is None:
+        raise FileNotFoundError(
+            f"norm_stats.json not found (ckpt_path={config.encoder.ckpt_path}). "
+            "It is saved automatically when training with train_clip_decoder.py. "
+            "Check the checkpoint path or retrain the model."
+        )
+    _ext_norm_min, _ext_norm_max = _loaded_norm_stats
+    logger.info(
+        "Norm stats ready for denorm: enums=%s",
+        sorted(_ext_norm_min.keys()),
+    )
+
     if cache_path.exists():
         try:
             cached = np.load(cache_path)
@@ -235,54 +334,22 @@ def _build_reward_and_condition_with_decoder(
             "Decoder reward prediction requires precomputed text embeddings "
             "from Instruct. Got text_embeddings=None."
         )
-    text_embeddings = jnp.array(text_embeddings, dtype=jnp.float32)
-    if text_embeddings.shape[0] != n:
+    _text_embed_arr = jnp.array(text_embeddings, dtype=jnp.float32)
+    if _text_embed_arr.shape[0] != n:
         raise ValueError(
-            f"text_embeddings batch mismatch: got={text_embeddings.shape[0]}, expected={n}"
+            f"text_embeddings batch mismatch: got={_text_embed_arr.shape[0]}, expected={n}"
         )
 
-    @jax.jit
-    def _decode_batch(text_embed_batch):
-        reward_logits, _, condition_pred_raw = decoder_apply_fn(
-            decoder_vars,
-            text_embed_batch,
-            training=False,
-            method=lambda m, embed, training=False: m.decoder(embed, training=training),
-        )
+    # ── 배치 추론 + denorm: reward_decode에 위임 ──
+    from encoder.utils.decoder_reward import reward_decode
 
-        reward_enum_i = jnp.argmax(reward_logits, axis=-1).astype(jnp.int32)
-        pred_cond = condition_pred_raw[jnp.arange(condition_pred_raw.shape[0]), reward_enum_i]
-        return reward_enum_i, pred_cond
-
-    batch_size = 256
-    total_batches = (n + batch_size - 1) // batch_size if n > 0 else 0
-    logger.info("Decoder batching: batch_size=%d, total_batches=%d", batch_size, total_batches)
-    reward_i_list = []
-    cond_list = []
-    pbar = tqdm(
-        range(0, n, batch_size),
-        total=total_batches,
-        desc="Decoder reward",
-        unit="batch",
-    )
-    for start_idx in pbar:
-        end_idx = min(start_idx + batch_size, n)
-        embed_batch = text_embeddings[start_idx:end_idx]
-        reward_enum_i, pred_cond = _decode_batch(embed_batch)
-        reward_i_list.append(np.array(reward_enum_i))
-        cond_list.append(np.array(pred_cond))
-
-    reward_i_flat = np.concatenate(reward_i_list, axis=0)
-    pred_cond_raw = np.concatenate(cond_list, axis=0)
-
-    reward_i = jnp.array(reward_i_flat, dtype=jnp.int32).reshape(-1, 1)
-    condition = jnp.full((n, num_classes), -1.0, dtype=jnp.float32)
-    row_idx = jnp.arange(n)
-    condition = condition.at[row_idx, reward_i_flat].set(jnp.array(pred_cond_raw))
-    logger.info(
-        "Decoder reward prediction done: reward_i=%s, condition=%s",
-        reward_i.shape,
-        condition.shape,
+    reward_i, condition = reward_decode(
+        text_embeddings=_text_embed_arr,
+        apply_fn=decoder_apply_fn,
+        variables=decoder_vars,
+        cond_norm_min=_ext_norm_min,
+        cond_norm_max=_ext_norm_max,
+        num_classes=num_classes,
     )
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)

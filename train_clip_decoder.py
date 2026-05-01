@@ -64,7 +64,7 @@ from encoder.utils.path import init_config
 from encoder.utils.training import build_multigame_dataset
 from instruct_rl.utils.logger import get_wandb_name
 from encoder.utils.path import get_ckpt_dir, init_config
-from encoder.utils.training import build_multigame_dataset, save_encoder_checkpoint, setup_wandb
+from encoder.utils.training import build_multigame_dataset, save_encoder_checkpoint, save_norm_stats, setup_wandb
 from encoder.data import CLIPDatasetBuilder, CLIPEmbedData, CLIPDataset
 from encoder.data.clip_batch import create_clip_decoder_batch, CLIPDecoderBatch
 
@@ -442,6 +442,9 @@ def make_train(config: CLIPDecoderTrainConfig):
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
         class_id2reward_cond = dataset_builder.get_class_id2reward_cond()
         cond_norm_min, cond_norm_max = dataset_builder.get_condition_norm_stats()
+
+        # ── Save norm stats to ckpt directory (used for denorm during inference) ──
+        save_norm_stats(config, cond_norm_min, cond_norm_max)
 
         # scatter plot용 class_id → game_name 매핑
         class_id2game_name = {}
@@ -915,6 +918,9 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
 
         full_dataset = dataset_builder.get_dataset()
         cond_norm_min, cond_norm_max = dataset_builder.get_condition_norm_stats()
+
+        # ── Save norm stats to ckpt directory (used for denorm during inference) ──
+        save_norm_stats(config, cond_norm_min, cond_norm_max)
 
         # ── 2. Seen/Unseen 게임 파싱 ──
         unseen_game_set = parse_unseen_game_names(config.unseen_games)

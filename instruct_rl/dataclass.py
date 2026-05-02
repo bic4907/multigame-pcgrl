@@ -12,6 +12,7 @@ class Instruct:
     condition: chex.Array
     embedding: chex.Array
     condition_id: int
+    level: chex.Array
 
 
 @struct.dataclass

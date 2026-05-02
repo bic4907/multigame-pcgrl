@@ -83,8 +83,7 @@ class TestCPCGRLConfig:
         assert c.use_nlp is False
         assert c.use_clip is False
         assert c.instruct_csv is None
-        assert c.use_sim_reward is False
-        assert c.human_demo is False
+        assert c.coef_human_sim == 0.0
         assert c.wandb_project == "cpcgrl"
 
     def test_init_config_sets_exp_dir(self):

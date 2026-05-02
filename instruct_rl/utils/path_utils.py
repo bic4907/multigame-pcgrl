@@ -60,13 +60,8 @@ def get_exp_group(config):
             if config.encoder.model == 'clip':
                 nlp_dict['hu'] = str(config.human_demo).lower()[0]
             if config.encoder.model == 'cnnclip':
-                if config.use_sim_reward:
-                    if config.only_sim_reward:
-                        nlp_dict['os'] = str(config.only_sim_reward).lower()[0]
-                    else:
-                        nlp_dict['s'] = str(config.use_sim_reward).lower()[0]
-                    nlp_dict['co'] = str(config.SIM_COEF)
-                    nlp_dict['hu'] = str(config.human_demo).lower()[0]
+                if config.coef_human_sim > 0:
+                    nlp_dict['co'] = str(config.coef_human_sim)
         else:
             nlp_dict = {}
 
@@ -106,7 +101,7 @@ def get_exp_group(config):
             modality = ''.join(modality)
             encoder_dict['md'] = modality
 
-            encoder_dict['cf'] = config.SIM_COEF
+            encoder_dict['cf'] = config.coef_human_sim
 
         config_dict = {**nlp_dict, **config_dict, **encoder_dict}
 
@@ -312,7 +307,6 @@ def init_config(config: Config):
             if config.nlp_input_dim <= 0:
                 config.nlp_input_dim = config.encoder.output_dim  # encoder output dim (e.g. 64)
             config.vec_input_dim = config.nlp_input_dim
-            config.use_sim_reward = True
             # dataset 기반 VIPCGRL: cnnclipconv/clipconv 가 이미 설정된 경우 유지
             if config.model not in ('nlpconv', 'cnnclipconv', 'clipconv'):
                 config.model = 'nlpconv'
@@ -353,13 +347,8 @@ def init_config(config: Config):
     elif config.aug_type is not None and config.embed_type is not None and config.instruct is not None:
         config.instruct_csv = f'{config.aug_type}/{config.embed_type}/{config.instruct}'
 
-    if config.use_sim_reward == False and config.only_sim_reward == True:
-        logger.warning("Setting use_sim_reward to True due to the only_sim_reward flag")
-        config.use_sim_reward = True
-
     if config.encoder.model == 'cnnclip':
         config.use_clip = True
-        config.use_sim_reward = True
 
     if hasattr(config, 'vec_cont') and config.vec_cont is True:
         config.use_nlp = False

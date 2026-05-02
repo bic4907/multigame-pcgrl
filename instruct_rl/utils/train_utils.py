@@ -40,6 +40,7 @@ from instruct_rl.utils.checkpointer import (
 from instruct_rl.utils.buffer_collector import BufferCollector
 from instruct_rl.utils.dataset_loader import load_dataset_instruct
 from instruct_rl.utils.instruction import update_instruction
+from instruct_rl.utils.level_processing_utils import add_coord_channel_batch, map2onehot_batch
 from instruct_rl.utils.log_handler import (
     CSVLoggingHandler,
     TensorBoardLoggingHandler,
@@ -52,6 +53,15 @@ from purejaxrl.experimental.s5.wrappers import LogWrapper
 from purejaxrl.structures import LossInfo, ReturnInfo, RunnerState, Transition
 
 logger = get_logger(__file__)
+
+
+# ── 공통 유틸 ──────────────────────────────────────────────────────────────────
+
+def _cosine_similarity(x: jnp.ndarray, y: jnp.ndarray, eps: float = 1e-8) -> jnp.ndarray:
+    """배치 코사인 유사도. x, y: (..., D) → scalar per batch item."""
+    dot = jnp.sum(x * y, axis=-1)
+    norm = jnp.linalg.norm(x, axis=-1) * jnp.linalg.norm(y, axis=-1) + eps
+    return dot / norm
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -215,12 +225,27 @@ def make_train(
             if _buffer_collector.should_collect(step_int):
                 _buffer_collector.collect_and_save(step_int, traj_batch, env_state)
 
+        # ── sim_reward 헬퍼: env_map → state embedding ────────────────────────
+        # clip_input_channel에서 좌표 채널(2개)을 빼면 one-hot 클래스 수가 된다
+        _num_tile_classes: int = max(1, config.clip_input_channel - 2)
+
+        def _get_state_embed(env_map, ref_obs, params):
+            """env_map (B, H, W) → one-hot + coord → state encoder → embedding (B, D)."""
+            map_array = map2onehot_batch(env_map, _num_tile_classes)
+            map_array = add_coord_channel_batch(map_array)
+            tmp_obs = ref_obs.replace(pixel_values=map_array)
+            _, _, _, _, state_embed = network.apply(
+                params, tmp_obs,
+                return_text_embed=False, return_state_embed=True,
+            )
+            return state_embed
+
         # ── TRAIN LOOP ────────────────────────────────────────────────────
         def _update_step(update_runner_state, _):
-            runner_state, update_steps, instruct_sample, level_sample, return_info = update_runner_state
+            runner_state, update_steps, instruct_sample, return_info = update_runner_state
 
             def _env_step(carry, _):
-                runner_state, instruct_sample, level_sample, return_info = carry
+                runner_state, instruct_sample, return_info = carry
 
                 train_state, env_state, last_obs, rng, update_i = (
                     runner_state.train_state,
@@ -287,6 +312,37 @@ def make_train(
                         special_tile_penalty_weight=config.special_tile_penalty_weight,
                     )
                     reward_batch = cond_reward_batch
+                    sim_reward = jnp.zeros_like(cond_reward_batch)
+
+                    # ── sim_reward: demo level ↔ current map cosine similarity delta ──
+                    if config.coef_human_sim > 0:
+                        # S_{t+1} / S_t 임베딩
+                        map_embed = _get_state_embed(
+                            env_state.env_state.env_map, last_obs, train_state.params
+                        )
+                        prev_map_embed = _get_state_embed(
+                            prev_env_state.env_state.env_map, last_obs, train_state.params
+                        )
+
+                        # anchor 임베딩: instruct_sample.level (demo level)
+                        anchor_embed = _get_state_embed(
+                            instruct_sample.level, last_obs, train_state.params
+                        )
+
+                        sim_reward = (
+                            _cosine_similarity(anchor_embed, map_embed)
+                            - _cosine_similarity(anchor_embed, prev_map_embed)
+                        )
+                        reward_batch = cond_reward_batch + config.coef_human_sim * sim_reward
+
+                    # return_info는 sim_reward 유무와 관계없이 항상 추적
+                    return_info = ReturnInfo(
+                        cond_return=return_info.cond_return * (1 - return_info.prev_done) + cond_reward_batch * (1 - done),
+                        sim_return=return_info.sim_return * (1 - return_info.prev_done) + sim_reward * (1 - done),
+                        coef_sim_return=return_info.coef_sim_return * (1 - return_info.prev_done) + config.coef_human_sim * sim_reward * (1 - done),
+                        total_return=return_info.total_return * (1 - return_info.prev_done) + reward_batch * (1 - done),
+                        prev_done=done,
+                    )
                 else:
                     reward_batch = reward_env
 
@@ -305,20 +361,20 @@ def make_train(
 
                 info["returned_episode_returns"] = env_state.returned_episode_returns
 
-                _store_env_map = config.use_sim_reward or getattr(config, 'collect_env_map', False)
+                _store_env_map = config.coef_human_sim > 0 or getattr(config, 'collect_env_map', False)
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info,
                     env_state.env_state.env_map if _store_env_map else None,
-                    level_sample if config.human_demo else None,
+                    instruct_sample.level if config.coef_human_sim > 0 else None,
                 )
                 runner_state = RunnerState(
                     train_state, env_state, obsv, rng, update_i=update_i
                 )
-                return (runner_state, instruct_sample, level_sample, return_info), transition
+                return (runner_state, instruct_sample, return_info), transition
 
-            (runner_state, instruct_sample, level_sample, return_info), traj_batch = jax.lax.scan(
+            (runner_state, instruct_sample, return_info), traj_batch = jax.lax.scan(
                 _env_step,
-                (runner_state, instruct_sample, level_sample, return_info),
+                (runner_state, instruct_sample, return_info),
                 (None, None),
                 config.num_steps,
             )
@@ -521,7 +577,7 @@ def make_train(
 
                     transition = Transition(
                         done, action, value, reward, log_prob, obsv, info,
-                        next_state.env_state, level_sample,
+                        next_state.env_state, None,
                     )
                     return (rng, obsv, next_state, done), (transition, next_state)
 
@@ -571,7 +627,7 @@ def make_train(
             do_eval = (config.eval_freq != -1) and (update_steps % config.eval_freq == 0)
             jax.lax.cond(do_eval, lambda _: _evaluate_step(), lambda _: None, operand=None)
 
-            return (runner_state, update_steps, instruct_sample, level_sample, return_info), metric
+            return (runner_state, update_steps, instruct_sample, return_info), metric
 
         # ── 학습 시작 ──────────────────────────────────────────────────────
         jax.debug.callback(init_checkpoint, runner_state)
@@ -581,11 +637,9 @@ def make_train(
                 runner_state.rng, (config.n_envs,), 0, train_inst.reward_i.shape[0]
             )
             instruct_sample = jax.tree.map(lambda x: x[random_indices], train_inst)
-            level_sample = None
             logger.info(f"Instruction: {instruct_sample}")
         else:
             instruct_sample = None
-            level_sample = None
             logger.info("Instruction: None")
 
         return_info = ReturnInfo(
@@ -598,7 +652,7 @@ def make_train(
 
         runner_state, metric = jax.lax.scan(
             _update_step,
-            (runner_state, latest_update_step, instruct_sample, level_sample, return_info),
+            (runner_state, latest_update_step, instruct_sample, return_info),
             None,
             config.NUM_UPDATES - latest_update_step,
         )
@@ -630,7 +684,8 @@ def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None, inject_reward_fn=Non
     assert hasattr(config, "dataset_game") and config.dataset_game is not None, \
         "Config must specify dataset_game for loading instruction dataset."
 
-    train_inst, test_inst, _ = load_dataset_instruct(config)
+    train_inst, test_inst, samples = load_dataset_instruct(config)
+    # level 데이터는 Instruct.level 필드에 포함되어 있으므로 별도 level_db 빌드 불필요
 
     train_jit = jax.jit(
         make_train(

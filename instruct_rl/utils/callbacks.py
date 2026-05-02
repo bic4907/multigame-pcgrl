@@ -62,7 +62,10 @@ def log_callback(metric, loss_mean, return_info, steps_prev_complete, config, wr
             f"loss: {loss_mean.total_loss:.02f}, "
             f"actor_loss: {loss_mean.actor_loss:.02f}, "
             f"value_loss: {loss_mean.value_loss:.02f}, "
-            f"entropy: {loss_mean.entropy:.02f}"
+            f"entropy: {loss_mean.entropy:.02f}, "
+            f"cond_return: {float(jnp.mean(return_info.cond_return)):.04f}, "
+            f"sim_return: {float(jnp.mean(return_info.sim_return)):.04f}, "
+            f"total_return: {float(jnp.mean(return_info.total_return)):.04f}"
         )
 
 

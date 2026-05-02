@@ -24,7 +24,6 @@ class Config:
     CLIP_EPS: float = 0.2
     ENT_COEF: float = 0.01
     VF_COEF: float = 0.5
-    SIM_COEF: float = 1.0
     MAX_GRAD_NORM: float = 0.5
     activation: str = "relu"
     env_name: str = "PCGRL"
@@ -228,14 +227,9 @@ class TrainConfig(Config):
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     buffer_ratio: float = 1
 
-    use_sim_reward: bool = False
-    only_sim_reward: bool = False
-    human_demo: bool = True
-    human_level: str = "human_20250630_213109"
-    human_augment: bool = False
+    coef_human_sim: float = 0.0
 
     multimodal_condition: bool = False
-    human_demo_path: str = './human_dataset'
 
 
 @dataclass
@@ -265,9 +259,6 @@ class CPCGRLConfig(TrainConfig):
     embed_type: str = "bert"
 
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
-    use_sim_reward: bool = False
-    only_sim_reward: bool = False
-    human_demo: bool = False
 
     wandb_project: Optional[str] = "cpcgrl"
 
@@ -295,7 +286,9 @@ class VIPCGRLConfig(CPCGRLConfig):
     vec_cont: bool = False
     nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
 
-    use_sim_reward: bool = True
+    # coef_human_sim > 0: human_demo sim_reward 활성화 및 계수로 사용 (0이면 비활성)
+    coef_human_sim: float = 30.0
+
     wandb_project: Optional[str] = f"{PREFIX}train_vipcgrl"
 
 
@@ -305,6 +298,9 @@ class MGPCGRLConfig(VIPCGRLConfig):
 
     # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
     use_decoder_reward_shaping: bool = True
+
+    # sim reward 사용 가능하되 기본값은 0.0 (비활성). 양수로 설정 시 활성화.
+    coef_human_sim: float = 0.0
 
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
 

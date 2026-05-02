@@ -215,7 +215,7 @@ class TrainConfig(Config):
     ckpt_freq: int = int(5e6)
     render_freq: int = 50
     n_render_eps: int = 3
-    eval_freq: int = 50
+    eval_freq: int = 5000
     n_eval_maps: int = 6
     eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
 
@@ -282,7 +282,7 @@ class IPCGRLConfig(CPCGRLConfig):
 
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
-    wandb_project: Optional[str] = "cpcgrl"
+    wandb_project: Optional[str] = f'{PREFIX}train_ipcgrl'
 
 
 @dataclass
@@ -554,7 +554,7 @@ class RewardConfig(Config):
     embed_visualize_freq: int = 5
 
     num_samples: int = 100
-    batch_size: int = 32
+    batch_size: int = 512
 
     num_layers: int = 2  # 1 ~ 3
     hidden_dim: int = 512
@@ -586,10 +586,11 @@ class RewardConfig(Config):
 
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
 
+
+
 @dataclass
 class RewardTrainConfig(RewardConfig):
-    wandb_project: str = 'train_mlp_encoder'
-    wandb_key: Optional[str] = None
+    wandb_project: str = f'{PREFIX}train_ipcgrl_encoder'
 
     pretrained_model: str = "bert"
     model_size: str = "base"
@@ -741,7 +742,7 @@ class IPCGRLEncoderMGConfig(RewardConfig):
         python train_ipcgrl_encoder_mg.py game=all
         python train_ipcgrl_encoder_mg.py game=all unseen_games=zd
     """
-    wandb_project: Optional[str] = "ipcgrl_encoder_mg"
+    wandb_project: Optional[str] = f"{PREFIX}train_ipcgrl_encoder"
     dir_prefix: str = "ipcgrl-enc-mg-"
     ckpt_freq: int = 10
 
@@ -755,7 +756,7 @@ class IPCGRLEncoderMGConfig(RewardConfig):
 
     # Annotation 데이터셋 설정 (CLIPTrainConfig 와 동일한 변인 통제)
     prepend_game_prefix: bool = False
-    prepend_game_desc: bool = False
+    prepend_game_desc: bool = True
 
     # MLP 인코더 (apply_encoder_model 에서 model='mlp' 분기 사용)
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))

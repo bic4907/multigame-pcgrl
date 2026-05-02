@@ -147,7 +147,7 @@ def _build_instruct(sample_list, config):
     )
     condition_id = jnp.arange(len(sample_list), dtype=jnp.int32).reshape(-1, 1)
 
-    if config.coef_human_sim:
+    if hasattr(config, 'coef_human_sim') and config.coef_human_sim:
         level_array = jnp.array(
             np.stack([s.array for s in sample_list], axis=0).astype(np.int32)
         )  # (N, H, W)

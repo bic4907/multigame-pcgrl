@@ -674,7 +674,7 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda). None=전체 seen
     unseen_games: Optional[str] = None
     # few-shot ratio: unseen 학습 풀 중 사용할 비율 (0.0=zero-shot, 1.0=전부)
-    unseen_ratio: float = 0.01
+    unseen_ratio: float = 0.0
     # seen 게임 데이터 비율 (1.0=전부 사용)
     seen_ratio: float = 1.0
     # 테스트셋 분할 시드 (재현 가능)

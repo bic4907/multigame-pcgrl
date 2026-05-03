@@ -64,6 +64,12 @@ wandb sweep --project aaai27_train_mgpcgrl --entity st4889ha-gwangju-institute-o
 ```
 
 ### MGPCGRL (Unseen)
+**Train Encoder**
 ```bash
 wandb sweep --project aaai27_train_mgpcgrl_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder_unseen.yaml
+```
+
+**Train PCGRL**
+```bash
+wandb sweep --project aaai27_train_mgpcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_unseen.yaml
 ```

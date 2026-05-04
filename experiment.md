@@ -110,3 +110,11 @@ wandb sweep --project aaai27_train_mgpcgrl_unseen --entity st4889ha-gwangju-inst
 ```bash
 wandb sweep --project aaai27_eval_mgpcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_unseen.yaml
 ```
+
+### Random
+
+---
+
+```bash
+bash run_docker.sh python eval_random.py -m eval_dataset_reward_enums=0,1,2,3,4 game=all reevaluate=True saves_dir=/mnt/nas/mgpcgrl/random seed=0,1,2,3,4 overwrite=true wandb_project=aaai27_eval_random
+```

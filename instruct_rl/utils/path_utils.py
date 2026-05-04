@@ -26,118 +26,57 @@ def is_default_hiddims(config: Config):
     return tuple(config.hidden_dims) == (64, 256)[:len(config.hidden_dims)]
 
 
-def get_exp_group(config):
-    if config.env_name == 'PCGRL':
-
-        # ── MultiGameDataset 기반 CPCGRL / IPCGRL / VIPCGRL 모드 ──
-        if hasattr(config, 'dataset_game') and config.dataset_game is not None:
-            config_dict = {}
-            # dir_prefix가 있으면 model 키 생략 (prefix가 역할을 대신함)
-            if not getattr(config, 'dir_prefix', ''):
-                config_dict['model'] = config.model
-            config_dict['exp'] = config.exp_name
-            config_dict['game'] = config.dataset_game
-            if hasattr(config, 'dataset_reward_enum') and config.dataset_reward_enum is not None:
-                config_dict['re'] = config.dataset_reward_enum
-            exp_group = '_'.join([f'{key}-{value}' for key, value in config_dict.items()])
-            if config.use_clip:
-                exp_group += '_clip'
-            elif config.use_nlp:
-                exp_group += '_nlp'
-            else:
-                exp_group += '_vec_ro'
-            return exp_group
-
-        if config.use_nlp or config.vec_cont or config.use_clip:
-            nlp_dict = {
-                'embed': config.embed_type,
-                'inst': config.instruct,
-            }
-
-            if config.encoder.model:
-                nlp_dict['enc'] = config.encoder.model
-                nlp_dict['tr'] = str(config.encoder.trainable).lower()[0]
-            if config.encoder.model == 'clip':
-                nlp_dict['hu'] = str(config.human_demo).lower()[0]
-            if config.encoder.model == 'cnnclip':
-                if config.coef_human_sim > 0:
-                    nlp_dict['co'] = str(config.coef_human_sim)
-        else:
-            nlp_dict = {}
-
-        # task
-        config_dict = {
-            'model': config.model,
-            'exp': config.exp_name,
-        }
-
-        # game 약어가 있으면 exp_group에 포함
-        if hasattr(config, 'game') and config.game:
-            config_dict['game'] = config.game
-
-        enc_def_setting = EncoderConfig()
-        tr_def_setting = TrainConfig()
-
-        # RQ4 parameters
-        if config.buffer_ratio != tr_def_setting.buffer_ratio:
-            config_dict['br'] = config.buffer_ratio
-        if config.encoder.output_dim != enc_def_setting.output_dim:
-            config_dict['es'] = config.encoder.output_dim
-
-        if hasattr(config, 'random_agent') and config.random_agent:
-            config_dict['model'] = 'rand'
-
-        encoder_dict = dict()
-
-        if config.encoder.model in ['clip', 'cnnclip']:
-            text_ratio_str = 't' if config.text_ratio == 1.0 else f"t.{str(config.text_ratio).split('.')[1]}"
-            modality = [text_ratio_str]
-            if config.encoder.state:
-                state_ratio_str = 's' if config.state_ratio == 1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
-                modality.append(state_ratio_str)
-            if config.encoder.sketch:
-                sketch_ratio_str = 'k' if config.sketch_ratio == 1.0 else f"k.{str(config.sketch_ratio).split('.')[1]}"
-                modality.append(sketch_ratio_str)
-            modality = ''.join(modality)
-            encoder_dict['md'] = modality
-
-            encoder_dict['cf'] = config.coef_human_sim
-
-        config_dict = {**nlp_dict, **config_dict, **encoder_dict}
+def _game_abbr(dataset_game: str) -> str:
+    """dataset_game 문자열(전체명 또는 약어) → 2글자 약어로 변환."""
+    from conf.game_utils import GAME_ABBR_INV
+    full = GAME_ABBR[dataset_game][0] if dataset_game in GAME_ABBR else dataset_game
+    return GAME_ABBR_INV.get(full, full)
 
 
-        exp_group = os.path.join(
-            '_'.join([f'{key}-{value}' for key, value in config_dict.items()])
-        )
+def _enc_str(encoder_config) -> str:
+    """encoder ckpt 이름/경로 기반 6자리 해시 문자열 반환."""
+    ckpt = getattr(encoder_config, 'ckpt_name', None) or getattr(encoder_config, 'ckpt_path', None) or ""
+    h = hashlib.md5(ckpt.encode()).hexdigest()[:6] if ckpt else "scratch"
+    return f'_enc-{h}'
 
-        flags_dict = {
-            'vec_cont': 'vec',
-            'raw_obs': 'ro',
-        }
-        # Append suffixes for enabled flags
 
-        for flag, suffix in flags_dict.items():
-            if getattr(config, flag, False):  # Check if the flag exists and is True
-                exp_group += f'_{suffix}'
+def get_exp_group(config) -> str:
+    """실험 그룹명 반환 (시드 미포함).
 
-    elif config.env_name == 'PlayPCGRL':
-        exp_group = os.path.join(
-            'saves',
-            f'play_w-{config.map_width}_' + \
-            f'{config.model}-{config.activation}_' + \
-            f'vrf-{config.vrf_size}_arf-{config.arf_size}_' + \
-            f'{config.exp_name}'
-        )
-    elif config.env_name == 'Candy':
-        exp_group = os.path.join(
-            'candy_' + \
-            f'{config.exp_name}'
-        )
-    else:
-        exp_group = os.path.join(
-            config.env_name
-        )
-    return exp_group
+    WandB group 및 exp_dir 경로 prefix로 사용된다.
+    """
+    exp_name = getattr(config, 'exp_name', None) or 'def'
+
+    # ── Random policy ──────────────────────────────────────────────────────────
+    if getattr(config, 'random_agent', False):
+        return f'random_exp-{exp_name}'
+
+    # ── MultiGameDataset 기반 모드 (CPCGRL / IPCGRL / VIPCGRL / MGPCGRL) ──────
+    if not (hasattr(config, 'dataset_game') and config.dataset_game is not None):
+        return config.env_name  # fallback for non-dataset configs
+
+    game  = _game_abbr(config.dataset_game)
+    re    = getattr(config, 'dataset_reward_enum', None)
+    re_s  = f'_re-{re}' if re is not None else ''
+    exp_s = f'_exp-{exp_name}'
+
+    # CPCGRL: raw condition vector
+    if getattr(config, 'vec_cont', False):
+        return f'cpcgrl_game-{game}{re_s}{exp_s}'
+
+    # IPCGRL: BERT embedding
+    if getattr(config, 'use_nlp', False):
+        return f'ipcgrl_game-{game}{re_s}{exp_s}'
+
+    # MGPCGRL / VIPCGRL: pretrained CLIP encoder
+    enc = _enc_str(config.encoder)
+    if hasattr(config, 'decoder'):
+        return f'mgpcgrl_game-{game}{re_s}{exp_s}{enc}'
+    if getattr(config, 'use_clip', False):
+        return f'vipcgrl_game-{game}{re_s}{exp_s}{enc}'
+
+    raise ValueError(f"[get_exp_group] Unknown model type for config: {config}")
+
 
 
 def get_short_target(target: str) -> str:
@@ -160,101 +99,7 @@ def encoder_hash(config):
     return config
 
 def get_exp_name(config):
-    # ── Random policy 모드: random_exp-{exp_name}_s-{seed} ──
-    if getattr(config, 'random_agent', False):
-        exp_str = getattr(config, 'exp_name', 'def') or 'def'
-        return f'random_exp-{exp_str}_s-{config.seed}'
-
-    # ── CPCGRL 모드: cpcgrl_game-{game}_re-{re}_s-{seed}_exp-{exp_name} ──
-    _is_cpcgrl = (
-        hasattr(config, 'dataset_game') and config.dataset_game is not None
-        and getattr(config, 'vec_cont', False)
-        and not getattr(config, 'use_clip', False)
-        and not getattr(config, 'use_nlp', False)
-    )
-    if _is_cpcgrl:
-        from conf.game_utils import GAME_ABBR_INV
-        # 약어 입력이면 첫 번째 full name 으로, 이미 full name 이면 그대로 사용
-        _dg = config.dataset_game
-        if _dg in GAME_ABBR:
-            game_full = GAME_ABBR[_dg][0]   # e.g. "dg" → "dungeon"
-        else:
-            game_full = _dg                  # e.g. "dungeon" → "dungeon"
-        game_abbr = GAME_ABBR_INV.get(game_full, game_full)
-        re = getattr(config, 'dataset_reward_enum', None)
-        re_str = f'_re-{re}' if re is not None else ''
-        exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
-        return f'cpcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
-
-    # ── IPCGRL 모드: ipcgrl_game-{game}_re-{re}_s-{seed}_exp-{exp_name} ──
-    _is_ipcgrl = (
-        not getattr(config, 'vec_cont', False)
-        and not getattr(config, 'use_clip', False)
-        and getattr(config, 'use_nlp', False)
-    )
-    if _is_ipcgrl:
-        from conf.game_utils import GAME_ABBR_INV
-        # 약어 입력이면 첫 번째 full name 으로, 이미 full name 이면 그대로 사용
-        _dg = config.dataset_game
-        if _dg in GAME_ABBR:
-            game_full = GAME_ABBR[_dg][0]   # e.g. "dg" → "dungeon"
-        else:
-            game_full = _dg                  # e.g. "dungeon" → "dungeon"
-        game_abbr = GAME_ABBR_INV.get(game_full, game_full)
-        re = getattr(config, 'dataset_reward_enum', None)
-        re_str = f'_re-{re}' if re is not None else ''
-        exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
-        return f'ipcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
-
-
-    _is_vipcgrl = (
-        hasattr(config, 'encoder') and not hasattr(config, 'decoder')
-    )
-    if _is_vipcgrl:
-        from conf.game_utils import GAME_ABBR_INV
-        # 약어 입력이면 첫 번째 full name 으로, 이미 full name 이면 그대로 사용
-        _dg = config.dataset_game
-        if _dg in GAME_ABBR:
-            game_full = GAME_ABBR[_dg][0]   # e.g. "dg" → "dungeon"
-        else:
-            game_full = _dg                  # e.g. "dungeon" → "dungeon"
-        game_abbr = GAME_ABBR_INV.get(game_full, game_full)
-        re = getattr(config, 'dataset_reward_enum', None)
-        re_str = f'_re-{re}' if re is not None else ''
-        exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
-
-        _ckpt_name = config.encoder.ckpt_name or config.encoder.ckpt_path or ""
-        enc_hash = hashlib.md5(_ckpt_name.encode()).hexdigest()[:6] if _ckpt_name else "scratch"
-        enc_str = f'_enc-{enc_hash}'
-
-        return f'vipcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
-
-
-    _is_mgpcgrl = (
-        hasattr(config, 'encoder') and hasattr(config, 'decoder')
-    )
-    if _is_mgpcgrl:
-        from conf.game_utils import GAME_ABBR_INV
-        # 약어 입력이면 첫 번째 full name 으로, 이미 full name 이면 그대로 사용
-        _dg = config.dataset_game
-        if _dg in GAME_ABBR:
-            game_full = GAME_ABBR[_dg][0]   # e.g. "dg" → "dungeon"
-        else:
-            game_full = _dg                  # e.g. "dungeon" → "dungeon"
-        game_abbr = GAME_ABBR_INV.get(game_full, game_full)
-        re = getattr(config, 'dataset_reward_enum', None)
-        re_str = f'_re-{re}' if re is not None else ''
-        exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
-
-        _ckpt_name = config.encoder.ckpt_name or config.encoder.ckpt_path or ""
-        enc_hash = hashlib.md5(_ckpt_name.encode()).hexdigest()[:6] if _ckpt_name else "scratch"
-        enc_str = f'_enc-{enc_hash}'
-
-        return f'mgpcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
-
     exp_group = get_exp_group(config)
-
-    # target_character = get_short_target(config.target_character) if config.task == 'scenario' else config.target_character
 
     prefix = getattr(config, 'dir_prefix', '')
     return f'{prefix}{exp_group}_s-{config.seed}'

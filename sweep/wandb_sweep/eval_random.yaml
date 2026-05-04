@@ -7,9 +7,9 @@ parameters:
   game:
     values: ['all']
   eval_dataset_reward_enums:
-    value: '01234'
+    values: [0, 1, 2, 3, 4]
   seed:
-    values: [0]
+    values: [0, 1, 2, 3, 4]
   reevaluate:
     value: true
   saves_dir:

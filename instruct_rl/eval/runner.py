@@ -184,6 +184,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                     condition=batch_condition,
                     embedding=batch_embedding,
                     condition_id=None,
+                    level=None,
                 )
 
                 reset_rng = jnp.stack([jax.random.PRNGKey(s) for s in batch_repetition])

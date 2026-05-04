@@ -969,6 +969,20 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         logger.info("  Total samples: %d", len(full_dataset.class_ids))
         logger.info("=" * 70)
 
+        # ── 데이터셋 설정 JSON 저장 ──
+        os.makedirs(config.exp_dir, exist_ok=True)
+        dataset_setting = {
+            "all_games": unique_games,
+            "seen_games": seen_games,
+            "unseen_games": unseen_games,
+            "unseen_ratio": config.unseen_ratio,
+            "seen_ratio": config.seen_ratio,
+        }
+        dataset_setting_path = os.path.join(config.exp_dir, "dataset_setting.json")
+        with open(dataset_setting_path, "w") as f:
+            json.dump(dataset_setting, f, indent=2, ensure_ascii=False)
+        logger.info("Dataset setting saved: %s", dataset_setting_path)
+
         if not unseen_games:
             logger.warning("No unseen games found in dataset — treating all games as seen.")
             unseen_game_set = set()

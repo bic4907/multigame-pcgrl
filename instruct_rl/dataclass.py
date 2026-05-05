@@ -12,8 +12,7 @@ class Instruct:
     condition: chex.Array
     embedding: chex.Array
     condition_id: int
-    goal_sim: chex.Array          # cos_sim(goal_state_embed, text_embed), precomputed offline
-
+    level: chex.Array
 
 @struct.dataclass
 class EmbeddingBufferReward:

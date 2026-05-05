@@ -30,7 +30,7 @@ logger = get_logger(__file__)
 
 def _make_vipcgrl_config(**overrides):
     """VIPCGRL 테스트용 최소 config 를 생성한다."""
-    from conf.config import CPCGRLConfig
+    from conf.config import VIPCGRLConfig
     from instruct_rl.utils.path_utils import init_config
 
     defaults = dict(
@@ -50,7 +50,7 @@ def _make_vipcgrl_config(**overrides):
     )
     defaults.update(overrides)
 
-    config = CPCGRLConfig(**defaults)
+    config = VIPCGRLConfig(**defaults)
     config = init_config(config)
     return config
 
@@ -87,9 +87,9 @@ class TestVIPCGRLConfig:
         assert c.vec_input_dim == c.encoder.output_dim
 
     def test_vipcgrl_enables_sim_reward(self):
-        """VIPCGRL 은 use_sim_reward=True 여야 한다."""
+        """VIPCGRL 은 coef_human_sim > 0 이어야 한다."""
         c = _make_vipcgrl_config()
-        assert c.use_sim_reward is True
+        assert c.coef_human_sim > 0
 
     def test_vipcgrl_exp_dir_contains_clip(self):
         """exp_dir 에 _clip 접미사가 붙어야 한다."""

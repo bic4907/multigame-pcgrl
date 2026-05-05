@@ -1,5 +1,5 @@
 defaults:
-  - eval_random_schema
+  - eval_vipcgrl_schema
   - _self_
 
 hydra:
@@ -7,3 +7,7 @@ hydra:
     params: {}
 
 n_envs: 500
+
+encoder:
+  model: cnnclip
+

@@ -81,45 +81,68 @@ def decoder_ckpt_dir(tmp_base):
         f"stderr:\n{result.stderr[-3000:]}"
     )
 
-    # train_clip_decoder 가 새로 저장한 ckpt 만 찾는다.
-    # 주의: _ROOT 전체를 탐색하면 `pretrained_encoders/vipcgrl/default2/ckpts`
-    # 같은 기존 ckpt 가 먼저 매칭되어 train_mg_pcgrl 에서 채널/구조 불일치로 실패한다.
-    # 따라서 (1) train_clip_decoder 의 출력 루트인 `saves/`,
-    # (2) hydra.run.dir 두 곳만 탐색한다.
-    found_ckpts = None
-    candidates = []
-    for search_root in [os.path.join(_ROOT, "saves"), hydra_run_dir]:
-        if not os.path.isdir(search_root):
-            continue
-        for dirpath, _, _ in os.walk(search_root):
-            if os.path.basename(dirpath) != "ckpts":
-                continue
-            entries = os.listdir(dirpath)
-            if not any(e.isdigit() for e in entries):
-                continue
-            # train_clip_decoder 가 만든 디렉토리만 (clipdec prefix) 받아들인다.
-            if "clipdec" not in dirpath:
-                continue
-            candidates.append((os.path.getmtime(dirpath), dirpath))
-
-    if candidates:
-        # 가장 최근에 생성된 ckpt 디렉토리를 선택
-        candidates.sort(reverse=True)
-        found_ckpts = candidates[0][1]
-
-    assert found_ckpts is not None, (
-        "train_clip_decoder.py 가 체크포인트를 저장하지 않았습니다.\n"
-        f"searched: {os.path.join(_ROOT, 'saves')}, {hydra_run_dir}"
+    # Verify norm_stats.json was saved (search stdout for log message)
+    combined_decoder_output = result.stdout + result.stderr
+    assert "Norm stats saved to" in combined_decoder_output, (
+        "Expected 'Norm stats saved to' in train_clip_decoder output.\n"
+        f"stdout (first 2000):\n{result.stdout[:2000]}\n"
+        f"stdout (last 2000):\n{result.stdout[-2000:]}"
     )
+
+    # Extract the actual saved path from the log line
+    norm_stats_saved_path = None
+    for line in combined_decoder_output.splitlines():
+        if "Norm stats saved to" in line:
+            norm_stats_saved_path = line.split("Norm stats saved to")[-1].strip()
+            break
+    logger.info(f"[decoder_ckpt_dir] norm_stats.json saved to (from log): {norm_stats_saved_path}")
+
+    # norm_stats.json 로그에서 직접 ckpts 경로를 유도한다.
+    # hydra.run.dir 이 이미 지정되어 있으므로 다른 경로는 탐색하지 않는다.
+
+    assert norm_stats_saved_path and os.path.isfile(norm_stats_saved_path), (
+        f"norm_stats.json 파일이 존재하지 않습니다: {norm_stats_saved_path}"
+    )
+
+    norm_stats_dir = os.path.dirname(norm_stats_saved_path)
+    ckpt_dir_from_log = os.path.join(norm_stats_dir, "ckpts")
+    assert os.path.isdir(ckpt_dir_from_log), (
+        f"ckpts 디렉토리가 존재하지 않습니다: {ckpt_dir_from_log}"
+    )
+    assert any(e.isdigit() for e in os.listdir(ckpt_dir_from_log)), (
+        f"ckpts 디렉토리에 step 디렉토리(숫자)가 없습니다: {ckpt_dir_from_log}\n"
+        f"내용: {os.listdir(ckpt_dir_from_log)}"
+    )
+    found_ckpts = ckpt_dir_from_log
+    logger.info(f"[decoder_ckpt_dir] ckpts dir from norm_stats path: {found_ckpts}")
+
 
     dst = os.path.join(tmp_base, "pretrained_decoders", "test_decoder", "ckpts")
     if os.path.exists(dst):
         shutil.rmtree(dst)
     shutil.copytree(found_ckpts, dst)
 
+    # Also copy norm_stats.json (saved in exp_dir, sibling of ckpts/) into dst
+    # so that load_norm_stats can find it when searching from ckpt_path = dst
+    src_norm_stats = norm_stats_saved_path
+    if src_norm_stats and os.path.isfile(src_norm_stats):
+        # Copy into dst/ so searches from dst or its parent find it
+        dst_norm_stats = os.path.join(dst, "norm_stats.json")
+        shutil.copy2(src_norm_stats, dst_norm_stats)
+        logger.info(f"[decoder_ckpt_dir] norm_stats.json copied to: {dst_norm_stats}")
+
     logger.info(f"[decoder_ckpt_dir] source: {found_ckpts}")
     logger.info(f"[decoder_ckpt_dir] copied to: {dst}")
     logger.info(f"[decoder_ckpt_dir] contents: {os.listdir(dst)}")
+
+    # Verify that norm_stats.json was copied into the ckpts directory
+    norm_stats_path = os.path.join(dst, "norm_stats.json")
+    assert os.path.isfile(norm_stats_path), (
+        f"norm_stats.json was not found in the ckpts directory.\n"
+        f"Expected: {norm_stats_path}\n"
+        f"ckpts contents: {os.listdir(dst)}"
+    )
+    logger.info(f"[decoder_ckpt_dir] norm_stats.json verified: {norm_stats_path}")
 
     return dst
 
@@ -185,13 +208,38 @@ class TestMGPCGRLWithDecoderCheckpoint:
             f"stderr:\n{result.stderr[-3000:]}"
         )
 
-
         combined_output = result.stdout + result.stderr
+
+        # ── 1. Decoder checkpoint loading log ──
         assert (
             "top-level keys: ['decoder', 'encoders_state', 'encoders_text', 'text_state_temperature']" in combined_output
             or "top-level keys: ['decoder', 'encoders_state', 'encoders_text', 'text_state_temperature']" in combined_output.lower()
         ), (
             "디코더 체크포인트 로딩 로그를 찾을 수 없습니다.\n"
+            f"stdout (last 2000):\n{result.stdout[-2000:]}\n"
+            f"stderr (last 2000):\n{result.stderr[-2000:]}"
+        )
+
+        # ── 2. Norm stats loaded log (denorm pipeline verification) ──
+        # "Norm stats loaded from" appears on cache miss;
+        # "Norm stats ready for denorm" appears always (even on cache hit).
+        assert (
+            "Norm stats loaded from" in combined_output
+            or "Norm stats ready for denorm" in combined_output
+        ), (
+            "Expected norm stats load log in train_mgpcgrl output — "
+            "norm_stats.json was not found or loaded during inference.\n"
+            f"stdout (last 2000):\n{result.stdout[-2000:]}\n"
+            f"stderr (last 2000):\n{result.stderr[-2000:]}"
+        )
+
+        # ── 3. Denorm log (cache miss) OR cache-hit with valid norm stats (cache hit) ──
+        assert (
+            "Denorm applied" in combined_output
+            or "Decoder reward cache HIT" in combined_output
+        ), (
+            "Expected 'Denorm applied' or 'Decoder reward cache HIT' in train_mgpcgrl output — "
+            "condition denorm pipeline did not run.\n"
             f"stdout (last 2000):\n{result.stdout[-2000:]}\n"
             f"stderr (last 2000):\n{result.stderr[-2000:]}"
         )

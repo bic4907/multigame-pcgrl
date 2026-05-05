@@ -1,0 +1,1 @@
+bash -lc 'mkdir -p /workspace/nas && ( [ ! -e /mnt/nas ] || [ -L /mnt/nas ] || rm -rf /mnt/nas ) && ln -sfn /workspace/nas /mnt/nas; sleep infinity'

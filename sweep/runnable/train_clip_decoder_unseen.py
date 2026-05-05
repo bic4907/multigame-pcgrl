@@ -1,17 +1,18 @@
 """
-train_clip_decoder_unseen.py
-============================
+sweep/runnable/train_clip_decoder_unseen.py
+============================================
 Seen/Unseen 게임 분리 + 단일 Few-shot Ratio 실험 스크립트.
 
 Seen 게임의 전체 학습 데이터 + Unseen 게임의 **단일 비율(unseen_ratio)** 학습 데이터로
 CLIP Decoder 모델을 학습하고, 고정된 테스트셋에서 게임별 reward_accuracy를 측정한다.
 
-ratio sweep 을 원할 경우 sweep/runnable_sweep/unseen_games.py 를 사용하세요.
+ratio sweep 을 원할 경우 sweep/runnable/unseen_games.py 를 사용하세요.
 
 Usage
 -----
-    python train_clip_decoder_unseen.py game=all unseen_games=zd unseen_ratio=0.1
-    python train_clip_decoder_unseen.py game=all unseen_games=pkzd unseen_ratio=0.0
+    # 프로젝트 루트에서 실행
+    python sweep/runnable/train_clip_decoder_unseen.py game=all unseen_games=zd unseen_ratio=0.1
+    python sweep/runnable/train_clip_decoder_unseen.py game=all unseen_games=pkzd unseen_ratio=0.0
 """
 
 import datetime
@@ -19,7 +20,15 @@ import json
 import os
 import shutil
 import logging
+import sys
 from os.path import basename
+
+# ── 프로젝트 루트를 sys.path에 추가 (sweep/ 하위에서 실행 시 필요) ──
+_PROJECT_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..")
+)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
 import hydra
 import jax
@@ -76,7 +85,7 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         cond_norm_min, cond_norm_max = dataset_builder.get_condition_norm_stats()
 
         # ── 2. Seen/Unseen 게임 파싱 ──
-        unseen_game_set = parse_unseen_game_names(config.unseen_games)
+        unseen_game_set = parse_unseen_game_names(config.unseen_games) if config.unseen_games else set()
         all_game_names = np.array(
             [rc["game_name"] for rc in full_dataset.reward_cond]
         )
@@ -100,8 +109,8 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
         game_train_pool, game_test, _ = split_dataset_by_game(
             full_dataset,
             unseen_game_set,
-            test_ratio=config.unseen_test_ratio,
-            test_seed=config.unseen_test_seed,
+            test_ratio=1.0 - config.train_ratio,
+            test_seed=config.split_seed,
         )
 
         test_indices = np.concatenate(
@@ -189,7 +198,11 @@ def make_train_unseen(config: CLIPDecoderUnseenConfig):
 #  Entry Point
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@hydra.main(version_base=None, config_path="./conf", config_name="train_clip_decoder_unseen")
+@hydra.main(
+    version_base=None,
+    config_path=os.path.join(_PROJECT_ROOT, "conf"),
+    config_name="train_clip_decoder_unseen",
+)
 def main(config: CLIPDecoderUnseenConfig):
     if config.encoder.model is None:
         config.encoder.model = "cnnclip"

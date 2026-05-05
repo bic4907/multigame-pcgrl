@@ -17,7 +17,7 @@ import os
 import hydra
 
 from conf.config import MGPCGRLConfig
-from conf.game_utils import ALL_GAMES, GAME_ABBR_INV
+from conf.game_utils import GAME_ABBR, GAME_ABBR_INV
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.train_utils import main_entry
 
@@ -48,10 +48,10 @@ def main(config: MGPCGRLConfig):
             dataset_setting = json.load(f)
         seen_games = dataset_setting.get("seen_games", [])
         if seen_games:
-            if set(seen_games) >= set(ALL_GAMES):
+            seen_abbrs = dict.fromkeys(GAME_ABBR_INV[g] for g in seen_games if g in GAME_ABBR_INV)
+            if seen_abbrs.keys() == GAME_ABBR.keys():  # 모든 약어가 포함되면 "all"
                 game_str = "all"
             else:
-                seen_abbrs = dict.fromkeys(GAME_ABBR_INV[g] for g in seen_games if g in GAME_ABBR_INV)
                 game_str = "".join(seen_abbrs)  # 순서 유지, 중복 제거 (doom+doom2 → dm 한 번)
             logger.info(
                 "Auto-setting game='%s' from encoder dataset_setting.json (seen_games=%s)",

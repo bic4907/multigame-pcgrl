@@ -307,6 +307,22 @@ class MGPCGRLConfig(VIPCGRLConfig):
     ignore_checkpoint: bool = False
 
 
+
+@dataclass
+class PretrainedCLIPPCGRLConfig(CPCGRLConfig):
+    use_clip: bool = True
+    model: str = "pretrained_clip"
+
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="clip"))
+
+    use_nlp: bool = False
+    vec_cont: bool = False
+    nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
+
+    use_pretrained_clip_reward: bool = True
+    wandb_project: Optional[str] = f'{PREFIX}train_pretrained_clip_pcgrl'
+
+
 @dataclass
 class EvalConfig(TrainConfig):
     reevaluate: bool = False
@@ -765,6 +781,7 @@ cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="ipcgrl", node=IPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
+cs.store(name="pretrained_clip_pcgrl", node=PretrainedCLIPPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)

@@ -361,7 +361,8 @@ def make_train(
 
                 info["returned_episode_returns"] = env_state.returned_episode_returns
 
-                _store_env_map = config.coef_human_sim > 0 or getattr(config, 'collect_env_map', False)
+                _store_env_map = config.coef_human_sim > 0 or getattr(config, 'collect_env_map', False) or \
+                                    getattr(config, 'use_pretrained_clip_reward', False)
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info,
                     env_state.env_state.env_map if _store_env_map else None,

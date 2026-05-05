@@ -6,7 +6,7 @@ hydra:
   sweeper:
     params: {}
 
-n_envs: 600
+n_envs: 500
 
 encoder:
   model: cnnclip

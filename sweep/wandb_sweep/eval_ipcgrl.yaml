@@ -1,4 +1,4 @@
-program: eval_vipcgrl.py
+program: eval_ipcgrl.py
 method: grid
 metric:
   goal: minimize
@@ -24,4 +24,3 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-  - "overwrite=true"

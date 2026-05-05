@@ -9,7 +9,7 @@ parameters:
   n_envs:
     value: 600
   overwrite:
-    value: true
+    value: false
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_encoder_unseen'
   unseen_games:
@@ -52,4 +52,3 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-  - "overwrite=true"

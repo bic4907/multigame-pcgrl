@@ -395,9 +395,9 @@ def get_clip_encoder(config: EncoderConfig, RL_training: bool=True):
         # Get vision model
         vision_model, vision_model_vars = clip.bind(clip_variables).vision_model.unbind()
 
-    text_encoder_def = PretrainedTextEncoder(text_model, projection_dim=config.output_dim,
+    text_encoder_def = PretrainedTextEncoder(text_model, projection_dim=None,
                                              freeze_encoder=config.freeze_text_enc)
-    state_encoder_def = PretrainedImageEncoder(vision_model, projection_dim=config.output_dim,
+    state_encoder_def = PretrainedImageEncoder(vision_model, projection_dim=None,
                                                freeze_encoder=config.freeze_state_enc)
 
     mode = "text"

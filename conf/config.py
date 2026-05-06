@@ -317,7 +317,7 @@ class PretrainedCLIPPCGRLConfig(CPCGRLConfig):
 
     use_nlp: bool = False
     vec_cont: bool = False
-    nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
+    nlp_input_dim: int = 512  # encoder.output_dim (pretrained CLIP latent space, no projection)
 
     use_pretrained_clip_reward: bool = True
     wandb_project: Optional[str] = f'{PREFIX}train_pretrained_clip_pcgrl'

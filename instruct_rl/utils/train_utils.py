@@ -41,7 +41,6 @@ from instruct_rl.utils.buffer_collector import BufferCollector
 from instruct_rl.utils.dataset_loader import load_dataset_instruct
 from instruct_rl.utils.instruction import update_instruction
 from instruct_rl.utils.level_processing_utils import add_coord_channel_batch, map2onehot_batch
-from instruct_rl.utils.img_preprocess import render_level_from_arr, clip_batch_preprocess
 from instruct_rl.utils.log_handler import (
     CSVLoggingHandler,
     TensorBoardLoggingHandler,
@@ -281,45 +280,14 @@ def make_train(
                 )
 
                 if inject_reward_fn is not None:
-                    # ── Pretrained CLIP reward ────────────────────────────────────
-                    # 현재·이전 env_map을 타일 이미지로 렌더링 → CLIP 전처리 → state embedding 계산
-                    curr_rendered = jax.vmap(render_level_from_arr)(
-                        env_state.env_state.env_map
-                    )  # (B, H_px, W_px, C)
-                    prev_rendered = jax.vmap(render_level_from_arr)(
-                        prev_env_state.env_state.env_map
-                    )
-
-                    # float32 변환 후 CLIP 표준 전처리: (B, 224, 224, 3)
-                    curr_clip_pixels = clip_batch_preprocess(
-                        curr_rendered.astype(jnp.float32)
-                    )
-                    prev_clip_pixels = clip_batch_preprocess(
-                        prev_rendered.astype(jnp.float32)
-                    )
-
-                    # pretrained CLIP 비전 인코더로 state embedding 획득
-                    _, _, _, _, curr_state_embed = network.apply(
-                        train_state.params,
-                        last_obs.replace(pixel_values=curr_clip_pixels),
-                        return_text_embed=False,
-                        return_state_embed=True,
-                    )
-                    _, _, _, _, prev_state_embed = network.apply(
-                        train_state.params,
-                        last_obs.replace(pixel_values=prev_clip_pixels),
-                        return_text_embed=False,
-                        return_state_embed=True,
-                    )
-
-                    # inject_reward_fn: (prev_state, curr_state, instruct_sample,
-                    #                    prev_state_embed, curr_state_embed) → reward (B,)
+                    # inject_reward_fn이 내부에서 렌더링·임베딩을 직접 수행
                     pred_clip_similarity_reward = inject_reward_fn(
                         prev_env_state,
                         env_state,
                         instruct_sample,
-                        prev_state_embed,
-                        curr_state_embed,
+                        network.apply,
+                        train_state.params,
+                        last_obs,
                     )
                     reward_batch = pred_clip_similarity_reward
                 elif train_inst is not None:
@@ -559,38 +527,17 @@ def make_train(
                     )
 
                     if inject_reward_fn is not None:
-                        # ── Pretrained CLIP reward (eval) ─────────────────────────
-                        curr_rendered_e = jax.vmap(render_level_from_arr)(
-                            next_state.env_state.env_map
-                        )
-                        prev_rendered_e = jax.vmap(render_level_from_arr)(
-                            state.env_state.env_map
-                        )
-                        curr_clip_pixels_e = clip_batch_preprocess(
-                            curr_rendered_e.astype(jnp.float32)
-                        )
-                        prev_clip_pixels_e = clip_batch_preprocess(
-                            prev_rendered_e.astype(jnp.float32)
-                        )
-                        _, _, _, _, curr_state_embed_e = network.apply(
-                            train_state.params,
-                            last_obs.replace(pixel_values=curr_clip_pixels_e),
-                            return_text_embed=False,
-                            return_state_embed=True,
-                        )
-                        _, _, _, _, prev_state_embed_e = network.apply(
-                            train_state.params,
-                            last_obs.replace(pixel_values=prev_clip_pixels_e),
-                            return_text_embed=False,
-                            return_state_embed=True,
-                        )
+
+                        # inject_reward_fn이 내부에서 렌더링·임베딩을 직접 수행
                         reward_batch = inject_reward_fn(
                             state,
                             next_state,
                             instruct_sample,
-                            prev_state_embed_e,
-                            curr_state_embed_e,
+                            network.apply,
+                            train_state.params,
+                            last_obs,
                         )
+
                     elif test_inst is not None:
                         cond_reward_batch = get_reward_batch(
                             instruct_sample.reward_i,

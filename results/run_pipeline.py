@@ -16,8 +16,8 @@ Usage:
 
 Step numbers:
     1  eval_downloader          Download eval artifacts from W&B
-    2  make_gamewise_summary    ctrl_sim.csv → per-game results/summary.csv
-    3  build_benchmark_table    summary/results.csv → Markdown/CSV tables + plots
+    2  make_eval_summary        ctrl_sim.csv → per-eval results/summary.csv
+    3  benchmark               summary/results.csv → Markdown/CSV tables + plots
     4  condition_progress_report  condition vs metric plots + Markdown report
     5  reward_enum_visualizer   reward_enum representative tile-map visualization (requires eval.h5)
 """
@@ -65,14 +65,14 @@ STEPS: list[dict] = [
     },
     {
         "id": 2,
-        "name": "make_gamewise_summary",
-        "script": _HERE / "make_gamewise_summary.py",
-        "description": "ctrl_sim.csv → per-game results.csv / summary.csv",
+        "name": "make_eval_summary",
+        "script": _HERE / "make_eval_summary.py",
+        "description": "ctrl_sim.csv → per-eval results.csv / summary.csv",
     },
     {
         "id": 3,
-        "name": "build_benchmark_table",
-        "script": _HERE / "build_benchmark_table.py",
+        "name": "benchmark",
+        "script": _HERE / "benchmark.py",
         "description": "summary/results.csv → Markdown/CSV tables + comparison plots",
     },
     {

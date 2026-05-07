@@ -48,7 +48,6 @@ REWARD_ENUM_LABELS: dict[int, str] = {
 }
 
 _re_cfg = _CFG.get("reward_enums", {})
-_paths_cfg = _CFG.get("paths", {})
 
 
 def reward_enum_label(reward_enum: int) -> str:
@@ -62,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-root", "--input",   # --input은 process_shared.py 공통 인터페이스용 alias
         dest="input_root",
-        default=_paths_cfg.get("condition_report_input", "results/wandb_download"),
+        default="wandb_projects",
         help="Root directory containing downloaded ctrl_sim.csv files.",
     )
     parser.add_argument(

@@ -155,8 +155,8 @@ def build_parser(experiment: str) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--input",
-        default=cfg.get("paths", {}).get("eval_output", "wandb_projects"),
-        help="다운로드된 결과 파일의 루트 경로 (기본값: config.json paths.eval_output)",
+        default="wandb_projects",
+        help="다운로드된 결과 파일의 루트 경로 (기본값: wandb_projects)",
     )
     parser.add_argument(
         "--steps",

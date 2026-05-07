@@ -1,18 +1,17 @@
 """
-Rebuild game-filtered results.csv and summary.csv from ctrl_sim.csv.
+ctrl_sim.csv → results.csv / summary.csv 생성
 
-실험(experiment)에 속한 모든 프로젝트의 run 폴더를 순회한다.
-- `*_game-{code}_*` 패턴 → game code로 단일 게임 필터링 후 집계
-- `*_game-all_*`  패턴 → 필터 없이 전체 게임 집계
+실험(experiment)에 속한 모든 프로젝트의 run 폴더를 순회하며
+ctrl_sim.csv를 IQR mean 집계해 results.csv / summary.csv를 생성한다.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import logging
-import re
+import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
@@ -21,13 +20,13 @@ from tqdm import tqdm
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _HERE = Path(__file__).resolve().parent          # results/
 
-# sys.path에 project root 추가 (instruct_rl 임포트용)
 if str(_HERE.parent) not in sys.path:
     sys.path.append(str(_HERE.parent))
 
 from instruct_rl.utils.log_utils import get_logger  # noqa: E402
 
 logger = get_logger(__name__)
+
 
 def _load_cfg() -> dict:
     cfg_path = _HERE / "config.json"
@@ -36,15 +35,8 @@ def _load_cfg() -> dict:
             return json.load(f)
     return {}
 
-_CFG = _load_cfg()
 
-GAME_CODE_TO_NAME: dict[str, str] = _CFG.get("games", {}).get("code_to_name", {
-    "dg": "dungeon",
-    "pk": "pokemon",
-    "sk": "sokoban",
-    "dm": "doom",
-    "zd": "zelda",
-})
+_CFG = _load_cfg()
 
 
 def iqr_mean(x: pd.Series) -> float:
@@ -64,64 +56,8 @@ def iqr_mean(x: pd.Series) -> float:
     return float(filtered.mean()) if not filtered.empty else float(x.mean())
 
 
-def parse_game_code(folder_name: str) -> str | None:
-    match = re.search(r"(?:^|_)game-([a-z0-9]+)(?:_|$)", folder_name)
-    if match is None:
-        return None
-    return match.group(1)
-
-
-def rebuild_eval_dir(eval_dir: Path, target_game: str) -> bool:
-    ctrl_sim_path = eval_dir / "ctrl_sim.csv"
-    results_path = eval_dir / "results.csv"
-    summary_path = eval_dir / "summary.csv"
-    diversity_path = eval_dir / "diversity.csv"
-
-    if not ctrl_sim_path.exists():
-        return False
-
-    df_ctrl_sim = pd.read_csv(ctrl_sim_path)
-    if "game" not in df_ctrl_sim.columns:
-        return False
-
-    df_ctrl_sim = df_ctrl_sim[df_ctrl_sim["game"].astype(str) == target_game].copy()
-    if df_ctrl_sim.empty:
-        return False
-
-    mean_cols = [c for c in ["progress", "vit_score", "tpkldiv"] if c in df_ctrl_sim.columns]
-    if not mean_cols:
-        return False
-
-    meta_cols = [c for c in ["row_i", "game", "instruction", "reward_enum"] if c in df_ctrl_sim.columns]
-
-    df_results = (
-        df_ctrl_sim.groupby("row_i", sort=True)[mean_cols]
-        .agg(iqr_mean)
-        .reset_index()
-    )
-    meta_df = df_ctrl_sim[meta_cols].drop_duplicates(subset="row_i").reset_index(drop=True)
-    df_results = meta_df.merge(df_results, on="row_i")
-
-    if diversity_path.exists():
-        diversity_df = pd.read_csv(diversity_path)
-        if {"row_i", "diversity"}.issubset(diversity_df.columns):
-            df_results = df_results.merge(diversity_df[["row_i", "diversity"]], on="row_i", how="left")
-
-    df_results.to_csv(results_path, index=False)
-
-    summary_metric_cols = [c for c in ["progress", "vit_score", "tpkldiv", "diversity"] if c in df_results.columns]
-    if summary_metric_cols:
-        df_summary = df_results[summary_metric_cols].mean().reset_index()
-        df_summary.columns = ["metric", "mean"]
-        df_summary.to_csv(summary_path, index=False)
-    else:
-        pd.DataFrame(columns=["metric", "mean"]).to_csv(summary_path, index=False)
-
-    return True
-
-
-def rebuild_eval_dir_all_games(eval_dir: Path) -> bool:
-    """game-all 런: 게임 필터 없이 전체 행으로 results.csv / summary.csv 재생성."""
+def process_eval_dir(eval_dir: Path) -> bool:
+    """ctrl_sim.csv → results.csv / summary.csv 생성 (게임 필터 없이 전체 집계)."""
     ctrl_sim_path = eval_dir / "ctrl_sim.csv"
     results_path  = eval_dir / "results.csv"
     summary_path  = eval_dir / "summary.csv"
@@ -167,8 +103,7 @@ def _get_project_dirs(input_root: Path, experiment: str | None) -> list[Path]:
     if experiment:
         projects = _CFG.get("experiments", {}).get(experiment, {}).get("target_projects", [])
     else:
-        default = _CFG.get("paths", {}).get("gamewise_target_dir", "wandb_projects/aaai27_eval_cpcgrl")
-        projects = [Path(default).name]
+        projects = []
 
     dirs = []
     for proj in projects:
@@ -180,53 +115,50 @@ def _get_project_dirs(input_root: Path, experiment: str | None) -> list[Path]:
     return dirs
 
 
-def _rebuild_project(project_dir: Path) -> int:
-    """프로젝트 디렉토리 안의 모든 run을 처리하고 rebuild 횟수를 반환한다."""
-    tasks: list[tuple[Path, str, list[Path]]] = []
-    for run_dir in sorted(p for p in project_dir.iterdir() if p.is_dir() and re.search(r"_game-", p.name)):
-        game_code = parse_game_code(run_dir.name)
-        if game_code is None:
-            continue
-        eval_dirs = sorted(p.parent for p in run_dir.rglob("ctrl_sim.csv"))
-        if eval_dirs:
-            tasks.append((run_dir, game_code, eval_dirs))
+def _process_project(project_dir: Path, workers: int = 4) -> int:
+    """프로젝트 디렉토리 안의 모든 eval dir을 병렬 처리하고 성공 횟수를 반환한다."""
+    eval_dirs = sorted({p.parent for p in project_dir.rglob("ctrl_sim.csv")})
+    if not eval_dirs:
+        logger.warning("ctrl_sim.csv not found under: %s", project_dir)
+        return 0
 
     n_done = 0
-    desc = f"rebuild  {project_dir.name}"
-    with tqdm(total=len(tasks), desc=desc, unit="run", leave=True) as pbar:
-        for run_dir, game_code, eval_dirs in tasks:
-            pbar.set_postfix_str(run_dir.name, refresh=False)
-            if game_code == "all":
-                for eval_dir in eval_dirs:
-                    if rebuild_eval_dir_all_games(eval_dir):
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(process_eval_dir, d): d for d in eval_dirs}
+        with tqdm(total=len(eval_dirs), desc=project_dir.name, unit="eval", leave=True) as pbar:
+            for fut in as_completed(futures):
+                d = futures[fut]
+                pbar.set_postfix_str(d.name, refresh=False)
+                try:
+                    if fut.result():
                         n_done += 1
-            else:
-                target_game = GAME_CODE_TO_NAME.get(game_code)
-                if target_game is None:
-                    pbar.update(1)
-                    continue
-                for eval_dir in eval_dirs:
-                    if rebuild_eval_dir(eval_dir, target_game):
-                        n_done += 1
-            pbar.update(1)
+                except Exception as e:
+                    logger.error("Error processing %s: %s", d, e)
+                pbar.update(1)
 
     return n_done
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="ctrl_sim.csv → results.csv / summary.csv 재생성"
+        description="ctrl_sim.csv → results.csv / summary.csv 생성"
     )
     parser.add_argument(
         "--input", "--input-root",
         dest="input",
-        default=_CFG.get("paths", {}).get("eval_output", "wandb_projects"),
-        help="다운로드 결과 루트 경로 (기본값: config.json paths.eval_output)",
+        default="wandb_projects",
+        help="다운로드 결과 루트 경로 (기본값: wandb_projects)",
     )
     parser.add_argument(
         "--experiment",
         default=None,
         help="처리할 experiment 이름 (미지정 시 config.json 기본 프로젝트 사용)",
+    )
+    parser.add_argument(
+        "--workers", "-j",
+        type=int,
+        default=min(8, os.cpu_count() or 4),
+        help="병렬 worker 수 (기본값: min(8, cpu_count))",
     )
     return parser.parse_args()
 
@@ -246,9 +178,9 @@ def main() -> None:
 
     total = 0
     for project_dir in project_dirs:
-        n = _rebuild_project(project_dir)
+        n = _process_project(project_dir, workers=args.workers)
         total += n
-    logger.info("rebuilt %d eval directories total", total)
+    logger.info("processed %d eval directories total", total)
 
 
 if __name__ == "__main__":

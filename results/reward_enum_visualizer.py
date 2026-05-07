@@ -41,13 +41,12 @@ def _load_cfg() -> dict:
 
 _CFG = _load_cfg()
 _re_cfg = _CFG.get("reward_enums", {})
-_paths_cfg = _CFG.get("paths", {})
 
 _DEFAULT_REWARD_ENUMS: list[int] = sorted(
     int(k) for k in _re_cfg.get("labels", {"0": None, "1": None, "2": None, "3": None, "4": None}).keys()
 )
-NUM_SLOTS: int = _re_cfg.get("num_slots", 4)
-_RUN_DIR_PATTERN: str = _re_cfg.get("run_dir_pattern", "cpcgrl_game-all_re-{reward_enum}_exp-def_s-0")
+NUM_SLOTS: int = 4
+_RUN_DIR_PATTERN: str = "cpcgrl_game-all_re-{reward_enum}_exp-def_s-0"
 
 
 @dataclass
@@ -72,7 +71,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--root",
-        default=_paths_cfg.get("reward_viz_root", "results/wandb_download/aaai27_eval_cpcgrl"),
+        default="wandb_projects",
         help="Root folder containing cpcgrl_game-all_re-{re}_exp-def_s-0 runs.",
     )
     parser.add_argument(

@@ -6,47 +6,31 @@
   "experiments": {
     "allseen": {
       "target_projects": [
+        "aaai27_eval_random",
         "aaai27_eval_cpcgrl",
-        "aaai27_eval_vipcgrl_nosim",
-        "aaai27_eval_mgpcgrl",
         "aaai27_eval_ipcgrl",
         "aaai27_eval_vipcgrl",
-        "aaai27_eval_random"
-      ],
-      "preferred_folder_order": [
-        "aaai27_eval_cpcgrl",
         "aaai27_eval_vipcgrl_nosim",
-        "aaai27_eval_mgpcgrl",
-        "aaai27_eval_ipcgrl",
-        "aaai27_eval_vipcgrl",
-        "aaai27_eval_random"
+        "aaai27_eval_mgpcgrl"
       ]
     },
     "unseen_generalizability": {
       "target_projects": [
         "aaai27_eval_mgpcgrl",
         "aaai27_eval_mgpcgrl_unseen"
-      ],
-      "preferred_folder_order": [
-        "aaai27_eval_mgpcgrl",
-        "aaai27_eval_mgpcgrl_unseen"
       ]
     }
   },
-  "paths": {
-    "eval_output": "wandb_projects",
-    "gamewise_target_dir": "wandb_projects/aaai27_eval_cpcgrl",
-    "condition_report_input": "wandb_projects",
-    "reward_viz_root": "wandb_projects/aaai27_eval_cpcgrl"
+  "project_display_names": {
+    "aaai27_eval_cpcgrl":        "cpcgrl",
+    "aaai27_eval_vipcgrl_nosim": "vipcgrl_nosim",
+    "aaai27_eval_mgpcgrl":       "mgpcgrl",
+    "aaai27_eval_ipcgrl":        "ipcgrl",
+    "aaai27_eval_vipcgrl":       "vipcgrl",
+    "aaai27_eval_random":        "random",
+    "aaai27_eval_mgpcgrl_unseen":"mgpcgrl_unseen"
   },
   "games": {
-    "code_to_name": {
-      "dg": "dungeon",
-      "pk": "pokemon",
-      "sk": "sokoban",
-      "dm": "doom",
-      "zd": "zelda"
-    },
     "colors": {
       "doom":    "#1f77b4",
       "dungeon": "#d62728",
@@ -71,8 +55,6 @@
       "2": "Interactable",
       "3": "Hazard",
       "4": "Collectable"
-    },
-    "num_slots": 4,
-    "run_dir_pattern": "cpcgrl_game-all_re-{reward_enum}_exp-def_s-0"
+    }
   }
 }

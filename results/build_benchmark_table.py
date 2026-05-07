@@ -43,16 +43,16 @@ METRIC_DISPLAY_NAMES: dict[str, str] = _CFG.get("metrics", {}).get(
     }
 )
 
-# experiments 구조에서 preferred_folder_order를 로드하는 헬퍼
+# experiments 구조에서 target_projects 순서를 로드하는 헬퍼
 def _get_experiment_folder_order(experiment: str | None = None) -> list[str]:
     experiments = _CFG.get("experiments", {})
     if experiment and experiment in experiments:
-        return experiments[experiment].get("preferred_folder_order", [])
-    # experiment 미지정 시 모든 실험의 순서를 합침 (중복 제거)
+        return experiments[experiment].get("target_projects", [])
+    # experiment 미지정 시 모든 실험의 target_projects 순서를 합침 (중복 제거)
     seen: set[str] = set()
     merged: list[str] = []
     for exp in experiments.values():
-        for p in exp.get("preferred_folder_order", []):
+        for p in exp.get("target_projects", []):
             if p not in seen:
                 seen.add(p)
                 merged.append(p)
@@ -61,6 +61,20 @@ def _get_experiment_folder_order(experiment: str | None = None) -> list[str]:
         "aaai27_eval_cpcgrl_gamegroup",
         "aaai27_eval_cpcgrl_all",
     ]
+
+
+# 현재 활성 experiment의 project_display_names (main()에서 갱신됨)
+_PROJECT_DISPLAY_NAMES: dict[str, str] = _CFG.get("project_display_names", {})
+
+
+def _load_project_display_names(experiment: str | None) -> dict[str, str]:
+    """config.json 최상위 project_display_names를 반환한다 (experiment 무관 글로벌 설정)."""
+    return _CFG.get("project_display_names", {})
+
+
+def _project_display_name(folder: str) -> str:
+    """project_display_names에 정의된 이름을 반환. 없으면 그대로 반환."""
+    return _PROJECT_DISPLAY_NAMES.get(folder, folder)
 
 PREFERRED_PLOT_FOLDER_ORDER: list[str] = _get_experiment_folder_order()
 
@@ -75,9 +89,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input",
-        default=_CFG.get("paths", {}).get("eval_output", "wandb_projects"),
+        default="wandb_projects",
         help="Root directory that contains <project>/<run>/summary.csv files. "
-             "(default: config.json paths.eval_output)",
+             "(default: wandb_projects)",
     )
     parser.add_argument(
         "--group-by",
@@ -150,9 +164,9 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="EXPERIMENT",
         help=(
-            f"Experiment group for preferred folder order "
+            f"Experiment group for target_projects folder order "
             f"(choices: {', '.join(_exp_names) or 'none defined'}). "
-            "Overrides global preferred_folder_order."
+            "Overrides global folder order derived from target_projects."
         ),
     )
     return parser.parse_args()
@@ -524,7 +538,7 @@ def write_game_reward_subplots(
                     width=width,
                     yerr=stds,
                     capsize=2,
-                    label=folder,
+                    label=_project_display_name(folder),
                     color=colors[j % len(colors)],
                     edgecolor="white",
                     linewidth=0.8,
@@ -636,7 +650,7 @@ def write_overall_simple_plot(
                 width=width,
                 yerr=stds,
                 capsize=2,
-                label=folder,
+                label=_project_display_name(folder),
                 color=colors[j % len(colors)],
                 edgecolor="white",
                 linewidth=0.8,
@@ -867,12 +881,13 @@ def main() -> None:
     log = setup_logger(run_dir, name=__file__)
     log.info("run_dir  : %s", run_dir)
 
-    # --experiment 옵션이 있으면 해당 실험의 folder order 사용
+    # --experiment 옵션이 있으면 해당 실험의 folder order 및 display names 사용
     folder_order = _get_experiment_folder_order(args.experiment)
     if args.experiment:
         log.info("experiment: %s  (folder_order: %s)", args.experiment, folder_order)
-    global PREFERRED_PLOT_FOLDER_ORDER
+    global PREFERRED_PLOT_FOLDER_ORDER, _PROJECT_DISPLAY_NAMES
     PREFERRED_PLOT_FOLDER_ORDER = folder_order
+    _PROJECT_DISPLAY_NAMES = _load_project_display_names(args.experiment)
     input_root = resolve_input_root(args.input, script_dir)
     output_md = Path(args.output_md).resolve() if args.output_md else run_dir / "benchmark_table.md"
     output_csv = Path(args.output_csv).resolve() if args.output_csv else run_dir / "benchmark_table.csv"

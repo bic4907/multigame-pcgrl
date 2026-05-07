@@ -94,7 +94,7 @@ TARGET_PROJECTS: list[str] = _ALL_EXPERIMENT_PROJECTS_DEDUP or [
     "aaai27_eval_cpcgrl_all",
 ]
 _DEFAULT_NUM_WORKERS: int = _CFG.get("wandb", {}).get("num_workers", DEFAULT_NUM_WORKERS)
-_DEFAULT_OUTPUT: str = _CFG.get("paths", {}).get("eval_output", "wandb_projects")
+_DEFAULT_OUTPUT: str = "wandb_projects"
 
 # ---------------------------------------------------------------------------
 # Download a single run
@@ -273,7 +273,7 @@ available experiments: {_exp_choices_str}
     parser.add_argument(
         "--output",
         default=_DEFAULT_OUTPUT,
-        help="Local root path to save downloads (default: config.json paths.eval_output)",
+        help="Local root path to save downloads (default: wandb_projects)",
     )
     parser.add_argument(
         "--no-csv",

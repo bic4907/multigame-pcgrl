@@ -704,7 +704,7 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
         wandb.login(key=wandb_key)
         wandb.init(
             project=config.wandb_project,
-            group=get_group_name(config),
+            group=config.exp_group,
             entity=config.wandb_entity,
             name=get_wandb_name(config),
             id=wandb_id,

@@ -1,0 +1,20 @@
+program: train_pretrained_clip.py
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  n_envs:
+    value: 600
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/pretrained_clip'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

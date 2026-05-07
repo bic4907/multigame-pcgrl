@@ -118,3 +118,12 @@ wandb sweep --project aaai27_eval_mgpcgrl_unseen --entity st4889ha-gwangju-insti
 ```bash
 wandb sweep --project aaai27_eval_random --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_random.yaml
 ```
+
+
+### Pretrained CLIP
+
+---
+
+```bash
+wandb sweep --project aaai27_train_pretrained_clip --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_pretrained_clip.yaml
+```

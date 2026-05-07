@@ -226,11 +226,7 @@ def get_exp_name(config):
         re_str = f'_re-{re}' if re is not None else ''
         exp_str = f'_exp-{config.exp_name}' if getattr(config, 'exp_name', None) else ''
 
-        _ckpt_name = config.encoder.ckpt_name or config.encoder.ckpt_path or ""
-        enc_hash = hashlib.md5(_ckpt_name.encode()).hexdigest()[:6] if _ckpt_name else "scratch"
-        enc_str = f'_enc-{enc_hash}'
-
-        return f'preclip_pcgrl_game-{game_abbr}{re_str}{exp_str}{enc_str}_s-{config.seed}'
+        return f'preclip_pcgrl_game-{game_abbr}{re_str}{exp_str}_s-{config.seed}'
 
 
     _is_vipcgrl = (

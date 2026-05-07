@@ -1,0 +1,78 @@
+{
+  "outputs_root": "results/outputs",
+  "wandb": {
+    "num_workers": 10
+  },
+  "experiments": {
+    "allseen": {
+      "target_projects": [
+        "aaai27_eval_cpcgrl",
+        "aaai27_eval_vipcgrl_nosim",
+        "aaai27_eval_mgpcgrl",
+        "aaai27_eval_ipcgrl",
+        "aaai27_eval_vipcgrl",
+        "aaai27_eval_random"
+      ],
+      "preferred_folder_order": [
+        "aaai27_eval_cpcgrl",
+        "aaai27_eval_vipcgrl_nosim",
+        "aaai27_eval_mgpcgrl",
+        "aaai27_eval_ipcgrl",
+        "aaai27_eval_vipcgrl",
+        "aaai27_eval_random"
+      ]
+    },
+    "unseen_generalizability": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl",
+        "aaai27_eval_mgpcgrl_unseen"
+      ],
+      "preferred_folder_order": [
+        "aaai27_eval_mgpcgrl",
+        "aaai27_eval_mgpcgrl_unseen"
+      ]
+    }
+  },
+  "paths": {
+    "eval_output": "wandb_projects",
+    "gamewise_target_dir": "wandb_projects/aaai27_eval_cpcgrl",
+    "condition_report_input": "wandb_projects",
+    "reward_viz_root": "wandb_projects/aaai27_eval_cpcgrl"
+  },
+  "games": {
+    "code_to_name": {
+      "dg": "dungeon",
+      "pk": "pokemon",
+      "sk": "sokoban",
+      "dm": "doom",
+      "zd": "zelda"
+    },
+    "colors": {
+      "doom":    "#1f77b4",
+      "dungeon": "#d62728",
+      "pokemon": "#2ca02c",
+      "sokoban": "#ff7f0e",
+      "zelda":   "#9467bd"
+    }
+  },
+  "metrics": {
+    "default_order": ["progress", "vit_score", "tpkldiv", "diversity"],
+    "display_names": {
+      "progress":  "Progress",
+      "vit_score": "ViTScore",
+      "tpkldiv":   "TPKL-Div",
+      "diversity": "Diversity"
+    }
+  },
+  "reward_enums": {
+    "labels": {
+      "0": "Region",
+      "1": "Path Length",
+      "2": "Interactable",
+      "3": "Hazard",
+      "4": "Collectable"
+    },
+    "num_slots": 4,
+    "run_dir_pattern": "cpcgrl_game-all_re-{reward_enum}_exp-def_s-0"
+  }
+}

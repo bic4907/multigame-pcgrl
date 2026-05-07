@@ -17,22 +17,52 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 from collections import defaultdict
 from pathlib import Path
 
-DEFAULT_METRIC_ORDER = ["progress", "vit_score", "tpkldiv", "diversity"]
-METRIC_DISPLAY_NAMES = {
-    "progress": "Progress",
-    "vit_score": "ViTScore",
-    "tpkldiv": "TPKL-Div",
-    "diversity": "Diversity",
-}
-PREFERRED_PLOT_FOLDER_ORDER = [
-    "aaai27_eval_cpcgrl",
-    "aaai27_eval_cpcgrl_gamegroup",
-    "aaai27_eval_cpcgrl_all",
-]
+def _load_cfg() -> dict:
+    cfg_path = Path(__file__).resolve().parent / "config.json"
+    if cfg_path.is_file():
+        with cfg_path.open(encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+_CFG = _load_cfg()
+
+DEFAULT_METRIC_ORDER: list[str] = _CFG.get("metrics", {}).get(
+    "default_order", ["progress", "vit_score", "tpkldiv", "diversity"]
+)
+METRIC_DISPLAY_NAMES: dict[str, str] = _CFG.get("metrics", {}).get(
+    "display_names", {
+        "progress": "Progress",
+        "vit_score": "ViTScore",
+        "tpkldiv": "TPKL-Div",
+        "diversity": "Diversity",
+    }
+)
+
+# experiments 구조에서 preferred_folder_order를 로드하는 헬퍼
+def _get_experiment_folder_order(experiment: str | None = None) -> list[str]:
+    experiments = _CFG.get("experiments", {})
+    if experiment and experiment in experiments:
+        return experiments[experiment].get("preferred_folder_order", [])
+    # experiment 미지정 시 모든 실험의 순서를 합침 (중복 제거)
+    seen: set[str] = set()
+    merged: list[str] = []
+    for exp in experiments.values():
+        for p in exp.get("preferred_folder_order", []):
+            if p not in seen:
+                seen.add(p)
+                merged.append(p)
+    return merged or [
+        "aaai27_eval_cpcgrl",
+        "aaai27_eval_cpcgrl_gamegroup",
+        "aaai27_eval_cpcgrl_all",
+    ]
+
+PREFERRED_PLOT_FOLDER_ORDER: list[str] = _get_experiment_folder_order()
 
 
 def _count_summary_files(root: Path) -> int:
@@ -45,8 +75,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input",
-        default="results/eval",
-        help="Root directory that contains <project>/<run>/summary.csv files.",
+        default=_CFG.get("paths", {}).get("eval_output", "wandb_projects"),
+        help="Root directory that contains <project>/<run>/summary.csv files. "
+             "(default: config.json paths.eval_output)",
     )
     parser.add_argument(
         "--group-by",
@@ -111,6 +142,18 @@ def parse_args() -> argparse.Namespace:
         "--output-folder-csv",
         default=None,
         help="Folder-only CSV output path. Default: <input>/benchmark_folder_mean.csv",
+    )
+    _exp_names = list(_CFG.get("experiments", {}).keys())
+    parser.add_argument(
+        "--experiment",
+        choices=_exp_names if _exp_names else None,
+        default=None,
+        metavar="EXPERIMENT",
+        help=(
+            f"Experiment group for preferred folder order "
+            f"(choices: {', '.join(_exp_names) or 'none defined'}). "
+            "Overrides global preferred_folder_order."
+        ),
     )
     return parser.parse_args()
 
@@ -806,30 +849,52 @@ def write_folder_only_csv(
 
 
 def main() -> None:
+    import sys as _sys
+    _script_dir = Path(__file__).resolve().parent
+    _project_root = _script_dir.parent
+    # Add results/ to front and project_root to back so results/utils/ package
+    # takes priority over root/utils.py module.
+    if str(_script_dir) not in _sys.path:
+        _sys.path.insert(0, str(_script_dir))
+    if str(_project_root) not in _sys.path:
+        _sys.path.append(str(_project_root))
+    from instruct_rl.utils.log_utils import get_logger
+    from utils.run_output import make_run_dir, setup_logger
+
     args = parse_args()
-    script_dir = Path(__file__).resolve().parent
+    script_dir = _script_dir
+    run_dir = make_run_dir("build_benchmark_table", cfg=_CFG)
+    log = setup_logger(run_dir, name=__file__)
+    log.info("run_dir  : %s", run_dir)
+
+    # --experiment 옵션이 있으면 해당 실험의 folder order 사용
+    folder_order = _get_experiment_folder_order(args.experiment)
+    if args.experiment:
+        log.info("experiment: %s  (folder_order: %s)", args.experiment, folder_order)
+    global PREFERRED_PLOT_FOLDER_ORDER
+    PREFERRED_PLOT_FOLDER_ORDER = folder_order
     input_root = resolve_input_root(args.input, script_dir)
-    output_md = Path(args.output_md).resolve() if args.output_md else input_root / "benchmark_table.md"
-    output_csv = Path(args.output_csv).resolve() if args.output_csv else input_root / "benchmark_table.csv"
+    output_md = Path(args.output_md).resolve() if args.output_md else run_dir / "benchmark_table.md"
+    output_csv = Path(args.output_csv).resolve() if args.output_csv else run_dir / "benchmark_table.csv"
     output_plot = (
         Path(args.plot_file).resolve()
         if args.plot_file
-        else input_root / "benchmark_game_reward_enum.png"
+        else run_dir / "benchmark_game_reward_enum.png"
     )
     output_plot_simple = (
         Path(args.plot_file_simple).resolve()
         if args.plot_file_simple
-        else input_root / "benchmark_overall_simple.png"
+        else run_dir / "benchmark_overall_simple.png"
     )
     output_folder_md = (
         Path(args.output_folder_md).resolve()
         if args.output_folder_md
-        else input_root / "benchmark_folder_mean.md"
+        else run_dir / "benchmark_folder_mean.md"
     )
     output_folder_csv = (
         Path(args.output_folder_csv).resolve()
         if args.output_folder_csv
-        else input_root / "benchmark_folder_mean.csv"
+        else run_dir / "benchmark_folder_mean.csv"
     )
 
     rows, discovered_metrics = discover_rows(input_root=input_root, group_by=args.group_by)
@@ -848,10 +913,9 @@ def main() -> None:
         hint_text = ""
         if existing_hints:
             hint_text = "\nDetected summary.csv files under: " + ", ".join(existing_hints)
-        raise SystemExit(
-            f"No valid summary.csv rows found under: {input_root}{hint_text}\n"
-            "Try: --input <path containing <project>/<run>/summary.csv>"
-        )
+        msg = f"No valid summary.csv rows found under: {input_root}{hint_text}\nTry: --input <path containing <project>/<run>/summary.csv>"
+        log.error(msg)
+        raise SystemExit(msg)
 
     metric_order = resolve_metric_order(args.metrics, discovered_metrics)
     grouped_rows = aggregate(rows=rows, metric_order=metric_order)
@@ -892,10 +956,12 @@ def main() -> None:
 
     if not args.no_plot:
         if not plot_rows:
-            raise SystemExit(
+            msg = (
                 "No valid plot rows found from results.csv under input root. "
                 "Expected rows with game/reward_enum and metric columns."
             )
+            log.error(msg)
+            raise SystemExit(msg)
         try:
             write_game_reward_subplots(
                 output_path=output_plot,
@@ -909,19 +975,21 @@ def main() -> None:
                 metric_order=simple_metric_order,
             )
         except RuntimeError as e:
+            log.error("Plot generation failed: %s", e)
             raise SystemExit(str(e)) from e
 
-    print(f"[OK] Input root : {input_root}")
-    print(f"[OK] Rows found  : {len(rows)}")
-    print(f"[OK] Group count : {len(grouped_rows)}")
-    print(f"[OK] Markdown    : {output_md}")
-    print(f"[OK] CSV         : {output_csv}")
+    log.info("input_root : %s", input_root)
+    log.info("rows_found : %d", len(rows))
+    log.info("group_count: %d", len(grouped_rows))
+    log.info("markdown   : %s", output_md)
+    log.info("csv        : %s", output_csv)
     if plot_rows:
-        print(f"[OK] Folder MD  : {output_folder_md}")
-        print(f"[OK] Folder CSV : {output_folder_csv}")
+        log.info("folder_md  : %s", output_folder_md)
+        log.info("folder_csv : %s", output_folder_csv)
     if not args.no_plot:
-        print(f"[OK] Plot       : {output_plot}")
-        print(f"[OK] PlotSimple : {output_plot_simple}")
+        log.info("plot       : %s", output_plot)
+        log.info("plot_simple: %s", output_plot_simple)
+    log.info("log        : %s", run_dir / 'run.log')
 
 
 if __name__ == "__main__":

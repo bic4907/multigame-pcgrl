@@ -11,6 +11,7 @@ from encoder.model import apply_encoder_model
 from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder, get_cnnclip_decoder_encoder
 from conf.config import Config, TrainConfig, EncoderConfig
 from conf.game_utils import parse_game_str, GAME_ABBR
+from encoder.pretrained_clip_model import get_pretrained_clip_encoder
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
@@ -153,7 +154,7 @@ def init_config(config: Config):
                 config.nlp_input_dim = config.encoder.output_dim  # encoder output dim (e.g. 64)
             config.vec_input_dim = config.nlp_input_dim
             # dataset 기반 VIPCGRL: cnnclipconv/clipconv 가 이미 설정된 경우 유지
-            if config.model not in ('nlpconv', 'cnnclipconv', 'clipconv'):
+            if config.model not in ('nlpconv', 'cnnclipconv', 'clipconv', 'pretrained_clip'):
                 config.model = 'nlpconv'
             logger.info(f"[VIPCGRL] dataset_game={config.dataset_game}, "
                         f"dataset_reward_enum={getattr(config, 'dataset_reward_enum', None)}, "
@@ -228,7 +229,11 @@ def init_config(config: Config):
                     f'(embed size: {config.encoder.output_dim}, buffer_ratio: {config.buffer_ratio})')
 
         # For coord Channel(x,y)
-        config.clip_input_channel = config.clip_input_channel + 2
+        if getattr(config, 'use_pretrained_clip_reward', False):
+            config.clip_input_channel = config.clip_input_channel
+        else:
+            config.clip_input_channel = config.clip_input_channel + 2
+
         config.text_ratio = min([0.25, 0.5, 0.75, 1.0], key=lambda x: abs(x - config.text_ratio))
 
         # ── encoder.ckpt_path 가 이미 지정된 경우 스킵 ──
@@ -425,6 +430,22 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
             act_shape=config.act_shape,
         )
 
+    elif config.model == "pretrained_clip":
+        network = EncoderCLIPConvForward(
+            config=config.encoder,
+            encoder=get_pretrained_clip_encoder(config.encoder)[0] if config.encoder.model else None,
+            train_encoder=config.encoder.trainable,
+            nlp_conv_forward=NLPConvForward(
+                action_dim=action_dim, activation=config.activation,
+                arf_size=config.arf_size, act_shape=config.act_shape,
+                vrf_size=config.vrf_size,
+                nlp_input_dim=config.nlp_input_dim,
+                hidden_dims=config.hidden_dims
+            ),
+            action_dim=action_dim,
+            act_shape=config.act_shape,
+        )
+
     elif config.model == "conv":
         network = ConvForward(
             action_dim=action_dim, activation=config.activation,
@@ -492,7 +513,7 @@ def get_env_params_from_config(config: Config):
     )
 
     # cnnclipconv/clipconv 모델은 nlp_input_dim과 clip_input_channel 둘 다 필요
-    _needs_clip_channel = config.model in ('cnnclipconv', 'clipconv')
+    _needs_clip_channel = config.model in ('cnnclipconv', 'clipconv', 'pretrained_clip')
 
     env_params = PCGRLEnvParams(
         problem=problem,

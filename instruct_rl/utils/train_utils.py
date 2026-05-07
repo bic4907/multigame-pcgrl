@@ -280,26 +280,16 @@ def make_train(
                 )
 
                 if inject_reward_fn is not None:
-                    pred_reward_i, pred_condition = inject_reward_fn(
+                    # inject_reward_fn이 내부에서 렌더링·임베딩을 직접 수행
+                    pred_clip_similarity_reward = inject_reward_fn(
                         prev_env_state,
                         env_state,
-                        last_obs,
-                        obsv,
                         instruct_sample,
-                        config,
-                        env,
+                        network.apply,
+                        train_state.params,
+                        last_obs,
                     )
-                    cond_reward_batch = get_reward_batch(
-                        pred_reward_i,
-                        pred_condition,
-                        prev_env_state.env_state.env_map,
-                        env_state.env_state.env_map,
-                        map_size=config.map_width,
-                        placement_w_amount=config.placement_w_amount,
-                        placement_w_spread=config.placement_w_spread,
-                        special_tile_penalty_weight=config.special_tile_penalty_weight,
-                    )
-                    reward_batch = cond_reward_batch
+                    reward_batch = pred_clip_similarity_reward
                 elif train_inst is not None:
                     cond_reward_batch = get_reward_batch(
                         instruct_sample.reward_i,
@@ -361,7 +351,8 @@ def make_train(
 
                 info["returned_episode_returns"] = env_state.returned_episode_returns
 
-                _store_env_map = config.coef_human_sim > 0 or getattr(config, 'collect_env_map', False)
+                _store_env_map = config.coef_human_sim > 0 or getattr(config, 'collect_env_map', False) or \
+                                    getattr(config, 'use_pretrained_clip_reward', False)
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info,
                     env_state.env_state.env_map if _store_env_map else None,
@@ -536,24 +527,17 @@ def make_train(
                     )
 
                     if inject_reward_fn is not None:
-                        cond_reward_batch = get_reward_batch(
-                            *inject_reward_fn(
-                                state,
-                                next_state,
-                                last_obs,
-                                obsv,
-                                instruct_sample,
-                                config,
-                                env,
-                            ),
-                            state.env_state.env_map,
-                            next_state.env_state.env_map,
-                            map_size=config.map_width,
-                            placement_w_amount=config.placement_w_amount,
-                            placement_w_spread=config.placement_w_spread,
-                            special_tile_penalty_weight=config.special_tile_penalty_weight,
+
+                        # inject_reward_fn이 내부에서 렌더링·임베딩을 직접 수행
+                        reward_batch = inject_reward_fn(
+                            state,
+                            next_state,
+                            instruct_sample,
+                            network.apply,
+                            train_state.params,
+                            last_obs,
                         )
-                        reward_batch = cond_reward_batch
+
                     elif test_inst is not None:
                         cond_reward_batch = get_reward_batch(
                             instruct_sample.reward_i,

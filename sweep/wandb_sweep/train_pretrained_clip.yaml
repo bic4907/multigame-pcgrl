@@ -1,4 +1,4 @@
-program: train_ipcgrl.py
+program: train_pretrained_clip.py
 method: grid
 metric:
   goal: minimize
@@ -8,20 +8,12 @@ parameters:
     values: ['all']
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
-  seed:
-    values: [0, 1, 2, 3, 4]
   n_envs:
     value: 600
   overwrite:
     value: false
-  encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/ipcgrl_encoder'
-  encoder.ckpt_name:
-    values: [
-      "ipcgrl-enc-mg-game-all_enc-mlp_exp-def_0",
-    ]
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/ipcgrl'
+    value: '/mnt/nas/mgpcgrl/pretrained_clip'
 command:
   - ${interpreter}
   - ${program}

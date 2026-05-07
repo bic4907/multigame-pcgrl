@@ -16,7 +16,7 @@ parameters:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_encoder'
   encoder.ckpt_name:
     values: [
-      "clip-game-all_exp-def_0",
+      "clipdec-game-all_exp-def_0",
     ]
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl'
@@ -24,4 +24,3 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-  - "overwrite=true"

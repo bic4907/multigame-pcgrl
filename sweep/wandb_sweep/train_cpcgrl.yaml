@@ -13,11 +13,10 @@ parameters:
   n_envs:
     value: 600
   overwrite:
-    value: true
+    value: false
   saves_dir:
     value: '/mnt/nas/mgpcgrl/cpcgrl'
 command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-  - "overwrite=true"

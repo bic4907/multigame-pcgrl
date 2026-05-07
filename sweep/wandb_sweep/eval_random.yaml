@@ -18,4 +18,3 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-  - "overwrite=true"

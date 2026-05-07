@@ -13,7 +13,7 @@ parameters:
   n_envs:
     value: 600
   overwrite:
-    value: true
+    value: false
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_encoder'
   encoder.ckpt_name:
@@ -26,4 +26,3 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-  - "overwrite=true"

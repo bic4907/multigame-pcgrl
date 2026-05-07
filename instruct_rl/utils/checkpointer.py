@@ -93,7 +93,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
         try:
             restored_ckpt = mgr.restore(
                 steps_prev_complete,
-                args=ocp.args.StandardRestore(target),
+                args=ocp.args.StandardRestore(target, strict=False),
             )
         except (KeyError, ValueError):
             runner_state = runner_state.replace(

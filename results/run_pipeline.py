@@ -18,8 +18,10 @@ Step numbers:
     1  eval_downloader          Download eval artifacts from W&B
     2  make_eval_summary        ctrl_sim.csv → per-eval results/summary.csv
     3  benchmark               summary/results.csv → Markdown/CSV tables + plots
+                                (allseen 등 일반 실험 전용; unseen_generalizability 에서는 생략)
     4  condition_progress_report  condition vs metric plots + Markdown report
-    5  reward_enum_visualizer   reward_enum representative tile-map visualization (requires eval.h5)
+    5  seen_unseen_report       seen / unseen 분리 테이블 + 비교 플롯
+                                (unseen_generalizability 전용; 다른 실험에서는 생략)
 """
 
 from __future__ import annotations
@@ -73,7 +75,7 @@ STEPS: list[dict] = [
         "id": 3,
         "name": "benchmark",
         "script": _HERE / "benchmark.py",
-        "description": "summary/results.csv → Markdown/CSV tables + comparison plots",
+        "description": "summary/results.csv → Markdown/CSV tables + comparison plots (allseen 전용)",
     },
     {
         "id": 4,
@@ -83,11 +85,19 @@ STEPS: list[dict] = [
     },
     {
         "id": 5,
-        "name": "reward_enum_visualizer",
-        "script": _HERE / "reward_enum_visualizer.py",
-        "description": "ctrl_sim.csv + eval.h5 → reward_enum tile-map visualization",
+        "name": "seen_unseen_report",
+        "script": _HERE / "seen_unseen_report.py",
+        "description": "results.csv → seen / unseen 분리 테이블 + 비교 플롯 (unseen_generalizability 전용)",
     },
 ]
+
+# 특정 experiment 에서 실행하지 않을 step id
+_EXPERIMENT_SKIP: dict[str | None, set[int]] = {
+    "unseen_generalizability": {3},   # benchmark 생략
+    None: {5},                        # experiment 미지정 시 seen_unseen_report 생략
+}
+# allseen 등 unseen_generalizability 아닌 실험: step 5 생략
+_DEFAULT_SKIP: set[int] = {5}        # unseen_generalizability 가 아닌 모든 실험에 적용
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
@@ -102,10 +112,14 @@ examples:
   python results/run_pipeline.py --experiment allseen
   python results/run_pipeline.py --experiment unseen_generalizability
   python results/run_pipeline.py --steps 3             # table generation only
-  python results/run_pipeline.py --steps 3 4           # table + condition report
+  python results/run_pipeline.py --steps 4 5           # condition report + seen/unseen report
   python results/run_pipeline.py --continue-on-failure # keep going after failures
   python results/run_pipeline.py --dry-run             # show steps without running
   python results/run_pipeline.py --list                # list step descriptions
+
+note:
+  step 3 (benchmark)         — allseen 등 일반 실험에서만 실행; unseen_generalizability 에서는 자동 생략
+  step 5 (seen_unseen_report)— unseen_generalizability 에서만 실행; 다른 실험에서는 자동 생략
 
 available experiments: {_exp_hint}
         """,
@@ -187,6 +201,53 @@ def _patch_argv(script_path: Path, extra_args: list[str]):
         yield
     finally:
         sys.argv = old
+
+
+def _compute_global_norm_scale(
+    pipeline_run_dir: Path,
+    base_extra: list[str],
+    log: logging.Logger,
+) -> bool:
+    """
+    모든 실험 데이터를 합산해 normalization scale 을 계산하고
+    pipeline_run_dir/normalization_scale.json 에 저장한다.
+
+    --input 인자가 base_extra 에 있으면 그 경로를 사용하고,
+    없으면 'wandb_projects' 기본값을 사용한다.
+
+    Returns True on success, False on failure.
+    """
+    try:
+        from benchmark import (
+            collect_plot_rows_from_results,
+            resolve_input_root,
+            DEFAULT_METRIC_ORDER,
+        )
+        from utils.normalization import compute_normalization_scale, save_normalization_scale
+
+        # base_extra 에서 --input 값 추출 (없으면 default)
+        try:
+            idx = base_extra.index("--input")
+            input_arg = base_extra[idx + 1]
+        except (ValueError, IndexError):
+            input_arg = "wandb_projects"
+
+        input_root = resolve_input_root(input_arg, _HERE)
+        log.info("[norm_scale] 전체 데이터 수집 중: %s", input_root)
+
+        all_rows = collect_plot_rows_from_results(input_root, DEFAULT_METRIC_ORDER)
+        if not all_rows:
+            log.warning("[norm_scale] 데이터 없음 — %s", input_root)
+            return False
+
+        scale = compute_normalization_scale(all_rows, DEFAULT_METRIC_ORDER)
+        scale_path = pipeline_run_dir / "normalization_scale.json"
+        save_normalization_scale(scale, scale_path)
+        log.info("[norm_scale] 저장 완료: %s  (rows=%d)", scale_path, len(all_rows))
+        return True
+    except Exception:
+        log.error("[norm_scale] 계산 중 예외:\n%s", traceback.format_exc())
+        return False
 
 
 def run_step(
@@ -290,6 +351,19 @@ def main(default_experiment: str | None = None) -> None:
     log.info("extra args  : %s", base_extra or "none")
     log.info("pipeline dir: %s", pipeline_run_dir)
 
+    # ── 전역 Normalization Scale 사전 계산 ──────────────────────────────────
+    # 모든 실험 데이터를 합산하여 normalization scale 을 한 번만 계산하고
+    # pipeline_run_dir/normalization_scale.json 에 저장한다.
+    # 이후 각 step 은 PIPELINE_NORM_SCALE 환경변수를 통해 이 파일을 읽는다.
+    if not args.dry_run:
+        _norm_ok = _compute_global_norm_scale(pipeline_run_dir, base_extra, log)
+        if _norm_ok:
+            os.environ["PIPELINE_NORM_SCALE"] = str(pipeline_run_dir / "normalization_scale.json")
+            log.info("PIPELINE_NORM_SCALE: %s", os.environ["PIPELINE_NORM_SCALE"])
+        else:
+            log.warning("전역 norm scale 계산 실패 — 각 실험이 개별 scale 을 사용합니다.")
+    # ────────────────────────────────────────────────────────────────────────
+
     all_ok = True
     for experiment in experiments_to_run:
         # 환경 변수로 각 step의 make_run_dir()에 경로 전달
@@ -307,6 +381,15 @@ def main(default_experiment: str | None = None) -> None:
 
         exp_results: list[tuple[dict, bool]] = []
         for step in selected_steps:
+            # 실험별 자동 스킵 —————————————————————————————————————————
+            skip_ids = _EXPERIMENT_SKIP.get(experiment, _DEFAULT_SKIP)
+            if step["id"] in skip_ids:
+                log.info(
+                    "Step %d (%s) — experiment=%s 에서 생략됩니다.",
+                    step["id"], step["name"], experiment or "(none)",
+                )
+                continue
+            # ——————————————————————————————————————————————————————————
             ok = run_step(step, extra, dry_run=args.dry_run, log=log)
             exp_results.append((step, ok))
             if not ok and not args.continue_on_failure:
@@ -330,6 +413,7 @@ def main(default_experiment: str | None = None) -> None:
     # 환경 변수 정리
     os.environ.pop("PIPELINE_RUN_DIR", None)
     os.environ.pop("PIPELINE_EXPERIMENT", None)
+    os.environ.pop("PIPELINE_NORM_SCALE", None)
 
     log.info("=== pipeline end ===")
 

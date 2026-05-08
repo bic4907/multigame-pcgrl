@@ -61,3 +61,8 @@ def save_normalization_scale(scale: NormScale, path: Path) -> None:
     with path.open("w", encoding="utf-8") as f:
         json.dump(scale, f, indent=2, ensure_ascii=False)
 
+
+def load_normalization_scale(path: Path) -> NormScale:
+    """JSON 파일에서 정규화 스케일을 로드한다."""
+    with path.open(encoding="utf-8") as f:
+        return json.load(f)

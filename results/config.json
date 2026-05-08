@@ -10,15 +10,18 @@
         "aaai27_eval_cpcgrl",
         "aaai27_eval_ipcgrl",
         "aaai27_eval_vipcgrl",
-        "aaai27_eval_vipcgrl_nosim",
         "aaai27_eval_mgpcgrl"
-      ]
+      ],
+      "re_baseline_project": "aaai27_eval_cpcgrl",
+      "re_baseline_label":   "CPCGRL"
     },
     "unseen_generalizability": {
       "target_projects": [
         "aaai27_eval_mgpcgrl",
         "aaai27_eval_mgpcgrl_unseen"
-      ]
+      ],
+      "seen_baseline_project": "aaai27_eval_mgpcgrl",
+      "seen_baseline_label":   "MGPCGRL"
     }
   },
   "project_display_names": {

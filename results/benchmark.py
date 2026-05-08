@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import math
 from collections import defaultdict
 from pathlib import Path
 
@@ -41,11 +40,14 @@ from utils.io import (
     iter_results_paths,
     read_summary,
     sort_key_reward_enum,
+    load_run_config,
+    get_game_split,
 )
 from utils.normalization import (
     compute_normalization_scale,
     apply_normalization,
     save_normalization_scale,
+    load_normalization_scale,
 )
 
 _CFG = load_cfg()
@@ -90,6 +92,9 @@ def _project_display_name(folder: str) -> str:
 
 PREFERRED_PLOT_FOLDER_ORDER: list[str] = _get_experiment_folder_order()
 
+# metric 별 y축 하한 (None = 0)
+_YMIN: dict[str, float] = {"vit_score": 0.35}
+
 
 def _count_summary_files(root: Path) -> int:
     return sum(1 for _ in root.rglob("summary.csv"))
@@ -109,8 +114,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-csv", default=None)
     parser.add_argument("--decimals", type=int, default=4)
     parser.add_argument("--no-plot", action="store_true")
-    parser.add_argument("--output-folder-md", default=None)
-    parser.add_argument("--output-folder-csv", default=None)
     _exp_names = list(_CFG.get("experiments", {}).keys())
     parser.add_argument("--experiment",
         choices=_exp_names if _exp_names else None,
@@ -165,6 +168,8 @@ def discover_rows(input_root: Path, group_by: str) -> tuple[list[dict], set[str]
         reward_enum = normalize_reward_enum(eval_tokens.get(
             "re", run_tokens.get("re", run_tokens.get("reward_enum", "unknown"))
         ))
+        # 시드 식별자: run_name 의 's' 토큰, 없으면 run_name 전체를 키로 사용
+        seed = run_tokens.get("s", run_name)
         metrics = read_summary(summary_path)
         if not metrics:
             continue
@@ -183,7 +188,7 @@ def discover_rows(input_root: Path, group_by: str) -> tuple[list[dict], set[str]
 
         rows.append({"group": group_key, "project": project, "game": game,
                      "reward_enum": reward_enum, "run": run_name, "eval": eval_name,
-                     "metrics": metrics})
+                     "seed": seed, "metrics": metrics})
     return rows, metric_names
 
 
@@ -194,6 +199,31 @@ def resolve_metric_order(selected: list[str] | None, discovered: set[str]) -> li
     return ordered + sorted(m for m in discovered if m not in ordered)
 
 
+# ---------------------------------------------------------------------------
+# Seed-aware aggregation helper
+# ---------------------------------------------------------------------------
+
+def _seed_agg(group_rows: list[dict], metric: str) -> dict | None:
+    """같은 시드(run)별로 먼저 평균 → 시드 간 mean / std / n_seeds 반환.
+
+    group_rows 안의 각 row 는 ``seed`` 필드를 가져야 한다.
+    seed 필드가 없으면 ``run`` 필드를 fallback 으로 사용한다.
+    """
+    seed_vals: dict[str, list[float]] = defaultdict(list)
+    for r in group_rows:
+        if metric in r["metrics"]:
+            seed = r.get("seed") or r.get("run", str(id(r)))
+            seed_vals[seed].append(r["metrics"][metric])
+    if not seed_vals:
+        return None
+    seed_means = [sum(v) / len(v) for v in seed_vals.values()]
+    return {
+        "mean": sum(seed_means) / len(seed_means),
+        "std":  safe_std(seed_means),
+        "n":    len(seed_means),   # 시드 수
+    }
+
+
 def aggregate(rows: list[dict], metric_order: list[str]) -> list[dict]:
     grouped: dict[tuple, list[dict]] = defaultdict(list)
     for row in rows:
@@ -201,12 +231,13 @@ def aggregate(rows: list[dict], metric_order: list[str]) -> list[dict]:
     result: list[dict] = []
     for group_key in sorted(grouped.keys()):
         group_rows = grouped[group_key]
-        agg: dict = {"group": group_key, "n_runs": len(group_rows), "stats": {}}
+        # n_seeds: 해당 group 내 고유 시드 수
+        n_seeds = len({r.get("seed") or r.get("run", "") for r in group_rows})
+        agg: dict = {"group": group_key, "n_runs": n_seeds, "stats": {}}
         for metric in metric_order:
-            values = [r["metrics"][metric] for r in group_rows if metric in r["metrics"]]
-            if values:
-                agg["stats"][metric] = {"mean": sum(values)/len(values),
-                                        "std": safe_std(values), "n": len(values)}
+            stat = _seed_agg(group_rows, metric)
+            if stat:
+                agg["stats"][metric] = stat
         result.append(agg)
     return result
 
@@ -219,10 +250,9 @@ def aggregate_folder_game_reward(rows: list[dict], metric_order: list[str]) -> d
     for key, group_rows in grouped.items():
         stats: dict = {}
         for metric in metric_order:
-            values = [r["metrics"][metric] for r in group_rows if metric in r["metrics"]]
-            if values:
-                stats[metric] = {"mean": sum(values)/len(values),
-                                 "std": safe_std(values), "n": len(values)}
+            stat = _seed_agg(group_rows, metric)
+            if stat:
+                stats[metric] = stat
         result[key] = stats
     return result
 
@@ -235,23 +265,34 @@ def aggregate_folder_reward_overall(rows: list[dict], metric_order: list[str]) -
     for key, group_rows in grouped.items():
         stats: dict = {}
         for metric in metric_order:
-            values = [r["metrics"][metric] for r in group_rows if metric in r["metrics"]]
-            if values:
-                stats[metric] = {"mean": sum(values)/len(values),
-                                 "std": safe_std(values), "n": len(values)}
+            stat = _seed_agg(group_rows, metric)
+            if stat:
+                stats[metric] = stat
         result[key] = stats
     return result
 
 
 def collect_plot_rows_from_results(input_root: Path, metric_order: list[str]) -> list[dict]:
     rows: list[dict] = []
+    # run_config.json 로드 캐시 (같은 eval 폴더를 중복 읽지 않도록)
+    _cfg_cache: dict[Path, dict] = {}
+
     for results_path in iter_results_paths(input_root):
         rel = results_path.relative_to(input_root)
         if len(rel.parts) < 3:
             continue
         project   = rel.parts[0]
+        run_name  = rel.parts[1]
         eval_name = rel.parts[2] if len(rel.parts) >= 4 else ""
         eval_tokens = parse_run_tokens(eval_name)
+        # 시드 식별자: run_name 의 's' 토큰, 없으면 run_name 전체
+        seed = parse_run_tokens(run_name).get("s", run_name)
+
+        # run_config.json 에서 seen/unseen 정보 로드 (폴더 단위 캐시)
+        run_dir = results_path.parent
+        if run_dir not in _cfg_cache:
+            _cfg_cache[run_dir] = load_run_config(run_dir)
+        run_cfg = _cfg_cache[run_dir]
 
         with results_path.open(newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -264,26 +305,16 @@ def collect_plot_rows_from_results(input_root: Path, metric_order: list[str]) ->
                     if (v := to_float(row.get(m))) is not None
                 }
                 if metric_values:
-                    rows.append({"project": project, "game": game,
-                                 "reward_enum": reward_enum, "metrics": metric_values})
+                    rows.append({
+                        "project": project,
+                        "game": game,
+                        "reward_enum": reward_enum,
+                        "game_split": get_game_split(game, run_cfg),
+                        "seed": seed,
+                        "metrics": metric_values,
+                    })
     return rows
 
-
-def aggregate_folder_only(rows: list[dict], metric_order: list[str]) -> list[dict]:
-    grouped: dict[str, list[dict]] = defaultdict(list)
-    for row in rows:
-        grouped[row["project"]].append(row)
-    out: list[dict] = []
-    for folder in sorted(grouped.keys()):
-        folder_rows = grouped[folder]
-        rec: dict = {"folder": folder, "n_rows": len(folder_rows), "stats": {}}
-        for metric in metric_order:
-            values = [r["metrics"][metric] for r in folder_rows if metric in r["metrics"]]
-            if values:
-                rec["stats"][metric] = {"mean": sum(values)/len(values),
-                                        "std": safe_std(values), "n": len(values)}
-        out.append(rec)
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -348,39 +379,6 @@ def write_csv_table(output_path: Path, grouped_rows: list[dict],
                 rec[f"{m}_n"]    = stat["n"]    if stat else 0
             writer.writerow(rec)
 
-
-def write_folder_only_markdown(output_path: Path, folder_rows: list[dict],
-                                metric_order: list[str], decimals: int) -> None:
-    headers = ["folder", "n_rows"] + metric_order
-    lines = ["| " + " | ".join(headers) + " |",
-             "| " + " | ".join(["---"] * len(headers)) + " |"]
-    for row in folder_rows:
-        cells = [row["folder"], str(row["n_rows"])]
-        for m in metric_order:
-            stat = row["stats"].get(m)
-            cells.append(f"{stat['mean']:.{decimals}f} +- {stat['std']:.{decimals}f}" if stat else "-")
-        lines.append("| " + " | ".join(cells) + " |")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def write_folder_only_csv(output_path: Path, folder_rows: list[dict],
-                           metric_order: list[str]) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    headers = ["folder", "n_rows"]
-    for m in metric_order:
-        headers += [f"{m}_mean", f"{m}_std", f"{m}_n"]
-    with output_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=headers)
-        writer.writeheader()
-        for row in folder_rows:
-            rec: dict = {"folder": row["folder"], "n_rows": row["n_rows"]}
-            for m in metric_order:
-                stat = row["stats"].get(m)
-                rec[f"{m}_mean"] = stat["mean"] if stat else ""
-                rec[f"{m}_std"]  = stat["std"]  if stat else ""
-                rec[f"{m}_n"]    = stat["n"]    if stat else 0
-            writer.writerow(rec)
 
 
 # ---------------------------------------------------------------------------
@@ -459,7 +457,7 @@ def write_game_reward_subplots(output_path: Path, plot_rows: list[dict],
             if drew_any and y_uppers:
                 dm = max(y_uppers)
                 pad = max(dm, 1e-6) * 0.12
-                ax.set_ylim(0, dm + pad)
+                ax.set_ylim(_YMIN.get(metric, 0), dm + pad)
             else:
                 ax.text(0.5, 0.5, "No data", transform=ax.transAxes, ha="center", va="center")
 
@@ -479,12 +477,23 @@ def write_game_reward_subplots(output_path: Path, plot_rows: list[dict],
 
 
 def write_overall_simple_plot(output_path: Path, plot_rows: list[dict],
-                               metric_order: list[str]) -> None:
+                               metric_order: list[str],
+                               baseline_project: str | None = None,
+                               baseline_label: str | None = None) -> None:
     plt = _bar_plot_setup()
     grouped_overall = aggregate_folder_reward_overall(plot_rows, metric_order)
-    folders = sorted({f for f, _ in grouped_overall}, key=_sort_folder_for_plot)
-    rewards = sorted({r for _, r in grouped_overall}, key=sort_key_reward_enum)
-    colors  = _palette(len(folders))
+    all_folders = sorted({f for f, _ in grouped_overall}, key=_sort_folder_for_plot)
+    rewards     = sorted({r for _, r in grouped_overall}, key=sort_key_reward_enum)
+
+    # baseline을 바에서 제외
+    bar_folders = [f for f in all_folders if f != baseline_project]
+    colors      = _palette(len(bar_folders))
+
+    # 기준선 label
+    bl_label = baseline_label or (
+        _project_display_name(baseline_project) if baseline_project else "Baseline"
+    )
+    legend_baseline_text = f"{bl_label} (baseline)"
 
     n_metrics = len(metric_order)
     if not n_metrics:
@@ -494,9 +503,12 @@ def write_overall_simple_plot(output_path: Path, plot_rows: list[dict],
 
     for ci, metric in enumerate(metric_order):
         ax    = axes[0][ci]
-        width = 0.8 / max(len(folders), 1)
+        width = 0.8 / max(len(bar_folders), 1)
         drew_any, y_uppers = False, []
-        for j, folder in enumerate(folders):
+        baseline_legend_added = False
+
+        # ── bars (baseline 제외) ──────────────────────────────────────────
+        for j, folder in enumerate(bar_folders):
             means, stds, xs = [], [], []
             for k, re in enumerate(rewards):
                 stat = grouped_overall.get((folder, re), {}).get(metric)
@@ -512,6 +524,22 @@ def write_overall_simple_plot(output_path: Path, plot_rows: list[dict],
             ax.bar(xs, means, width=width, yerr=stds, capsize=2,
                    label=_project_display_name(folder),
                    color=colors[j % len(colors)], edgecolor="white", linewidth=0.8, alpha=0.9)
+
+        # ── 기준선 (baseline_project) ──────────────────────────────────────
+        if baseline_project:
+            for k, re in enumerate(rewards):
+                stat = grouped_overall.get((baseline_project, re), {}).get(metric)
+                if not stat:
+                    continue
+                y_val   = float(stat["mean"])
+                x_left  = x_center[k] - 0.45
+                x_right = x_center[k] + 0.45
+                lbl = legend_baseline_text if not baseline_legend_added else None
+                ax.plot([x_left, x_right], [y_val, y_val],
+                        color="red", linewidth=2.0, linestyle="--", zorder=5, label=lbl)
+                baseline_legend_added = True
+                y_uppers.append(y_val)
+
         ax.set_title(METRIC_DISPLAY_NAMES.get(metric, metric))
         if ci == 0:
             ax.set_ylabel("overall", rotation=90, labelpad=8)
@@ -522,13 +550,20 @@ def write_overall_simple_plot(output_path: Path, plot_rows: list[dict],
         if drew_any and y_uppers:
             dm  = max(y_uppers)
             pad = max(dm, 1e-6) * 0.12
-            ax.set_ylim(0, dm + pad)
+            ax.set_ylim(_YMIN.get(metric, 0), dm + pad)
         else:
             ax.text(0.5, 0.5, "No data", transform=ax.transAxes, ha="center", va="center")
 
-    handles, labels = axes[0][0].get_legend_handles_labels()
+    # 범례: 중복 제거 후 상단 중앙
+    handles, labels = [], []
+    for ax in axes[0]:
+        h, l = ax.get_legend_handles_labels()
+        for handle, lbl in zip(h, l):
+            if lbl and lbl not in labels:
+                handles.append(handle)
+                labels.append(lbl)
     if handles:
-        fig.legend(handles, labels, loc="upper center", ncol=min(len(labels), 6))
+        fig.legend(handles, labels, loc="upper center", ncol=min(len(handles), 6))
         fig.subplots_adjust(top=0.82)
     fig.tight_layout(rect=(0, 0, 1, 0.94))
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -536,9 +571,133 @@ def write_overall_simple_plot(output_path: Path, plot_rows: list[dict],
     plt.close(fig)
 
 
-# ---------------------------------------------------------------------------
-# main
-# ---------------------------------------------------------------------------
+def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
+                            metric_order: list[str],
+                            seen_baseline_project: str | None = None,
+                            seen_baseline_label: str | None = None) -> None:
+    """unseen 게임 성능 바 플롯 + seen 성능을 빨간 수평선(Seen baseline)으로 오버레이.
+
+    레이아웃: 1행 × n_metrics열 (가로 배치, allseen re.png 와 유사한 크기)
+    바 높이와 에러 바(yerr)는 시드별 먼저 평균 → 시드 간 mean/std 로 계산한다.
+    """
+    plt = _bar_plot_setup()
+    folders = sorted({r["project"] for r in plot_rows}, key=_sort_folder_for_plot)
+    rewards = sorted({r["reward_enum"] for r in plot_rows}, key=sort_key_reward_enum)
+    colors  = _palette(len(folders))
+
+    n_metrics = len(metric_order)
+    if not n_metrics:
+        return
+
+    baseline_project = seen_baseline_project or (folders[0] if folders else None)
+    baseline_label   = seen_baseline_label or (
+        _project_display_name(baseline_project) if baseline_project else "Seen baseline"
+    )
+    legend_baseline_text = f"Seen baseline ({baseline_label})"
+
+    # (folder, split, reward_enum) → rows 목록
+    grouped: dict[tuple, list[dict]] = defaultdict(list)
+    for r in plot_rows:
+        grouped[(r["project"], r["game_split"], r["reward_enum"])].append(r)
+
+    def _seed_stats(folder, split, re, metric):
+        stat = _seed_agg(grouped.get((folder, split, re), []), metric)
+        if stat is None:
+            return None, None
+        return stat["mean"], stat["std"]
+
+    # 가로 배치: 1행 × n_metrics열, allseen re.png 와 유사한 크기
+    # 마지막 subplot 에만 baseline 텍스트 여백 필요
+    fig, axes = plt.subplots(
+        1, n_metrics,
+        figsize=(3.8 * n_metrics + 1.5, 3.5),
+        squeeze=False,
+    )
+    fig.suptitle("Unseen Games", fontsize=11, fontweight="bold", y=1.01)
+
+    x_center  = list(range(len(rewards)))
+    bar_width  = 0.8 / max(len(folders), 1)
+
+    for ci, metric in enumerate(metric_order):
+        metric_label = METRIC_DISPLAY_NAMES.get(metric, metric)
+        ax = axes[0][ci]
+        drew_any, y_uppers = False, []
+        baseline_legend_added = False
+        is_last = ci == n_metrics - 1
+
+        # ── unseen bars + 시드별 std 에러 바 ─────────────────────────────
+        for j, folder in enumerate(folders):
+            means, stds, xs = [], [], []
+            for k, re in enumerate(rewards):
+                mean, std = _seed_stats(folder, "unseen", re, metric)
+                if mean is None:
+                    continue
+                xs.append(x_center[k] - 0.4 + (j + 0.5) * bar_width)
+                means.append(float(mean))
+                stds.append(float(std))
+                y_uppers.append(float(mean) + float(std))
+            if means:
+                drew_any = True
+                ax.bar(xs, means, width=bar_width, yerr=stds, capsize=2,
+                       label=_project_display_name(folder),
+                       color=colors[j % len(colors)], edgecolor="white",
+                       linewidth=0.8, alpha=0.9)
+
+        # ── seen baseline 수평선 ───────────────────────────────────────────
+        if baseline_project:
+            for k, re in enumerate(rewards):
+                val_seen, _ = _seed_stats(baseline_project, "seen", re, metric)
+                if val_seen is None:
+                    continue
+                y_val   = float(val_seen)
+                x_left  = x_center[k] - 0.45
+                x_right = x_center[k] + 0.45
+                lbl = legend_baseline_text if not baseline_legend_added else None
+                ax.plot([x_left, x_right], [y_val, y_val],
+                        color="red", linewidth=2.0, linestyle="--",
+                        zorder=5, label=lbl)
+                baseline_legend_added = True
+                # 마지막 subplot 의 마지막 re 오른쪽에만 텍스트
+                if is_last and k == len(rewards) - 1:
+                    ax.text(x_right + 0.06, y_val,
+                            f"Seen\nbaseline\n({baseline_label})",
+                            color="red", fontsize=6.0, va="center", ha="left",
+                            linespacing=1.2)
+                y_uppers.append(y_val)
+
+        ax.set_title(metric_label)
+        if ci == 0:
+            ax.set_ylabel("Score", rotation=90, labelpad=8)
+        ax.set_xticks(x_center, [f"re={r}" for r in rewards])
+        ax.tick_params(axis="x", labelrotation=0)
+        # 마지막 subplot 에만 텍스트 여백
+        ax.set_xlim(-0.5, len(rewards) - 0.5 + (1.1 if is_last else 0))
+        ax.grid(axis="y", alpha=0.3)
+        if drew_any and y_uppers:
+            dm  = max(y_uppers)
+            pad = max(dm, 1e-6) * 0.15
+            ax.set_ylim(_YMIN.get(metric, 0), dm + pad)
+        else:
+            ax.text(0.5, 0.5, "No data", transform=ax.transAxes,
+                    ha="center", va="center", color="gray")
+
+    # 범례: 중복 제거 후 상단 중앙
+    handles, labels = [], []
+    for ax in axes[0]:
+        h, l = ax.get_legend_handles_labels()
+        for handle, lbl in zip(h, l):
+            if lbl and lbl not in labels:
+                handles.append(handle)
+                labels.append(lbl)
+    if handles:
+        fig.legend(handles, labels, loc="upper center", ncol=min(len(handles), 5),
+                   fontsize=8, bbox_to_anchor=(0.5, 1.0))
+        fig.subplots_adjust(top=0.82)
+
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
 
 def main() -> None:
     from utils.run_output import make_run_dir, setup_logger
@@ -558,10 +717,8 @@ def main() -> None:
 
     script_dir = Path(__file__).resolve().parent
     input_root = resolve_input_root(args.input, script_dir)
-    output_md         = Path(args.output_md).resolve()         if args.output_md         else run_dir / "benchmark_table.md"
-    output_csv        = Path(args.output_csv).resolve()        if args.output_csv        else run_dir / "benchmark_table.csv"
-    output_folder_md  = Path(args.output_folder_md).resolve()  if args.output_folder_md  else run_dir / "benchmark_folder_mean.md"
-    output_folder_csv = Path(args.output_folder_csv).resolve() if args.output_folder_csv else run_dir / "benchmark_folder_mean.csv"
+    output_md  = Path(args.output_md).resolve()  if args.output_md  else run_dir / "benchmark_table.md"
+    output_csv = Path(args.output_csv).resolve() if args.output_csv else run_dir / "benchmark_table.csv"
 
     rows, discovered_metrics = discover_rows(input_root=input_root, group_by=args.group_by)
 
@@ -588,15 +745,6 @@ def main() -> None:
     if target_projects:
         plot_rows = [r for r in plot_rows if r["project"] in target_projects]
 
-    if plot_rows:
-        folder_rows = aggregate_folder_only(plot_rows, metric_order)
-        write_folder_only_markdown(output_folder_md,  folder_rows, metric_order, args.decimals)
-        write_folder_only_csv(output_folder_csv, folder_rows, metric_order)
-        log.debug("folder_md : %s", output_folder_md)
-        log.debug("folder_csv: %s", output_folder_csv)
-    else:
-        log.warning("No valid rows in results.csv — skipped folder-only mean outputs.")
-
     if not args.no_plot and not plot_rows:
         msg = "No valid plot rows found from results.csv under input root."
         log.error(msg)
@@ -604,27 +752,35 @@ def main() -> None:
 
     # ---- Normalization + plots ----
     if plot_rows:
-        norm_scale     = compute_normalization_scale(plot_rows, metric_order)
-        norm_scale_path = run_dir / "normalization_scale.json"
-        save_normalization_scale(norm_scale, norm_scale_path)
-        log.info("norm_scale: %s", norm_scale_path)
+        # 파이프라인에서 전달된 전역 norm scale 우선 사용, 없으면 로컬 계산
+        import os as _os
+        _global_scale_path = _os.environ.get("PIPELINE_NORM_SCALE")
+        if _global_scale_path and Path(_global_scale_path).is_file():
+            norm_scale = load_normalization_scale(Path(_global_scale_path))
+            log.info("norm_scale (global): %s", _global_scale_path)
+        else:
+            norm_scale = compute_normalization_scale(plot_rows, metric_order)
+            norm_scale_path = run_dir / "normalization_scale.json"
+            save_normalization_scale(norm_scale, norm_scale_path)
+            log.info("norm_scale (local) : %s", norm_scale_path)
 
         norm_rows = apply_normalization(plot_rows, norm_scale, metric_order)
 
-        norm_folder_rows = aggregate_folder_only(norm_rows, metric_order)
-        write_folder_only_markdown(run_dir / "normalized_folder_mean.md",
-                                   norm_folder_rows, metric_order, args.decimals)
-        write_folder_only_csv(run_dir / "normalized_folder_mean.csv",
-                               norm_folder_rows, metric_order)
-        log.debug("norm_md   : %s", run_dir / "normalized_folder_mean.md")
-        log.debug("norm_csv  : %s", run_dir / "normalized_folder_mean.csv")
-
         if not args.no_plot:
             try:
-                write_overall_simple_plot(run_dir / "re.png",      norm_rows, DEFAULT_METRIC_ORDER.copy())
+                # re.png: experiment의 re_baseline_project 를 기준선으로
+                exp_cfg       = _CFG.get("experiments", {}).get(args.experiment or "", {})
+                re_baseline   = exp_cfg.get("re_baseline_project")
+                re_bl_label   = exp_cfg.get("re_baseline_label")
+                write_overall_simple_plot(
+                    run_dir / "re.png", norm_rows, DEFAULT_METRIC_ORDER.copy(),
+                    baseline_project=re_baseline,
+                    baseline_label=re_bl_label,
+                )
                 write_game_reward_subplots(run_dir / "re_game.png", norm_rows, metric_order)
                 log.info("plot      : %s", run_dir / "re.png")
                 log.info("plot_game : %s", run_dir / "re_game.png")
+
             except RuntimeError as e:
                 log.error("Plot generation failed: %s", e)
                 raise SystemExit(str(e)) from e

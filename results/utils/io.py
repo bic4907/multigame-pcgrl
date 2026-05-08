@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 
@@ -77,4 +78,32 @@ def sort_key_reward_enum(value: str) -> tuple[int, float | str]:
         return (0, float(value))
     except ValueError:
         return (1, value)
+
+
+# ---------------------------------------------------------------------------
+# run_config.json helpers
+# ---------------------------------------------------------------------------
+
+def load_run_config(run_dir: Path) -> dict:
+    """run_dir 아래 run_config.json 을 로드해 dict 로 반환한다. 없으면 {}."""
+    path = run_dir / "run_config.json"
+    if not path.is_file():
+        return {}
+    try:
+        with path.open(encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def get_game_split(game: str, run_cfg: dict) -> str:
+    """run_config.json 의 seen_games / unseen_games 기반으로 'seen' | 'unseen' | 'unknown' 반환."""
+    seen   = run_cfg.get("seen_games",   [])
+    unseen = run_cfg.get("unseen_games", [])
+    if game in seen:
+        return "seen"
+    if game in unseen:
+        return "unseen"
+    return "unknown"
+
 

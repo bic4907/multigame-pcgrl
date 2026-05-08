@@ -7,6 +7,10 @@ Artifact types
   - eval_csv  (type=dataset): ctrl_sim.csv / results.csv / diversity.csv / summary.csv
   - eval_h5_* (type=dataset): eval.h5
 
+Run config
+  - run_config.json: 각 run의 W&B config를 필터링하여 저장
+    불필요한 키는 results/run_config_exclude_keys.json 에서 관리
+
 Examples
 --------
     python results/eval_downloader.py
@@ -15,9 +19,11 @@ Examples
     python results/eval_downloader.py --h5
     python results/eval_downloader.py --output wandb_projects
     python results/eval_downloader.py --finished-only --workers 4
+    python results/eval_downloader.py --no-run-config
 """
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -50,12 +56,118 @@ logger = logging.getLogger(__name__)
 def _load_cfg() -> dict:
     cfg_path = os.path.join(_HERE, "config.json")
     if os.path.isfile(cfg_path):
-        import json
         with open(cfg_path, encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 _CFG = _load_cfg()
+
+
+def _load_exclude_keys() -> set[str]:
+    """run_config_exclude_keys.json 에서 제외 키 목록을 읽어 set 으로 반환한다.
+
+    JSON 파일의 ``exclude_keys`` 배열에서 ``#`` 으로 시작하는 주석 문자열은
+    자동으로 건너뛴다.
+    """
+    path = os.path.join(_HERE, "run_config_exclude_keys.json")
+    if not os.path.isfile(path):
+        logger.warning(
+            "run_config_exclude_keys.json 을 찾을 수 없습니다 — 필터 없이 전체 config 를 저장합니다."
+        )
+        return set()
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    raw = data.get("exclude_keys", [])
+    return {k for k in raw if isinstance(k, str) and not k.startswith("#")}
+
+
+_EXCLUDE_KEYS: set[str] = _load_exclude_keys()
+
+
+_ALL_GAMES: list[str] = ["doom", "dungeon", "pokemon", "sokoban", "zelda"]
+
+
+def _derive_game_lists(raw_cfg: dict) -> dict:
+    """raw run.config 의 ``include_*`` 플래그로 seen_games / unseen_games 를 파생한다.
+
+    doom / doom2 는 표시 게임 기준 "doom" 하나로 통합한다.
+    두 플래그가 모두 없으면 게임이 특정되지 않으므로 빈 리스트를 반환한다.
+    """
+    # include_* 플래그가 하나도 없는 config 는 게임 구분 불가
+    flag_keys = {"include_doom", "include_doom2", "include_dungeon",
+                 "include_pokemon", "include_sokoban", "include_zelda"}
+    if not flag_keys.intersection(raw_cfg):
+        return {}
+
+    seen_flags = {
+        "doom":    bool(raw_cfg.get("include_doom", False) or raw_cfg.get("include_doom2", False)),
+        "dungeon": bool(raw_cfg.get("include_dungeon", False)),
+        "pokemon": bool(raw_cfg.get("include_pokemon", False)),
+        "sokoban": bool(raw_cfg.get("include_sokoban", False)),
+        "zelda":   bool(raw_cfg.get("include_zelda", False)),
+    }
+    return {
+        "seen_games":   [g for g in _ALL_GAMES if     seen_flags[g]],
+        "unseen_games": [g for g in _ALL_GAMES if not seen_flags[g]],
+    }
+
+
+def _flatten_encoder(cfg: dict) -> dict:
+    """``encoder`` 값이 문자열 Python dict 이면 ``encoder.<subkey>`` 로 펼쳐서 반환한다.
+
+    원본 ``encoder`` 키는 제거되고, 예를 들어 ``encoder.model``, ``encoder.ckpt_path``
+    등의 최상위 키로 대체된다. 값이 없거나 dict 가 아니면 그대로 반환한다.
+    """
+    import ast
+
+    result = dict(cfg)
+    enc = result.pop("encoder", None)
+    if enc is None:
+        return result
+
+    # W&B 는 종종 dict 를 Python repr 문자열로 저장함 — ast.literal_eval 로 파싱
+    if isinstance(enc, str):
+        try:
+            enc = ast.literal_eval(enc)
+        except (ValueError, SyntaxError):
+            # 파싱 실패 시 원본 문자열 그대로 보존
+            result["encoder"] = enc
+            return result
+
+    if isinstance(enc, dict):
+        for sub_key, sub_val in enc.items():
+            result[f"encoder.{sub_key}"] = sub_val
+    else:
+        result["encoder"] = enc
+
+    return result
+
+
+def _filter_run_config(cfg: dict, exclude_keys: set[str] | None = None) -> dict:
+    """run.config 에서 불필요한 키를 제거하고 ``encoder`` 를 dot notation 으로 펼친다.
+
+    처리 순서:
+    1. raw config 에서 seen_games / unseen_games 파생
+    2. 최상위 exclude_keys 제거
+    3. ``encoder`` 문자열 dict → ``encoder.<subkey>`` 로 펼치기
+    4. 펼쳐진 ``encoder.*`` 키 중 exclude_keys 에 포함된 것도 제거
+    """
+    keys = exclude_keys if exclude_keys is not None else _EXCLUDE_KEYS
+    # 1) raw config 기준 게임 리스트 파생 (필터 전)
+    game_lists = _derive_game_lists(cfg)
+    # 2) 최상위 필터 (encoder 자체는 아직 남김)
+    filtered = {k: v for k, v in cfg.items() if k not in keys}
+    # 3) encoder 펼치기
+    expanded = _flatten_encoder(filtered)
+    # 4) 펼쳐진 encoder.* 키에도 exclude 필터 적용
+    result = {k: v for k, v in expanded.items() if k not in keys}
+    # seen_games / unseen_games 주입 (기존 키 우선 — 이미 있으면 덮어쓰지 않음)
+    for k, v in game_lists.items():
+        result.setdefault(k, v)
+    # dataset_reward_enum → re 로 축약
+    if "dataset_reward_enum" in result:
+        result["re"] = result.pop("dataset_reward_enum")
+    return result
 
 
 @dataclass
@@ -95,6 +207,7 @@ TARGET_PROJECTS: list[str] = _ALL_EXPERIMENT_PROJECTS_DEDUP or [
 ]
 _DEFAULT_NUM_WORKERS: int = _CFG.get("wandb", {}).get("num_workers", DEFAULT_NUM_WORKERS)
 _DEFAULT_OUTPUT: str = "wandb_projects"
+_PROJECT_DISPLAY_NAMES: dict[str, str] = _CFG.get("project_display_names", {})
 
 # ---------------------------------------------------------------------------
 # Download a single run
@@ -104,8 +217,10 @@ _DEFAULT_OUTPUT: str = "wandb_projects"
 def _download_run(
     run,
     output_dir: str,
+    project: str = "",
     download_csv: bool = True,
     download_h5: bool = True,
+    download_run_config: bool = True,
     skip_if_exists: bool = True,
 ) -> _RunResult:
     """Download eval artifacts from a single W&B run.
@@ -167,12 +282,27 @@ def _download_run(
             except Exception as e:
                 errors.append(f"eval_h5 error: {e}")
 
+    # ── save run config ───────────────────────────────────────────────────
+    if download_run_config:
+        config_path = os.path.join(run_dir, "run_config.json")
+        if not (skip_if_exists and os.path.isfile(config_path)):
+            try:
+                filtered = _filter_run_config(run.config)
+                # method: config.json project_display_names 기반 축약 이름 주입
+                method = _PROJECT_DISPLAY_NAMES.get(project, project) if project else None
+                if method:
+                    filtered = {"method": method, **filtered}
+                with open(config_path, "w", encoding="utf-8") as fp:
+                    json.dump(filtered, fp, indent=2, ensure_ascii=False)
+            except Exception as e:
+                errors.append(f"run_config error: {e}")
+
     if errors:
         return _RunResult(run_name=run.name, status="error", error=" | ".join(errors))
     return _RunResult(run_name=run.name, status="ok")
 
 
-# ---------------------------------------------------------------------------
+
 # Download all runs in a project
 # ---------------------------------------------------------------------------
 
@@ -183,6 +313,7 @@ def download_eval_project(
     output_dir: str = "wandb_projects",
     download_csv: bool = True,
     download_h5: bool = True,
+    download_run_config: bool = True,
     skip_if_exists: bool = True,
     n_workers: int = DEFAULT_NUM_WORKERS,
     filters: dict | None = None,
@@ -200,8 +331,10 @@ def download_eval_project(
         return _download_run(
             run,
             output_dir=proj_output_dir,
+            project=project,
             download_csv=download_csv,
             download_h5=download_h5,
+            download_run_config=download_run_config,
             skip_if_exists=skip_if_exists,
         )
 
@@ -235,7 +368,7 @@ def parse_args():
     _exp_names = list(_EXPERIMENTS.keys())
     _exp_choices_str = ", ".join(_exp_names) if _exp_names else "none defined"
     parser = argparse.ArgumentParser(
-        description="W&B eval artifact downloader (eval_csv / eval_h5)",
+        description="W&B eval artifact downloader (eval_csv / eval_h5 / run_config)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 examples:
@@ -243,6 +376,7 @@ examples:
   python results/eval_downloader.py --experiment allseen
   python results/eval_downloader.py --experiment unseen_generalizability
   python results/eval_downloader.py --no-h5
+  python results/eval_downloader.py --no-run-config
   python results/eval_downloader.py --output wandb_projects --finished-only
   python results/eval_downloader.py --projects aaai27_eval_cpcgrl --workers 4
 
@@ -291,6 +425,11 @@ available experiments: {_exp_choices_str}
         action="store_false",
         dest="no_h5",
         help="Include eval_h5 artifact (eval.h5) in download",
+    )
+    parser.add_argument(
+        "--no-run-config",
+        action="store_true",
+        help="Skip saving run_config.json (filtered W&B run config)",
     )
     parser.add_argument(
         "--force",
@@ -358,6 +497,7 @@ def main():
             output_dir=args.output,
             download_csv=not args.no_csv,
             download_h5=not args.no_h5,
+            download_run_config=not args.no_run_config,
             skip_if_exists=not args.force,
             n_workers=args.workers,
             filters=filters,

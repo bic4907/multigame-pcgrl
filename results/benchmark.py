@@ -577,13 +577,14 @@ def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
                             seen_baseline_label: str | None = None) -> None:
     """unseen 게임 성능 바 플롯 + seen 성능을 빨간 수평선(Seen baseline)으로 오버레이.
 
-    레이아웃: 1행 × n_metrics열 (가로 배치, allseen re.png 와 유사한 크기)
-    바 높이와 에러 바(yerr)는 시드별 먼저 평균 → 시드 간 mean/std 로 계산한다.
+    레이아웃: 1행 × n_metrics열 (가로 배치)
+    unseen 데이터가 없는 folder 는 바 위치 계산에서 제외해 가운데 정렬을 유지한다.
     """
     plt = _bar_plot_setup()
     folders = sorted({r["project"] for r in plot_rows}, key=_sort_folder_for_plot)
     rewards = sorted({r["reward_enum"] for r in plot_rows}, key=sort_key_reward_enum)
-    colors  = _palette(len(folders))
+    colors_all = _palette(len(folders))
+    folder_color = {f: colors_all[i % len(colors_all)] for i, f in enumerate(folders)}
 
     n_metrics = len(metric_order)
     if not n_metrics:
@@ -606,33 +607,37 @@ def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
             return None, None
         return stat["mean"], stat["std"]
 
-    # 가로 배치: 1행 × n_metrics열, allseen re.png 와 유사한 크기
-    # 마지막 subplot 에만 baseline 텍스트 여백 필요
+    # 가로 배치: 1행 × n_metrics열
     fig, axes = plt.subplots(
         1, n_metrics,
         figsize=(3.8 * n_metrics + 1.5, 3.5),
         squeeze=False,
     )
-    fig.suptitle("Unseen Games", fontsize=11, fontweight="bold", y=1.01)
+    # suptitle 없음
 
     x_center  = list(range(len(rewards)))
-    bar_width  = 0.8 / max(len(folders), 1)
 
     for ci, metric in enumerate(metric_order):
         metric_label = METRIC_DISPLAY_NAMES.get(metric, metric)
         ax = axes[0][ci]
         drew_any, y_uppers = False, []
         baseline_legend_added = False
-        is_last = ci == n_metrics - 1
 
-        # ── unseen bars + 시드별 std 에러 바 ─────────────────────────────
-        for j, folder in enumerate(folders):
+        # ── unseen 데이터가 있는 folder 만 추려서 바 위치·폭 계산 ──────────
+        active_folders = [
+            f for f in folders
+            if any(_seed_stats(f, "unseen", re, metric)[0] is not None for re in rewards)
+        ]
+        n_bars    = max(len(active_folders), 1)
+        bar_width = 0.8 / n_bars
+
+        for bar_j, folder in enumerate(active_folders):
             means, stds, xs = [], [], []
             for k, re in enumerate(rewards):
                 mean, std = _seed_stats(folder, "unseen", re, metric)
                 if mean is None:
                     continue
-                xs.append(x_center[k] - 0.4 + (j + 0.5) * bar_width)
+                xs.append(x_center[k] - 0.4 + (bar_j + 0.5) * bar_width)
                 means.append(float(mean))
                 stds.append(float(std))
                 y_uppers.append(float(mean) + float(std))
@@ -640,10 +645,10 @@ def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
                 drew_any = True
                 ax.bar(xs, means, width=bar_width, yerr=stds, capsize=2,
                        label=_project_display_name(folder),
-                       color=colors[j % len(colors)], edgecolor="white",
+                       color=folder_color[folder], edgecolor="white",
                        linewidth=0.8, alpha=0.9)
 
-        # ── seen baseline 수평선 ───────────────────────────────────────────
+        # ── seen baseline 수평선 (텍스트 애노테이션 없음) ─────────────────
         if baseline_project:
             for k, re in enumerate(rewards):
                 val_seen, _ = _seed_stats(baseline_project, "seen", re, metric)
@@ -657,12 +662,6 @@ def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
                         color="red", linewidth=2.0, linestyle="--",
                         zorder=5, label=lbl)
                 baseline_legend_added = True
-                # 마지막 subplot 의 마지막 re 오른쪽에만 텍스트
-                if is_last and k == len(rewards) - 1:
-                    ax.text(x_right + 0.06, y_val,
-                            f"Seen\nbaseline\n({baseline_label})",
-                            color="red", fontsize=6.0, va="center", ha="left",
-                            linespacing=1.2)
                 y_uppers.append(y_val)
 
         ax.set_title(metric_label)
@@ -670,8 +669,7 @@ def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
             ax.set_ylabel("Score", rotation=90, labelpad=8)
         ax.set_xticks(x_center, [f"re={r}" for r in rewards])
         ax.tick_params(axis="x", labelrotation=0)
-        # 마지막 subplot 에만 텍스트 여백
-        ax.set_xlim(-0.5, len(rewards) - 0.5 + (1.1 if is_last else 0))
+        ax.set_xlim(-0.5, len(rewards) - 0.5)
         ax.grid(axis="y", alpha=0.3)
         if drew_any and y_uppers:
             dm  = max(y_uppers)

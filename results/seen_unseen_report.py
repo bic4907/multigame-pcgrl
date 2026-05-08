@@ -248,11 +248,14 @@ def write_seen_unseen_plot(
 ) -> None:
     """unseen 게임 성능 바 플롯 + seen 성능을 빨간 수평선으로 오버레이.
 
-    바 높이와 에러 바는 모두 시드별 먼저 평균 → 시드 간 mean/std 로 계산한다.
+    레이아웃: 1행 × n_metrics열 (가로 배치, allseen re.png 와 유사한 크기)
+    바 높이와 에러 바는 시드별 먼저 평균 → 시드 간 mean/std 로 계산한다.
     """
     plt = _bar_plot_setup()
     folders = sorted({r["project"] for r in plot_rows}, key=_sort_folder_for_plot)
-    rewards = sorted({r["reward_enum"] for r in plot_rows}, key=sort_key_reward_enum)
+    # unseen 데이터에 실제로 존재하는 reward_enum 만 사용 (seen-only 항목을 x축에서 제거)
+    unseen_rows = [r for r in plot_rows if r.get("game_split") == "unseen"]
+    rewards = sorted({r["reward_enum"] for r in unseen_rows}, key=sort_key_reward_enum)
     colors  = _palette(len(folders))
 
     n_metrics = len(metric_order)
@@ -271,25 +274,27 @@ def write_seen_unseen_plot(
         grouped[(r["project"], r.get("game_split", ""), r["reward_enum"])].append(r)
 
     def _seed_stats(folder, split, re, metric):
-        """시드별 먼저 평균 → 시드 간 (mean, std) 반환. 데이터 없으면 (None, None)."""
         stat = _seed_agg(grouped.get((folder, split, re), []), metric)
         if stat is None:
             return None, None
         return stat["mean"], stat["std"]
 
+    # 가로 배치: 1행 × n_metrics열
     fig, axes = plt.subplots(
-        n_metrics, 1,
-        figsize=(4.5 + 1.2 * len(rewards), 2.7 * n_metrics),
+        1, n_metrics,
+        figsize=(3.8 * n_metrics + 1.5, 3.5),
         squeeze=False,
     )
+
     x_center  = list(range(len(rewards)))
     bar_width  = 0.8 / max(len(folders), 1)
 
-    for ri, metric in enumerate(metric_order):
+    for ci, metric in enumerate(metric_order):
         metric_label = METRIC_DISPLAY_NAMES.get(metric, metric)
-        ax = axes[ri][0]
+        ax = axes[0][ci]
         drew_any, y_uppers = False, []
         baseline_legend_added = False
+        is_last = ci == n_metrics - 1
 
         # ── unseen bars: 시드별 std → yerr ────────────────────────────────
         for j, folder in enumerate(folders):
@@ -311,7 +316,7 @@ def write_seen_unseen_plot(
                     linewidth=0.8, alpha=0.9,
                 )
 
-        # ── seen baseline 수평선 (시드별 mean) ────────────────────────────
+        # ── seen baseline 수평선 ───────────────────────────────────────────
         if baseline_project:
             for k, re in enumerate(rewards):
                 val_seen, _ = _seed_stats(baseline_project, "seen", re, metric)
@@ -327,21 +332,14 @@ def write_seen_unseen_plot(
                     zorder=5, label=lbl,
                 )
                 baseline_legend_added = True
-                if k == len(rewards) - 1:
-                    ax.text(
-                        x_right + 0.06, y_val,
-                        f"Seen baseline\n({baseline_label})",
-                        color="red", fontsize=6.5, va="center", ha="left",
-                        linespacing=1.2,
-                    )
                 y_uppers.append(y_val)
 
-        if ri == 0:
-            ax.set_title("Unseen Games", fontsize=11, fontweight="bold")
-        ax.set_ylabel(metric_label, rotation=90, labelpad=8)
+        ax.set_title(metric_label)
+        if ci == 0:
+            ax.set_ylabel("Score", rotation=90, labelpad=8)
         ax.set_xticks(x_center, [f"re={r}" for r in rewards])
         ax.tick_params(axis="x", labelrotation=0)
-        ax.set_xlim(-0.5, len(rewards) - 0.2)
+        ax.set_xlim(-0.5, len(rewards) - 0.5 + (1.1 if is_last else 0))
         ax.grid(axis="y", alpha=0.3)
         if drew_any and y_uppers:
             dm  = max(y_uppers)
@@ -351,20 +349,20 @@ def write_seen_unseen_plot(
             ax.text(0.5, 0.5, "No data", transform=ax.transAxes,
                     ha="center", va="center", color="gray")
 
+    # 범례: 중복 제거 후 상단 중앙
     handles, labels = [], []
-    for ax_row in axes:
-        h, l = ax_row[0].get_legend_handles_labels()
+    for ax in axes[0]:
+        h, l = ax.get_legend_handles_labels()
         for handle, lbl in zip(h, l):
             if lbl and lbl not in labels:
                 handles.append(handle)
                 labels.append(lbl)
-        if handles:
-            break
     if handles:
-        fig.legend(handles, labels, loc="upper center", ncol=min(len(labels), 5), fontsize=8)
-        fig.subplots_adjust(top=0.88)
+        fig.legend(handles, labels, loc="upper center", ncol=min(len(handles), 5),
+                   fontsize=8, bbox_to_anchor=(0.5, 1.0))
+        fig.subplots_adjust(top=0.82)
 
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -453,11 +451,11 @@ def main() -> None:
         sb_label   = exp_cfg.get("seen_baseline_label")
         try:
             write_seen_unseen_plot(
-                run_dir / "seen_unseen.png", norm_rows, metric_order,
+                run_dir / "unseen.png", norm_rows, metric_order,
                 seen_baseline_project=sb_project,
                 seen_baseline_label=sb_label,
             )
-            log.info("plot      : %s", run_dir / "seen_unseen.png")
+            log.info("plot      : %s", run_dir / "unseen.png")
         except RuntimeError as e:
             log.error("Plot generation failed: %s", e)
             raise SystemExit(str(e)) from e

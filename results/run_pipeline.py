@@ -5,11 +5,12 @@ Calls each script's main() function directly in the same process.
 Aborts the pipeline on the first failure by default.
 
 Usage:
-    python results/run_pipeline.py                         # full pipeline (steps 1-5)
+    python results/run_pipeline.py                         # full pipeline (steps 1-6)
     python results/run_pipeline.py --experiment allseen    # allseen experiment
     python results/run_pipeline.py --experiment unseen_generalizability
     python results/run_pipeline.py --steps 3               # single step
-    python results/run_pipeline.py --steps 3 4 5           # multiple steps
+    python results/run_pipeline.py --steps 3 4 5 6         # multiple steps
+    python results/run_pipeline.py --steps 6               # 분석 리포트만 생성
     python results/run_pipeline.py --continue-on-failure   # keep going after failure
     python results/run_pipeline.py --dry-run               # show steps without running
     python results/run_pipeline.py --list                  # list step descriptions
@@ -22,6 +23,8 @@ Step numbers:
     4  condition_progress_report  condition vs metric plots + Markdown report
     5  seen_unseen_report       seen / unseen 분리 테이블 + 비교 플롯
                                 (unseen_generalizability 전용; 다른 실험에서는 생략)
+    6  analysis_report          모델 간 % 비교 + Baseline 대비 분석을 한글 Markdown 으로 저장
+                                (allseen / unseen_generalizability 모두 적용)
 """
 
 from __future__ import annotations
@@ -89,6 +92,12 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/seen_unseen_report.py",
         "description": "results.csv → seen / unseen 분리 테이블 + 비교 플롯 (unseen_generalizability 전용)",
     },
+    {
+        "id": 6,
+        "name": "analysis_report",
+        "script": _HERE / "utils/experiment/analysis_report.py",
+        "description": "모델 간 수치 비교 + Baseline 대비 % 변화량을 한글 Markdown 리포트로 저장",
+    },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
@@ -108,11 +117,12 @@ def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 examples:
-  python results/run_pipeline.py                       # run all steps (1-5)
+  python results/run_pipeline.py                       # run all steps (1-6)
   python results/run_pipeline.py --experiment allseen
   python results/run_pipeline.py --experiment unseen_generalizability
   python results/run_pipeline.py --steps 3             # table generation only
   python results/run_pipeline.py --steps 4 5           # condition report + seen/unseen report
+  python results/run_pipeline.py --steps 6             # 한글 분석 리포트만 생성
   python results/run_pipeline.py --continue-on-failure # keep going after failures
   python results/run_pipeline.py --dry-run             # show steps without running
   python results/run_pipeline.py --list                # list step descriptions
@@ -120,6 +130,7 @@ examples:
 note:
   step 3 (benchmark)         — allseen 등 일반 실험에서만 실행; unseen_generalizability 에서는 자동 생략
   step 5 (seen_unseen_report)— unseen_generalizability 에서만 실행; 다른 실험에서는 자동 생략
+  step 6 (analysis_report)   — allseen / unseen_generalizability 모두 실행; 한글 Markdown 리포트 생성
 
 available experiments: {_exp_hint}
         """,

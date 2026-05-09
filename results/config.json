@@ -12,16 +12,22 @@
         "aaai27_eval_vipcgrl",
         "aaai27_eval_mgpcgrl"
       ],
-      "re_baseline_project": "aaai27_eval_cpcgrl",
-      "re_baseline_label":   "CPCGRL"
+      "re_oracle_project":          "aaai27_eval_cpcgrl",
+      "re_oracle_label":            "CPCGRL (Oracle)",
+      "re_baseline_project":        "aaai27_eval_vipcgrl",
+      "re_baseline_label":          "VIPCGRL",
+      "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
     },
     "unseen_generalizability": {
       "target_projects": [
+        "aaai27_eval_cpcgrl",
         "aaai27_eval_mgpcgrl",
         "aaai27_eval_mgpcgrl_unseen"
       ],
       "seen_baseline_project": "aaai27_eval_mgpcgrl",
-      "seen_baseline_label":   "MGPCGRL"
+      "seen_baseline_label":   "MGPCGRL",
+      "re_oracle_project":     "aaai27_eval_cpcgrl",
+      "re_oracle_label":       "CPCGRL (Oracle)"
     }
   },
   "project_display_names": {

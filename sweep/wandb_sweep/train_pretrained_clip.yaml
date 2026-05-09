@@ -7,7 +7,9 @@ parameters:
   game:
     values: ['all']
   dataset_reward_enum:
-    values: [4]
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0, 1, 2, 3, 4]
   n_envs:
     value: 600
   overwrite:

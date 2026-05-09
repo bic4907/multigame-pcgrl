@@ -6,6 +6,7 @@ then export a Markdown report.
 from __future__ import annotations
 
 import argparse
+import sys
 import math
 from pathlib import Path
 
@@ -15,24 +16,40 @@ import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 
+_HERE        = Path(__file__).resolve().parent   # results/utils/experiment/
+_RESULTS_DIR = _HERE.parent.parent               # results/
+_ROOT        = _HERE.parent.parent.parent        # project root
+if str(_RESULTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_RESULTS_DIR))
+if str(_ROOT) not in sys.path:
+    sys.path.append(str(_ROOT))
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from utils.core.run_output import load_cfg, make_run_dir, setup_logger  # noqa: E402
 
-GAME_COLORS = {
-    "doom": "#1f77b4",
+PROJECT_ROOT = _ROOT
+
+_CFG = load_cfg()
+
+GAME_COLORS: dict[str, str] = _CFG.get("games", {}).get("colors", {
+    "doom":    "#1f77b4",
     "dungeon": "#d62728",
     "pokemon": "#2ca02c",
     "sokoban": "#ff7f0e",
-    "zelda": "#9467bd",
+    "zelda":   "#9467bd",
+})
+
+REWARD_ENUM_LABELS: dict[int, str] = {
+    int(k): v
+    for k, v in _CFG.get("reward_enums", {}).get("labels", {
+        "0": "Region",
+        "1": "Path Length",
+        "2": "Interactable",
+        "3": "Hazard",
+        "4": "Collectable",
+    }).items()
 }
 
-REWARD_ENUM_LABELS = {
-    0: "Region",
-    1: "Path Length",
-    2: "Interactable",
-    3: "Hazard",
-    4: "Collectable",
-}
+_re_cfg = _CFG.get("reward_enums", {})
 
 
 def reward_enum_label(reward_enum: int) -> str:
@@ -44,19 +61,25 @@ def parse_args() -> argparse.Namespace:
         description="Generate condition-progress/feat plots by game and reward_enum."
     )
     parser.add_argument(
-        "--input-root",
-        default="results/wandb_download",
+        "--input-root", "--input",   # --input은 process_shared.py 공통 인터페이스용 alias
+        dest="input_root",
+        default="wandb_projects",
         help="Root directory containing downloaded ctrl_sim.csv files.",
     )
     parser.add_argument(
+        "--experiment",
+        default=None,
+        help="Experiment group 이름 (현재는 로깅용; 향후 필터링에 활용 가능).",
+    )
+    parser.add_argument(
         "--output-dir",
-        default="results/wandb_download/condition_progress_plots",
-        help="Directory to save plot images.",
+        default=None,
+        help="Directory to save plot images. Default: <run_dir>/plots/",
     )
     parser.add_argument(
         "--output-md",
-        default="results/wandb_download/condition_progress_report.md",
-        help="Markdown report path.",
+        default=None,
+        help="Markdown report path. Default: <run_dir>/report.md",
     )
     parser.add_argument(
         "--output-pdf",
@@ -99,8 +122,8 @@ def resolve_input_root(path_arg: str) -> Path:
 
     candidates = [
         (Path.cwd() / raw).resolve(),
+        (_RESULTS_DIR / raw).resolve(),       # results/wandb_projects 등
         (PROJECT_ROOT / raw).resolve(),
-        (Path(__file__).resolve().parent / raw).resolve(),
     ]
     uniq: list[Path] = []
     seen = set()
@@ -374,15 +397,25 @@ def write_pdf_report(
 
 
 def main() -> None:
+
     args = parse_args()
+    run_dir = make_run_dir("condition_progress_report", cfg=_CFG)
+    log = setup_logger(run_dir, name=__file__)
+    log.info("run_dir    : %s", run_dir)
     input_root = resolve_input_root(args.input_root)
-    output_dir = resolve_path(args.output_dir, prefer_existing=False)
-    output_md = resolve_path(args.output_md, prefer_existing=False)
-    output_pdf = resolve_path(args.output_pdf, prefer_existing=False) if args.output_pdf else None
+    output_dir = resolve_path(args.output_dir, prefer_existing=False) if args.output_dir else run_dir / "plots"
+    output_md  = resolve_path(args.output_md,  prefer_existing=False) if args.output_md  else run_dir / "report.md"
+    output_pdf = resolve_path(args.output_pdf,  prefer_existing=False) if args.output_pdf else None
 
     df = collect_condition_metrics(input_root)
     if df.empty:
-        raise SystemExit(f"No usable rows found under: {input_root}")
+        msg = f"No usable rows found under: {input_root}"
+        log.error(msg)
+        raise SystemExit(msg)
+
+    log.info("input_root : %s", input_root)
+    log.info("rows       : %d", len(df))
+    log.debug("output_dir : %s", output_dir)
 
     progress_image_entries = plot_by_reward(
         df=df,
@@ -416,14 +449,13 @@ def main() -> None:
             output_dir=output_dir,
         )
 
-    print(f"[OK] input_root  : {input_root}")
-    print(f"[OK] rows        : {len(df):,}")
-    print(f"[OK] images(prog): {len(progress_image_entries)}")
-    print(f"[OK] images(feat): {len(feat_image_entries)}")
-    print(f"[OK] output_dir  : {output_dir}")
-    print(f"[OK] output_md   : {output_md}")
+    log.info("images(prog): %d", len(progress_image_entries))
+    log.info("images(feat): %d", len(feat_image_entries))
+    log.info("output_dir  : %s", output_dir)
+    log.info("output_md   : %s", output_md)
     if output_pdf is not None:
-        print(f"[OK] output_pdf  : {output_pdf}")
+        log.info("output_pdf  : %s", output_pdf)
+    log.info("log         : %s", run_dir / 'run.log')
 
 
 if __name__ == "__main__":

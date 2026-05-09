@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import sys
 
@@ -23,15 +24,32 @@ import numpy as np
 import pandas as pd
 
 # Ensure project root is importable even when run from "results/".
-_HERE = Path(__file__).resolve().parent
-_ROOT = _HERE.parent
+_HERE        = Path(__file__).resolve().parent   # results/utils/experiment/
+_RESULTS_DIR = _HERE.parent.parent               # results/
+_ROOT        = _HERE.parent.parent.parent        # project root
+if str(_RESULTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_RESULTS_DIR))
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from envs.probs.multigame import render_multigame_map_np
 
 
-NUM_SLOTS = 4
+def _load_cfg() -> dict:
+    cfg_path = _RESULTS_DIR / "config.json"
+    if cfg_path.is_file():
+        with cfg_path.open(encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+_CFG = _load_cfg()
+_re_cfg = _CFG.get("reward_enums", {})
+
+_DEFAULT_REWARD_ENUMS: list[int] = sorted(
+    int(k) for k in _re_cfg.get("labels", {"0": None, "1": None, "2": None, "3": None, "4": None}).keys()
+)
+NUM_SLOTS: int = 4
+_RUN_DIR_PATTERN: str = "cpcgrl_game-all_re-{reward_enum}_exp-def_s-0"
 
 
 @dataclass
@@ -56,31 +74,36 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--root",
-        default="results/wandb_download/aaai27_eval_cpcgrl",
+        default="wandb_projects",
         help="Root folder containing cpcgrl_game-all_re-{re}_exp-def_s-0 runs.",
     )
     parser.add_argument(
         "--reward-enums",
         nargs="+",
         type=int,
-        default=[0, 1, 2, 3, 4],
+        default=_DEFAULT_REWARD_ENUMS,
         help="reward_enum ids to visualize.",
     )
     parser.add_argument(
         "--output-dir",
-        default="results/wandb_download/reward_enum_viz",
-        help="Directory for PNG outputs.",
+        default=None,
+        help="Directory for PNG outputs. Default: <run_dir>/plots/",
     )
     parser.add_argument(
         "--output-md",
-        default="results/wandb_download/reward_enum_viz_report.md",
-        help="Markdown report path.",
+        default=None,
+        help="Markdown report path. Default: <run_dir>/report.md",
     )
     parser.add_argument(
         "--render-tile-size",
         type=int,
         default=16,
         help="Tile size used by env renderer (actual tile image rendering).",
+    )
+    parser.add_argument(
+        "--experiment",
+        default=None,
+        help="Experiment group 이름 (현재는 로깅용; 향후 필터링에 활용 가능).",
     )
     return parser.parse_args()
 
@@ -90,14 +113,16 @@ def resolve_paths(root_arg: str, output_dir_arg: str, output_md_arg: str) -> tup
         raw = Path(path_arg)
         if raw.is_absolute():
             return raw.resolve()
-        proj = (_ROOT / raw).resolve()
-        cwd = (Path.cwd() / raw).resolve()
+        candidates = [
+            (_RESULTS_DIR / raw).resolve(),  # results/ 기준 (wandb_projects/ 실제 위치)
+            (_ROOT / raw).resolve(),          # 프로젝트 루트 기준
+            (Path.cwd() / raw).resolve(),
+        ]
         if prefer_existing:
-            if proj.exists():
-                return proj
-            if cwd.exists():
-                return cwd
-        return proj
+            for c in candidates:
+                if c.exists():
+                    return c
+        return candidates[0]  # 기본값: results/ 기준
 
     root = _resolve_project_path(root_arg, prefer_existing=True)
     out_dir = _resolve_project_path(output_dir_arg, prefer_existing=False)
@@ -106,7 +131,8 @@ def resolve_paths(root_arg: str, output_dir_arg: str, output_md_arg: str) -> tup
 
 
 def run_dir_for_reward(root: Path, reward_enum: int) -> Path:
-    return root / f"cpcgrl_game-all_re-{reward_enum}_exp-def_s-0"
+    folder = _RUN_DIR_PATTERN.format(reward_enum=reward_enum)
+    return root / folder
 
 
 def aggregate_ctrl_sim(ctrl_sim_path: Path, reward_enum: int) -> pd.DataFrame:
@@ -280,11 +306,11 @@ def build_markdown(
     lines: list[str] = []
     lines.append("# Reward Enum Condition Visualization")
     lines.append("")
-    lines.append("선정 방식:")
-    lines.append("- 각 `reward_enum`에서 `condition_{reward_enum}` 전체 범위를 4개 구간으로 균등 분할")
-    lines.append("- 각 구간 중심값에 가장 가까운 샘플을 선택하고, 동률이면 `progress` 평균이 높은 샘플 우선")
-    lines.append("- 각 샘플의 타일맵은 `envs.probs.multigame.render_multigame_map_np`로 실제 타일 이미지 렌더")
-    lines.append("- `eval.h5`의 해당 그룹에서 `seed_0`(없으면 첫 seed) 상태를 사용")
+    lines.append("Selection method:")
+    lines.append("- The full range of `condition_{reward_enum}` is split into 4 equal bins per `reward_enum`.")
+    lines.append("- The sample closest to each bin center is selected; ties are broken by highest mean `progress`.")
+    lines.append("- Tile maps are rendered with `envs.probs.multigame.render_multigame_map_np` using actual tile images.")
+    lines.append("- The `seed_0` group (or the first seed if absent) is used from the corresponding `eval.h5` group.")
     lines.append("")
 
     for reward_enum, grouped, selections, image_name in all_entries:
@@ -292,8 +318,8 @@ def build_markdown(
         cmax = grouped["condition"].max() if not grouped.empty else np.nan
         lines.append(f"## reward_enum = {reward_enum}")
         lines.append("")
-        lines.append(f"- 조건 범위: `{cmin:.2f} ~ {cmax:.2f}`")
-        lines.append(f"- 후보 수(게임+row_i): `{len(grouped)}`")
+        lines.append(f"- Condition range: `{cmin:.2f} ~ {cmax:.2f}`")
+        lines.append(f"- Number of candidates (game+row_i): `{len(grouped)}`")
         lines.append("")
         lines.append(f"![reward_enum_{reward_enum}](./{output_dir.name}/{image_name})")
         lines.append("")
@@ -312,8 +338,16 @@ def build_markdown(
 
 
 def main() -> None:
+    from utils.core.run_output import make_run_dir, setup_logger
+
     args = parse_args()
-    root, output_dir, output_md = resolve_paths(args.root, args.output_dir, args.output_md)
+    out_run_dir = make_run_dir("reward_enum_visualizer", cfg=_CFG)
+    log = setup_logger(out_run_dir, name=__file__)
+    log.info("run_dir    : %s", out_run_dir)
+    root, _, _ = resolve_paths(args.root, str(out_run_dir / "plots"), str(out_run_dir / "report.md"))
+    output_dir = Path(args.output_dir).resolve() if args.output_dir else out_run_dir / "plots"
+    output_md  = Path(args.output_md).resolve()  if args.output_md  else out_run_dir / "report.md"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     all_entries: list[tuple[int, pd.DataFrame, list[Selection], str]] = []
 
@@ -322,7 +356,7 @@ def main() -> None:
         ctrl_sim_path = run_dir / "ctrl_sim.csv"
         h5_path = run_dir / "eval.h5"
         if not ctrl_sim_path.exists() or not h5_path.exists():
-            print(f"[WARN] Skip reward_enum={reward_enum}: missing files in {run_dir}")
+            log.warning("Skip reward_enum=%d: missing files in %s", reward_enum, run_dir)
             continue
 
         grouped = aggregate_ctrl_sim(ctrl_sim_path, reward_enum)
@@ -338,13 +372,19 @@ def main() -> None:
                 render_tile_size=args.render_tile_size,
             )
         all_entries.append((reward_enum, grouped, selections, image_name))
-        print(
-            f"[OK] reward_enum={reward_enum} range=({grouped['condition'].min():.2f}, {grouped['condition'].max():.2f}) "
-            f"selected={len(selections)} image={output_dir / image_name}"
+        log.info(
+            "reward_enum=%d range=(%.2f, %.2f) selected=%d image=%s",
+            reward_enum,
+            grouped["condition"].min(),
+            grouped["condition"].max(),
+            len(selections),
+            output_dir / image_name,
         )
 
     build_markdown(output_md, output_dir, all_entries)
-    print(f"[OK] report={output_md}")
+    log.info("output_dir : %s", output_dir)
+    log.info("report     : %s", output_md)
+    log.info("log        : %s", out_run_dir / 'run.log')
 
 
 if __name__ == "__main__":

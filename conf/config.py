@@ -306,6 +306,10 @@ class MGPCGRLConfig(VIPCGRLConfig):
 
     ignore_checkpoint: bool = False
 
+    # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
+    # 1.0 = 전체 seen 게임 데이터 사용 (기본값), 0.0~1.0 = seen 게임 데이터 prefix 비율
+    dataset_seen_ratio: float = 1.0
+
 
 
 @dataclass

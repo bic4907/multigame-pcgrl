@@ -122,6 +122,27 @@ def load_dataset_instruct(config):
         f"Check that reward annotations exist."
     )
 
+    # ── dataset_seen_ratio: 게임당 seen_ratio 비율만큼 샘플 prefix 사용 ──
+    dataset_seen_ratio = getattr(config, "dataset_seen_ratio", 1.0)
+    if dataset_seen_ratio < 1.0:
+        from collections import defaultdict
+        game_buckets: dict = defaultdict(list)
+        for s in samples:
+            game_buckets[s.game].append(s)
+        filtered: list = []
+        for game, bucket in sorted(game_buckets.items()):
+            n_use = max(1, int(len(bucket) * dataset_seen_ratio))
+            filtered.extend(bucket[:n_use])
+            logger.info(
+                "dataset_seen_ratio=%.4f: game=%s  %d → %d samples",
+                dataset_seen_ratio, game, len(bucket), n_use,
+            )
+        samples = filtered
+        logger.info(
+            "dataset_seen_ratio=%.4f: total %d samples after per-game ratio filtering",
+            dataset_seen_ratio, len(samples),
+        )
+
     eval_samples_per_group = getattr(config, "eval_samples_per_group", None)
     sampled_counts: dict = {}
     if eval_samples_per_group is not None:

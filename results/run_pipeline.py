@@ -62,31 +62,31 @@ STEPS: list[dict] = [
     {
         "id": 1,
         "name": "eval_downloader",
-        "script": _HERE / "eval_downloader.py",
+        "script": _HERE / "utils/wandb/eval_downloader.py",
         "description": "Download eval artifacts (CSV/H5) from W&B",
     },
     {
         "id": 2,
         "name": "make_eval_summary",
-        "script": _HERE / "make_eval_summary.py",
+        "script": _HERE / "utils/experiment/make_eval_summary.py",
         "description": "ctrl_sim.csv → per-eval results.csv / summary.csv",
     },
     {
         "id": 3,
         "name": "benchmark",
-        "script": _HERE / "benchmark.py",
+        "script": _HERE / "utils/experiment/benchmark.py",
         "description": "summary/results.csv → Markdown/CSV tables + comparison plots (allseen 전용)",
     },
     {
         "id": 4,
         "name": "condition_progress_report",
-        "script": _HERE / "condition_progress_report.py",
+        "script": _HERE / "utils/experiment/condition_progress_report.py",
         "description": "ctrl_sim.csv → condition vs metric plots + Markdown report",
     },
     {
         "id": 5,
         "name": "seen_unseen_report",
-        "script": _HERE / "seen_unseen_report.py",
+        "script": _HERE / "utils/experiment/seen_unseen_report.py",
         "description": "results.csv → seen / unseen 분리 테이블 + 비교 플롯 (unseen_generalizability 전용)",
     },
 ]
@@ -218,12 +218,12 @@ def _compute_global_norm_scale(
     Returns True on success, False on failure.
     """
     try:
-        from benchmark import (
+        from utils.experiment.benchmark import (
             collect_plot_rows_from_results,
             resolve_input_root,
             DEFAULT_METRIC_ORDER,
         )
-        from utils.normalization import compute_normalization_scale, save_normalization_scale
+        from utils.core.normalization import compute_normalization_scale, save_normalization_scale
 
         # base_extra 에서 --input 값 추출 (없으면 default)
         try:
@@ -336,7 +336,7 @@ def main(default_experiment: str | None = None) -> None:
         experiments_to_run = [None]   # experiment 없이 전체 실행
 
     # Create pipeline root directory (모든 experiment 공유)
-    from utils.run_output import make_run_dir, load_cfg
+    from utils.core.run_output import make_run_dir, load_cfg
     _cfg = load_cfg()
     pipeline_run_dir = make_run_dir("pipeline", cfg=_cfg)
     log_path = pipeline_run_dir / "pipeline.log"

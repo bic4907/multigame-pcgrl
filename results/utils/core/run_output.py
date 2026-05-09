@@ -25,7 +25,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-_UTILS_DIR    = Path(__file__).resolve().parent   # results/utils/
+_CORE_DIR     = Path(__file__).resolve().parent   # results/utils/core/
+_UTILS_DIR    = _CORE_DIR.parent                  # results/utils/
 _RESULTS_DIR  = _UTILS_DIR.parent                 # results/
 _PROJECT_ROOT = _RESULTS_DIR.parent               # project root
 _DEFAULT_CFG  = _RESULTS_DIR / "config.json"

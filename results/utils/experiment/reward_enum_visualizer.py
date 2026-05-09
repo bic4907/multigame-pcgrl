@@ -24,8 +24,11 @@ import numpy as np
 import pandas as pd
 
 # Ensure project root is importable even when run from "results/".
-_HERE = Path(__file__).resolve().parent
-_ROOT = _HERE.parent
+_HERE        = Path(__file__).resolve().parent   # results/utils/experiment/
+_RESULTS_DIR = _HERE.parent.parent               # results/
+_ROOT        = _HERE.parent.parent.parent        # project root
+if str(_RESULTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_RESULTS_DIR))
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
@@ -33,7 +36,7 @@ from envs.probs.multigame import render_multigame_map_np
 
 
 def _load_cfg() -> dict:
-    cfg_path = _HERE / "config.json"
+    cfg_path = _RESULTS_DIR / "config.json"
     if cfg_path.is_file():
         with cfg_path.open(encoding="utf-8") as f:
             return json.load(f)
@@ -111,8 +114,8 @@ def resolve_paths(root_arg: str, output_dir_arg: str, output_md_arg: str) -> tup
         if raw.is_absolute():
             return raw.resolve()
         candidates = [
-            (_HERE / raw).resolve(),   # results/ 기준 (wandb_projects/ 실제 위치)
-            (_ROOT / raw).resolve(),   # 프로젝트 루트 기준
+            (_RESULTS_DIR / raw).resolve(),  # results/ 기준 (wandb_projects/ 실제 위치)
+            (_ROOT / raw).resolve(),          # 프로젝트 루트 기준
             (Path.cwd() / raw).resolve(),
         ]
         if prefer_existing:
@@ -335,15 +338,7 @@ def build_markdown(
 
 
 def main() -> None:
-    import sys as _sys
-    _script_dir = Path(__file__).resolve().parent
-    _project_root = _script_dir.parent
-    if str(_script_dir) not in _sys.path:
-        _sys.path.insert(0, str(_script_dir))
-    if str(_project_root) not in _sys.path:
-        _sys.path.append(str(_project_root))
-    from instruct_rl.utils.log_utils import get_logger
-    from utils.run_output import make_run_dir, setup_logger
+    from utils.core.run_output import make_run_dir, setup_logger
 
     args = parse_args()
     out_run_dir = make_run_dir("reward_enum_visualizer", cfg=_CFG)

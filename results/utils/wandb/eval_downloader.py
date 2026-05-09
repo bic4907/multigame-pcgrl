@@ -32,9 +32,12 @@ from dataclasses import dataclass, field
 
 from tqdm import tqdm
 
-# ── Add project root to sys.path ─────────────────────────────────────────────
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
+# ── Add results/ and project root to sys.path ────────────────────────────────
+_HERE        = os.path.dirname(os.path.abspath(__file__))               # results/utils/wandb/
+_RESULTS_DIR = os.path.abspath(os.path.join(_HERE, "..", ".."))         # results/
+_ROOT        = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))   # project root
+if _RESULTS_DIR not in sys.path:
+    sys.path.insert(0, _RESULTS_DIR)
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
@@ -54,7 +57,7 @@ logger = logging.getLogger(__name__)
 
 
 def _load_cfg() -> dict:
-    cfg_path = os.path.join(_HERE, "config.json")
+    cfg_path = os.path.join(_RESULTS_DIR, "config.json")
     if os.path.isfile(cfg_path):
         with open(cfg_path, encoding="utf-8") as f:
             return json.load(f)
@@ -69,7 +72,7 @@ def _load_exclude_keys() -> set[str]:
     JSON 파일의 ``exclude_keys`` 배열에서 ``#`` 으로 시작하는 주석 문자열은
     자동으로 건너뛴다.
     """
-    path = os.path.join(_HERE, "run_config_exclude_keys.json")
+    path = os.path.join(_RESULTS_DIR, "run_config_exclude_keys.json")
     if not os.path.isfile(path):
         logger.warning(
             "run_config_exclude_keys.json 을 찾을 수 없습니다 — 필터 없이 전체 config 를 저장합니다."

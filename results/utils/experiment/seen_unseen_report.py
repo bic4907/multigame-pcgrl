@@ -24,17 +24,18 @@ from collections import defaultdict
 from pathlib import Path
 
 import sys as _sys
-_HERE = Path(__file__).resolve().parent
-_ROOT = _HERE.parent
-if str(_HERE) not in _sys.path:
-    _sys.path.insert(0, str(_HERE))
+_HERE        = __import__('pathlib').Path(__file__).resolve().parent  # results/utils/experiment/
+_RESULTS_DIR = _HERE.parent.parent                                     # results/
+_ROOT        = _HERE.parent.parent.parent                              # project root
+if str(_RESULTS_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_RESULTS_DIR))
 if str(_ROOT) not in _sys.path:
     _sys.path.append(str(_ROOT))
 
-from utils.run_output import load_cfg
-from utils.io import sort_key_reward_enum
-from utils.normalization import compute_normalization_scale, apply_normalization, save_normalization_scale, load_normalization_scale
-from benchmark import (
+from utils.core.run_output import load_cfg, make_run_dir, setup_logger
+from utils.core.io import sort_key_reward_enum
+from utils.core.normalization import compute_normalization_scale, apply_normalization, save_normalization_scale, load_normalization_scale
+from utils.experiment.benchmark import (
     collect_plot_rows_from_results,
     resolve_input_root,
     _get_experiment_folder_order,
@@ -286,24 +287,32 @@ def write_seen_unseen_plot(
         squeeze=False,
     )
 
-    x_center  = list(range(len(rewards)))
-    bar_width  = 0.8 / max(len(folders), 1)
+    x_center = list(range(len(rewards)))
+
+    # unseen 데이터가 실제로 존재하는 폴더만 bar 위치·너비 계산에 사용
+    folders_with_unseen = [
+        f for f in folders
+        if any(grouped.get((f, "unseen", re), []) for re in rewards)
+    ]
+    _BAR_SPAN = 0.55   # 전체 바 그룹 폭 (0.8 → 0.55 로 축소)
+    bar_width = _BAR_SPAN / max(len(folders_with_unseen), 1)
 
     for ci, metric in enumerate(metric_order):
         metric_label = METRIC_DISPLAY_NAMES.get(metric, metric)
         ax = axes[0][ci]
         drew_any, y_uppers = False, []
         baseline_legend_added = False
-        is_last = ci == n_metrics - 1
 
         # ── unseen bars: 시드별 std → yerr ────────────────────────────────
-        for j, folder in enumerate(folders):
+        # j_eff: unseen 데이터 있는 폴더 내 인덱스 (바를 가운데 정렬)
+        for j_eff, folder in enumerate(folders_with_unseen):
+            j_color = folders.index(folder)  # 원래 색상 인덱스 유지
             means, stds, xs = [], [], []
             for k, re in enumerate(rewards):
                 mean, std = _seed_stats(folder, "unseen", re, metric)
                 if mean is None:
                     continue
-                xs.append(x_center[k] - 0.4 + (j + 0.5) * bar_width)
+                xs.append(x_center[k] - _BAR_SPAN / 2 + (j_eff + 0.5) * bar_width)
                 means.append(float(mean))
                 stds.append(float(std))
                 y_uppers.append(float(mean) + float(std))
@@ -312,7 +321,7 @@ def write_seen_unseen_plot(
                 ax.bar(
                     xs, means, width=bar_width, yerr=stds, capsize=2,
                     label=_project_display_name(folder),
-                    color=colors[j % len(colors)], edgecolor="white",
+                    color=colors[j_color % len(colors)], edgecolor="white",
                     linewidth=0.8, alpha=0.9,
                 )
 
@@ -339,7 +348,7 @@ def write_seen_unseen_plot(
             ax.set_ylabel("Score", rotation=90, labelpad=8)
         ax.set_xticks(x_center, [f"re={r}" for r in rewards])
         ax.tick_params(axis="x", labelrotation=0)
-        ax.set_xlim(-0.5, len(rewards) - 0.5 + (1.1 if is_last else 0))
+        ax.set_xlim(-0.5, len(rewards) - 0.5)
         ax.grid(axis="y", alpha=0.3)
         if drew_any and y_uppers:
             dm  = max(y_uppers)
@@ -373,7 +382,6 @@ def write_seen_unseen_plot(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    from utils.run_output import make_run_dir, setup_logger
 
     args    = parse_args()
     run_dir = make_run_dir("seen_unseen_report", cfg=_CFG)
@@ -384,12 +392,12 @@ def main() -> None:
     folder_order = _get_experiment_folder_order(experiment)
     log.info("experiment: %s  folder_order=%s", experiment, folder_order)
 
-    from benchmark import PREFERRED_PLOT_FOLDER_ORDER as _pfo  # noqa: F401
-    import benchmark as _bm
+    from utils.experiment.benchmark import PREFERRED_PLOT_FOLDER_ORDER as _pfo  # noqa: F401
+    import utils.experiment.benchmark as _bm
     _bm.PREFERRED_PLOT_FOLDER_ORDER = folder_order
     _bm._PROJECT_DISPLAY_NAMES      = _load_project_display_names(experiment)
 
-    script_dir = Path(__file__).resolve().parent
+    script_dir = _RESULTS_DIR  # wandb_projects 기본 탐색 기준은 results/
     input_root = resolve_input_root(args.input, script_dir)
     log.info("input_root: %s", input_root)
 

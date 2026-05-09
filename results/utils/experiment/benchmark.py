@@ -24,16 +24,17 @@ from pathlib import Path
 # sys.path bootstrap — must happen before any local imports
 # ---------------------------------------------------------------------------
 import sys as _sys
-_HERE = Path(__file__).resolve().parent
-_ROOT = _HERE.parent
-if str(_HERE) not in _sys.path:
-    _sys.path.insert(0, str(_HERE))
+_HERE        = __import__('pathlib').Path(__file__).resolve().parent  # results/utils/experiment/
+_RESULTS_DIR = _HERE.parent.parent                                     # results/
+_ROOT        = _HERE.parent.parent.parent                              # project root
+if str(_RESULTS_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_RESULTS_DIR))
 if str(_ROOT) not in _sys.path:
     _sys.path.append(str(_ROOT))
 
-from utils.run_output import load_cfg
-from utils.stats import safe_std, to_float
-from utils.io import (
+from utils.core.run_output import load_cfg, make_run_dir, setup_logger
+from utils.core.stats import safe_std, to_float
+from utils.core.io import (
     normalize_reward_enum,
     parse_run_tokens,
     iter_summary_paths,
@@ -43,7 +44,7 @@ from utils.io import (
     load_run_config,
     get_game_split,
 )
-from utils.normalization import (
+from utils.core.normalization import (
     compute_normalization_scale,
     apply_normalization,
     save_normalization_scale,
@@ -571,6 +572,112 @@ def write_overall_simple_plot(output_path: Path, plot_rows: list[dict],
     plt.close(fig)
 
 
+def write_re_overall_plot(
+    output_path: Path,
+    plot_rows: list[dict],
+    metric_order: list[str],
+    baseline_project: str | None = None,
+    baseline_label: str | None = None,
+) -> None:
+    """re 구분 없이 전체 집계 바 플롯 (폴더별 단일 바, 1행 × n_metrics열).
+
+    모든 reward_enum 에 걸친 데이터를 합산하여 폴더(모델)마다 하나의 바를 그린다.
+    """
+    plt = _bar_plot_setup()
+
+    # 폴더별로 모든 rows 모으기 (re 구분 없음)
+    by_folder: dict[str, list[dict]] = defaultdict(list)
+    for r in plot_rows:
+        by_folder[r["project"]].append(r)
+
+    all_folders = sorted(by_folder.keys(), key=_sort_folder_for_plot)
+    bar_folders = [f for f in all_folders if f != baseline_project]
+    colors = _palette(max(len(bar_folders), 1))
+
+    bl_label = baseline_label or (
+        _project_display_name(baseline_project) if baseline_project else "Baseline"
+    )
+    legend_baseline_text = f"{bl_label} (baseline)"
+
+    n_metrics = len(metric_order)
+    if not n_metrics:
+        return
+
+    fig, axes = plt.subplots(
+        1, n_metrics, figsize=(1.6 * n_metrics + 0.4, 3.0), squeeze=False
+    )
+
+    bar_total_span = 0.7
+    n_bars = max(len(bar_folders), 1)
+    bar_width = bar_total_span / n_bars
+
+    for ci, metric in enumerate(metric_order):
+        ax = axes[0][ci]
+        drew_any, y_uppers = False, []
+        baseline_legend_added = False
+
+        # ── 폴더별 단일 바 ────────────────────────────────────────────────
+        for j, folder in enumerate(bar_folders):
+            stat = _seed_agg(by_folder[folder], metric)
+            if not stat:
+                continue
+            x = -bar_total_span / 2 + (j + 0.5) * bar_width
+            drew_any = True
+            ax.bar(
+                [x], [float(stat["mean"])], width=bar_width * 0.85,
+                yerr=[float(stat["std"])], capsize=3,
+                label=_project_display_name(folder),
+                color=colors[j % len(colors)], edgecolor="white",
+                linewidth=0.8, alpha=0.9,
+            )
+            y_uppers.append(float(stat["mean"]) + float(stat["std"]))
+
+        # ── 기준선 수평선 ─────────────────────────────────────────────────
+        if baseline_project and baseline_project in by_folder:
+            stat = _seed_agg(by_folder[baseline_project], metric)
+            if stat:
+                y_val = float(stat["mean"])
+                lbl = legend_baseline_text if not baseline_legend_added else None
+                ax.axhline(
+                    y_val, color="red", linewidth=2.0, linestyle="--",
+                    zorder=5, label=lbl,
+                )
+                baseline_legend_added = True
+                y_uppers.append(y_val)
+
+        ax.set_title(METRIC_DISPLAY_NAMES.get(metric, metric))
+        if ci == 0:
+            ax.set_ylabel("Score", rotation=90, labelpad=8)
+        ax.set_xticks([0], [""])
+        ax.tick_params(axis="x", length=0)
+        ax.set_xlim(-0.5, 0.5)
+        ax.grid(axis="y", alpha=0.3)
+        if drew_any and y_uppers:
+            dm = max(y_uppers)
+            pad = max(dm, 1e-6) * 0.15
+            ax.set_ylim(_YMIN.get(metric, 0), dm + pad)
+        else:
+            ax.text(0.5, 0.5, "No data", transform=ax.transAxes,
+                    ha="center", va="center", color="gray")
+
+    # 범례: 중복 제거 후 상단 중앙
+    handles, labels = [], []
+    for ax in axes[0]:
+        h, l = ax.get_legend_handles_labels()
+        for handle, lbl in zip(h, l):
+            if lbl and lbl not in labels:
+                handles.append(handle)
+                labels.append(lbl)
+    if handles:
+        fig.legend(handles, labels, loc="upper center",
+                   ncol=min(len(handles), 6), fontsize=8)
+        fig.subplots_adjust(top=0.82)
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
 def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
                             metric_order: list[str],
                             seen_baseline_project: str | None = None,
@@ -698,8 +805,6 @@ def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
     plt.close(fig)
 
 def main() -> None:
-    from utils.run_output import make_run_dir, setup_logger
-    from instruct_rl.utils.log_utils import get_logger  # noqa: F401 (side-effect import)
 
     args    = parse_args()
     run_dir = make_run_dir("benchmark", cfg=_CFG)
@@ -713,7 +818,7 @@ def main() -> None:
     PREFERRED_PLOT_FOLDER_ORDER = folder_order
     _PROJECT_DISPLAY_NAMES      = _load_project_display_names(args.experiment)
 
-    script_dir = Path(__file__).resolve().parent
+    script_dir = _RESULTS_DIR  # wandb_projects 기본 탐색 기준은 results/
     input_root = resolve_input_root(args.input, script_dir)
     output_md  = Path(args.output_md).resolve()  if args.output_md  else run_dir / "benchmark_table.md"
     output_csv = Path(args.output_csv).resolve() if args.output_csv else run_dir / "benchmark_table.csv"
@@ -775,8 +880,14 @@ def main() -> None:
                     baseline_project=re_baseline,
                     baseline_label=re_bl_label,
                 )
+                write_re_overall_plot(
+                    run_dir / "re_overall.png", norm_rows, DEFAULT_METRIC_ORDER.copy(),
+                    baseline_project=re_baseline,
+                    baseline_label=re_bl_label,
+                )
                 write_game_reward_subplots(run_dir / "re_game.png", norm_rows, metric_order)
                 log.info("plot      : %s", run_dir / "re.png")
+                log.info("plot_overall: %s", run_dir / "re_overall.png")
                 log.info("plot_game : %s", run_dir / "re_game.png")
 
             except RuntimeError as e:

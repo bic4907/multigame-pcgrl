@@ -6,7 +6,7 @@ then export a Markdown report.
 from __future__ import annotations
 
 import argparse
-import json
+import sys
 import math
 from pathlib import Path
 
@@ -16,17 +16,19 @@ import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 
+_HERE        = Path(__file__).resolve().parent   # results/utils/experiment/
+_RESULTS_DIR = _HERE.parent.parent               # results/
+_ROOT        = _HERE.parent.parent.parent        # project root
+if str(_RESULTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_RESULTS_DIR))
+if str(_ROOT) not in sys.path:
+    sys.path.append(str(_ROOT))
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from utils.core.run_output import load_cfg, make_run_dir, setup_logger  # noqa: E402
 
-def _load_cfg() -> dict:
-    cfg_path = Path(__file__).resolve().parent / "config.json"
-    if cfg_path.is_file():
-        with cfg_path.open(encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+PROJECT_ROOT = _ROOT
 
-_CFG = _load_cfg()
+_CFG = load_cfg()
 
 GAME_COLORS: dict[str, str] = _CFG.get("games", {}).get("colors", {
     "doom":    "#1f77b4",
@@ -120,8 +122,8 @@ def resolve_input_root(path_arg: str) -> Path:
 
     candidates = [
         (Path.cwd() / raw).resolve(),
+        (_RESULTS_DIR / raw).resolve(),       # results/wandb_projects 등
         (PROJECT_ROOT / raw).resolve(),
-        (Path(__file__).resolve().parent / raw).resolve(),
     ]
     uniq: list[Path] = []
     seen = set()
@@ -395,15 +397,6 @@ def write_pdf_report(
 
 
 def main() -> None:
-    import sys as _sys
-    _script_dir = Path(__file__).resolve().parent
-    _project_root = _script_dir.parent
-    if str(_script_dir) not in _sys.path:
-        _sys.path.insert(0, str(_script_dir))
-    if str(_project_root) not in _sys.path:
-        _sys.path.append(str(_project_root))
-    from instruct_rl.utils.log_utils import get_logger
-    from utils.run_output import make_run_dir, setup_logger
 
     args = parse_args()
     run_dir = make_run_dir("condition_progress_report", cfg=_CFG)

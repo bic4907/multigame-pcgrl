@@ -10,22 +10,23 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
 from tqdm import tqdm
 
-_HERE = Path(__file__).resolve().parent
-_ROOT = _HERE.parent
-if str(_HERE) not in sys.path:
-    sys.path.insert(0, str(_HERE))
+_HERE        = Path(__file__).resolve().parent   # results/utils/experiment/
+_RESULTS_DIR = _HERE.parent.parent               # results/
+_ROOT        = _HERE.parent.parent.parent        # project root
+if str(_RESULTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_RESULTS_DIR))
 if str(_ROOT) not in sys.path:
     sys.path.append(str(_ROOT))
 
 from instruct_rl.utils.log_utils import get_logger
-from utils.run_output import load_cfg
-from utils.stats import iqr_mean
+from utils.core.run_output import load_cfg
+from utils.core.stats import iqr_mean
 
 logger = get_logger(__name__)
 _CFG = load_cfg()
@@ -102,7 +103,7 @@ def _process_project(project_dir: Path, workers: int = 4) -> int:
         return 0
 
     n_done = 0
-    with ProcessPoolExecutor(max_workers=workers) as executor:
+    with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {executor.submit(process_eval_dir, d): d for d in eval_dirs}
         with tqdm(total=len(eval_dirs), desc=project_dir.name, unit="eval", leave=True) as pbar:
             for fut in as_completed(futures):
@@ -134,7 +135,7 @@ def main() -> None:
     args = parse_args()
 
     raw        = Path(args.input)
-    input_root = raw if raw.is_absolute() else (_HERE / raw).resolve()
+    input_root = raw if raw.is_absolute() else (_RESULTS_DIR / raw).resolve()
     if not input_root.exists():
         raise FileNotFoundError(f"input root not found: {input_root}")
 

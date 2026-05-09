@@ -111,6 +111,26 @@ wandb sweep --project aaai27_train_mgpcgrl_unseen --entity st4889ha-gwangju-inst
 wandb sweep --project aaai27_eval_mgpcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_unseen.yaml
 ```
 
+### MGPCGRL (Seen Ratios)
+
+---
+
+**Train Encoder**
+```bash
+wandb sweep --project aaai27_train_mgpcgrl_encoder_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder_unseen_ratios.yaml
+```
+
+**Train PCGRL**
+```bash
+wandb sweep --project aaai27_train_mgpcgrl_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_unseen_ratios.yaml
+```
+
+**Eval PCGRL**
+```bash
+wandb sweep --project aaai27_eval_mgpcgrl_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_unseen_ratios.yaml
+```
+
+
 ### Random
 
 ---

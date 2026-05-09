@@ -21,13 +21,14 @@ unseen_generalizability 실험의 다운로드된 결과 파일을 처리한다.
 import sys
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-if str(_HERE) not in sys.path:
-    sys.path.insert(0, str(_HERE))
-if str(_HERE.parent) not in sys.path:
-    sys.path.append(str(_HERE.parent))
+_HERE        = Path(__file__).resolve().parent   # results/utils/experiment/
+_RESULTS_DIR = _HERE.parent.parent               # results/
+if str(_RESULTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_RESULTS_DIR))
+if str(_RESULTS_DIR.parent) not in sys.path:
+    sys.path.append(str(_RESULTS_DIR.parent))
 
-from process_shared import run_experiment_processing  # noqa: E402
+from utils.pipeline import run_experiment_processing  # noqa: E402
 
 EXPERIMENT = "unseen_generalizability"
 

@@ -1,8 +1,8 @@
 """
-process_shared.py
+utils/pipeline.py
 =================
 experiment별 결과 처리 스크립트(process_allseen.py,
-process_unseen_generalizability.py)가 공유하는 유틸리티.
+process_unseen_generalizability.py)가 공유하는 파이프라인 유틸리티.
 
 직접 실행하지 말 것.
 """
@@ -12,32 +12,29 @@ from __future__ import annotations
 import argparse
 import contextlib
 import importlib.util
-import json
 import logging
 import sys
 import time
 import traceback
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent          # results/
-_ROOT = _HERE.parent                             # project root
+_PIPELINE_DIR = Path(__file__).resolve().parent   # results/utils/pipeline/
+_UTILS_DIR    = _PIPELINE_DIR.parent              # results/utils/
+_RESULTS_DIR  = _UTILS_DIR.parent                 # results/
+_ROOT         = _RESULTS_DIR.parent               # project root
 
-if str(_HERE) not in sys.path:
-    sys.path.insert(0, str(_HERE))
-if str(str(_ROOT)) not in sys.path:
+# sys.path 보장
+if str(_RESULTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_RESULTS_DIR))
+if str(_ROOT) not in sys.path:
     sys.path.append(str(_ROOT))
+
+from utils.core.run_output import load_cfg  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # Config helpers
 # ---------------------------------------------------------------------------
-
-def load_cfg() -> dict:
-    cfg_path = _HERE / "config.json"
-    if cfg_path.is_file():
-        with cfg_path.open(encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
 
 def get_experiment_projects(experiment: str, cfg: dict | None = None) -> list[str]:
     """config.json의 experiments.<experiment>.target_projects 반환."""
@@ -110,20 +107,20 @@ def run_processing_step(
 PROCESSING_STEPS: list[dict] = [
     {
         "id": 1,
-        "name": "make_gamewise_summary",
-        "script": _HERE / "make_gamewise_summary.py",
+        "name": "make_eval_summary",
+        "script": _RESULTS_DIR / "utils/experiment/make_eval_summary.py",
         "description": "ctrl_sim.csv → per-game results.csv / summary.csv",
     },
     {
         "id": 2,
-        "name": "build_benchmark_table",
-        "script": _HERE / "build_benchmark_table.py",
+        "name": "benchmark",
+        "script": _RESULTS_DIR / "utils/experiment/benchmark.py",
         "description": "summary.csv → Markdown/CSV 벤치마크 테이블 + 플롯",
     },
     {
         "id": 3,
         "name": "condition_progress_report",
-        "script": _HERE / "condition_progress_report.py",
+        "script": _RESULTS_DIR / "utils/experiment/condition_progress_report.py",
         "description": "ctrl_sim.csv → condition vs metric 플롯 + Markdown 리포트",
     },
 ]
@@ -134,7 +131,6 @@ PROCESSING_STEPS: list[dict] = [
 # ---------------------------------------------------------------------------
 
 def build_parser(experiment: str) -> argparse.ArgumentParser:
-
     cfg = load_cfg()
     _exp_names = get_experiment_names(cfg)
 
@@ -219,7 +215,10 @@ def run_experiment_processing(experiment: str) -> None:
         ok = run_processing_step(step["script"], base_extra, log)
         results.append((step, ok))
         if not ok and not args.continue_on_failure:
-            log.error("[중단] 단계 %d (%s) 실패 — 이후 단계를 건너뜁니다.", step["id"], step["name"])
+            log.error(
+                "[중단] 단계 %d (%s) 실패 — 이후 단계를 건너뜁니다.",
+                step["id"], step["name"],
+            )
             break
 
     log.info("=== 요약 ===")

@@ -1,0 +1,54 @@
+program: train_clip_decoder.py
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all']
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_encoder_unseen_ratios'
+  seen_ratio:
+    values: [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0]
+  unseen_games:
+    values:
+      # 1 unseen game
+#      - 'pk'        # unseen: pokemon
+#      - 'dg'        # unseen: dungeon
+      - 'zd'        # unseen: zelda
+      - 'dm'        # unseen: doom
+      - 'sk'        # unseen: sokoban
+      # 2 unseen games
+#      - 'pkdg'      # unseen: pokemon, dungeon
+#      - 'pkzd'      # unseen: pokemon, zelda
+#      - 'pkdm'      # unseen: pokemon, doom
+#      - 'pksk'      # unseen: pokemon, sokoban
+#      - 'dgzd'      # unseen: dungeon, zelda
+#      - 'dgdm'      # unseen: dungeon, doom
+#      - 'dgsk'      # unseen: dungeon, sokoban
+      - 'zddm'      # unseen: zelda, doom
+      - 'zdsk'      # unseen: zelda, sokoban
+      - 'dmsk'      # unseen: doom, sokoban
+      # 3 unseen games
+#      - 'pkdgzd'    # unseen: pokemon, dungeon, zelda
+#      - 'pkdgdm'    # unseen: pokemon, dungeon, doom
+#      - 'pkdgsk'    # unseen: pokemon, dungeon, sokoban
+      - 'pkzddm'    # unseen: pokemon, zelda, doom
+#      - 'pkzdsk'    # unseen: pokemon, zelda, sokoban
+#      - 'pkdmsk'    # unseen: pokemon, doom, sokoban
+      - 'dgzddm'    # unseen: dungeon, zelda, doom
+#      - 'dgzdsk'    # unseen: dungeon, zelda, sokoban
+#      - 'dgdmsk'    # unseen: dungeon, doom, sokoban
+      - 'zddmsk'    # unseen: zelda, doom, sokoban
+      # 4 unseen games
+      - 'pkdgzddm'  # unseen: pokemon, dungeon, zelda, doom
+#      - 'pkdgzdsk'  # unseen: pokemon, dungeon, zelda, sokoban
+#      - 'pkdgdmsk'  # unseen: pokemon, dungeon, doom, sokoban
+      - 'pkzddmsk'  # unseen: pokemon, zelda, doom, sokoban
+      - 'dgzddmsk'  # unseen: dungeon, zelda, doom, sokoban
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

@@ -15,7 +15,7 @@ class Config:
     n_envs: int = 4
     # How many steps do I take in all of my batched environments before doing a gradient update
     num_steps: int = 128
-    total_timesteps: int = int(5e7)
+    total_timesteps: int = int(2e7)
     timestep_chunk_size: int = -1
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4

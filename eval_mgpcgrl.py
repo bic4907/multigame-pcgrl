@@ -54,14 +54,14 @@ def main(config: MGPCGRLEvalConfig):
         else:
             logger.warning("dataset_setting.json has empty seen_games — keeping config.game='%s'", config.game)
 
-        # ── seen_ratio 주입: encoder 학습 때 쓴 seen 게임 데이터 비율을 그대로 사용 ──
+        # ── seen_ratio 기록: encoder 학습 때 쓴 seen 비율을 분석용으로만 저장 (데이터셋 필터링에는 미적용) ──
         seen_ratio = dataset_setting.get("seen_ratio", 1.0)
-        if seen_ratio != config.dataset_seen_ratio:
+        if seen_ratio != config.train_seen_ratio:
             logger.info(
-                "Auto-setting dataset_seen_ratio=%.4f from encoder dataset_setting.json",
+                "Auto-setting train_seen_ratio=%.4f from encoder dataset_setting.json (analysis only)",
                 seen_ratio,
             )
-            config.dataset_seen_ratio = seen_ratio
+            config.train_seen_ratio = seen_ratio
     else:
         logger.warning("dataset_setting.json not found at %s — keeping config.game='%s'", dataset_setting_path, config.game)
 

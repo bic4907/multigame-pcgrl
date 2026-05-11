@@ -466,9 +466,11 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     use_clip: bool = True
     nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
 
-    wandb_project: Optional[str] = "vipcgrl"
-
     ignore_checkpoint: bool = False
+
+    # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
+    # 분석/로깅용으로만 사용하며, eval 데이터셋 필터링에는 적용되지 않음.
+    train_seen_ratio: float = 1.0
 
 
 @dataclass

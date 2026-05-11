@@ -135,7 +135,7 @@ def main() -> None:
     args = parse_args()
 
     raw        = Path(args.input)
-    input_root = raw if raw.is_absolute() else (_RESULTS_DIR / raw).resolve()
+    input_root = raw if raw.is_absolute() else (_ROOT / raw).resolve()
     if not input_root.exists():
         raise FileNotFoundError(f"input root not found: {input_root}")
 

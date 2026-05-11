@@ -1,0 +1,12 @@
+defaults:
+  - eval_pretrained_clip_schema
+  - _self_
+
+hydra:
+  sweeper:
+    params: {}
+
+n_envs: 500
+
+encoder:
+  model: clip

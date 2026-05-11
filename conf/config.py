@@ -451,6 +451,27 @@ class VIPCGRLEvalConfig(CPCGRLEvalConfig):
 
 
 @dataclass
+class PretrainedCLIPEvalConfig(CPCGRLEvalConfig):
+    """PretrainedCLIP PCGRL 평가용 Config.
+
+    train_pretrained_clip.py 로 학습한 체크포인트를 평가한다.
+    사전 계산된 CLIP 텍스트 임베딩을 nlp_obs 에 주입하며,
+    별도의 encoder 체크포인트 없이 모델 자체에 포함된 CLIP 비전 인코더를 사용한다.
+    """
+    wandb_project: Optional[str] = f"{PREFIX}eval_pretrained_clip"
+
+    encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="clip"))
+
+    use_clip: bool = True
+    vec_cont: bool = False
+    model: str = "pretrained_clip"
+    use_nlp: bool = False
+    nlp_input_dim: int = 512  # pretrained CLIP 텍스트 임베딩 차원 (projection 없음)
+
+    ignore_checkpoint: bool = False
+
+
+@dataclass
 class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     """MGPCGRL 평가용 Config.
 
@@ -794,6 +815,7 @@ cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
 cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="eval_vipcgrl_schema", node=VIPCGRLEvalConfig)
 cs.store(name="eval_mgpcgrl_schema", node=MGPCGRLEvalConfig)
+cs.store(name="eval_pretrained_clip_schema", node=PretrainedCLIPEvalConfig)
 cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 

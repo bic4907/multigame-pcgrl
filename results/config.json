@@ -10,6 +10,7 @@
         "aaai27_eval_cpcgrl",
         "aaai27_eval_ipcgrl",
         "aaai27_eval_vipcgrl",
+        "aaai27_eval_pretrained_clip",
         "aaai27_eval_mgpcgrl"
       ],
       "re_oracle_project":          "aaai27_eval_cpcgrl",

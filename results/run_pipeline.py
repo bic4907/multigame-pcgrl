@@ -25,6 +25,11 @@ Step numbers:
                                 (unseen_generalizability 전용; 다른 실험에서는 생략)
     6  analysis_report          모델 간 % 비교 + Baseline 대비 분석을 한글 Markdown 으로 저장
                                 (allseen / unseen_generalizability 모두 적용)
+    7  unseen_count_progress    unseen 게임 수 증가에 따른 성능 변화 꺾은선 그래프
+                                (unseen_generalizability 전용; 다른 실험에서는 생략)
+    8  game_impact_analysis     게임 간 학습 데이터 영향도 히트맵 + 바 차트
+                                Impact(X→Y) = perf(Y|X seen) − perf(Y|X unseen)
+                                (unseen_generalizability 전용; 다른 실험에서는 생략)
 """
 
 from __future__ import annotations
@@ -98,15 +103,27 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/analysis_report.py",
         "description": "모델 간 수치 비교 + Baseline 대비 % 변화량을 한글 Markdown 리포트로 저장",
     },
+    {
+        "id": 7,
+        "name": "unseen_count_progress",
+        "script": _HERE / "utils/experiment/unseen_count_progress.py",
+        "description": "unseen 게임 수 증가에 따른 성능 변화 꺾은선 그래프 (unseen_generalizability 전용)",
+    },
+    {
+        "id": 8,
+        "name": "game_impact_analysis",
+        "script": _HERE / "utils/experiment/game_impact_analysis.py",
+        "description": "게임 간 학습 데이터 영향도 히트맵 — Impact(X→Y) = perf(Y|X seen)−perf(Y|X unseen) (unseen_generalizability 전용)",
+    },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
 _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
-    "unseen_generalizability": {3},   # benchmark 생략
-    None: {5},                        # experiment 미지정 시 seen_unseen_report 생략
+    "unseen_generalizability": {3},        # benchmark 생략
+    None: {5, 7, 8},                       # experiment 미지정 시 생략
 }
-# allseen 등 unseen_generalizability 아닌 실험: step 5 생략
-_DEFAULT_SKIP: set[int] = {5}        # unseen_generalizability 가 아닌 모든 실험에 적용
+# allseen 등 unseen_generalizability 아닌 실험: step 5, 7, 8 생략
+_DEFAULT_SKIP: set[int] = {5, 7, 8}        # unseen_generalizability 가 아닌 모든 실험에 적용
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
@@ -128,9 +145,10 @@ examples:
   python results/run_pipeline.py --list                # list step descriptions
 
 note:
-  step 3 (benchmark)         — allseen 등 일반 실험에서만 실행; unseen_generalizability 에서는 자동 생략
-  step 5 (seen_unseen_report)— unseen_generalizability 에서만 실행; 다른 실험에서는 자동 생략
-  step 6 (analysis_report)   — allseen / unseen_generalizability 모두 실행; 한글 Markdown 리포트 생성
+  step 3 (benchmark)             — allseen 등 일반 실험에서만 실행; unseen_generalizability 에서는 자동 생략
+  step 5 (seen_unseen_report)    — unseen_generalizability 에서만 실행; 다른 실험에서는 자동 생략
+  step 6 (analysis_report)       — allseen / unseen_generalizability 모두 실행; 한글 Markdown 리포트 생성
+  step 7 (unseen_count_progress) — unseen_generalizability 에서만 실행; unseen 게임 수 vs 성능 꺾은선 그래프
 
 available experiments: {_exp_hint}
         """,

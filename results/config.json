@@ -32,14 +32,13 @@
     }
   },
   "project_display_names": {
-    "aaai27_eval_cpcgrl":           "cpcgrl",
-    "aaai27_eval_vipcgrl_nosim":    "vipcgrl_nosim",
-    "aaai27_eval_mgpcgrl":          "mgpcgrl",
-    "aaai27_eval_ipcgrl":           "ipcgrl",
-    "aaai27_eval_vipcgrl":          "vipcgrl",
-    "aaai27_eval_pretrained_clip":  "pretrained_clip",
-    "aaai27_eval_random":           "random",
-    "aaai27_eval_mgpcgrl_unseen":   "mgpcgrl_unseen"
+    "aaai27_eval_cpcgrl":        "CPCGRL",
+    "aaai27_eval_vipcgrl_nosim": "VIPCGRL (nosim)",
+    "aaai27_eval_mgpcgrl":       "MGPCGRL",
+    "aaai27_eval_ipcgrl":        "IPCGRL",
+    "aaai27_eval_vipcgrl":       "VIPCGRL",
+    "aaai27_eval_random":        "Random",
+    "aaai27_eval_mgpcgrl_unseen":"MGPCGRL"
   },
   "games": {
     "colors": {

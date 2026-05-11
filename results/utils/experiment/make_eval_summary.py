@@ -135,7 +135,18 @@ def main() -> None:
     args = parse_args()
 
     raw        = Path(args.input)
-    input_root = raw if raw.is_absolute() else (_ROOT / raw).resolve()
+    if raw.is_absolute():
+        input_root = raw.resolve()
+    else:
+        # 상대 경로는 results/ 기준으로 먼저, 없으면 프로젝트 루트 기준으로 시도
+        candidate_results = (_RESULTS_DIR / raw).resolve()
+        candidate_root    = (_ROOT / raw).resolve()
+        if candidate_results.exists():
+            input_root = candidate_results
+        elif candidate_root.exists():
+            input_root = candidate_root
+        else:
+            input_root = candidate_results   # 에러 메시지에 results/ 기준 경로 표시
     if not input_root.exists():
         raise FileNotFoundError(f"input root not found: {input_root}")
 

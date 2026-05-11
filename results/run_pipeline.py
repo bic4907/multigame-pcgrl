@@ -30,6 +30,9 @@ Step numbers:
     8  game_impact_analysis     게임 간 학습 데이터 영향도 히트맵 + 바 차트
                                 Impact(X→Y) = perf(Y|X seen) − perf(Y|X unseen)
                                 (unseen_generalizability 전용; 다른 실험에서는 생략)
+    9  seen_ratio_progress      train_seen_ratio(데이터 양) 증가에 따른 unseen 게임
+                                progress 꺾은선 그래프 — 선 구분: seen 게임 수
+                                (seen_ratio_progress 전용; 다른 실험에서는 생략)
 """
 
 from __future__ import annotations
@@ -115,15 +118,22 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/game_impact_analysis.py",
         "description": "게임 간 학습 데이터 영향도 히트맵 — Impact(X→Y) = perf(Y|X seen)−perf(Y|X unseen) (unseen_generalizability 전용)",
     },
+    {
+        "id": 9,
+        "name": "seen_ratio_progress",
+        "script": _HERE / "utils/experiment/seen_ratio_progress.py",
+        "description": "train_seen_ratio(데이터 양) 증가에 따른 unseen 게임 progress 꺾은선 그래프 (seen_ratio_progress 전용)",
+    },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
 _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
-    "unseen_generalizability": {3},        # benchmark 생략
-    None: {5, 7, 8},                       # experiment 미지정 시 생략
+    "unseen_generalizability": {3, 9},          # benchmark, seen_ratio_progress 생략
+    "seen_ratio_progress":     {3, 4, 5, 7, 8}, # seen_ratio_progress 전용 — step 9만 실행
+    None: {5, 7, 8, 9},                          # experiment 미지정 시 생략
 }
-# allseen 등 unseen_generalizability 아닌 실험: step 5, 7, 8 생략
-_DEFAULT_SKIP: set[int] = {5, 7, 8}        # unseen_generalizability 가 아닌 모든 실험에 적용
+# allseen 등 unseen_generalizability / seen_ratio_progress 아닌 실험: step 5, 7, 8, 9 생략
+_DEFAULT_SKIP: set[int] = {5, 7, 8, 9}          # unseen_generalizability / seen_ratio_progress 가 아닌 모든 실험에 적용
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
@@ -149,6 +159,7 @@ note:
   step 5 (seen_unseen_report)    — unseen_generalizability 에서만 실행; 다른 실험에서는 자동 생략
   step 6 (analysis_report)       — allseen / unseen_generalizability 모두 실행; 한글 Markdown 리포트 생성
   step 7 (unseen_count_progress) — unseen_generalizability 에서만 실행; unseen 게임 수 vs 성능 꺾은선 그래프
+  step 9 (seen_ratio_progress)   — seen_ratio_progress 실험에서만 실행; train_seen_ratio vs progress 꺾은선 그래프
 
 available experiments: {_exp_hint}
         """,

@@ -1,0 +1,29 @@
+"""
+eval_pretrained_clip.py
+=======================
+PretrainedCLIP PCGRL 평가 엔트리포인트.
+사전 계산된 CLIP 텍스트 임베딩을 nlp_obs 에 주입하여 평가한다.
+
+실행:
+    python -m eval_pretrained_clip [overrides]
+    python -m eval_pretrained_clip dataset_reward_enum=4 game=all
+"""
+import hydra
+
+from conf.config import PretrainedCLIPEvalConfig
+from instruct_rl.utils.log_utils import suppress_jax_debug_logs
+from instruct_rl.utils.eval_utils import main_eval_entry
+from train_pretrained_clip import inject_pretrained_clip_pcgrl_obs
+
+suppress_jax_debug_logs()
+
+
+# ── Hydra entrypoint ──────────────────────────────────────────────────────────
+
+@hydra.main(version_base=None, config_path="./conf", config_name="eval_pretrained_clip")
+def main(config: PretrainedCLIPEvalConfig):
+    main_eval_entry(config, inject_obs_fn=inject_pretrained_clip_pcgrl_obs)
+
+
+if __name__ == "__main__":
+    main()

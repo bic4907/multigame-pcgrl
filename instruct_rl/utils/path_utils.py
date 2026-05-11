@@ -69,6 +69,10 @@ def get_exp_group(config) -> str:
     if getattr(config, 'use_nlp', False):
         return f'ipcgrl_game-{game}{re_s}{exp_s}'
 
+    # PretrainedCLIP: model=pretrained_clip, enc suffix 없음
+    if getattr(config, 'model', None) == 'pretrained_clip':
+        return f'preclip_pcgrl_game-{game}{re_s}{exp_s}'
+
     # MGPCGRL / VIPCGRL: pretrained CLIP encoder
     enc = _enc_str(config.encoder)
     if hasattr(config, 'decoder'):
@@ -145,7 +149,7 @@ def init_config(config: Config):
         config.instruct_csv = None
 
         if config.use_clip:
-            # ── VIPCGRL 모드: pretrained CLIP encoder의 latent embedding을 입력으로 사용 ──
+            # ── VIPCGRL / PretrainedCLIP 모드: CLIP latent embedding을 입력으로 사용 ──
             config.vec_cont = False
             config.use_nlp = False
             if config.encoder.model is None:
@@ -156,7 +160,8 @@ def init_config(config: Config):
             # dataset 기반 VIPCGRL: cnnclipconv/clipconv 가 이미 설정된 경우 유지
             if config.model not in ('nlpconv', 'cnnclipconv', 'clipconv', 'pretrained_clip'):
                 config.model = 'nlpconv'
-            logger.info(f"[VIPCGRL] dataset_game={config.dataset_game}, "
+            _mode_tag = "PretrainedCLIP" if config.model == 'pretrained_clip' else "VIPCGRL"
+            logger.info(f"[{_mode_tag}] dataset_game={config.dataset_game}, "
                         f"dataset_reward_enum={getattr(config, 'dataset_reward_enum', None)}, "
                         f"nlp_input_dim={config.nlp_input_dim}, "
                         f"encoder={config.encoder.model}")

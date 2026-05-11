@@ -10,6 +10,7 @@
         "aaai27_eval_cpcgrl",
         "aaai27_eval_ipcgrl",
         "aaai27_eval_vipcgrl",
+        "aaai27_eval_pretrained_clip",
         "aaai27_eval_mgpcgrl"
       ],
       "re_oracle_project":          "aaai27_eval_cpcgrl",
@@ -31,13 +32,14 @@
     }
   },
   "project_display_names": {
-    "aaai27_eval_cpcgrl":        "cpcgrl",
-    "aaai27_eval_vipcgrl_nosim": "vipcgrl_nosim",
-    "aaai27_eval_mgpcgrl":       "mgpcgrl",
-    "aaai27_eval_ipcgrl":        "ipcgrl",
-    "aaai27_eval_vipcgrl":       "vipcgrl",
-    "aaai27_eval_random":        "random",
-    "aaai27_eval_mgpcgrl_unseen":"mgpcgrl_unseen"
+    "aaai27_eval_cpcgrl":           "cpcgrl",
+    "aaai27_eval_vipcgrl_nosim":    "vipcgrl_nosim",
+    "aaai27_eval_mgpcgrl":          "mgpcgrl",
+    "aaai27_eval_ipcgrl":           "ipcgrl",
+    "aaai27_eval_vipcgrl":          "vipcgrl",
+    "aaai27_eval_pretrained_clip":  "pretrained_clip",
+    "aaai27_eval_random":           "random",
+    "aaai27_eval_mgpcgrl_unseen":   "mgpcgrl_unseen"
   },
   "games": {
     "colors": {

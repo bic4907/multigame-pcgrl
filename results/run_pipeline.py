@@ -31,8 +31,10 @@ Step numbers:
                                 Impact(X→Y) = perf(Y|X seen) − perf(Y|X unseen)
                                 (unseen_generalizability 전용; 다른 실험에서는 생략)
     9  seen_ratio_progress      train_seen_ratio(데이터 양) 증가에 따른 unseen 게임
-                                progress 꺾은선 그래프 — 선 구분: seen 게임 수
-                                (seen_ratio_progress 전용; 다른 실험에서는 생략)
+                                 progress 꺾은선 그래프 — 선 구분: seen 게임 수
+                                 (seen_ratio_progress 전용; 다른 실험에서는 생략)
+    10 condition_shift_perf_drop  RE별 조건 분포 변화(Wasserstein/JSD) vs 성능 하락 scatter + 상관계수
+                                 (condition_shift_analysis 전용; 다른 실험에서는 생략)
 """
 
 from __future__ import annotations
@@ -124,16 +126,23 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/seen_ratio_progress.py",
         "description": "train_seen_ratio(데이터 양) 증가에 따른 unseen 게임 progress 꺾은선 그래프 (seen_ratio_progress 전용)",
     },
+    {
+        "id": 10,
+        "name": "condition_shift_perf_drop",
+        "script": _HERE / "utils/experiment/condition_shift_perf_drop.py",
+        "description": "RE별 조건 분포 변화(Wasserstein/JSD) vs 성능 하락 scatter + 상관계수 (condition_shift_analysis 전용)",
+    },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
 _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
-    "unseen_generalizability": {3, 9},          # benchmark, seen_ratio_progress 생략
-    "seen_ratio_progress":     {3, 4, 5, 7, 8}, # seen_ratio_progress 전용 — step 9만 실행
-    None: {5, 7, 8, 9},                          # experiment 미지정 시 생략
+    "unseen_generalizability": {3, 9, 10},          # benchmark, seen_ratio_progress, condition_shift 생략
+    "seen_ratio_progress":     {3, 4, 5, 7, 8, 10}, # seen_ratio_progress 전용 — step 9만 실행
+    "condition_shift_analysis": {3, 4, 5, 6, 7, 8, 9},  # condition_shift_analysis 전용 — step 10만 실행
+    None: {5, 7, 8, 9, 10},                          # experiment 미지정 시 생략
 }
-# allseen 등 unseen_generalizability / seen_ratio_progress 아닌 실험: step 5, 7, 8, 9 생략
-_DEFAULT_SKIP: set[int] = {5, 7, 8, 9}          # unseen_generalizability / seen_ratio_progress 가 아닌 모든 실험에 적용
+# allseen 등 unseen_generalizability / seen_ratio_progress / condition_shift_analysis 아닌 실험: step 5, 7, 8, 9, 10 생략
+_DEFAULT_SKIP: set[int] = {5, 7, 8, 9, 10}          # unseen_generalizability / seen_ratio_progress / condition_shift_analysis 가 아닌 모든 실험에 적용
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:

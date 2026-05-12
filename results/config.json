@@ -35,6 +35,11 @@
         "aaai27_eval_mgpcgrl_unseen_ratios",
         "aaai27_eval_mgpcgrl_unseen"
       ]
+    },
+    "condition_shift_analysis": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_unseen"
+      ]
     }
   },
   "project_display_names": {

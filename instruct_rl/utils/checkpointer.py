@@ -91,10 +91,30 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
             mgr = checkpoint_manager
         runner_state = target["runner_state"]
         try:
+            # orbax 최신 버전: strict 지원
             restored_ckpt = mgr.restore(
                 steps_prev_complete,
                 args=ocp.args.StandardRestore(target, strict=False),
             )
+        except TypeError:
+            # 구버전 orbax: strict 파라미터 미지원 → 없이 재시도
+            try:
+                restored_ckpt = mgr.restore(
+                    steps_prev_complete,
+                    args=ocp.args.StandardRestore(target),
+                )
+            except (KeyError, ValueError):
+                runner_state = runner_state.replace(
+                    env_state=runner_state.env_state.replace(
+                        env_state=runner_state.env_state.env_state.replace(
+                            queued_state=gen_dummy_queued_state_old(env)
+                        )
+                    )
+                )
+                target = {"runner_state": runner_state, "step_i": 0}
+                restored_ckpt = mgr.restore(
+                    steps_prev_complete, items=target
+                )
         except (KeyError, ValueError):
             runner_state = runner_state.replace(
                 env_state=runner_state.env_state.replace(

@@ -33,7 +33,7 @@ GAME_HANDLER_FILES: Dict[str, List[str]] = {
     "dungeon": ["handlers/dungeon_handler.py"],
     "sokoban": ["handlers/boxoban_handler.py"],
     "zelda":   ["handlers/zelda_handler.py", "handlers/vglc_handler.py"],
-    "pokemon": ["handlers/pokemon_handler.py"],
+    "pokemon": ["handlers/pokemon_handler.py", "handlers/fdm_game"],
     "doom":    ["handlers/doom_handler.py"],
     "doom2":   ["handlers/doom_handler.py"],
 }

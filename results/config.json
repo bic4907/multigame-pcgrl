@@ -15,8 +15,8 @@
       ],
       "re_oracle_project":          "aaai27_eval_cpcgrl",
       "re_oracle_label":            "CPCGRL (Oracle)",
-      "re_baseline_project":        "aaai27_eval_vipcgrl",
-      "re_baseline_label":          "VIPCGRL",
+      "re_baseline_project":        "aaai27_eval_cpcgrl",
+      "re_baseline_label":          "CPCGRL",
       "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
     },
     "unseen_generalizability": {

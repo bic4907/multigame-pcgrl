@@ -73,23 +73,18 @@ DUNGEON_PALETTE: dict[int, tuple[int, int, int]] = {
 
 def _place_treasure(array: np.ndarray, key: str) -> np.ndarray:
     """
-    FLOOR 타일 중 랜덤하게 0~9개를 TREASURE(4)로 교체한다.
+    FLOOR 타일 각각에 대해 독립적으로 10% 확률로 TREASURE(4)로 교체한다.
     key(='000000' 형식)를 정수로 변환해 seed로 사용 → 재현 가능.
     FLOOR 가 없으면 array 를 그대로 반환한다.
     """
     rng = np.random.RandomState(int(key))
-    n = rng.randint(0, 10)                          # 0~9 개
-    if n == 0:
-        return array
     floor_pos = np.argwhere(array == DungeonTile.FLOOR)
     if len(floor_pos) == 0:
         return array
-    n = min(n, len(floor_pos))
-    chosen = rng.choice(len(floor_pos), size=n, replace=False)
     result = array.copy()
-    for idx in chosen:
-        r, c = floor_pos[idx]
-        result[r, c] = DungeonTile.TREASURE
+    for idx in floor_pos:
+        if rng.random() < 0.1:
+            result[idx[0], idx[1]] = DungeonTile.TREASURE
     return result
 
 

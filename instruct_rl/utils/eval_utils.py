@@ -137,6 +137,29 @@ def main_eval_entry(config, *, inject_obs_fn=None):
     exp_dir = config.exp_dir
     logger.info(f"Running experiment at {exp_dir}")
 
+    # ── reward_decoder_config.json: train exp_dir에서 읽어 config에 주입 (WandB 로깅용) ──
+    _rdm_path = os.path.join(exp_dir, "train_setting.json")
+    if os.path.exists(_rdm_path):
+        try:
+            import json as _json
+            with open(_rdm_path) as _f:
+                _rdm_data = _json.load(_f)
+            _rdm = _rdm_data.get("reward_decoder_mode")
+            if _rdm and hasattr(config, "reward_decoder_mode"):
+                config.reward_decoder_mode = _rdm
+            _seen = _rdm_data.get("seen_games", [])
+            if _seen and hasattr(config, "seen_games"):
+                config.seen_games = list(_seen)
+            _unseen = _rdm_data.get("unseen_games", [])
+            if _unseen and hasattr(config, "unseen_games"):
+                config.unseen_games = list(_unseen)
+            logger.info(
+                "Loaded reward_decoder_config: mode=%s, seen=%s, unseen=%s",
+                _rdm, _seen, _unseen,
+            )
+        except Exception as _e:
+            logger.warning("Failed to load reward_decoder_config.json: %s", _e)
+
     _re = getattr(config, 'dataset_reward_enum', None)
     _re_enums = getattr(config, 'eval_dataset_reward_enums', None)
 

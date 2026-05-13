@@ -205,33 +205,89 @@ def _build_reward_and_condition(
     shared_module=None,
     shared_variables=None,
 ):
-    """reward_i 및 condition 벡터를 생성한다."""
-    if getattr(config, "use_clip", False) and hasattr(config, "decoder"):
-        logger.info("Reward/Condition mode: CLIP decoder prediction path")
-        return _build_reward_and_condition_with_decoder(
-            sample_list,
-            config,
-            text_embeddings=text_embeddings,
-            module=shared_module,
-            variables=shared_variables,
-        )
+    """reward_i 및 condition 벡터를 생성한다.
 
-    logger.info("Reward/Condition mode: metadata fallback path")
-    reward_i_list = []
-    for sample in sample_list:
-        reward_i_list.append([sample.meta["reward_enum"]])
-    reward_i = jnp.array(reward_i_list, dtype=jnp.int32)
+    동작 순서:
+    1. 항상 데이터셋 메타데이터로 전체 배열을 초기화한다.
+    2. reward_decoder_mode에 따라 decoder로 덮어쓸 범위를 결정한다:
+       - "noop"  : 초기화한 메타데이터를 그대로 반환 (decoder 미사용)
+       - "all"   : 전체 게임을 decoder 예측값으로 덮어쓴다
+       - "unseen": unseen 게임 샘플만 decoder 예측값으로 덮어쓴다
+    """
+    use_decoder = getattr(config, "use_clip", False) and hasattr(config, "decoder")
+    num_classes = config.decoder.num_reward_classes if use_decoder else 5
+    reward_decoder_mode = getattr(config, "reward_decoder_mode", "unseen")
+    n = len(sample_list)
 
-    condition_list = []
-    for sample in sample_list:
+    # ── 1. 메타데이터로 전체 배열 초기화 (항상) ───────────────────────────────
+    reward_i_arr = np.zeros((n, 1), dtype=np.int32)
+    condition_arr = np.full((n, num_classes), -1.0, dtype=np.float32)
+    for idx, sample in enumerate(sample_list):
+        reward_i_arr[idx, 0] = sample.meta["reward_enum"]
         conds = sample.meta.get("conditions", {})
-        row = []
-        for i in range(0, 5):
-            val = conds.get(i, conds.get(str(i), -1))
-            row.append(float(val))
-        condition_list.append(row)
-    condition = jnp.array(condition_list, dtype=jnp.float32)
-    return reward_i, condition
+        for j in range(num_classes):
+            val = conds.get(j, conds.get(str(j), -1))
+            condition_arr[idx, j] = float(val)
+    logger.info("Reward/Condition: metadata loaded for all %d samples", n)
+
+    # ── 2. "noop" 모드 또는 decoder 미사용: 메타데이터 그대로 반환 ─────────────
+    if reward_decoder_mode == "noop" or not use_decoder:
+        logger.info("Reward/Condition mode: noop (metadata only, decoder not applied)")
+        return jnp.array(reward_i_arr, dtype=jnp.int32), jnp.array(condition_arr, dtype=jnp.float32)
+
+    # ── 3. decoder로 덮어쓸 target_indices 결정 ───────────────────────────────
+    if reward_decoder_mode == "unseen":
+        reward_seen_games = set(getattr(config, "reward_seen_games", None) or [])
+        if reward_seen_games:
+            target_indices = [i for i, s in enumerate(sample_list) if s.game not in reward_seen_games]
+            logger.info(
+                "Reward/Condition mode: unseen→decoder "
+                "(seen=%d samples kept as metadata, unseen=%d samples → decoder)",
+                n - len(target_indices),
+                len(target_indices),
+            )
+        else:
+            logger.warning(
+                "reward_decoder_mode=unseen but reward_seen_games is empty — decoder applied to all games"
+            )
+            target_indices = list(range(n))
+    else:
+        # "all": 전체를 decoder로 덮어쓴다
+        target_indices = list(range(n))
+        logger.info("Reward/Condition mode: all (%d samples → decoder)", n)
+
+    if not target_indices:
+        logger.info("No decoder target samples — returning metadata as-is")
+        return jnp.array(reward_i_arr, dtype=jnp.int32), jnp.array(condition_arr, dtype=jnp.float32)
+
+    # ── 4. 대상 samples에 대해 decoder 예측 후 덮어쓰기 ──────────────────────
+    target_samples = [sample_list[i] for i in target_indices]
+    target_embeddings = (
+        np.asarray(text_embeddings)[target_indices]
+        if text_embeddings is not None
+        else None
+    )
+
+    reward_i_dec, cond_dec = _build_reward_and_condition_with_decoder(
+        target_samples,
+        config,
+        text_embeddings=target_embeddings,
+        module=shared_module,
+        variables=shared_variables,
+    )
+    reward_i_dec_np = np.asarray(reward_i_dec, dtype=np.int32)
+    cond_dec_np = np.asarray(cond_dec, dtype=np.float32)
+
+    for local_i, orig_i in enumerate(target_indices):
+        reward_i_arr[orig_i] = reward_i_dec_np[local_i]
+        condition_arr[orig_i] = cond_dec_np[local_i]
+
+    logger.info(
+        "Reward/Condition: decoder overwrite done — reward_i=%s, condition=%s",
+        reward_i_arr.shape,
+        condition_arr.shape,
+    )
+    return jnp.array(reward_i_arr, dtype=jnp.int32), jnp.array(condition_arr, dtype=jnp.float32)
 
 
 def _build_reward_and_condition_with_decoder(

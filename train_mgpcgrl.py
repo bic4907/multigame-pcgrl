@@ -41,25 +41,11 @@ def main(config: MGPCGRLConfig):
     if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
         raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
-    # ── encoder의 dataset_setting.json에서 seen_games를 읽어 game 자동 설정 ──
+    # ── encoder의 dataset_setting.json에서 seen_ratio / seen_games 주입 ──
     dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
     if os.path.exists(dataset_setting_path):
         with open(dataset_setting_path, "r") as f:
             dataset_setting = json.load(f)
-        seen_games = dataset_setting.get("seen_games", [])
-        if seen_games:
-            seen_abbrs = dict.fromkeys(GAME_ABBR_INV[g] for g in seen_games if g in GAME_ABBR_INV)
-            if seen_abbrs.keys() == GAME_ABBR.keys():  # 모든 약어가 포함되면 "all"
-                game_str = "all"
-            else:
-                game_str = "".join(seen_abbrs)  # 순서 유지, 중복 제거 (doom+doom2 → dm 한 번)
-            logger.info(
-                "Auto-setting game='%s' from encoder dataset_setting.json (seen_games=%s)",
-                game_str, seen_games,
-            )
-            config.game = game_str
-        else:
-            logger.warning("dataset_setting.json has empty seen_games — keeping config.game='%s'", config.game)
 
         # ── seen_ratio 주입: encoder 학습 때 쓴 seen 게임 데이터 비율을 그대로 사용 ──
         seen_ratio = dataset_setting.get("seen_ratio", 1.0)
@@ -69,8 +55,44 @@ def main(config: MGPCGRLConfig):
                 seen_ratio,
             )
             config.dataset_seen_ratio = seen_ratio
+
+        # ── game_setting_mode=encoder_seen: seen 게임만 학습 대상으로 설정 ──
+        if config.game_setting_mode == "encoder_seen":
+            seen_games = dataset_setting.get("seen_games", [])
+            if seen_games:
+                seen_abbrs = dict.fromkeys(GAME_ABBR_INV[g] for g in seen_games if g in GAME_ABBR_INV)
+                if seen_abbrs.keys() == GAME_ABBR.keys():
+                    game_str = "all"
+                else:
+                    game_str = "".join(seen_abbrs)
+                logger.info(
+                    "game_setting_mode=encoder_seen → setting game='%s' (seen_games=%s)",
+                    game_str, seen_games,
+                )
+                config.game = game_str
+            else:
+                logger.warning(
+                    "game_setting_mode=encoder_seen but dataset_setting.json has empty seen_games "
+                    "— keeping config.game='%s'", config.game,
+                )
+
+        # ── reward_decoder_mode=unseen: seen_games 주입 ──
+        if config.reward_decoder_mode == "unseen":
+            seen_games = dataset_setting.get("seen_games", [])
+            if seen_games:
+                config.reward_seen_games = list(seen_games)
+                logger.info(
+                    "Auto-setting reward_seen_games=%s from encoder dataset_setting.json "
+                    "(reward_decoder_mode=unseen)",
+                    seen_games,
+                )
+            else:
+                logger.warning(
+                    "reward_decoder_mode=unseen but dataset_setting.json has empty seen_games "
+                    "— decoder will be used for all games"
+                )
     else:
-        logger.warning("dataset_setting.json not found at %s — keeping config.game='%s'", dataset_setting_path, config.game)
+        logger.warning("dataset_setting.json not found at %s", dataset_setting_path)
 
     main_entry(
         config,

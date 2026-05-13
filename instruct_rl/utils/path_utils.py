@@ -76,7 +76,8 @@ def get_exp_group(config) -> str:
     # MGPCGRL / VIPCGRL: pretrained CLIP encoder
     enc = _enc_str(config.encoder)
     if hasattr(config, 'decoder'):
-        return f'mgpcgrl_game-{game}{re_s}{exp_s}{enc}'
+        rdm = getattr(config, 'reward_decoder_mode', 'unseen')
+        return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{exp_s}{enc}'
     if getattr(config, 'use_clip', False):
         return f'vipcgrl_game-{game}{re_s}{exp_s}{enc}'
 

@@ -99,7 +99,7 @@ docker_command="docker run --rm -it
     --gpus all
     -e CUDA_VISIBLE_DEVICES=$available_gpu
     -e XLA_PYTHON_CLIENT_PREALLOCATE=true
-    -e XLA_PYTHON_CLIENT_MEM_FRACTION=.95
+    -e XLA_PYTHON_CLIENT_MEM_FRACTION=.75
     -v /mnt/nas:/mnt/nas
     -v /raid:/raid
     --env-file .env

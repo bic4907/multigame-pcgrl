@@ -719,6 +719,27 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
     if config.overwrite and os.path.exists(exp_dir):
         shutil.rmtree(exp_dir)
 
+    # ── reward_decoder_config.json: 모드 + seen/unseen 게임 목록 저장 ──────────
+    _rdm = getattr(config, "reward_decoder_mode", None)
+    if _rdm is not None:
+        import json as _json
+        from conf.game_utils import ALL_GAMES
+        _seen = list(getattr(config, "reward_seen_games", None) or [])
+        _unseen = sorted(set(ALL_GAMES) - set(_seen)) if _seen else []
+        os.makedirs(exp_dir, exist_ok=True)
+        _rdm_path = os.path.join(exp_dir, "train_setting.json")
+        _rdm_data = {
+            "reward_decoder_mode": _rdm,
+            "seen_games":          _seen,
+            "unseen_games":        _unseen,
+        }
+        with open(_rdm_path, "w") as _f:
+            _json.dump(_rdm_data, _f, indent=2)
+        logger.info(
+            "Saved reward_decoder_config: mode=%s, seen=%s, unseen=%s → %s",
+            _rdm, _seen, _unseen, _rdm_path,
+        )
+
     if config.timestep_chunk_size != -1:
         n_chunks = config.total_timesteps // config.timestep_chunk_size
         for i in range(n_chunks):

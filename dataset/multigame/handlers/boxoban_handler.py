@@ -318,47 +318,39 @@ def _placeable_positions(array: np.ndarray) -> np.ndarray:
 
 def _augment_objects(array: np.ndarray) -> np.ndarray:
     """
-    Sokoban 맵의 오브젝트(box) 수를 확률적으로 증감한다.
+    Sokoban 맵의 오브젝트(box) 수를 1~12개 범위로 조정한다.
 
-    - 40% : 변경 없음 (4개 유지)
-    - 20% : 랜덤 1개 제거 → 3개
-    - 20% : EMPTY(비구석) 위치에 1개 추가 → 5개
-    - 20% : EMPTY(비구석) 위치에 2개 추가 → 6개
-
+    목표 개수를 1~12에서 균등 샘플링한 뒤, 현재 박스를 추가/제거해 목표에 맞춘다.
     시드는 배열 내용의 MD5 해시 → 동일 입력이면 항상 동일 결과.
     """
-    seed = int.from_bytes(
-        hashlib.md5(array.tobytes()).digest()[:4], byteorder='big'
-    )
-    rng = np.random.default_rng(seed)
+    digest = hashlib.md5(array.tobytes()).digest()
+    seed   = int.from_bytes(digest[:4], byteorder='big')
+    rng    = np.random.default_rng(seed)
 
-    choice = rng.choice([0, 1, 2, 3], p=[0.4, 0.2, 0.2, 0.2])
+    # 128비트 전체로 모듈로 매핑 → 4바이트 앞 부분의 편향 제거
+    full_hash = int.from_bytes(digest, byteorder='big')
+    target = (full_hash % 12) + 1  # 1~12 uniform
     result = array.copy()
 
-    if choice == 0:
-        # 변경 없음
-        return result
+    obj_positions = list(np.argwhere(result == BoxobanTile.OBJECT))
+    current = len(obj_positions)
 
-    elif choice == 1:
-        # 1개 제거
-        obj_positions = np.argwhere(result == BoxobanTile.OBJECT)
-        if len(obj_positions) == 0:
-            return result
-        idx = rng.integers(len(obj_positions))
-        r, c = obj_positions[idx]
-        result[r, c] = BoxobanTile.EMPTY
+    if target < current:
+        n_remove = current - target
+        indices = rng.choice(len(obj_positions), size=n_remove, replace=False)
+        for idx in indices:
+            r, c = obj_positions[idx]
+            result[r, c] = BoxobanTile.EMPTY
 
-    else:
-        # 1개(choice==2) 또는 2개(choice==3) 추가
-        n_add = 1 if choice == 2 else 2
+    elif target > current:
+        n_add = target - current
         placeable = _placeable_positions(result)
-        if len(placeable) == 0:
-            return result
-        n_add = min(n_add, len(placeable))
-        chosen = rng.choice(len(placeable), size=n_add, replace=False)
-        for idx in chosen:
-            r, c = placeable[idx]
-            result[r, c] = BoxobanTile.OBJECT
+        if len(placeable) > 0:
+            n_add = min(n_add, len(placeable))
+            chosen = rng.choice(len(placeable), size=n_add, replace=False)
+            for idx in chosen:
+                r, c = placeable[idx]
+                result[r, c] = BoxobanTile.OBJECT
 
     return result
 
@@ -452,7 +444,6 @@ class BoxobanHandler(BaseGameHandler):
                 if arr is None:
                     continue
                 processed = _fit_to_target(arr, _TARGET_SIZE)
-                processed = _augment_objects(processed)
                 source_id = f"{rel}#{lvl_idx}"
                 all_arrays.append(processed)
                 all_ids.append(source_id)
@@ -460,19 +451,21 @@ class BoxobanHandler(BaseGameHandler):
         if not all_arrays:
             raise ValueError("[boxoban] 파싱 가능한 레벨이 없습니다.")
 
-        # ── Diversity sampling ────────────────────────────────────────────────
+        # ── Diversity sampling (augmentation 전 원본 구조 기준) ───────────────
         n = self._n_sample
         if n is not None and n < len(all_arrays):
             chosen_idxs = _diversity_sample(all_arrays, n, seed=self._seed)
         else:
             chosen_idxs = list(range(len(all_arrays)))
 
+        # ── Augmentation (diversity sampling 이후 적용) ───────────────────────
         samples: List[GameSample] = []
         for order, idx in enumerate(chosen_idxs):
+            augmented = _augment_objects(all_arrays[idx])
             samples.append(GameSample(
                 game=GameTag.SOKOBAN,
                 source_id=all_ids[idx],
-                array=all_arrays[idx],
+                array=augmented,
                 legend=legend,
                 order=order,
                 meta={

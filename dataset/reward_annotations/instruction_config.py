@@ -27,11 +27,11 @@ _SUPPORTED_GAMES = ["doom", "zelda", "sokoban", "pokemon", "dungeon"]
 # None = 해당 (game, feature) 조합에 threshold 없음
 # threshold 3개 → 4 구간: 매우 적음 / 다소 적음 / 다소 많음 / 매우 많음
 CUSTOM_THRESHOLDS: Dict[str, Optional[List[float]]] = {
-    "dungeon_region":             [1.5, 4.5, 10.5],
-    "dungeon_path_length":        [23.5, 32.5, 46.5],
+    "dungeon_region":             [1.5, 4.5, 14.5],
+    "dungeon_path_length":        [23.5, 32.5, 44.5],
     "dungeon_interactable_count": None,
-    "dungeon_hazard_count":       [5.5, 10.5, 18.5],
-    "dungeon_collectable_count":  [1.5, 4.5, 7.5],
+    "dungeon_hazard_count":       [6.5, 10.5, 18.5],
+    "dungeon_collectable_count":  [8.5, 11.5, 15.5],
 
     "doom_region":                [1.5, 2.5, 3.5],
     "doom_path_length":           [23.5, 27.5, 30.5],
@@ -42,18 +42,18 @@ CUSTOM_THRESHOLDS: Dict[str, Optional[List[float]]] = {
     "zelda_region":               [1.5, 2.5, 4.5],
     "zelda_path_length":          [16.5, 21.5, 22.5],
     "zelda_interactable_count":   [4.5, 8.5, 26.5],
-    "zelda_hazard_count":         [0.5, 4.5, 8.5],
-    "zelda_collectable_count":    [0.5, 1.5, 2.5],
+    "zelda_hazard_count":         [5.5, 10.5, 18.5],
+    "zelda_collectable_count":    [1.5, 3.5, 14.5],
 
     "pokemon_region":             [1.5, 2.5, 4.5],
-    "pokemon_path_length":        [18.5, 24.5, 30.5],
+    "pokemon_path_length":        [18.5, 23.5, 29.5],
     "pokemon_interactable_count": [0.5, 20.5, 60.5],
-    "pokemon_hazard_count":       [1.5, 4.5, 8.5],
+    "pokemon_hazard_count":       [11.5, 44.5, 76.5],
     "pokemon_collectable_count":  [0.5, 2.5, 6.5],
 
     "sokoban_region":             [1.5, 2.5, 3.5],
     "sokoban_path_length":        [17.5, 21.5, 25.5],
-    "sokoban_interactable_count": [3.5, 4.5, 5.5],
+    "sokoban_interactable_count": [3.5, 6.5, 9.5],
     "sokoban_hazard_count":       None,
     "sokoban_collectable_count":  None,
 }

@@ -188,6 +188,11 @@ def _rotate_90(patch: np.ndarray) -> np.ndarray:
     return np.rot90(patch, k=-1).copy()
 
 
+def _flip_ud(patch: np.ndarray) -> np.ndarray:
+    """상하 반전."""
+    return np.flipud(patch).copy()
+
+
 def _is_uniform_center_12x12(padded: np.ndarray) -> bool:
     """
     16x16 맵의 중앙 12x12 영역(테두리 2줄 제외)이 모두 같은 타일인지 확인.
@@ -213,11 +218,11 @@ _DROP_TILES = [ZeldaTile.MOB, ZeldaTile.OBJECT]
 _DROPPABLE_TILES = {ZeldaTile.FLOOR, ZeldaTile.EMPTY}
 
 # 드롭 증강 비율 (원본 중 몇 %에 적용할지)
-DROP_AUG_RATIO = 0.5  # 원본의 50%에만 드롭 적용
+DROP_AUG_RATIO = 1.0  # 원본의 100%에 드롭 적용
 
 # 드롭 개수 범위
-DROP_COUNT_MIN = 1
-DROP_COUNT_MAX = 5
+DROP_COUNT_MIN = 0
+DROP_COUNT_MAX = 25
 
 
 def _augment_random_drop(
@@ -225,7 +230,7 @@ def _augment_random_drop(
     rng: np.random.Generator,
 ) -> Optional[np.ndarray]:
     """
-    16×16 패치의 FLOOR 또는 EMPTY 타일 중 1~5개를 랜덤으로
+    16×16 패치의 FLOOR 또는 EMPTY 타일 중 0~25개를 랜덤으로
     MOB 또는 OBJECT로 교체한다.
 
     드롭 가능한 위치가 없으면 None을 반환한다.
@@ -236,7 +241,6 @@ def _augment_random_drop(
     if len(droppable) == 0:
         return None
 
-    # 드롭 개수: 1~5 (가용 위치 수 이내)
     n_drop = rng.integers(DROP_COUNT_MIN, DROP_COUNT_MAX + 1)
     n_drop = min(n_drop, len(droppable))
 
@@ -246,6 +250,34 @@ def _augment_random_drop(
         tile = rng.choice(_DROP_TILES)
         aug[pos[0], pos[1]] = tile
     return aug
+
+
+def _fill_missing_tiles(padded: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """
+    MOB(hazard) 또는 OBJECT(collectable)가 없는 맵에 해당 타일을 in-place로 추가한다.
+
+    - MOB 없음  → FLOOR/EMPTY 중 1~DROP_COUNT_MAX개를 MOB으로 교체
+    - OBJECT 없음 → 남은 FLOOR/EMPTY 중 1~DROP_COUNT_MAX개를 OBJECT로 교체
+    """
+    result = padded.copy()
+
+    def _add_tile(arr: np.ndarray, tile: int) -> np.ndarray:
+        droppable = np.argwhere(np.isin(arr, list(_DROPPABLE_TILES)))
+        if len(droppable) == 0:
+            return arr
+        n = int(rng.integers(1, DROP_COUNT_MAX + 1))
+        n = min(n, len(droppable))
+        chosen = droppable[rng.choice(len(droppable), size=n, replace=False)]
+        for pos in chosen:
+            arr[pos[0], pos[1]] = tile
+        return arr
+
+    if not np.any(result == ZeldaTile.MOB):
+        result = _add_tile(result, ZeldaTile.MOB)
+    if not np.any(result == ZeldaTile.OBJECT):
+        result = _add_tile(result, ZeldaTile.OBJECT)
+
+    return result
 
 
 # ── 정수 → 대표 문자 역매핑 ─────────────────────────────────────────────────────
@@ -330,8 +362,6 @@ class ZeldaHandler(BaseGameHandler):
 
         rng = np.random.default_rng(seed=42)
         samples: List[GameSample] = []
-        # 드롭 증강 후보 (원본 padded + 메타)
-        originals_for_drop: List[tuple] = []
 
         for fpath in files:
             fname = fpath.stem  # e.g. "tloz1_1"
@@ -353,7 +383,7 @@ class ZeldaHandler(BaseGameHandler):
                 padded = _center_pad_to_16x16(squared)
 
                 # 4) OBJECT가 없는 맵에 확률적으로 OBJECT 배치 (결정적)
-                padded = self._preprocessor.postprocess_array(padded)
+                base_padded = self._preprocessor.postprocess_array(padded)
 
                 source_id = f"{fname}_r{ry}_c{rx}"
                 base_meta = {
@@ -366,20 +396,21 @@ class ZeldaHandler(BaseGameHandler):
                     "output_size": (TARGET_SIZE, TARGET_SIZE),
                 }
 
-                # 원본
+                # 원본 — 독립적으로 MOB/OBJECT 채움
+                arr_orig = _fill_missing_tiles(base_padded, rng)
                 samples.append(GameSample(
                     game=GameTag.ZELDA,
                     source_id=source_id,
-                    array=padded,
-                    char_grid=_array_to_char_grid(padded),
+                    array=arr_orig,
+                    char_grid=_array_to_char_grid(arr_orig),
                     legend=self._legend,
                     instruction=None,
                     order=len(samples),
                     meta={**base_meta, "augmented": False},
                 ))
 
-                # 90도 회전 증강
-                rotated = _rotate_90(padded)
+                # 90도 회전 증강 — 독립적으로 MOB/OBJECT 채움
+                rotated = _fill_missing_tiles(_rotate_90(base_padded), rng)
                 samples.append(GameSample(
                     game=GameTag.ZELDA,
                     source_id=f"{source_id}_rot90",
@@ -391,29 +422,18 @@ class ZeldaHandler(BaseGameHandler):
                     meta={**base_meta, "augmented": True, "augmentation": "rot90"},
                 ))
 
-                # 드롭 증강 후보 등록
-                originals_for_drop.append((padded, source_id, base_meta))
-
-        # ── 랜덤 몹/오브젝트 드롭 증강 (원본의 50%) ─────────────────────────
-        n_drop = int(len(originals_for_drop) * DROP_AUG_RATIO)
-        drop_indices = rng.choice(
-            len(originals_for_drop), size=n_drop, replace=False,
-        )
-        for idx in drop_indices:
-            padded, source_id, base_meta = originals_for_drop[idx]
-            dropped = _augment_random_drop(padded, rng)
-            if dropped is None:
-                continue
-            samples.append(GameSample(
-                game=GameTag.ZELDA,
-                source_id=f"{source_id}_drop",
-                array=dropped,
-                char_grid=_array_to_char_grid(dropped),
-                legend=self._legend,
-                instruction=None,
-                order=len(samples),
-                meta={**base_meta, "augmented": True, "augmentation": "random_drop"},
-            ))
+                # 상하 반전 증강 — 독립적으로 MOB/OBJECT 채움
+                flipped = _fill_missing_tiles(_flip_ud(base_padded), rng)
+                samples.append(GameSample(
+                    game=GameTag.ZELDA,
+                    source_id=f"{source_id}_flipud",
+                    array=flipped,
+                    char_grid=_array_to_char_grid(flipped),
+                    legend=self._legend,
+                    instruction=None,
+                    order=len(samples),
+                    meta={**base_meta, "augmented": True, "augmentation": "flipud"},
+                ))
 
         # ── 필터링: uniform center 맵의 증강 버전만 제거 ─────────────────────────
         samples_before_filter = len(samples)
@@ -422,12 +442,12 @@ class ZeldaHandler(BaseGameHandler):
         uniform_source_ids = set()
         for sample in samples:
             # 원본이 uniform인지 확인 (rot90, drop이 아닌 원본만 체크)
-            if not sample.source_id.endswith("_rot90") and not sample.source_id.endswith("_drop"):
+            if not any(sample.source_id.endswith(s) for s in ("_rot90", "_flipud", "_drop")):
                 padded_array = sample.array
                 if _is_uniform_center_12x12(padded_array):
-                    # 이 원본의 증강 버전만 제거 (_rot90, _drop)
                     base_id = sample.source_id
                     uniform_source_ids.add(f"{base_id}_rot90")
+                    uniform_source_ids.add(f"{base_id}_flipud")
                     uniform_source_ids.add(f"{base_id}_drop")
         
         # 2단계: uniform center 맵의 증강 버전 제거

@@ -310,6 +310,21 @@ class MGPCGRLConfig(VIPCGRLConfig):
     # 1.0 = 전체 seen 게임 데이터 사용 (기본값), 0.0~1.0 = seen 게임 데이터 prefix 비율
     dataset_seen_ratio: float = 1.0
 
+    # ── game_setting_mode: 학습에 사용할 게임 범위 선택 ──
+    # "all"          : 전체 게임 사용 (기본값)
+    # "encoder_seen" : encoder 학습 시 seen 게임만 사용 (dataset_setting.json에서 자동 읽음)
+    game_setting_mode: str = "all"
+
+    # ── reward_decoder_mode: reward/condition 소스 선택 ──
+    # "noop"  : 모든 게임에 대해 데이터셋 메타데이터를 그대로 사용 (decoder 미사용)
+    # "all"   : 모든 게임에 대해 CLIP decoder 예측값을 사용 (기본값)
+    # "unseen": seen 게임은 데이터셋 메타데이터, unseen 게임만 decoder 예측값 사용
+    reward_decoder_mode: str = "unseen"
+
+    # reward_mode="unseen" 일 때 seen 게임 목록 — dataset_setting.json에서 자동 주입됨.
+    # (encoder 학습 시 seen으로 사용된 게임 full name 리스트, e.g. ["dungeon", "doom", "zelda"])
+    reward_seen_games: List[str] = field(default_factory=list)
+
 
 
 @dataclass
@@ -492,6 +507,15 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
     # 분석/로깅용으로만 사용하며, eval 데이터셋 필터링에는 적용되지 않음.
     train_seen_ratio: float = 1.0
+
+    # 학습 시 사용된 reward_decoder_mode — reward_decoder_config.json에서 자동 주입됨.
+    # WandB 로깅/분석용이며 eval 자체 동작에는 영향 없음.
+    # exp_dir 경로 매칭을 위해 train 기본값(unseen)과 동일하게 설정.
+    reward_decoder_mode: str = "unseen"
+
+    # 학습 시 seen/unseen 게임 목록 — reward_decoder_config.json에서 자동 주입됨.
+    seen_games: List[str] = field(default_factory=list)
+    unseen_games: List[str] = field(default_factory=list)
 
 
 @dataclass

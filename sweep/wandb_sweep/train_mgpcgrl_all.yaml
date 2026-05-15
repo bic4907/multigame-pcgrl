@@ -14,7 +14,6 @@ parameters:
     value: 600
   overwrite:
     value: false
-
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_encoder_unseen'
   encoder.ckpt_name:
@@ -55,7 +54,9 @@ parameters:
       "clipdec-game-all_unseen-dgzddmsk_ur-0.0_exp-def_0",
     ]
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_all'
+  reward_decoder_mode:
+    value: 'all'
 command:
   - ${interpreter}
   - ${program}

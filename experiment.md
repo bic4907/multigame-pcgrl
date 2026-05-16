@@ -130,7 +130,24 @@ wandb sweep --project aaai27_train_mgpcgrl_all --entity st4889ha-gwangju-institu
 wandb sweep --project aaai27_eval_mgpcgrl_all --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_all.yaml
 ```
 
+### MGPCGRL (Oracle)
 
+---
+
+**Train Encoder (Same to `Unseen`**)
+```bash
+wandb sweep --project aaai27_train_mgpcgrl_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder_unseen.yaml
+```
+
+**Train PCGRL**
+```bash
+wandb sweep --project aaai27_train_mgpcgrl_oracle --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_oracle.yaml
+```
+
+**Eval PCGRL**
+```bash
+wandb sweep --project aaai27_eval_mgpcgrl_oracle --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_oracle.yaml
+```
 
 
 ### MGPCGRL (Seen Ratios)

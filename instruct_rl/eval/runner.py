@@ -321,6 +321,8 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         )
 
         # ── HDF5 artifact 업로드 (rollout 완료 직후, 메트릭 계산과 병렬 진행) ─
+        # 로컬 eval.h5 는 이후 ViTScoreWrapper/TPKLWrapper 가 다시 읽기 때문에
+        # upload_h5=False 라도 여기서는 삭제하지 않고, 모든 후처리 완료 후 정리한다.
         h5_path = join(config.eval_dir, "eval.h5")
         _upload_h5 = getattr(config, "upload_h5", False)
         if wandb.run and os.path.exists(h5_path) and _upload_h5:
@@ -332,12 +334,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             wandb.log_artifact(h5_artifact)
             logger.info("[Eval] Started eval.h5 upload → wandb artifact (name=eval_h5_%s)", _uid)
         elif os.path.exists(h5_path) and not _upload_h5:
-            # Not uploading → delete the local eval.h5 to save disk space
-            try:
-                os.remove(h5_path)
-                logger.info("[Eval] upload_h5=False → removed local %s", h5_path)
-            except OSError as _e:
-                logger.warning("[Eval] Failed to remove local %s: %s", h5_path, _e)
+            logger.info("[Eval] upload_h5=False → will remove local %s after post-processing", h5_path)
 
         df_ctrl_sim = instruct_df.iloc[eval_batches].copy()
         df_ctrl_sim['seed'] = repetitions
@@ -486,6 +483,15 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             wandb.log_artifact(csv_artifact)
             logger.info("[Eval] Uploaded CSV files → wandb artifact (eval_csv)")
 
+
+        # ── 로컬 eval.h5 정리 (upload_h5=False 인 경우) ─────────────────────────
+        # 모든 후처리(ViT/TPKL/Diversity 등)가 끝난 뒤 안전하게 삭제.
+        if not _upload_h5 and os.path.exists(h5_path):
+            try:
+                os.remove(h5_path)
+                logger.info("[Eval] upload_h5=False → removed local %s", h5_path)
+            except OSError as _e:
+                logger.warning("[Eval] Failed to remove local %s: %s", h5_path, _e)
 
         return losses_arr
 

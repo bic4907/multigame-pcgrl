@@ -14,6 +14,7 @@ import os
 import hydra
 
 from conf.config import MGPCGRLEvalConfig
+from conf.game_utils import compute_seen_unseen_split
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.eval_utils import main_eval_entry
 from train_mgpcgrl import inject_vipcgrl_obs
@@ -33,13 +34,13 @@ def main(config: MGPCGRLEvalConfig):
     if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
         raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
-    # ── encoder의 dataset_setting.json에서 seen_ratio를 읽어 기록 ──
+    # ── Read encoder's dataset_setting.json → inject train_seen_ratio + seen/unseen ──
     dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
     if os.path.exists(dataset_setting_path):
         with open(dataset_setting_path, "r") as f:
             dataset_setting = json.load(f)
 
-        # ── seen_ratio 기록: 분석용으로만 저장 (데이터셋 필터링에는 미적용) ──
+        # ── seen_ratio: analysis only (dataset filtering is not applied) ──
         seen_ratio = dataset_setting.get("seen_ratio", 1.0)
         if seen_ratio != config.train_seen_ratio:
             logger.info(
@@ -47,6 +48,18 @@ def main(config: MGPCGRLEvalConfig):
                 seen_ratio,
             )
             config.train_seen_ratio = seen_ratio
+
+        # ── seen/unseen games (canonical 5-game split) → injected into config
+        #    so they appear in WandB regardless of train_setting.json state. ──
+        seen_raw = dataset_setting.get("seen_games", [])
+        if seen_raw:
+            _seen, _unseen = compute_seen_unseen_split(seen_raw)
+            config.seen_games = list(_seen)
+            config.unseen_games = list(_unseen)
+            logger.info(
+                "Auto-setting seen_games=%s, unseen_games=%s from encoder dataset_setting.json",
+                _seen, _unseen,
+            )
     else:
         logger.warning("dataset_setting.json not found at %s", dataset_setting_path)
 

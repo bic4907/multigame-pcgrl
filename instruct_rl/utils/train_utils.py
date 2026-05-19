@@ -719,26 +719,49 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
     if config.overwrite and os.path.exists(exp_dir):
         shutil.rmtree(exp_dir)
 
-    # ── reward_decoder_config.json: 모드 + seen/unseen 게임 목록 저장 ──────────
+    # ── train_setting.json: reward decoder mode + seen/unseen games ────────────
+    # The seen/unseen split reflects the encoder's training distribution
+    # (sourced from ``config.reward_seen_games``, which mgpcgrl populates from
+    # the encoder's ``dataset_setting.json``). It is independent of
+    # ``reward_decoder_mode`` — rdm only controls *how* reward annotations are
+    # computed at training time (noop = metadata only, all = decoder for all,
+    # unseen = decoder only for unseen-game samples), not which games are
+    # considered seen/unseen.
     _rdm = getattr(config, "reward_decoder_mode", None)
     if _rdm is not None:
         import json as _json
-        from conf.game_utils import ALL_GAMES
-        _seen = list(getattr(config, "reward_seen_games", None) or [])
-        _unseen = sorted(set(ALL_GAMES) - set(_seen)) if _seen else []
+        from conf.game_utils import compute_seen_unseen_split
+
+        _seen, _unseen = compute_seen_unseen_split(getattr(config, "reward_seen_games", None))
+
+        # Encoder checkpoint folder name (mgpcgrl uses encoder.ckpt_name)
+        _enc_ckpt_name = getattr(getattr(config, "encoder", None), "ckpt_name", None)
+
         os.makedirs(exp_dir, exist_ok=True)
         _rdm_path = os.path.join(exp_dir, "train_setting.json")
         _rdm_data = {
             "reward_decoder_mode": _rdm,
+            "encoder_ckpt_name":   _enc_ckpt_name,
             "seen_games":          _seen,
             "unseen_games":        _unseen,
         }
         with open(_rdm_path, "w") as _f:
             _json.dump(_rdm_data, _f, indent=2)
         logger.info(
-            "Saved reward_decoder_config: mode=%s, seen=%s, unseen=%s → %s",
-            _rdm, _seen, _unseen, _rdm_path,
+            "Saved train_setting: mode=%s, encoder=%s, seen=%s, unseen=%s → %s",
+            _rdm, _enc_ckpt_name, _seen, _unseen, _rdm_path,
         )
+
+        # Mirror seen/unseen split into wandb config for easy filtering
+        if wandb.run is not None:
+            wandb.config.update(
+                {
+                    "encoder_ckpt_name": _enc_ckpt_name,
+                    "seen_games":        _seen,
+                    "unseen_games":      _unseen,
+                },
+                allow_val_change=True,
+            )
 
     if config.timestep_chunk_size != -1:
         n_chunks = config.total_timesteps // config.timestep_chunk_size

@@ -31,6 +31,14 @@ GAME_ABBR: Dict[str, List[str]] = {
 # 전체 게임 이름 목록 (include_* 필드 기준)
 ALL_GAMES: List[str] = ["dungeon", "pokemon", "sokoban", "doom", "doom2", "zelda"]
 
+# doom 과 doom2 는 단일 게임군으로 본다 → 정식 게임 목록은 5개
+CANONICAL_GAMES: List[str] = [g for g in ALL_GAMES if g != "doom2"]
+CANONICAL_GAMES_TOTAL = 5
+assert len(CANONICAL_GAMES) == CANONICAL_GAMES_TOTAL, (
+    f"CANONICAL_GAMES must have {CANONICAL_GAMES_TOTAL} entries (doom/doom2 merged), "
+    f"got {len(CANONICAL_GAMES)}: {CANONICAL_GAMES}"
+)
+
 # 역방향 매핑 (full name → abbr)  doom, doom2 → dm
 GAME_ABBR_INV: Dict[str, str] = {}
 for _abbr, _names in GAME_ABBR.items():
@@ -124,3 +132,36 @@ def build_game_str(
         parts.append("zd")
     return "".join(parts)
 
+
+def compute_seen_unseen_split(seen_games_raw):
+    """Compute the canonical seen / unseen split.
+
+    Absorbs ``doom2`` into ``doom`` (canonical list has 5 games), sorts both
+    lists, and asserts that ``len(seen) + len(unseen) == 5`` whenever ``seen``
+    is non-empty.
+
+    Parameters
+    ----------
+    seen_games_raw : iterable of str | None
+        Game names considered "seen" by the encoder (may contain ``doom2``
+        and/or ``doom``).
+
+    Returns
+    -------
+    (List[str], List[str])
+        Tuple of ``(seen_games, unseen_games)`` — both sorted, both drawn from
+        ``CANONICAL_GAMES``.
+    """
+    raw = list(seen_games_raw or [])
+    seen = sorted({("doom" if g == "doom2" else g) for g in raw})
+    unseen = sorted(set(CANONICAL_GAMES) - set(seen)) if seen else []
+    if seen:
+        total = len(seen) + len(unseen)
+        assert total == CANONICAL_GAMES_TOTAL, (
+            f"seen + unseen total must be {CANONICAL_GAMES_TOTAL}, got {total}.\n"
+            f"  seen_raw        = {raw}\n"
+            f"  seen_games      = {seen}\n"
+            f"  unseen_games    = {unseen}\n"
+            f"  CANONICAL_GAMES = {CANONICAL_GAMES}"
+        )
+    return seen, unseen

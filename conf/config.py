@@ -291,6 +291,23 @@ class VIPCGRLConfig(CPCGRLConfig):
 
     wandb_project: Optional[str] = f"{PREFIX}train_vipcgrl"
 
+    ignore_checkpoint: bool = False
+
+    # ── encoder unseen 실험 지원 (mgpcgrl 과 동일 시맨틱) ──────────────────────
+    # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
+    # 1.0 = 전체 seen 게임 데이터 사용 (기본값), 0.0~1.0 = seen 게임 데이터 prefix 비율
+    dataset_seen_ratio: float = 1.0
+
+    # ── game_setting_mode: 학습에 사용할 게임 범위 선택 ──
+    # "all"          : 전체 게임 사용
+    # "encoder_seen" : encoder 학습 시 seen 게임만 사용 (기본값, dataset_setting.json에서 자동 읽음)
+    game_setting_mode: str = "encoder_seen"
+
+    # encoder 학습 시 seen 게임 목록 — dataset_setting.json에서 자동 주입됨.
+    # (full name 리스트, e.g. ["dungeon", "doom", "zelda"]). 비어있지 않으면
+    # train_setting.json에 seen/unseen split이 기록되어 WandB 로깅에 사용된다.
+    reward_seen_games: List[str] = field(default_factory=list)
+
 
 @dataclass
 class MGPCGRLConfig(VIPCGRLConfig):
@@ -304,26 +321,14 @@ class MGPCGRLConfig(VIPCGRLConfig):
 
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
 
-    ignore_checkpoint: bool = False
-
-    # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
-    # 1.0 = 전체 seen 게임 데이터 사용 (기본값), 0.0~1.0 = seen 게임 데이터 prefix 비율
-    dataset_seen_ratio: float = 1.0
-
-    # ── game_setting_mode: 학습에 사용할 게임 범위 선택 ──
-    # "all"          : 전체 게임 사용 (기본값)
-    # "encoder_seen" : encoder 학습 시 seen 게임만 사용 (dataset_setting.json에서 자동 읽음)
     game_setting_mode: str = "all"
 
-    # ── reward_decoder_mode: reward/condition 소스 선택 ──
+    # ── reward_decoder_mode: reward/condition 소스 선택 (MGPCGRL 전용) ──
     # "noop"  : 모든 게임에 대해 데이터셋 메타데이터를 그대로 사용 (decoder 미사용)
     # "all"   : 모든 게임에 대해 CLIP decoder 예측값을 사용 (기본값)
     # "unseen": seen 게임은 데이터셋 메타데이터, unseen 게임만 decoder 예측값 사용
     reward_decoder_mode: str = "unseen"
 
-    # reward_mode="unseen" 일 때 seen 게임 목록 — dataset_setting.json에서 자동 주입됨.
-    # (encoder 학습 시 seen으로 사용된 게임 full name 리스트, e.g. ["dungeon", "doom", "zelda"])
-    reward_seen_games: List[str] = field(default_factory=list)
 
 
 
@@ -468,6 +473,15 @@ class VIPCGRLEvalConfig(CPCGRLEvalConfig):
     nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
 
     ignore_checkpoint: bool = False
+
+    # ── encoder unseen 실험 지원 (mgpcgrl eval 과 동일 시맨틱) ───────────────
+    # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
+    # 분석/로깅용으로만 사용하며, eval 데이터셋 필터링에는 적용되지 않음.
+    train_seen_ratio: float = 1.0
+
+    # 학습 시 seen/unseen 게임 목록 — dataset_setting.json에서 자동 주입됨.
+    seen_games: List[str] = field(default_factory=list)
+    unseen_games: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -690,7 +704,7 @@ class CLIPTrainConfig(Config):
     lr: float = 1.0e-3
     weight_decay: float = 1e-5
     train_ratio: float = 0.99
-    batch_size: int = 1024
+    batch_size: int = 2048
     buffer_ratio: float = 1.0 # Not implemented for clip yet.
     train_shuffle: bool = False
     
@@ -708,6 +722,17 @@ class CLIPTrainConfig(Config):
 
     # overwrite
     embed_type: str = "humanai"
+
+    # ── Seen/Unseen 게임 분리 설정 (CLIPDecoderTrainConfig 와 동일 시맨틱) ──
+    # unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda).
+    # None/"" 이면 기존 동작 (전체 게임을 train/test 비율로 split).
+    unseen_games: Optional[str] = None
+    # few-shot ratio: unseen 학습 풀 중 사용할 비율 (0.0=zero-shot, 1.0=전부)
+    unseen_ratio: float = 0.0
+    # seen 게임 데이터 비율 (1.0=전부 사용)
+    seen_ratio: float = 1.0
+    # 테스트셋 분할 시드 (재현 가능)
+    split_seed: int = 42
 
 @dataclass
 class CLIPEvalConfig(EvalConfig):

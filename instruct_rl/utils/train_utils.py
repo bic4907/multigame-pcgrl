@@ -728,23 +728,25 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
     # unseen = decoder only for unseen-game samples), not which games are
     # considered seen/unseen.
     _rdm = getattr(config, "reward_decoder_mode", None)
-    if _rdm is not None:
+    _seen_src = getattr(config, "reward_seen_games", None)
+    if _rdm is not None or _seen_src:
         import json as _json
         from conf.game_utils import compute_seen_unseen_split
 
-        _seen, _unseen = compute_seen_unseen_split(getattr(config, "reward_seen_games", None))
+        _seen, _unseen = compute_seen_unseen_split(_seen_src)
 
-        # Encoder checkpoint folder name (mgpcgrl uses encoder.ckpt_name)
+        # Encoder checkpoint folder name (mgpcgrl/vipcgrl use encoder.ckpt_name)
         _enc_ckpt_name = getattr(getattr(config, "encoder", None), "ckpt_name", None)
 
         os.makedirs(exp_dir, exist_ok=True)
         _rdm_path = os.path.join(exp_dir, "train_setting.json")
         _rdm_data = {
-            "reward_decoder_mode": _rdm,
             "encoder_ckpt_name":   _enc_ckpt_name,
             "seen_games":          _seen,
             "unseen_games":        _unseen,
         }
+        if _rdm is not None:
+            _rdm_data["reward_decoder_mode"] = _rdm
         with open(_rdm_path, "w") as _f:
             _json.dump(_rdm_data, _f, indent=2)
         logger.info(

@@ -1,4 +1,5 @@
 import datetime
+import json
 import math
 from os.path import basename, abspath
 from collections import deque
@@ -36,6 +37,14 @@ from encoder.utils.visualize import create_clip_embedding_figures
 
 
 from transformers import CLIPProcessor, FlaxCLIPModel
+
+# Seen/Unseen split helpers (train_clip_decoder.py 에서 재사용)
+from train_clip_decoder import (
+    parse_unseen_game_names,
+    split_dataset_by_game,
+    build_train_indices_for_ratio,
+    subset_clip_dataset,
+)
 
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()  # Add the environment variable ;LOG_LEVEL=DEBUG
 logger = logging.getLogger(basename(__file__))
@@ -177,6 +186,77 @@ def make_train(config: CLIPTrainConfig):
 
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
         class_id2reward_cond = dataset_builder.get_class_id2reward_cond()
+
+        # ── Seen/Unseen 게임 분리 (unseen_games 가 지정된 경우) ──────────────
+        # CLIPDecoderTrainConfig 와 동일한 split 로직을 적용하여 mgpcgrl 과
+        # 동일한 ckpt 이름/구조를 갖도록 한다. vipcgrl 은 디코더 없이 contrastive
+        # 학습만 수행하지만, encoder 입장에서의 seen/unseen 분포는 동일하게 통제된다.
+        unseen_games_str = getattr(config, "unseen_games", None)
+        if unseen_games_str:
+            full_dataset = dataset_builder.get_dataset()
+            unseen_game_set = parse_unseen_game_names(unseen_games_str)
+            all_game_names = np.array(
+                [rc["game_name"] for rc in full_dataset.reward_cond]
+            )
+            unique_games = sorted(set(all_game_names))
+            seen_games_list = [g for g in unique_games if g not in unseen_game_set]
+            unseen_games_list = [g for g in unique_games if g in unseen_game_set]
+
+            logger.info("=" * 70)
+            logger.info("  Seen/Unseen Split (train_clip)")
+            logger.info("  Seen games   : %s", seen_games_list)
+            logger.info("  Unseen games : %s", unseen_games_list)
+            logger.info("  Seen ratio   : %.4f", config.seen_ratio)
+            logger.info("  Unseen ratio : %.4f", config.unseen_ratio)
+            logger.info("  Total samples: %d", len(full_dataset.class_ids))
+            logger.info("=" * 70)
+
+            # ── dataset_setting.json 저장 (RL 학습 시 자동 주입에 사용됨) ──
+            os.makedirs(config.exp_dir, exist_ok=True)
+            dataset_setting = {
+                "all_games":    unique_games,
+                "seen_games":   seen_games_list,
+                "unseen_games": unseen_games_list,
+                "unseen_ratio": config.unseen_ratio,
+                "seen_ratio":   config.seen_ratio,
+            }
+            dataset_setting_path = os.path.join(config.exp_dir, "dataset_setting.json")
+            with open(dataset_setting_path, "w") as f:
+                json.dump(dataset_setting, f, indent=2, ensure_ascii=False)
+            logger.info("Dataset setting saved: %s", dataset_setting_path)
+
+            # ── 게임별 train pool / test 분할 후 ratio 적용 ──
+            game_train_pool, game_test, _ = split_dataset_by_game(
+                full_dataset,
+                unseen_game_set,
+                test_ratio=1.0 - config.train_ratio,
+                test_seed=config.split_seed,
+            )
+            test_indices = np.concatenate(
+                [game_test[g] for g in sorted(game_test.keys())]
+            )
+            train_indices = build_train_indices_for_ratio(
+                game_train_pool, unseen_game_set,
+                ratio=config.unseen_ratio,
+                seen_ratio=config.seen_ratio,
+            )
+            if len(train_indices) == 0:
+                logger.warning(
+                    "unseen_ratio=%.2f, seen_ratio=%.2f: 0 training samples — "
+                    "fallback to a single placeholder sample",
+                    config.unseen_ratio, config.seen_ratio,
+                )
+                train_indices = np.array([0])
+
+            train_clip_dataset = subset_clip_dataset(full_dataset, train_indices)
+            test_clip_dataset = subset_clip_dataset(full_dataset, test_indices)
+
+            _train_games = np.array(
+                [rc["game_name"] for rc in train_clip_dataset.reward_cond]
+            )
+            _game_counts = {g: int(np.sum(_train_games == g)) for g in sorted(set(_train_games))}
+            logger.info("  Train set = %d samples %s", len(train_indices), _game_counts)
+            logger.info("  Test  set = %d samples", len(test_indices))
 
         # dry-run: 데이터 개수 제한
         if config.max_samples is not None:

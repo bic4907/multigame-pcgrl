@@ -1,0 +1,16 @@
+defaults:
+  - eval_finetuned_clip_schema
+  - _self_
+
+hydra:
+  sweeper:
+    params: {}
+
+n_envs: 500
+
+encoder:
+  model: clip
+  ckpt_dir: pretrained_encoders
+  ckpt_name: null
+  ckpt_path: null
+

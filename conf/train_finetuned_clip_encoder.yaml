@@ -1,0 +1,19 @@
+defaults:
+  - train_finetuned_clip_encoder_schema
+  - _self_
+
+hydra:
+  sweeper:
+    params: {}
+
+# 인코더 모델 식별
+encoder:
+  model: clip
+  state: true
+  token_max_len: 77
+
+# 기본 데이터 옵션
+game: all
+prepend_game_prefix: false
+prepend_game_desc: true
+

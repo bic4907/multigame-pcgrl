@@ -348,6 +348,24 @@ class PretrainedCLIPPCGRLConfig(CPCGRLConfig):
 
 
 @dataclass
+class FinetunedCLIPPCGRLConfig(PretrainedCLIPPCGRLConfig):
+    """Fine-tuned CLIP 보상 기반 PCGRL 학습 Config.
+
+    PretrainedCLIPPCGRLConfig 와 동일한 모델/환경 구조를 사용하되,
+    `encoder.ckpt_name` (또는 ckpt_path) 으로 지정된 fine-tuned CLIP
+    체크포인트를 RL 인코더 subtree 에 inject 한다. (기존
+    `apply_encoder_params` 메커니즘 그대로 활용)
+    """
+    wandb_project: Optional[str] = f"{PREFIX}train_finetuned_clip_pcgrl"
+    dir_prefix: str = "finetuned-clip-pcgrl-"
+
+    # ── encoder unseen 실험 지원 (mgpcgrl/vipcgrl 와 동일 시맨틱) ──
+    dataset_seen_ratio: float = 1.0
+    reward_seen_games: List[str] = field(default_factory=list)
+    game_setting_mode: str = "all"
+
+
+@dataclass
 class EvalConfig(TrainConfig):
     reevaluate: bool = False
 
@@ -503,6 +521,13 @@ class PretrainedCLIPEvalConfig(CPCGRLEvalConfig):
     nlp_input_dim: int = 512  # pretrained CLIP 텍스트 임베딩 차원 (projection 없음)
 
     ignore_checkpoint: bool = False
+
+
+@dataclass
+class FinetunedCLIPEvalConfig(PretrainedCLIPEvalConfig):
+    """Fine-tuned CLIP PCGRL 평가용 Config."""
+    wandb_project: Optional[str] = f"{PREFIX}eval_finetuned_clip"
+    dir_prefix: str = "finetuned-clip-pcgrl-"
 
 
 @dataclass
@@ -735,6 +760,36 @@ class CLIPTrainConfig(Config):
     split_seed: int = 42
 
 @dataclass
+class FinetunedCLIPEncoderTrainConfig(CLIPTrainConfig):
+    """HuggingFace pretrained CLIP을 사용자의 (image, text) 데이터로
+    파인튜닝하기 위한 Config.
+
+    파라미터 트리 구조가 `pretrained_clip_model.ContrastiveModule` 과 동일하므로
+    저장된 체크포인트를 그대로 RL 파이프라인(`apply_encoder_params`)에서 inject 할 수 있다.
+    """
+    wandb_project: str = f"{PREFIX}train_finetuned_clip_encoder"
+    dir_prefix: str = "finetuned-clip-"
+
+    # HF CLIP은 224×224 입력을 기대 → 좌표채널 OFF
+    clip_input_channel: int = 3
+
+    # encoder 모델 식별 (path/exp 이름 일관성). RL 단계에서는 'clip'로 로딩됨.
+    encoder: EncoderConfig = field(
+        default_factory=lambda: EncoderConfig(model="clip", state=True)
+    )
+
+    # HF CLIP은 미세조정 시 학습률을 매우 작게 잡고, epoch 도 적게 (5~15) 유지하는 편
+    # → catastrophic forgetting 방지 + 빠른 도메인 적응
+    lr: float = 5.0e-6
+    weight_decay: float = 0.1
+    n_epochs: int = 10
+    batch_size: int = 256
+    ckpt_freq: int = 2
+
+    embed_type: str = "finetuned_clip"
+
+
+@dataclass
 class CLIPEvalConfig(EvalConfig):
     eval_aug_type: str = "test"
     embed_type: str = 'clip'
@@ -863,6 +918,7 @@ cs.store(name="ipcgrl", node=IPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="pretrained_clip_pcgrl", node=PretrainedCLIPPCGRLConfig)
+cs.store(name="finetuned_clip_pcgrl_schema", node=FinetunedCLIPPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
@@ -870,11 +926,13 @@ cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="eval_vipcgrl_schema", node=VIPCGRLEvalConfig)
 cs.store(name="eval_mgpcgrl_schema", node=MGPCGRLEvalConfig)
 cs.store(name="eval_pretrained_clip_schema", node=PretrainedCLIPEvalConfig)
+cs.store(name="eval_finetuned_clip_schema", node=FinetunedCLIPEvalConfig)
 cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="collect_buffer_schema", node=CollectBufferConfig)
 
 # CLIP PCGRL Configs
 cs.store(name="train_clip", node=CLIPTrainConfig)
+cs.store(name="train_finetuned_clip_encoder_schema", node=FinetunedCLIPEncoderTrainConfig)
 cs.store(name="train_clip_decoder_schema", node=CLIPDecoderTrainConfig)
 cs.store(name="train_clip_decoder_unseen_schema", node=CLIPDecoderUnseenConfig)
 cs.store(name="train_clip_decoder_unseen_sweep_schema", node=CLIPDecoderUnseenSweepConfig)

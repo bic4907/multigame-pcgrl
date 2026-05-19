@@ -17,7 +17,7 @@ parameters:
   seed:
     values: [0, 1, 2]
   n_epochs:
-    value: 10
+    value: 100
   batch_size:
     value: 256
   lr:
@@ -27,37 +27,37 @@ parameters:
   unseen_games:
     values:
       # 1 unseen game
-#      - 'pk'        # unseen: pokemon
-#      - 'dg'        # unseen: dungeon
+      - 'pk'        # unseen: pokemon
+      - 'dg'        # unseen: dungeon
       - 'zd'        # unseen: zelda
       - 'dm'        # unseen: doom
       - 'sk'        # unseen: sokoban
       # 2 unseen games
-#      - 'pkdg'      # unseen: pokemon, dungeon
-#      - 'pkzd'      # unseen: pokemon, zelda
-#      - 'pkdm'      # unseen: pokemon, doom
-#      - 'pksk'      # unseen: pokemon, sokoban
-#      - 'dgzd'      # unseen: dungeon, zelda
-#      - 'dgdm'      # unseen: dungeon, doom
-#      - 'dgsk'      # unseen: dungeon, sokoban
+      - 'pkdg'      # unseen: pokemon, dungeon
+      - 'pkzd'      # unseen: pokemon, zelda
+      - 'pkdm'      # unseen: pokemon, doom
+      - 'pksk'      # unseen: pokemon, sokoban
+      - 'dgzd'      # unseen: dungeon, zelda
+      - 'dgdm'      # unseen: dungeon, doom
+      - 'dgsk'      # unseen: dungeon, sokoban
       - 'zddm'      # unseen: zelda, doom
       - 'zdsk'      # unseen: zelda, sokoban
       - 'dmsk'      # unseen: doom, sokoban
       # 3 unseen games
-#      - 'pkdgzd'    # unseen: pokemon, dungeon, zelda
-#      - 'pkdgdm'    # unseen: pokemon, dungeon, doom
-#      - 'pkdgsk'    # unseen: pokemon, dungeon, sokoban
+      - 'pkdgzd'    # unseen: pokemon, dungeon, zelda
+      - 'pkdgdm'    # unseen: pokemon, dungeon, doom
+      - 'pkdgsk'    # unseen: pokemon, dungeon, sokoban
       - 'pkzddm'    # unseen: pokemon, zelda, doom
-#      - 'pkzdsk'    # unseen: pokemon, zelda, sokoban
-#      - 'pkdmsk'    # unseen: pokemon, doom, sokoban
+      - 'pkzdsk'    # unseen: pokemon, zelda, sokoban
+      - 'pkdmsk'    # unseen: pokemon, doom, sokoban
       - 'dgzddm'    # unseen: dungeon, zelda, doom
-#      - 'dgzdsk'    # unseen: dungeon, zelda, sokoban
-#      - 'dgdmsk'    # unseen: dungeon, doom, sokoban
+      - 'dgzdsk'    # unseen: dungeon, zelda, sokoban
+      - 'dgdmsk'    # unseen: dungeon, doom, sokoban
       - 'zddmsk'    # unseen: zelda, doom, sokoban
       # 4 unseen games
       - 'pkdgzddm'  # unseen: pokemon, dungeon, zelda, doom
-#      - 'pkdgzdsk'  # unseen: pokemon, dungeon, zelda, sokoban
-#      - 'pkdgdmsk'  # unseen: pokemon, dungeon, doom, sokoban
+      - 'pkdgzdsk'  # unseen: pokemon, dungeon, zelda, sokoban
+      - 'pkdgdmsk'  # unseen: pokemon, dungeon, doom, sokoban
       - 'pkzddmsk'  # unseen: pokemon, zelda, doom, sokoban
       - 'dgzddmsk'  # unseen: dungeon, zelda, doom, sokoban
 command:

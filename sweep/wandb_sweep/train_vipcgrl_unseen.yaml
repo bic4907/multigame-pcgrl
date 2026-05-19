@@ -15,7 +15,7 @@ parameters:
   overwrite:
     value: false
 
-  # vipcgrl 전용 encoder (train_vipcgrl_encoder_unseen.yaml 로 학습)
+  # vipcgrl encoder trained with train_vipcgrl_encoder_unseen.yaml
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/vipcgrl_encoder_unseen'
   encoder.ckpt_name:

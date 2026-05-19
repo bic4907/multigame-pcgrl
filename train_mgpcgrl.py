@@ -76,21 +76,24 @@ def main(config: MGPCGRLConfig):
                     "— keeping config.game='%s'", config.game,
                 )
 
-        # ── reward_decoder_mode=unseen: seen_games 주입 ──
-        if config.reward_decoder_mode == "unseen":
-            seen_games = dataset_setting.get("seen_games", [])
-            if seen_games:
-                config.reward_seen_games = list(seen_games)
-                logger.info(
-                    "Auto-setting reward_seen_games=%s from encoder dataset_setting.json "
-                    "(reward_decoder_mode=unseen)",
-                    seen_games,
-                )
-            else:
-                logger.warning(
-                    "reward_decoder_mode=unseen but dataset_setting.json has empty seen_games "
-                    "— decoder will be used for all games"
-                )
+        # ── Always inject reward_seen_games from encoder's dataset_setting.json ──
+        # The seen/unseen split reflects the encoder training distribution and is
+        # independent of reward_decoder_mode (noop / all / unseen). rdm only
+        # controls how reward annotations are computed; seen/unseen lists must
+        # always come from the encoder.
+        seen_games = dataset_setting.get("seen_games", [])
+        if seen_games:
+            config.reward_seen_games = list(seen_games)
+            logger.info(
+                "Auto-setting reward_seen_games=%s from encoder dataset_setting.json "
+                "(reward_decoder_mode=%s)",
+                seen_games, config.reward_decoder_mode,
+            )
+        else:
+            logger.warning(
+                "dataset_setting.json has empty seen_games — "
+                "train_setting.json seen/unseen will also be empty"
+            )
     else:
         logger.warning("dataset_setting.json not found at %s", dataset_setting_path)
 

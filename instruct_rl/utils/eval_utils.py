@@ -137,28 +137,39 @@ def main_eval_entry(config, *, inject_obs_fn=None):
     exp_dir = config.exp_dir
     logger.info(f"Running experiment at {exp_dir}")
 
-    # ── reward_decoder_config.json: train exp_dir에서 읽어 config에 주입 (WandB 로깅용) ──
+    # ── train_setting.json: load from train exp_dir → inject into config (WandB) ──
     _rdm_path = os.path.join(exp_dir, "train_setting.json")
     if os.path.exists(_rdm_path):
         try:
             import json as _json
+            from conf.game_utils import compute_seen_unseen_split
+
             with open(_rdm_path) as _f:
                 _rdm_data = _json.load(_f)
             _rdm = _rdm_data.get("reward_decoder_mode")
             if _rdm and hasattr(config, "reward_decoder_mode"):
                 config.reward_decoder_mode = _rdm
-            _seen = _rdm_data.get("seen_games", [])
-            if _seen and hasattr(config, "seen_games"):
+
+            # Canonicalize seen/unseen (doom2 → doom, 5-game total) regardless
+            # of what is stored in train_setting.json (old runs may have empty
+            # or doom2-containing lists).
+            _seen_raw = _rdm_data.get("seen_games", [])
+            _seen, _unseen = compute_seen_unseen_split(_seen_raw)
+            if hasattr(config, "seen_games"):
                 config.seen_games = list(_seen)
-            _unseen = _rdm_data.get("unseen_games", [])
-            if _unseen and hasattr(config, "unseen_games"):
+            if hasattr(config, "unseen_games"):
                 config.unseen_games = list(_unseen)
+
+            _enc_name = _rdm_data.get("encoder_ckpt_name")
+            if _enc_name and hasattr(config, "encoder_ckpt_name"):
+                config.encoder_ckpt_name = _enc_name
+
             logger.info(
-                "Loaded reward_decoder_config: mode=%s, seen=%s, unseen=%s",
-                _rdm, _seen, _unseen,
+                "Loaded train_setting: mode=%s, encoder=%s, seen=%s, unseen=%s",
+                _rdm, _enc_name, _seen, _unseen,
             )
         except Exception as _e:
-            logger.warning("Failed to load reward_decoder_config.json: %s", _e)
+            logger.warning("Failed to load train_setting.json: %s", _e)
 
     _re = getattr(config, 'dataset_reward_enum', None)
     _re_enums = getattr(config, 'eval_dataset_reward_enums', None)

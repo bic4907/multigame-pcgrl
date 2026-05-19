@@ -238,6 +238,10 @@ def _build_reward_and_condition(
     # ── 3. decoder로 덮어쓸 target_indices 결정 ───────────────────────────────
     if reward_decoder_mode == "unseen":
         reward_seen_games = set(getattr(config, "reward_seen_games", None) or [])
+        # Treat doom and doom2 as a single game group — if either is in encoder
+        # seen_games, mark both as seen for filtering purposes.
+        if "doom" in reward_seen_games or "doom2" in reward_seen_games:
+            reward_seen_games.update({"doom", "doom2"})
         if reward_seen_games:
             target_indices = [i for i, s in enumerate(sample_list) if s.game not in reward_seen_games]
             logger.info(

@@ -322,7 +322,8 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
 
         # ── HDF5 artifact 업로드 (rollout 완료 직후, 메트릭 계산과 병렬 진행) ─
         h5_path = join(config.eval_dir, "eval.h5")
-        if wandb.run and os.path.exists(h5_path):
+        _upload_h5 = getattr(config, "upload_h5", False)
+        if wandb.run and os.path.exists(h5_path) and _upload_h5:
             # run마다 고유한 artifact name 생성 (동일 내용 dedup 방지)
             import uuid
             _uid = uuid.uuid4().hex[:8]
@@ -330,6 +331,13 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             h5_artifact.add_file(h5_path, name="eval.h5")
             wandb.log_artifact(h5_artifact)
             logger.info("[Eval] Started eval.h5 upload → wandb artifact (name=eval_h5_%s)", _uid)
+        elif os.path.exists(h5_path) and not _upload_h5:
+            # Not uploading → delete the local eval.h5 to save disk space
+            try:
+                os.remove(h5_path)
+                logger.info("[Eval] upload_h5=False → removed local %s", h5_path)
+            except OSError as _e:
+                logger.warning("[Eval] Failed to remove local %s: %s", h5_path, _e)
 
         df_ctrl_sim = instruct_df.iloc[eval_batches].copy()
         df_ctrl_sim['seed'] = repetitions

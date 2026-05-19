@@ -356,6 +356,11 @@ class EvalConfig(TrainConfig):
     eval_randomize_map_shape: Optional[bool] = None
     eval_seed: int = 0
 
+    # Upload eval.h5 (per-sample rollouts) as a WandB artifact at the end of
+    # eval. When False, the local eval.h5 file is also deleted after eval to
+    # save disk space (only aggregate metrics are kept).
+    upload_h5: bool = False
+
     eval_aug_type: str = "sub_condition"
     eval_embed_type: str = "bert"
     eval_instruct: str = "scn-1_se-whole"

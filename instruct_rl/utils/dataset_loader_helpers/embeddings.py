@@ -476,7 +476,43 @@ def _tokenize_texts(sample_list, encoder_config):
 
 
 def _load_clip_encoder_module(config, encoder_config):
-    """config에 따라 ContrastiveModule 또는 ContrastiveDecoderModule을 초기화한다."""
+    """config에 따라 ContrastiveModule 또는 ContrastiveDecoderModule을 초기화한다.
+
+    분기:
+      - model == 'pretrained_clip'  → encoder.pretrained_clip_model.ContrastiveModule
+        (HF CLIP wrapper, `final_text_projection` 없음 — pretrained CLIP ckpt 와 일치)
+      - model == 'finetuned_clip'   → encoder.finetuned_clip_model 의 trainable 변종
+        (구조는 pretrained 과 동일, stop_gradient 만 제거)
+      - 그 외                       → 기존 cnnclip / cnnclip+decoder 경로
+        (`encoder.clip_model.PretrainedTextEncoder` 의 `final_text_projection` 분기 사용)
+    """
+    _model = getattr(config, "model", None)
+
+    # ── pretrained / finetuned CLIP 분기 ──────────────────────────────────
+    if _model in ("pretrained_clip", "finetuned_clip"):
+        if _model == "finetuned_clip":
+            from encoder.finetuned_clip_model import (
+                get_finetuned_clip_encoder as _get_clip,
+            )
+        else:
+            from encoder.pretrained_clip_model import (
+                get_pretrained_clip_encoder as _get_clip,
+            )
+        module, _ = _get_clip(encoder_config)
+
+        rng = jax.random.PRNGKey(0)
+        dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
+        dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
+        # HF pretrained CLIP vision tower 는 항상 224×224×3 RGB 입력
+        dummy_pix = jnp.ones((1, 224, 224, 3), dtype=jnp.float32)
+        mode = "text_state" if encoder_config.state else "text"
+        variables = module.init(
+            rng, input_ids=dummy_ids, attention_mask=dummy_mask,
+            pixel_values=dummy_pix, mode=mode,
+        )
+        return module, variables
+
+    # ── 기존 cnnclip 경로 ─────────────────────────────────────────────────
     from encoder.clip_model import get_cnnclip_decoder_encoder, get_cnnclip_encoder
 
     use_decoder = hasattr(config, "decoder")

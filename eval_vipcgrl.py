@@ -14,7 +14,7 @@ import os
 import hydra
 
 from conf.config import VIPCGRLEvalConfig
-from conf.game_utils import compute_seen_unseen_split
+from conf.game_utils import GAME_ABBR, GAME_ABBR_INV, compute_seen_unseen_split
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.eval_utils import main_eval_entry
 from train_vipcgrl import inject_vipcgrl_obs
@@ -47,6 +47,32 @@ def main(config: VIPCGRLEvalConfig):
                 seen_ratio,
             )
             config.train_seen_ratio = seen_ratio
+
+        # ── game_setting_mode=encoder_seen: train 과 동일하게 config.game 을
+        #    encoder seen 게임 약어 subset 으로 덮어써서 exp_dir 매칭을 맞춘다.
+        #    (train_vipcgrl.py 의 로직과 1:1 대응)
+        if config.game_setting_mode == "encoder_seen":
+            seen_games_raw = dataset_setting.get("seen_games", [])
+            if seen_games_raw:
+                seen_abbrs = dict.fromkeys(
+                    GAME_ABBR_INV[g] for g in seen_games_raw if g in GAME_ABBR_INV
+                )
+                if seen_abbrs.keys() == GAME_ABBR.keys():
+                    game_str = "all"
+                else:
+                    game_str = "".join(seen_abbrs)
+                if game_str != config.game:
+                    logger.info(
+                        "game_setting_mode=encoder_seen → overriding config.game "
+                        "'%s' → '%s' (seen_games=%s) for exp_dir matching",
+                        config.game, game_str, seen_games_raw,
+                    )
+                    config.game = game_str
+            else:
+                logger.warning(
+                    "game_setting_mode=encoder_seen but dataset_setting.json has empty "
+                    "seen_games — keeping config.game='%s'", config.game,
+                )
 
         # ── seen/unseen games (canonical 5-game split) → injected into config
         #    so they appear in WandB regardless of train_setting.json state. ──

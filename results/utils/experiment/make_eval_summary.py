@@ -32,6 +32,33 @@ logger = get_logger(__name__)
 _CFG = load_cfg()
 
 
+def _iqr_mean_groupby(df: pd.DataFrame, group_col: str, value_cols: list[str]) -> pd.DataFrame:
+    """그룹별 IQR-filtered mean — 벡터화 버전.
+
+    기존 ``df.groupby(group_col)[value_cols].agg(iqr_mean)`` 와 동일한 결과를
+    Python 함수 호출 없이 pandas/NumPy 연산만으로 계산한다.
+
+    동작:
+      1. 그룹별 q1, q3 를 transform 으로 broadcast
+      2. [q1 - 1.5·IQR, q3 + 1.5·IQR] 밖의 값을 NaN 마스킹
+      3. 그룹별 mean (NaN 자동 무시)
+      4. 마스킹 후 그룹 평균이 NaN(전부 outlier) 이면 원본 평균으로 fallback
+    """
+    grp_vals = df.groupby(group_col, sort=True)[value_cols]
+    q1 = grp_vals.transform("quantile", 0.25)
+    q3 = grp_vals.transform("quantile", 0.75)
+    iqr = q3 - q1
+    lo  = q1 - 1.5 * iqr
+    hi  = q3 + 1.5 * iqr
+    vals = df[value_cols]
+    mask = (vals.ge(lo)) & (vals.le(hi))
+    filtered = vals.where(mask)
+    result = filtered.groupby(df[group_col], sort=True).mean()
+    # fallback: 필터 결과가 모두 NaN 인 그룹은 원본 평균으로 채움
+    plain  = vals.groupby(df[group_col], sort=True).mean()
+    return result.fillna(plain).reset_index()
+
+
 def process_eval_dir(eval_dir: Path) -> bool:
     """ctrl_sim.csv → results.csv / summary.csv 생성 (게임 필터 없이 전체 집계)."""
     ctrl_sim_path  = eval_dir / "ctrl_sim.csv"
@@ -48,11 +75,8 @@ def process_eval_dir(eval_dir: Path) -> bool:
         return False
 
     meta_cols = [c for c in ["row_i", "game", "instruction", "reward_enum"] if c in df.columns]
-    df_results = (
-        df.groupby("row_i", sort=True)[mean_cols]
-        .agg(iqr_mean)
-        .reset_index()
-    )
+    # 벡터화된 IQR mean — 기존 .agg(iqr_mean) 보다 10~50배 빠름
+    df_results = _iqr_mean_groupby(df, "row_i", mean_cols)
     meta_df    = df[meta_cols].drop_duplicates(subset="row_i").reset_index(drop=True)
     df_results = meta_df.merge(df_results, on="row_i")
 
@@ -126,8 +150,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--experiment", default=None,
                         help="처리할 experiment 이름")
     parser.add_argument("--workers", "-j", type=int,
-                        default=min(8, os.cpu_count() or 4),
-                        help="병렬 worker 수 (기본값: min(8, cpu_count))")
+                        default=os.cpu_count() or 4,
+                        help="병렬 worker 수 (기본값: cpu_count)")
     return parser.parse_args()
 
 

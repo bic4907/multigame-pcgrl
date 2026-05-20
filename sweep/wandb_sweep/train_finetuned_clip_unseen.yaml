@@ -15,7 +15,7 @@ parameters:
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/finetuned_clip'
+    value: '/mnt/nas/mgpcgrl/finetuned_clip_unseen'
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/finetuned_clip_encoder'
   # fine-tuned CLIP 인코더 체크포인트 디렉토리명 — train_finetuned_clip_encoder_unseen.yaml

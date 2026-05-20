@@ -12,6 +12,7 @@ from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder, get_cnncli
 from conf.config import Config, TrainConfig, EncoderConfig
 from conf.game_utils import parse_game_str, GAME_ABBR
 from encoder.pretrained_clip_model import get_pretrained_clip_encoder
+from encoder.finetuned_clip_model import get_finetuned_clip_encoder
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
@@ -72,6 +73,13 @@ def get_exp_group(config) -> str:
     # PretrainedCLIP: model=pretrained_clip, enc suffix 없음
     if getattr(config, 'model', None) == 'pretrained_clip':
         return f'preclip_pcgrl_game-{game}{re_s}{exp_s}'
+
+    # FinetunedCLIP: model=finetuned_clip, encoder ckpt 해시 suffix 포함
+    # (동일 게임/실험명이라도 어떤 fine-tuned ckpt 를 inject 했는지에 따라
+    # exp_dir 가 분리되도록 — mgpcgrl 와 동일 시맨틱)
+    if getattr(config, 'model', None) == 'finetuned_clip':
+        enc = _enc_str(config.encoder)
+        return f'finclip_pcgrl_game-{game}{re_s}{exp_s}{enc}'
 
     # MGPCGRL / VIPCGRL: pretrained CLIP encoder
     enc = _enc_str(config.encoder)
@@ -159,9 +167,12 @@ def init_config(config: Config):
                 config.nlp_input_dim = config.encoder.output_dim  # encoder output dim (e.g. 64)
             config.vec_input_dim = config.nlp_input_dim
             # dataset 기반 VIPCGRL: cnnclipconv/clipconv 가 이미 설정된 경우 유지
-            if config.model not in ('nlpconv', 'cnnclipconv', 'clipconv', 'pretrained_clip'):
+            if config.model not in ('nlpconv', 'cnnclipconv', 'clipconv', 'pretrained_clip', 'finetuned_clip'):
                 config.model = 'nlpconv'
-            _mode_tag = "PretrainedCLIP" if config.model == 'pretrained_clip' else "VIPCGRL"
+            _mode_tag = (
+                "FinetunedCLIP" if config.model == 'finetuned_clip'
+                else ("PretrainedCLIP" if config.model == 'pretrained_clip' else "VIPCGRL")
+            )
             logger.info(f"[{_mode_tag}] dataset_game={config.dataset_game}, "
                         f"dataset_reward_enum={getattr(config, 'dataset_reward_enum', None)}, "
                         f"nlp_input_dim={config.nlp_input_dim}, "
@@ -452,6 +463,25 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
             act_shape=config.act_shape,
         )
 
+    elif config.model == "finetuned_clip":
+        # Fine-tuned CLIP: ckpt 파라미터 트리(TrainablePretrained*Encoder) 와
+        # 동일한 모듈을 RL 측에도 사용해야 `apply_encoder_params` 의 subtree
+        # replace 가 안전하다.
+        network = EncoderCLIPConvForward(
+            config=config.encoder,
+            encoder=get_finetuned_clip_encoder(config.encoder)[0] if config.encoder.model else None,
+            train_encoder=config.encoder.trainable,
+            nlp_conv_forward=NLPConvForward(
+                action_dim=action_dim, activation=config.activation,
+                arf_size=config.arf_size, act_shape=config.act_shape,
+                vrf_size=config.vrf_size,
+                nlp_input_dim=config.nlp_input_dim,
+                hidden_dims=config.hidden_dims
+            ),
+            action_dim=action_dim,
+            act_shape=config.act_shape,
+        )
+
     elif config.model == "conv":
         network = ConvForward(
             action_dim=action_dim, activation=config.activation,
@@ -519,7 +549,7 @@ def get_env_params_from_config(config: Config):
     )
 
     # cnnclipconv/clipconv 모델은 nlp_input_dim과 clip_input_channel 둘 다 필요
-    _needs_clip_channel = config.model in ('cnnclipconv', 'clipconv', 'pretrained_clip')
+    _needs_clip_channel = config.model in ('cnnclipconv', 'clipconv', 'pretrained_clip', 'finetuned_clip')
 
     env_params = PCGRLEnvParams(
         problem=problem,

@@ -588,7 +588,7 @@ class ActorCriticPCGRL(nn.Module):
         z_embed, text_embed, state_embed = None, None, None
         if self.model_type in ['nlpconv', 'nlpencconv', 'contconv']:
             act, val = self.subnet(map_obs, ctrl_obs, nlp_obs, rng)
-        elif self.model_type in ['clipconv', 'cnnclipconv', 'pretrained_clip']:
+        elif self.model_type in ['clipconv', 'cnnclipconv', 'pretrained_clip', 'finetuned_clip']:
             act, val, z_embed, text_embed, state_embed = self.subnet(map_obs, ctrl_obs, nlp_obs,
                                                                      input_ids, attention_mask,
                                                                      pixel_values,

@@ -364,6 +364,12 @@ class FinetunedCLIPPCGRLConfig(PretrainedCLIPPCGRLConfig):
     wandb_project: Optional[str] = f"{PREFIX}train_finetuned_clip_pcgrl"
     dir_prefix: str = "finetuned-clip-pcgrl-"
 
+    # ── Finetuned CLIP 전용 RL 모델 분기 ──────────────────────────────────
+    # pretrained_clip 와 파라미터 트리 구조는 동일하지만, `get_finetuned_clip_encoder`
+    # 로 모듈을 생성해 ckpt 의 trainable 파라미터 트리 (TrainablePretrained*Encoder)
+    # 와 정확히 일치시킨다. 별도 model 식별자로 exp_dir / encoder hash 충돌 회피.
+    model: str = "finetuned_clip"
+
     # ── encoder unseen 실험 지원 (mgpcgrl/vipcgrl 와 동일 시맨틱) ──
     dataset_seen_ratio: float = 1.0
     reward_seen_games: List[str] = field(default_factory=list)
@@ -541,6 +547,7 @@ class FinetunedCLIPEvalConfig(PretrainedCLIPEvalConfig):
     """Fine-tuned CLIP PCGRL 평가용 Config."""
     wandb_project: Optional[str] = f"{PREFIX}eval_finetuned_clip"
     dir_prefix: str = "finetuned-clip-pcgrl-"
+    model: str = "finetuned_clip"
 
 
 @dataclass

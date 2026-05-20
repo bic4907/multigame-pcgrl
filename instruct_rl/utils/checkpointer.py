@@ -314,59 +314,12 @@ def apply_encoder_params(runner_state, encoder_params, config):
     -------
     runner_state : RunnerState (파라미터 주입 완료)
     """
-    from flax.core import unfreeze
-    from flax.traverse_util import flatten_dict, unflatten_dict
+    from flax.traverse_util import flatten_dict
 
     logger.info(
         f"Parameters loaded from encoder checkpoint ({config.encoder.ckpt_path})"
     )
-
-    # ── leaf 단위 머지 ──────────────────────────────────────────────────────
-    # RL 측 모델과 인코더 체크포인트의 파라미터 트리는 완전히 일치하지 않을 수
-    # 있다 (예: RL 측에만 존재하는 `final_text_projection`). 서브트리를 통째
-    # 교체하면 RL-init 으로 만들어진 파라미터가 사라져
-    # ScopeParamNotFoundError 가 발생하므로, 존재하는 leaf 만 덮어쓴다.
-    base_encoder_params = unfreeze(
-        runner_state.train_state.params["params"]["subnet"]["encoder"]
-    )
-    flat_base = flatten_dict(base_encoder_params)
-    flat_enc = flatten_dict(unfreeze(encoder_params))
-
-    merged = dict(flat_base)
-    overwritten, shape_mismatch, extra = 0, 0, 0
-    for path, arr in flat_enc.items():
-        if path in flat_base:
-            base_arr = flat_base[path]
-            if hasattr(base_arr, "shape") and hasattr(arr, "shape") and base_arr.shape != arr.shape:
-                logger.warning(
-                    "  ⚠️  Shape mismatch for %s: base=%s, ckpt=%s — keeping base",
-                    "/".join(path), base_arr.shape, arr.shape,
-                )
-                shape_mismatch += 1
-                continue
-            merged[path] = arr
-            overwritten += 1
-        else:
-            extra += 1
-            logger.warning(
-                "  ⚠️  Encoder ckpt has extra leaf not in RL model: %s — ignoring",
-                "/".join(path),
-            )
-
-    missing = [p for p in flat_base if p not in flat_enc]
-    for path in missing:
-        logger.warning(
-            "  ⚠️  RL model has leaf not in encoder ckpt: %s — keeping RL-init value",
-            "/".join(path),
-        )
-
-    logger.info(
-        "  Encoder param merge: overwritten=%d, kept(missing in ckpt)=%d, "
-        "shape_mismatch=%d, extra_in_ckpt=%d",
-        overwritten, len(missing), shape_mismatch, extra,
-    )
-
-    runner_state.train_state.params["params"]["subnet"]["encoder"] = unflatten_dict(merged)
+    runner_state.train_state.params["params"]["subnet"]["encoder"] = encoder_params
 
     logger.info("-" * 80)
     for key, enc_param in encoder_params.items():

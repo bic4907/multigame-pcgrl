@@ -501,6 +501,10 @@ class VIPCGRLEvalConfig(CPCGRLEvalConfig):
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
+    # ── game_setting_mode: 평가 시 사용할 게임 범위 선택 ──
+    # train_vipcgrl 의 기본값(encoder_seen) 과 맞춰서 exp_dir 매칭이 일관되도록 한다.
+    game_setting_mode: str = "encoder_seen"
+
 
 @dataclass
 class PretrainedCLIPEvalConfig(CPCGRLEvalConfig):

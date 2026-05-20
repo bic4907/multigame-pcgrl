@@ -28,7 +28,9 @@ Step numbers:
                                  (seen_ratio_progress 전용; 다른 실험에서는 생략)
     10 condition_shift_perf_drop  RE별 조건 분포 변화(Wasserstein/JSD) vs 성능 하락 scatter + 상관계수
                                  (condition_shift_analysis 전용; 다른 실험에서는 생략)
-    11 seen_count_progress      unseen 게임 개수별 subplot — method 간 unseen 성능 비교
+    11 seen_count_progress      unseen 게임 개수별 bar chart — method 간 unseen/seen 성능 비교
+                                 (unseen_count_progress → seen_count_progress.py 실행;
+                                  unseen_count_progress.png + seen_progress.png 출력)
                                  (unseen 전용; 다른 실험에서는 생략)
 
 NOTE: step 5 (seen_unseen_report), 7 (unseen_count_progress), 8 (game_impact_analysis)
@@ -115,9 +117,9 @@ STEPS: list[dict] = [
     },
     {
         "id": 11,
-        "name": "seen_count_progress",
+        "name": "unseen_count_progress",
         "script": _HERE / "utils/experiment/seen_count_progress.py",
-        "description": "unseen 게임 개수별 subplot — method 간 unseen 성능 비교 (unseen 전용)",
+        "description": "unseen 게임 개수별 bar chart — method 간 unseen/seen 성능 비교 (unseen 전용)",
     },
 ]
 

@@ -786,9 +786,9 @@ class FinetunedCLIPEncoderTrainConfig(CLIPTrainConfig):
     # → catastrophic forgetting 방지 + 빠른 도메인 적응
     lr: float = 5.0e-6
     weight_decay: float = 0.1
-    n_epochs: int = 10
+    n_epochs: int = 100
     batch_size: int = 256
-    ckpt_freq: int = 2
+    ckpt_freq: int = 50
 
     embed_type: str = "finetuned_clip"
 

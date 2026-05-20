@@ -188,7 +188,7 @@ def get_train_state(config: FinetunedCLIPEncoderTrainConfig, rng_key):
 def save_checkpoint(config, state, step):
     ckpt_dir = os.path.abspath(get_ckpt_dir(config))
     checkpoints.save_checkpoint(ckpt_dir, target=state, prefix="",
-                                step=step, overwrite=True, keep=3)
+                                step=step, overwrite=True, keep=1)
     logger.info(f"Checkpoint saved at step {step} → {ckpt_dir}")
 
 

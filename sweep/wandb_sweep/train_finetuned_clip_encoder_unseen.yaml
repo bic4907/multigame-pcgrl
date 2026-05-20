@@ -15,7 +15,7 @@ parameters:
   seen_ratio:
     value: 1.0
   seed:
-    values: [0, 1, 2]
+    values: [0]
   n_epochs:
     value: 100
   batch_size:

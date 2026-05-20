@@ -100,10 +100,10 @@ def get_game_split(game: str, run_cfg: dict) -> str:
     """run_config.json 의 seen_games / unseen_games 기반으로 'seen' | 'unseen' | 'unknown' 반환."""
     seen   = run_cfg.get("seen_games",   [])
     unseen = run_cfg.get("unseen_games", [])
-    if game in seen:
-        return "seen"
     if game in unseen:
         return "unseen"
+    if game in seen:
+        return "seen"
     return "unknown"
 
 

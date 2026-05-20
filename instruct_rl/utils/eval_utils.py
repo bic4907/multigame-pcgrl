@@ -154,11 +154,12 @@ def main_eval_entry(config, *, inject_obs_fn=None):
             # of what is stored in train_setting.json (old runs may have empty
             # or doom2-containing lists).
             _seen_raw = _rdm_data.get("seen_games", [])
-            _seen, _unseen = compute_seen_unseen_split(_seen_raw)
+            _seen, _ = compute_seen_unseen_split(_seen_raw)
             if hasattr(config, "seen_games"):
                 config.seen_games = list(_seen)
+            _unseen_raw = _rdm_data.get("unseen_games", [])
             if hasattr(config, "unseen_games"):
-                config.unseen_games = list(_unseen)
+                config.unseen_games = sorted(set(list(config.unseen_games) + _unseen_raw))
 
             _enc_name = _rdm_data.get("encoder_ckpt_name")
             if _enc_name and hasattr(config, "encoder_ckpt_name"):
@@ -166,7 +167,7 @@ def main_eval_entry(config, *, inject_obs_fn=None):
 
             logger.info(
                 "Loaded train_setting: mode=%s, encoder=%s, seen=%s, unseen=%s",
-                _rdm, _enc_name, _seen, _unseen,
+                _rdm, _enc_name, _seen, config.unseen_games,
             )
         except Exception as _e:
             logger.warning("Failed to load train_setting.json: %s", _e)

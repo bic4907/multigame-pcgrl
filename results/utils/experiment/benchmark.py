@@ -404,6 +404,27 @@ def _palette(n: int):
         return plt.cm.Set2.colors
 
 
+_PROJECT_COLORS: dict[str, str] = _CFG.get("project_colors", {})
+
+
+def _project_colors(projects: list[str]) -> list:
+    """프로젝트 목록에 대해 색상 리스트를 반환한다.
+    config.json 의 project_colors에 지정된 프로젝트는 명시적 색상을 사용하고,
+    나머지는 _palette 로부터 할당한다."""
+    # 팔레트에서 색상이 필요한 프로젝트 (명시적 색상 없는 것)
+    unspecified = [p for p in projects if p not in _PROJECT_COLORS]
+    fallback = _palette(max(len(unspecified), 1))
+    fi = 0
+    result = []
+    for p in projects:
+        if p in _PROJECT_COLORS:
+            result.append(_PROJECT_COLORS[p])
+        else:
+            result.append(fallback[fi % len(fallback)])
+            fi += 1
+    return result
+
+
 def write_game_reward_subplots(output_path: Path, plot_rows: list[dict],
                                 metric_order: list[str]) -> None:
     plt = _bar_plot_setup()

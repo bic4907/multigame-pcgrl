@@ -1,7 +1,7 @@
 """
 seen_unseen_report.py
 =====================
-unseen_generalizability 실험 전용:
+unseen 실험 전용:
   results.csv 에서 seen / unseen 게임 성능을 분리 집계하여
   Markdown 테이블 + 비교 플롯을 생성한다.
 
@@ -12,8 +12,8 @@ unseen_generalizability 실험 전용:
     unseen_table.md / unseen_table.csv              — unseen 게임만 테이블
 
 사용법:
-    python results/seen_unseen_report.py --experiment unseen_generalizability
-    python results/seen_unseen_report.py --experiment unseen_generalizability --no-plot
+    python results/seen_unseen_report.py --experiment unseen
+    python results/seen_unseen_report.py --experiment unseen --no-plot
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ _CFG = load_cfg()
 def parse_args() -> argparse.Namespace:
     _exp_names = list(_CFG.get("experiments", {}).keys())
     parser = argparse.ArgumentParser(
-        description="seen / unseen 게임 성능 분리 리포트 (unseen_generalizability 전용)"
+        description="seen / unseen 게임 성능 분리 리포트 (unseen 전용)"
     )
     parser.add_argument("--input", default="wandb_projects")
     parser.add_argument("--metrics", nargs="+", default=None)
@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--experiment",
         choices=_exp_names if _exp_names else None,
-        default="unseen_generalizability",
+        default="unseen",
         metavar="EXPERIMENT",
     )
     return parser.parse_args()
@@ -388,7 +388,7 @@ def main() -> None:
     log     = setup_logger(run_dir, name=__file__)
     log.debug("run_dir   : %s", run_dir)
 
-    experiment = args.experiment or "unseen_generalizability"
+    experiment = args.experiment or "unseen"
     folder_order = _get_experiment_folder_order(experiment)
     log.info("experiment: %s  folder_order=%s", experiment, folder_order)
 

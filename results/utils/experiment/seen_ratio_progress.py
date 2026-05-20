@@ -1,7 +1,7 @@
 """
 seen_ratio_progress.py
 ======================
-seen_ratio_progress 실험 전용 (aaai27_eval_mgpcgrl_unseen_ratios):
+seen_ratio_progress 실험 전용:
   train_seen_ratio (데이터 양)가 늘어남에 따라 unseen 게임의 progress 성능이
   어떻게 달라지는지를 꺾은선 그래프 1개로 시각화한다.
 
@@ -334,7 +334,7 @@ def main() -> None:
 
     rows = collect_rows(input_root, target_projects=folder_order or None)
     if not rows:
-        msg = "No valid rows found. wandb_projects 에 aaai27_eval_mgpcgrl_unseen_ratios 데이터가 있는지 확인하세요."
+        msg = "No valid rows found. wandb_projects 에 seen_ratio_progress 대상 데이터가 있는지 확인하세요."
         log.error(msg)
         raise SystemExit(msg)
 

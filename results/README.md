@@ -35,7 +35,7 @@ results/
     │   ├── make_eval_summary.py       # ctrl_sim.csv → results/summary.csv
     │   ├── reward_enum_visualizer.py  # reward_enum 타일맵 시각화
     │   ├── process_allseen.py         # allseen 실험 래퍼
-    │   └── process_unseen_generalizability.py
+    │   └── process_unseen.py
     │
     ├── wandb/                          # W&B 연동 도구
     │   └── eval_downloader.py         # eval 아티팩트 다운로드
@@ -72,7 +72,7 @@ W&B
     outputs/<run_dir>/
         plots/          report.md
  │
- ▼ [Step 5] seen_unseen_report.py  (unseen_generalizability 실험)
+ ▼ [Step 5] seen_unseen_report.py  (unseen 실험)
     outputs/<run_dir>/
         unseen.png
         seen_table.md/.csv    unseen_table.md/.csv
@@ -91,7 +91,7 @@ python results/run_pipeline.py
 
 # 특정 experiment만
 python results/run_pipeline.py --experiment allseen
-python results/run_pipeline.py --experiment unseen_generalizability
+python results/run_pipeline.py --experiment unseen
 
 # 특정 step만
 python results/run_pipeline.py --steps 3
@@ -128,8 +128,8 @@ python results/condition_progress_report.py
 python results/condition_progress_report.py --experiment allseen
 
 # Step 5: seen/unseen 분리 분석
-python results/seen_unseen_report.py --experiment unseen_generalizability
-python results/seen_unseen_report.py --experiment unseen_generalizability --no-plot
+python results/seen_unseen_report.py --experiment unseen
+python results/seen_unseen_report.py --experiment unseen --no-plot
 ```
 
 ---

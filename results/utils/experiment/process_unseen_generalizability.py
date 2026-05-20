@@ -1,9 +1,9 @@
 """
-process_unseen_generalizability.py
+process_unseen.py
 ===================================
-unseen_generalizability 실험의 다운로드된 결과 파일을 처리한다.
+unseen 실험의 다운로드된 결과 파일을 처리한다.
 
-대상 프로젝트 (config.json experiments.unseen_generalizability):
+대상 프로젝트 (config.json experiments.unseen):
     aaai27_eval_mgpcgrl, aaai27_eval_mgpcgrl_unseen
 
 처리 단계:
@@ -12,10 +12,10 @@ unseen_generalizability 실험의 다운로드된 결과 파일을 처리한다.
     3  condition_progress_report ctrl_sim.csv → 조건 플롯 + Markdown 리포트
 
 사용법:
-    python results/process_unseen_generalizability.py
-    python results/process_unseen_generalizability.py --steps 2 3
-    python results/process_unseen_generalizability.py --input wandb_projects --dry-run
-    python results/process_unseen_generalizability.py --continue-on-failure
+    python results/process_unseen.py
+    python results/process_unseen.py --steps 2 3
+    python results/process_unseen.py --input wandb_projects --dry-run
+    python results/process_unseen.py --continue-on-failure
 """
 
 import sys
@@ -30,7 +30,7 @@ if str(_RESULTS_DIR.parent) not in sys.path:
 
 from utils.pipeline import run_experiment_processing  # noqa: E402
 
-EXPERIMENT = "unseen_generalizability"
+EXPERIMENT = "unseen"
 
 
 def main() -> None:

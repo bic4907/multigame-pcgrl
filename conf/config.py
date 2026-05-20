@@ -346,6 +346,11 @@ class PretrainedCLIPPCGRLConfig(CPCGRLConfig):
     use_pretrained_clip_reward: bool = True
     wandb_project: Optional[str] = f'{PREFIX}train_pretrained_clip_pcgrl'
 
+    # 학습에 사용된 게임 목록 — config.game 에서 자동 유도되어 train_setting.json 에 기록됨.
+    # (full name 리스트, e.g. ["dungeon", "doom", "zelda"]). 비어있지 않으면
+    # train_setting.json 에 seen/unseen split 이 기록되어 WandB 로깅에 사용된다.
+    reward_seen_games: List[str] = field(default_factory=list)
+
 
 @dataclass
 class FinetunedCLIPPCGRLConfig(PretrainedCLIPPCGRLConfig):
@@ -525,6 +530,10 @@ class PretrainedCLIPEvalConfig(CPCGRLEvalConfig):
     nlp_input_dim: int = 512  # pretrained CLIP 텍스트 임베딩 차원 (projection 없음)
 
     ignore_checkpoint: bool = False
+
+    # 학습 시 seen/unseen 게임 목록 — train_setting.json 에서 자동 주입됨.
+    seen_games: List[str] = field(default_factory=list)
+    unseen_games: List[str] = field(default_factory=list)
 
 
 @dataclass

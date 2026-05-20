@@ -7,7 +7,7 @@ Aborts the pipeline on the first failure by default.
 Usage:
     python results/run_pipeline.py                         # full pipeline (steps 1-6)
     python results/run_pipeline.py --experiment allseen    # allseen experiment
-    python results/run_pipeline.py --experiment unseen_generalizability
+    python results/run_pipeline.py --experiment unseen
     python results/run_pipeline.py --steps 3               # single step
     python results/run_pipeline.py --steps 3 4 5 6         # multiple steps
     python results/run_pipeline.py --steps 6               # 분석 리포트만 생성
@@ -19,22 +19,21 @@ Step numbers:
     1  eval_downloader          Download eval artifacts from W&B
     2  make_eval_summary        ctrl_sim.csv → per-eval results/summary.csv
     3  benchmark               summary/results.csv → Markdown/CSV tables + plots
-                                (allseen 등 일반 실험 전용; unseen_generalizability 에서는 생략)
+                                (allseen 등 일반 실험 전용; unseen 에서는 생략)
     4  condition_progress_report  condition vs metric plots + Markdown report
-    5  seen_unseen_report       seen / unseen 분리 테이블 + 비교 플롯
-                                (unseen_generalizability 전용; 다른 실험에서는 생략)
     6  analysis_report          모델 간 % 비교 + Baseline 대비 분석을 한글 Markdown 으로 저장
-                                (allseen / unseen_generalizability 모두 적용)
-    7  unseen_count_progress    unseen 게임 수 증가에 따른 성능 변화 꺾은선 그래프
-                                (unseen_generalizability 전용; 다른 실험에서는 생략)
-    8  game_impact_analysis     게임 간 학습 데이터 영향도 히트맵 + 바 차트
-                                Impact(X→Y) = perf(Y|X seen) − perf(Y|X unseen)
-                                (unseen_generalizability 전용; 다른 실험에서는 생략)
+                                (allseen / unseen 모두 적용)
     9  seen_ratio_progress      train_seen_ratio(데이터 양) 증가에 따른 unseen 게임
                                  progress 꺾은선 그래프 — 선 구분: seen 게임 수
                                  (seen_ratio_progress 전용; 다른 실험에서는 생략)
     10 condition_shift_perf_drop  RE별 조건 분포 변화(Wasserstein/JSD) vs 성능 하락 scatter + 상관계수
                                  (condition_shift_analysis 전용; 다른 실험에서는 생략)
+    11 seen_count_progress      unseen 게임 개수별 subplot — method 간 unseen 성능 비교
+                                 (unseen 전용; 다른 실험에서는 생략)
+
+NOTE: step 5 (seen_unseen_report), 7 (unseen_count_progress), 8 (game_impact_analysis)
+      스크립트 파일은 results/utils/experiment/ 아래에 보존되어 있으나
+      파이프라인의 STEPS 목록에서는 제외되었습니다.
 """
 
 from __future__ import annotations
@@ -97,28 +96,10 @@ STEPS: list[dict] = [
         "description": "ctrl_sim.csv → condition vs metric plots + Markdown report",
     },
     {
-        "id": 5,
-        "name": "seen_unseen_report",
-        "script": _HERE / "utils/experiment/seen_unseen_report.py",
-        "description": "results.csv → seen / unseen 분리 테이블 + 비교 플롯 (unseen_generalizability 전용)",
-    },
-    {
         "id": 6,
         "name": "analysis_report",
         "script": _HERE / "utils/experiment/analysis_report.py",
         "description": "모델 간 수치 비교 + Baseline 대비 % 변화량을 한글 Markdown 리포트로 저장",
-    },
-    {
-        "id": 7,
-        "name": "unseen_count_progress",
-        "script": _HERE / "utils/experiment/unseen_count_progress.py",
-        "description": "unseen 게임 수 증가에 따른 성능 변화 꺾은선 그래프 (unseen_generalizability 전용)",
-    },
-    {
-        "id": 8,
-        "name": "game_impact_analysis",
-        "script": _HERE / "utils/experiment/game_impact_analysis.py",
-        "description": "게임 간 학습 데이터 영향도 히트맵 — Impact(X→Y) = perf(Y|X seen)−perf(Y|X unseen) (unseen_generalizability 전용)",
     },
     {
         "id": 9,
@@ -132,17 +113,23 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/condition_shift_perf_drop.py",
         "description": "RE별 조건 분포 변화(Wasserstein/JSD) vs 성능 하락 scatter + 상관계수 (condition_shift_analysis 전용)",
     },
+    {
+        "id": 11,
+        "name": "seen_count_progress",
+        "script": _HERE / "utils/experiment/seen_count_progress.py",
+        "description": "unseen 게임 개수별 subplot — method 간 unseen 성능 비교 (unseen 전용)",
+    },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
 _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
-    "unseen_generalizability": {3, 9, 10},          # benchmark, seen_ratio_progress, condition_shift 생략
-    "seen_ratio_progress":     {3, 4, 5, 7, 8, 10}, # seen_ratio_progress 전용 — step 9만 실행
-    "condition_shift_analysis": {3, 4, 5, 6, 7, 8, 9},  # condition_shift_analysis 전용 — step 10만 실행
-    None: {5, 7, 8, 9, 10},                          # experiment 미지정 시 생략
+    "unseen":   {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
+    "seen_ratio_progress":       {3, 4, 10, 11},    # seen_ratio_progress 전용 — step 9만 실행
+    "condition_shift_analysis":  {3, 4, 6, 9, 11},  # condition_shift_analysis 전용 — step 10만 실행
+    None:                        {9, 10, 11},        # experiment 미지정 시 생략
 }
-# allseen 등 unseen_generalizability / seen_ratio_progress / condition_shift_analysis 아닌 실험: step 5, 7, 8, 9, 10 생략
-_DEFAULT_SKIP: set[int] = {5, 7, 8, 9, 10}          # unseen_generalizability / seen_ratio_progress / condition_shift_analysis 가 아닌 모든 실험에 적용
+# allseen 등 unseen / seen_ratio_progress / condition_shift_analysis 아닌 실험: 9, 10, 11 생략
+_DEFAULT_SKIP: set[int] = {9, 10, 11}
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
@@ -155,7 +142,7 @@ def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
 examples:
   python results/run_pipeline.py                       # run all steps (1-6)
   python results/run_pipeline.py --experiment allseen
-  python results/run_pipeline.py --experiment unseen_generalizability
+  python results/run_pipeline.py --experiment unseen
   python results/run_pipeline.py --steps 3             # table generation only
   python results/run_pipeline.py --steps 4 5           # condition report + seen/unseen report
   python results/run_pipeline.py --steps 6             # 한글 분석 리포트만 생성
@@ -164,11 +151,10 @@ examples:
   python results/run_pipeline.py --list                # list step descriptions
 
 note:
-  step 3 (benchmark)             — allseen 등 일반 실험에서만 실행; unseen_generalizability 에서는 자동 생략
-  step 5 (seen_unseen_report)    — unseen_generalizability 에서만 실행; 다른 실험에서는 자동 생략
-  step 6 (analysis_report)       — allseen / unseen_generalizability 모두 실행; 한글 Markdown 리포트 생성
-  step 7 (unseen_count_progress) — unseen_generalizability 에서만 실행; unseen 게임 수 vs 성능 꺾은선 그래프
+  step 3 (benchmark)             — allseen 등 일반 실험에서만 실행; unseen 에서는 자동 생략
+  step 6 (analysis_report)       — allseen / unseen 모두 실행; 한글 Markdown 리포트 생성
   step 9 (seen_ratio_progress)   — seen_ratio_progress 실험에서만 실행; train_seen_ratio vs progress 꺾은선 그래프
+  step 11 (seen_count_progress)  — unseen 에서만 실행; unseen 개수별 subplot
 
 available experiments: {_exp_hint}
         """,

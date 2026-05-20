@@ -1,7 +1,7 @@
 """
 game_impact_analysis.py
 =======================
-unseen_generalizability 실험 전용:
+unseen 실험 전용:
   어떤 게임의 학습 데이터 유무(seen / unseen)가 다른 게임의 unseen 성능에
   얼마나 영향을 주는지 게임 쌍(X → Y) 단위로 정량화하고 시각화한다.
 
@@ -696,7 +696,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--experiment",
         choices=_exp_names if _exp_names else None,
-        default="unseen_generalizability",
+        default="unseen",
         metavar="EXPERIMENT",
     )
     return parser.parse_args()
@@ -712,7 +712,7 @@ def main() -> None:
     log     = setup_logger(run_dir, name=__file__)
     log.debug("run_dir    : %s", run_dir)
 
-    experiment   = args.experiment or "unseen_generalizability"
+    experiment   = args.experiment or "unseen"
     folder_order = _get_experiment_folder_order(experiment)
     log.info("experiment : %s  folder_order=%s", experiment, folder_order)
 

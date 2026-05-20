@@ -19,11 +19,12 @@
       "re_baseline_label":          "CPCGRL",
       "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
     },
-    "unseen_generalizability": {
+    "unseen": {
       "target_projects": [
-        "aaai27_eval_cpcgrl",
-        "aaai27_eval_mgpcgrl",
-        "aaai27_eval_mgpcgrl_unseen"
+        "aaai27_eval_vipcgrl_unseen",
+        "aaai27_eval_mgpcgrl_unseen",
+        "aaai27_eval_mgpcgrl_all",
+        "aaai27_eval_mgpcgrl_oracle"
       ],
       "seen_baseline_project": "aaai27_eval_mgpcgrl",
       "seen_baseline_label":   "MGPCGRL",
@@ -31,12 +32,6 @@
       "re_oracle_label":       "CPCGRL (Oracle)"
     },
     "seen_ratio_progress": {
-      "target_projects": [
-        "aaai27_eval_mgpcgrl_unseen_ratios",
-        "aaai27_eval_mgpcgrl_unseen"
-      ]
-    },
-    "condition_shift_analysis": {
       "target_projects": [
         "aaai27_eval_mgpcgrl_unseen"
       ]
@@ -49,8 +44,17 @@
     "aaai27_eval_ipcgrl":        "IPCGRL",
     "aaai27_eval_vipcgrl":       "VIPCGRL",
     "aaai27_eval_random":        "Random",
+    "aaai27_eval_pretrained_clip":  "Pretrained CLIP",
     "aaai27_eval_mgpcgrl_unseen":"MGPCGRL",
-    "aaai27_eval_mgpcgrl_unseen_ratios":"MGPCGRL (ratio)"
+    "aaai27_eval_mgpcgrl_all":   "MGPCGRL (all)",
+    "aaai27_eval_mgpcgrl_oracle":"MGPCGRL (oracle)",
+    "aaai27_eval_vipcgrl_unseen":"VIPCGRL"
+  },
+  "project_colors": {
+    "aaai27_eval_mgpcgrl":        "#2166ac",
+    "aaai27_eval_mgpcgrl_unseen": "#2166ac",
+    "aaai27_eval_mgpcgrl_all":    "#4393c3",
+    "aaai27_eval_mgpcgrl_oracle": "#92c5de"
   },
   "games": {
     "colors": {

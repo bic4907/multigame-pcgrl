@@ -2,7 +2,7 @@
 utils/pipeline.py
 =================
 experiment별 결과 처리 스크립트(process_allseen.py,
-process_unseen_generalizability.py)가 공유하는 파이프라인 유틸리티.
+process_unseen.py)가 공유하는 파이프라인 유틸리티.
 
 직접 실행하지 말 것.
 """

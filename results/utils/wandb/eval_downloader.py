@@ -15,7 +15,7 @@ Examples
 --------
     python results/eval_downloader.py
     python results/eval_downloader.py --experiment allseen
-    python results/eval_downloader.py --experiment unseen_generalizability
+    python results/eval_downloader.py --experiment unseen
     python results/eval_downloader.py --h5
     python results/eval_downloader.py --output wandb_projects
     python results/eval_downloader.py --finished-only --workers 4
@@ -377,7 +377,7 @@ def parse_args():
 examples:
   python results/eval_downloader.py
   python results/eval_downloader.py --experiment allseen
-  python results/eval_downloader.py --experiment unseen_generalizability
+  python results/eval_downloader.py --experiment unseen
   python results/eval_downloader.py --no-h5
   python results/eval_downloader.py --no-run-config
   python results/eval_downloader.py --output wandb_projects --finished-only

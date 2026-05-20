@@ -1,7 +1,7 @@
 """
 analysis_report.py
 ==================
-각 실험(allseen / unseen_generalizability)에 대해
+각 실험(allseen / unseen)에 대해
 모델 간 수치 비교를 한글로 작성한 분석 리포트를 생성한다.
 
 - Baseline 대비 비교 (절대값 및 %)
@@ -14,7 +14,7 @@ analysis_report.py
 사용법:
     python results/utils/experiment/analysis_report.py
     python results/utils/experiment/analysis_report.py --experiment allseen
-    python results/utils/experiment/analysis_report.py --experiment unseen_generalizability
+    python results/utils/experiment/analysis_report.py --experiment unseen
 """
 
 from __future__ import annotations
@@ -448,7 +448,7 @@ def _section_seen_unseen_compare(
     metric_order: list[str],
     decimals: int,
 ) -> list[str]:
-    """seen vs unseen 비교 (unseen_generalizability 전용)."""
+    """seen vs unseen 비교 (unseen 전용)."""
     lines: list[str] = []
     lines.append("## 🌐 Seen vs Unseen 일반화 비교\n")
     lines.append("> 학습에 사용된 게임(seen)과 미사용 게임(unseen)에서의 성능 차이를 나타냅니다.\n")
@@ -751,7 +751,7 @@ def build_report(
     experiment: str,
     exp_cfg: dict,
 ) -> str:
-    if experiment == "unseen_generalizability":
+    if experiment == "unseen":
         lines = build_report_unseen(
             plot_rows, folder_order, metric_order, decimals, experiment, exp_cfg
         )

@@ -1,7 +1,7 @@
 """
 unseen_count_progress.py
 ========================
-unseen_generalizability 실험 전용:
+unseen 실험 전용:
   unseen 게임 수(n_unseen_games)가 늘어날 때 성능이 어떻게 변화하는지를
   꺾은선 그래프로 시각화한다.
 
@@ -19,7 +19,7 @@ y 축: unseen 게임 성능 (정규화된 metric)
     python results/utils/experiment/unseen_count_progress.py
     python results/utils/experiment/unseen_count_progress.py --per-reward-enum
     python results/utils/experiment/unseen_count_progress.py --line-key project
-    python results/utils/experiment/unseen_count_progress.py --experiment unseen_generalizability
+    python results/utils/experiment/unseen_count_progress.py --experiment unseen
 """
 
 from __future__ import annotations
@@ -427,7 +427,7 @@ def write_table_markdown(
 def parse_args() -> argparse.Namespace:
     _exp_names = list(_CFG.get("experiments", {}).keys())
     parser = argparse.ArgumentParser(
-        description="unseen 게임 수 증가에 따른 성능 변화 꺾은선 그래프 (unseen_generalizability 전용)"
+        description="unseen 게임 수 증가에 따른 성능 변화 꺾은선 그래프 (unseen 전용)"
     )
     parser.add_argument("--input", default="wandb_projects",
                         help="wandb_projects 루트 디렉토리")
@@ -452,7 +452,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--experiment",
         choices=_exp_names if _exp_names else None,
-        default="unseen_generalizability",
+        default="unseen",
         metavar="EXPERIMENT",
     )
     return parser.parse_args()
@@ -468,7 +468,7 @@ def main() -> None:
     log     = setup_logger(run_dir, name=__file__)
     log.debug("run_dir   : %s", run_dir)
 
-    experiment   = args.experiment or "unseen_generalizability"
+    experiment   = args.experiment or "unseen"
     folder_order = _get_experiment_folder_order(experiment)
     log.info("experiment: %s  folder_order=%s", experiment, folder_order)
 

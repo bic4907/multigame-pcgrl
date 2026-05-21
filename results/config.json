@@ -10,7 +10,6 @@
         "aaai27_eval_cpcgrl",
         "aaai27_eval_ipcgrl",
         "aaai27_eval_vipcgrl",
-        "aaai27_eval_pretrained_clip",
         "aaai27_eval_mgpcgrl"
       ],
       "re_oracle_project":          "aaai27_eval_cpcgrl",
@@ -51,6 +50,13 @@
     "aaai27_eval_vipcgrl_unseen":"VIPCGRL"
   },
   "project_colors": {
+    "aaai27_eval_random":         "#aaaaaa",
+    "aaai27_eval_cpcgrl":         "#e66101",
+    "aaai27_eval_ipcgrl":         "#1a9641",
+    "aaai27_eval_vipcgrl":        "#7b3294",
+    "aaai27_eval_vipcgrl_nosim":  "#c2a5cf",
+    "aaai27_eval_vipcgrl_unseen": "#762a83",
+    "aaai27_eval_pretrained_clip":"#bf812d",
     "aaai27_eval_mgpcgrl":        "#2166ac",
     "aaai27_eval_mgpcgrl_unseen": "#2166ac",
     "aaai27_eval_mgpcgrl_all":    "#4393c3",

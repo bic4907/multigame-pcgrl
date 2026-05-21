@@ -378,7 +378,7 @@ def write_subplot_grid(
             bars = ax.bar(
                 xs, means, width=bar_width, yerr=stds, capsize=2.5,
                 color=colors[j % len(colors)],
-                edgecolor="white", linewidth=0.6, alpha=0.9,
+                edgecolor="none", alpha=0.9,
                 label=_project_display_name(proj),
             )
             # 막대 위에 숫자 표시
@@ -542,7 +542,7 @@ def write_seen_subplot_grid(
             bars = ax.bar(
                 xs, means, width=bar_width, yerr=stds, capsize=2.5,
                 color=colors[j % len(colors)],
-                edgecolor="white", linewidth=0.6, alpha=0.9,
+                edgecolor="none", alpha=0.9,
                 label=_project_display_name(proj),
             )
             for bar, m in zip(bars, means):
@@ -703,7 +703,7 @@ def write_all_subplot_grid(
             bars = ax.bar(
                 xs, means, width=bar_width, yerr=stds, capsize=2.5,
                 color=colors[j % len(colors)],
-                edgecolor="white", linewidth=0.6, alpha=0.9,
+                edgecolor="none", alpha=0.9,
                 label=_project_display_name(proj),
             )
             for bar, m in zip(bars, means):

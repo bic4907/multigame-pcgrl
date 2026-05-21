@@ -431,7 +431,7 @@ def write_game_reward_subplots(output_path: Path, plot_rows: list[dict],
     grouped_stats         = aggregate_folder_game_reward(plot_rows, metric_order)
     grouped_stats_overall = aggregate_folder_reward_overall(plot_rows, metric_order)
     folders = sorted({f for f, _, _ in grouped_stats}, key=_sort_folder_for_plot)
-    colors  = _palette(len(folders))
+    colors  = _project_colors(folders)
     games   = sorted({g for _, g, _ in grouped_stats})
     rewards = sorted({r for _, _, r in grouped_stats}, key=sort_key_reward_enum)
 
@@ -467,7 +467,7 @@ def write_game_reward_subplots(output_path: Path, plot_rows: list[dict],
                 drew_any = True
                 ax.bar(xs, means, width=width, yerr=stds, capsize=2,
                        label=_project_display_name(folder),
-                       color=colors[j % len(colors)], edgecolor="white", linewidth=0.8, alpha=0.9)
+                       color=colors[j % len(colors)], edgecolor="none", alpha=0.9)
             if ri == 0:
                 ax.set_title("overall" if game_key is None else game_key)
             if ci == 0:
@@ -509,7 +509,7 @@ def write_overall_simple_plot(output_path: Path, plot_rows: list[dict],
 
     # baseline을 바에서 제외
     bar_folders = [f for f in all_folders if f != baseline_project]
-    colors      = _palette(len(bar_folders))
+    colors      = _project_colors(bar_folders)
 
     # 기준선 label
     bl_label = baseline_label or (
@@ -545,7 +545,7 @@ def write_overall_simple_plot(output_path: Path, plot_rows: list[dict],
             drew_any = True
             ax.bar(xs, means, width=width, yerr=stds, capsize=2,
                    label=_project_display_name(folder),
-                   color=colors[j % len(colors)], edgecolor="white", linewidth=0.8, alpha=0.9)
+                   color=colors[j % len(colors)], edgecolor="none", alpha=0.9)
 
         # ── 기준선 (baseline_project) ──────────────────────────────────────
         if baseline_project:
@@ -613,7 +613,7 @@ def write_re_overall_plot(
 
     all_folders = sorted(by_folder.keys(), key=_sort_folder_for_plot)
     bar_folders = [f for f in all_folders if f != baseline_project]
-    colors = _palette(max(len(bar_folders), 1))
+    colors = _project_colors(bar_folders)
 
     bl_label = baseline_label or (
         _project_display_name(baseline_project) if baseline_project else "Baseline"
@@ -645,11 +645,11 @@ def write_re_overall_plot(
             x = -bar_total_span / 2 + (j + 0.5) * bar_width
             drew_any = True
             ax.bar(
-                [x], [float(stat["mean"])], width=bar_width * 0.85,
+                [x], [float(stat["mean"])], width=bar_width,
                 yerr=[float(stat["std"])], capsize=3,
                 label=_project_display_name(folder),
-                color=colors[j % len(colors)], edgecolor="white",
-                linewidth=0.8, alpha=0.9,
+                color=colors[j % len(colors)], edgecolor="none",
+                alpha=0.9,
             )
             y_uppers.append(float(stat["mean"]) + float(stat["std"]))
 
@@ -711,8 +711,8 @@ def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
     plt = _bar_plot_setup()
     folders = sorted({r["project"] for r in plot_rows}, key=_sort_folder_for_plot)
     rewards = sorted({r["reward_enum"] for r in plot_rows}, key=sort_key_reward_enum)
-    colors_all = _palette(len(folders))
-    folder_color = {f: colors_all[i % len(colors_all)] for i, f in enumerate(folders)}
+    colors_all = _project_colors(folders)
+    folder_color = {f: c for f, c in zip(folders, colors_all)}
 
     n_metrics = len(metric_order)
     if not n_metrics:
@@ -773,8 +773,8 @@ def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
                 drew_any = True
                 ax.bar(xs, means, width=bar_width, yerr=stds, capsize=2,
                        label=_project_display_name(folder),
-                       color=folder_color[folder], edgecolor="white",
-                       linewidth=0.8, alpha=0.9)
+                       color=folder_color[folder], edgecolor="none",
+                       alpha=0.9)
 
         # ── seen baseline 수평선 (텍스트 애노테이션 없음) ─────────────────
         if baseline_project:

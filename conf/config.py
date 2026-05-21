@@ -572,10 +572,14 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     # 분석/로깅용으로만 사용하며, eval 데이터셋 필터링에는 적용되지 않음.
     train_seen_ratio: float = 1.0
 
-    # eval은 항상 GT condition 기준으로 평가한다.
-    # exp_dir 경로 매칭을 위해 train 기본값(unseen)과 동일하게 설정하되,
-    # 실제 condition 소스는 init_config에서 noop으로 강제된다.
-    reward_decoder_mode: str = "noop"
+    # exp_dir 경로 매칭용 — train과 동일한 기본값(unseen) 유지.
+    # 실제 eval condition 소스는 eval_reward_decoder_mode로 별도 제어한다.
+    reward_decoder_mode: str = "unseen"
+
+    # eval 시 실제로 사용할 condition 소스.
+    # "noop" → GT condition 사용 (기본값, 공정한 비교를 위해).
+    # "unseen" → unseen 게임만 decoder 예측 사용.
+    eval_reward_decoder_mode: str = "noop"
 
     # 학습 시 seen/unseen 게임 목록 — reward_decoder_config.json에서 자동 주입됨.
     seen_games: List[str] = field(default_factory=list)

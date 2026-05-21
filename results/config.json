@@ -34,6 +34,11 @@
       "target_projects": [
         "aaai27_eval_mgpcgrl_unseen"
       ]
+    },
+    "unseen_ratio_ngames": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_unseen_ratios_2"
+      ]
     }
   },
   "project_display_names": {

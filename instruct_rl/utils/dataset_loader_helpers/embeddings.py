@@ -216,9 +216,7 @@ def _build_reward_and_condition(
     """
     use_decoder = getattr(config, "use_clip", False) and hasattr(config, "decoder")
     num_classes = config.decoder.num_reward_classes if use_decoder else 5
-    # eval_reward_decoder_mode가 있으면 우선 사용 (경로 매칭용 reward_decoder_mode와 분리)
-    reward_decoder_mode = getattr(config, "eval_reward_decoder_mode", None) \
-        or getattr(config, "reward_decoder_mode", "unseen")
+    reward_decoder_mode = getattr(config, "reward_decoder_mode", "unseen")
     n = len(sample_list)
 
     # ── 1. 메타데이터로 전체 배열 초기화 (항상) ───────────────────────────────

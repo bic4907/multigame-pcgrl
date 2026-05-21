@@ -172,6 +172,12 @@ def main_eval_entry(config, *, inject_obs_fn=None):
         except Exception as _e:
             logger.warning("Failed to load train_setting.json: %s", _e)
 
+    # eval_reward_decoder_mode로 실제 condition 소스를 결정한다.
+    # reward_decoder_mode는 exp_dir 경로 매칭용으로 그대로 유지한다.
+    _eval_rdm = getattr(config, 'eval_reward_decoder_mode', None)
+    if _eval_rdm is not None:
+        config.reward_decoder_mode = _eval_rdm
+
     _re = getattr(config, 'dataset_reward_enum', None)
     _re_enums = getattr(config, 'eval_dataset_reward_enums', None)
 

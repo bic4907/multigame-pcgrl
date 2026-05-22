@@ -14,6 +14,7 @@ from envs.pcgrl_env import PCGRLObs
 from instruct_rl.dataclass import Instruct
 from instruct_rl.human_data.dataset import DatasetManager
 from instruct_rl.utils.level_processing_utils import add_coord_channel_batch, map2onehot_batch
+from dataset.multigame.tile_utils import NUM_CATEGORIES
 from instruct_rl.vision.data.render import render_array_batch
 
 logger = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ def prepare_instruct(config, network, runner_state, instruct_df, init_x) -> Inst
             input_level_raw = dataset_mgr.get_levels(
                 instructions=language_instr_list, n=1, squeeze_n=True
             )
-            input_level = add_coord_channel_batch(map2onehot_batch(input_level_raw))
+            input_level = add_coord_channel_batch(map2onehot_batch(input_level_raw, num_classes=NUM_CATEGORIES))
             pixel_values = input_level
 
             assert input_level.shape[-1] == config.clip_input_channel, (

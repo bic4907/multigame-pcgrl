@@ -20,6 +20,7 @@ import jax.numpy as jnp
 
 from instruct_rl.utils.level_processing_utils import mutate_level_fn, map2onehot_batch, add_coord_channel_batch
 from dataset.reward_annotations.instruction_config import CUSTOM_THRESHOLDS
+from dataset.multigame.tile_utils import NUM_CATEGORIES
 
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()  # Add the environment variable ;LOG_LEVEL=DEBUG
 logger = logging.getLogger(basename(__file__))
@@ -261,9 +262,12 @@ class CLIPDatasetBuilder:
         logger.info(f"Detected {len(unique_games)} unique games: {game2idx}")
 
         # Extract level arrays and language instructions
+        # unified 카테고리: 0=empty, 1=wall, 2=interactive, 3=hazard, 4=collectable (5개)
+        # map2onehot은 value-1 을 index로 쓰므로 category 0(empty)은 all-zeros(implicit bg),
+        # category 1-4는 채널 0-3에 정확히 표현된다.
         level_arrays = jnp.stack([s.array for s in samples], 0)  # (N, 16, 16)
-        level_arrays = map2onehot_batch(level_arrays)
-        level_arrays = add_coord_channel_batch(level_arrays)  # (N, 16, 16, C)
+        level_arrays = map2onehot_batch(level_arrays, num_classes=NUM_CATEGORIES)  # (N, 16, 16, NUM_CATEGORIES)
+        level_arrays = add_coord_channel_batch(level_arrays)  # (N, 16, 16, 7)
 
         language_inst_list = [s.instruction for s in samples]
 

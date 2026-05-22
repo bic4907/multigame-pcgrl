@@ -6,6 +6,7 @@ from conf.game_utils import (                       # noqa: F401  — re-export
     GAME_ABBR, GAME_ABBR_INV, ALL_GAMES,
     parse_game_str, build_game_str,
 )
+from dataset.multigame.tile_utils import NUM_CATEGORIES
 
 PREFIX = "aaai27_"
 
@@ -56,7 +57,9 @@ class Config:
     
     # CLIP params
     use_clip: bool = False
-    clip_input_channel: int = 3
+    # tile-only 채널 수 = unified category 수 (NUM_CATEGORIES).
+    # init_config()에서 coord 채널 2개를 더해 총 NUM_CATEGORIES+2 가 모델 입력 채널이 된다.
+    clip_input_channel: int = NUM_CATEGORIES
 
     vec_cont: bool = False
     vec_input_dim: Optional[int] = None

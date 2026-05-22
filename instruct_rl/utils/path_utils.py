@@ -36,10 +36,73 @@ def _game_abbr(dataset_game: str) -> str:
 
 
 def _enc_str(encoder_config) -> str:
-    """encoder ckpt 이름/경로 기반 6자리 해시 문자열 반환."""
+    """encoder ckpt 이름 기반 6자리 해시 (VIPCGRL 등 비-MGPCGRL 모델 전용)."""
     ckpt = getattr(encoder_config, 'ckpt_name', None) or getattr(encoder_config, 'ckpt_path', None) or ""
     h = hashlib.md5(ckpt.encode()).hexdigest()[:6] if ckpt else "scratch"
     return f'_enc-{h}'
+
+
+def _mgpcgrl_enc_str(config) -> str:
+    """MGPCGRL 전용: config 파라미터(unseen_abbr, unseen_ratio, seen_ratio)로 경로 suffix 생성.
+
+    우선순위:
+      1. config.train_unseen_abbr / config.train_unseen_ratio / config.train_seen_ratio (명시 파라미터)
+      2. config.reward_seen_games + config.dataset_seen_ratio 에서 자동 계산
+      3. 폴백: encoder ckpt 해시
+    """
+    def _to_pstr(v: float) -> str:
+        s = f"{v:g}"            # e.g. 0.05 → "0.05", 1.0 → "1"
+        return s.replace('.', 'p')
+
+    # ── 1. 명시 파라미터 우선 ────────────────────────────────────────────────
+    un_abbr = getattr(config, 'train_unseen_abbr', None)   # e.g. "zd"
+    ur      = getattr(config, 'train_unseen_ratio', None)  # e.g. 0.05
+    sr      = getattr(config, 'train_seen_ratio', None)    # e.g. 1.0
+
+    # ── 2. encoder.ckpt_name 에서 파싱 ─────────────────────────────────────
+    # ur 실험 패턴: clipdec-game-all_unseen-{abbr}_ur-{ratio}_exp-def_{seed}
+    # sr 실험 패턴: clipdec-game-all_sr-{sr}_unseen-{abbr}_ur-{ratio}_exp-def_{seed}
+    if un_abbr is None or ur is None or sr is None:
+        import re
+        ckpt_name = getattr(getattr(config, 'encoder', None), 'ckpt_name', None) or ""
+        if ckpt_name:
+            m_abbr = re.search(r'_unseen-([^_]+)_', ckpt_name)
+            m_ur   = re.search(r'_ur-([\d.]+)_', ckpt_name)
+            m_sr   = re.search(r'_sr-([\d.]+)_', ckpt_name)
+            if un_abbr is None and m_abbr:
+                un_abbr = m_abbr.group(1)
+            if ur is None and m_ur:
+                ur = float(m_ur.group(1))
+            if sr is None and m_sr:
+                sr = float(m_sr.group(1))
+
+    # ── 3. reward_seen_games + dataset_seen_ratio 에서 자동 계산 ────────────
+    if un_abbr is None:
+        seen_games = getattr(config, 'reward_seen_games', []) or []
+        if seen_games:
+            from conf.game_utils import GAME_ABBR_INV, GAME_ABBR
+            all_games = [g for games in GAME_ABBR.values() for g in games
+                         if g not in ('doom2',)]   # doom2 → doom 계열로 묶음
+            unseen = [g for g in all_games if g not in seen_games and g != 'doom2']
+            if unseen:
+                abbr_parts, seen_abbrs = [], set()
+                for g in unseen:
+                    abbr = GAME_ABBR_INV.get(g, g[:2])
+                    if abbr not in seen_abbrs:
+                        abbr_parts.append(abbr)
+                        seen_abbrs.add(abbr)
+                un_abbr = ''.join(abbr_parts)
+
+    if ur is None:
+        return '_ur-unknown'
+
+    parts = []
+    if un_abbr:
+        parts.append(f'un-{un_abbr}')
+    parts.append(f'ur-{_to_pstr(ur)}')
+    if sr is not None:
+        parts.append(f'sr-{_to_pstr(sr)}')
+    return '_' + '_'.join(parts)
 
 
 def get_exp_group(config) -> str:
@@ -81,11 +144,14 @@ def get_exp_group(config) -> str:
         enc = _enc_str(config.encoder)
         return f'finclip_pcgrl_game-{game}{re_s}{exp_s}{enc}'
 
-    # MGPCGRL / VIPCGRL: pretrained CLIP encoder
-    enc = _enc_str(config.encoder)
+    # MGPCGRL: explicit param-based path (un-XX / ur-XX / sr-XX)
     if hasattr(config, 'decoder'):
         rdm = getattr(config, 'reward_decoder_mode', 'unseen')
-        return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{exp_s}{enc}'
+        enc = _mgpcgrl_enc_str(config)
+        return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{enc}'
+
+    # VIPCGRL: encoder ckpt hash suffix
+    enc = _enc_str(config.encoder)
     if getattr(config, 'use_clip', False):
         return f'vipcgrl_game-{game}{re_s}{exp_s}{enc}'
 

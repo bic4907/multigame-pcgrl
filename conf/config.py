@@ -332,6 +332,14 @@ class MGPCGRLConfig(VIPCGRLConfig):
     # "unseen": seen 게임은 데이터셋 메타데이터, unseen 게임만 decoder 예측값 사용
     reward_decoder_mode: str = "unseen"
 
+    # ── 경로 식별용 파라미터 (encoder ckpt 해시 대체) ─────────────────────────
+    # encoder 학습 시 사용한 unseen games 약어 (e.g. "zd", "zddm")
+    train_unseen_abbr: Optional[str] = None
+    # encoder 학습 시 unseen game 데이터 비율 (0.0 ~ 1.0)
+    train_unseen_ratio: Optional[float] = None
+    # encoder 학습 시 seen game 데이터 비율 (0.0 ~ 1.0)
+    train_seen_ratio: Optional[float] = None
+
 
 
 
@@ -587,6 +595,12 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     # 학습 시 seen/unseen 게임 목록 — reward_decoder_config.json에서 자동 주입됨.
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
+
+    # ── 경로 식별용 파라미터 (encoder ckpt 해시 대체) ─────────────────────────
+    # train 시 MGPCGRLConfig와 동일한 값을 지정해야 exp_dir가 일치함.
+    train_unseen_abbr: Optional[str] = None
+    train_unseen_ratio: Optional[float] = None
+    train_seen_ratio: Optional[float] = None
 
 
 @dataclass

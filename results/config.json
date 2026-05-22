@@ -37,7 +37,7 @@
     },
     "unseen_ratio_ngames": {
       "target_projects": [
-        "aaai27_eval_mgpcgrl_unseen_ratios_2"
+        "aaai27_eval_mgpcgrl_unseen_ratios_2_GT"
       ]
     }
   },
@@ -52,7 +52,8 @@
     "aaai27_eval_mgpcgrl_unseen":"MGPCGRL",
     "aaai27_eval_mgpcgrl_all":   "MGPCGRL (all)",
     "aaai27_eval_mgpcgrl_oracle":"MGPCGRL (oracle)",
-    "aaai27_eval_vipcgrl_unseen":"VIPCGRL"
+    "aaai27_eval_vipcgrl_unseen":"VIPCGRL",
+    "aaai27_eval_mgpcgrl_unseen_ratios_2_GT": "MGPCGRL (GT)"
   },
   "project_colors": {
     "aaai27_eval_random":         "#aaaaaa",

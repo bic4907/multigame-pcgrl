@@ -1,0 +1,68 @@
+program: train_mgpcgrl.py
+project: aaai27_train_mgpcgrl_seen_ratios
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    value: 'all'
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    value: 0
+  n_envs:
+    value: 600
+  overwrite:
+    value: false
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios'
+  encoder.ckpt_name:
+    values:
+      # ── seen_ratio: 0.0 (ur=0.0 고정) ────────────────────────────────────
+      - "clipdec-game-all_sr-0.0_unseen-zd_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-dm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-sk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-zddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-zdsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-dmsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-pkzddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-dgzddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-zddmsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-pkdgzddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-pkzddmsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.0_unseen-dgzddmsk_ur-0.0_exp-def_0"
+      # ── seen_ratio: 0.1 ───────────────────────────────────────────────────
+      - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-dm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-sk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-zddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-zdsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-dmsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-pkzddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-dgzddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-zddmsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-pkdgzddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-pkzddmsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.1_unseen-dgzddmsk_ur-0.0_exp-def_0"
+      # ── seen_ratio: 0.5 ───────────────────────────────────────────────────
+      - "clipdec-game-all_sr-0.5_unseen-zd_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-dm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-sk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-zddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-zdsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-dmsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-pkzddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-dgzddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-zddmsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-pkdgzddm_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-pkzddmsk_ur-0.0_exp-def_0"
+      - "clipdec-game-all_sr-0.5_unseen-dgzddmsk_ur-0.0_exp-def_0"
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# 총 runs: 36 encoder × 5 enum = 180 runs  (ur=0.0 고정, sr=1.0 제외)
+# train_seen_ratio / train_unseen_ratio 는 encoder.ckpt_name 에서 자동 파싱됨

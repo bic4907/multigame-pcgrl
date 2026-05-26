@@ -11,7 +11,7 @@ parameters:
   seed:
     values: [0]
   n_envs:
-    value: 600
+    value: 500
   overwrite:
     value: false
 

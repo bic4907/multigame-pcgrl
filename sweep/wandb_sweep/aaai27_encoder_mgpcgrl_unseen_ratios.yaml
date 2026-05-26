@@ -1,0 +1,38 @@
+program: train_clip_decoder.py
+project: aaai27_encoder_mgpcgrl_unseen_ratios
+method: grid
+metric:
+  goal: minimize
+  name: val/loss
+parameters:
+  game:
+    value: 'all'
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios'
+  unseen_ratio:
+    values: [0.0, 0.1, 0.5, 1.0]
+  unseen_games:
+    values:
+      # 1 unseen game
+      - 'zd'
+      - 'dm'
+      - 'sk'
+      # 2 unseen games
+      - 'zddm'
+      - 'zdsk'
+      - 'dmsk'
+      # 3 unseen games
+      - 'pkzddm'
+      - 'dgzddm'
+      - 'zddmsk'
+      # 4 unseen games
+      - 'pkdgzddm'
+      - 'pkzddmsk'
+      - 'dgzddmsk'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# 총 runs: 4 ur × 12 unseen_games = 48 runs

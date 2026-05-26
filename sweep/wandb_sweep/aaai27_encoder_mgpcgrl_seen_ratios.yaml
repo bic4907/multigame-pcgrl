@@ -1,0 +1,41 @@
+program: train_clip_decoder.py
+project: aaai27_encoder_mgpcgrl_seen_ratios
+method: grid
+metric:
+  goal: minimize
+  name: val/loss
+parameters:
+  game:
+    value: 'all'
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios'
+  unseen_ratio:
+    value: 0.0
+  seen_ratio:
+    values: [0.0, 0.1, 0.5]
+  unseen_games:
+    values:
+      # 1 unseen game
+      - 'zd'
+      - 'dm'
+      - 'sk'
+      # 2 unseen games
+      - 'zddm'
+      - 'zdsk'
+      - 'dmsk'
+      # 3 unseen games
+      - 'pkzddm'
+      - 'dgzddm'
+      - 'zddmsk'
+      # 4 unseen games
+      - 'pkdgzddm'
+      - 'pkzddmsk'
+      - 'dgzddmsk'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# 총 runs: 3 sr × 12 unseen_games = 36 runs  (ur=0.0 고정, sr=1.0 제외)
+# 결과 ckpt 경로: saves_dir/{clipdec-game-all_sr-{sr}_unseen-{abbr}_ur-0.0_exp-def_0}/ckpts

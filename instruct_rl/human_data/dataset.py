@@ -11,6 +11,7 @@ import glob
 from PIL import Image
 
 from instruct_rl.utils.level_processing_utils import add_coord_channel_batch, map2onehot_batch
+from dataset.multigame.tile_utils import NUM_CATEGORIES
 
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
 logger = logging.getLogger(basename(__file__))
@@ -67,7 +68,7 @@ class DatasetManager:
             output = output.squeeze(axis=1)
 
         if coord_channel:
-            output = map2onehot_batch(output)
+            output = map2onehot_batch(output, num_classes=NUM_CATEGORIES)
             output = add_coord_channel_batch(output)
         return output
 

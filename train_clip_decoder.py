@@ -871,8 +871,6 @@ def train_and_evaluate_ratio(
     cond_norm_min: dict,
     cond_norm_max: dict,
     ratio: float,
-    ratio_idx: int,
-    total_ratios: int,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, Dict[str, np.ndarray]], Dict[int, float]]:
     """하나의 few-shot ratio에 대해 모델을 처음부터 학습하고 평가한다.
 
@@ -1546,8 +1544,6 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             cond_norm_min=cond_norm_min,
             cond_norm_max=cond_norm_max,
             ratio=ratio,
-            ratio_idx=0,
-            total_ratios=1,
         )
 
         # W&B 로깅

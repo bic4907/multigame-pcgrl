@@ -17,7 +17,8 @@ CSV(all_checkpoints.csv)로부터 시각화 플롯을 생성한다.
 """
 from __future__ import annotations
 
-import os  # noqa: F401import sys
+import os  # noqa: F401
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional

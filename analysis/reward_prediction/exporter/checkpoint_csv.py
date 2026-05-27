@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 import numpy as np
-import yaml
 
 # 프로젝트 루트가 sys.path에 없으면 추가
 _ROOT = Path(__file__).resolve().parents[4]
@@ -43,8 +42,7 @@ logger = get_logger(__file__)
 class ExportConfig:
     """pipeline.py 에서 export 단계를 구성하는 파라미터."""
 
-    sweep_yaml: Path = Path("sweep/wandb_sweep/train_mgpcgrl_unseen.yaml")
-    ckpt_dir_override: str | None = None
+    ckpt_dir: str = "/mnt/nas/mgpcgrl_encoder_unseen"
     output_dir: Path = Path("results/mgpcgrl_reward_pred_csv")
     dataset_game: str = "all"
     dataset_reward_enum: Any = "all"   # "all" | int | str
@@ -75,20 +73,18 @@ def _to_number_or_str(value: str) -> Any:
         return value
 
 
-def _load_sweep_checkpoint_list(sweep_yaml_path: Path) -> Tuple[str, List[str]]:
-    """wandb sweep yaml에서 encoder.ckpt_dir, encoder.ckpt_name 목록 파싱."""
-    with sweep_yaml_path.open("r", encoding="utf-8") as f:
-        sweep = yaml.safe_load(f)
+def _scan_checkpoint_dir(ckpt_dir: str) -> List[str]:
+    """ckpt_dir 내의 유효한 체크포인트 이름 목록 반환.
 
-    params = sweep.get("parameters", {})
-    ckpt_dir = params.get("encoder.ckpt_dir", {}).get("value")
-    ckpt_names = params.get("encoder.ckpt_name", {}).get("values", [])
-
-    if not ckpt_dir:
-        raise ValueError(f"`encoder.ckpt_dir` missing in sweep yaml: {sweep_yaml_path}")
-    if not ckpt_names:
-        raise ValueError(f"`encoder.ckpt_name.values` missing in sweep yaml: {sweep_yaml_path}")
-    return str(ckpt_dir), [str(x) for x in ckpt_names]
+    유효 체크포인트 = <ckpt_dir>/<name>/ckpts/ 디렉토리가 존재하는 것.
+    """
+    root = Path(ckpt_dir)
+    if not root.is_dir():
+        raise FileNotFoundError(f"ckpt_dir 를 찾을 수 없습니다: {root}")
+    names = sorted(p.name for p in root.iterdir() if p.is_dir() and (p / "ckpts").is_dir())
+    if not names:
+        raise ValueError(f"유효한 체크포인트(ckpts/ 포함 서브디렉토리)가 없습니다: {root}")
+    return names
 
 
 def _canonical_game_name(game: str) -> str:
@@ -332,11 +328,10 @@ def run_export(cfg: ExportConfig) -> ExportConfig:
     """
     _log_nas_mount_status()
 
-    ckpt_dir_from_yaml, ckpt_names = _load_sweep_checkpoint_list(cfg.sweep_yaml)
-    ckpt_dir = cfg.ckpt_dir_override or ckpt_dir_from_yaml
+    ckpt_dir = str(cfg.ckpt_dir)
+    ckpt_names = _scan_checkpoint_dir(ckpt_dir)
     ckpt_names = _iter_checkpoints(ckpt_names, cfg.max_checkpoints)
 
-    logger.info("Sweep YAML       : %s", cfg.sweep_yaml)
     logger.info("Checkpoint dir   : %s", ckpt_dir)
     logger.info("Checkpoint count : %d", len(ckpt_names))
     logger.info("dataset_game     : %s", cfg.dataset_game)

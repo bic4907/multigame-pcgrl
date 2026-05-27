@@ -5,9 +5,9 @@ MGPCGRL 보상 예측 분석 End-to-End 파이프라인.
 
 단계
 ----
-1. [Export]     체크포인트 inference → CSV 파일 생성
+1. [export]     체크포인트 inference → CSV 파일 생성
                 (exporter.checkpoint_csv.run_export)
-2. [Visualize]  CSV → 시각화 플롯 생성
+2. [visualize]  CSV → 시각화 플롯 생성
                 (visualizer.plots.run_visualize)
 
 실행 예시
@@ -16,14 +16,15 @@ MGPCGRL 보상 예측 분석 End-to-End 파이프라인.
     python analysis/reward_prediction/pipeline.py
 
     # export 만
-    python analysis/reward_prediction/pipeline.py --skip-visualize
+    python analysis/reward_prediction/pipeline.py --steps export
 
     # 이미 생성된 CSV로 visualize 만
-    python analysis/reward_prediction/pipeline.py --skip-export \\
+    python analysis/reward_prediction/pipeline.py --steps visualize \
         --all-csv results/mgpcgrl_reward_pred_csv/all_checkpoints.csv
 
-    # 일부 체크포인트만 (테스트)
-    python analysis/reward_prediction/pipeline.py --max-checkpoints 3
+    # 커스텀 체크포인트 디렉토리 + 일부만 (테스트)
+    python analysis/reward_prediction/pipeline.py \
+        --ckpt-dir /mnt/nas/mgpcgrl_encoder_unseen --max-checkpoints 3
 """
 from __future__ import annotations
 
@@ -41,6 +42,8 @@ from instruct_rl.utils.log_utils import get_logger, suppress_jax_debug_logs
 
 suppress_jax_debug_logs()
 logger = get_logger(__file__)
+
+_VALID_STEPS = {"export", "visualize"}
 
 
 # ─────────────────────────────────────────────────────────
@@ -68,31 +71,23 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # --- 단계 선택 ---
-    step_grp = p.add_argument_group("Pipeline steps")
-    step_grp.add_argument(
-        "--skip-export",
-        action="store_true",
-        help="Export 단계를 건너뛴다 (기존 CSV 사용).",
-    )
-    step_grp.add_argument(
-        "--skip-visualize",
-        action="store_true",
-        help="Visualize 단계를 건너뛴다.",
+    p.add_argument(
+        "--steps",
+        type=str,
+        default="export,visualize",
+        help=(
+            "실행할 단계를 쉼표로 지정. 가능한 값: export, visualize. "
+            "예: --steps export  /  --steps visualize  /  --steps export,visualize"
+        ),
     )
 
     # --- Export 옵션 ---
     exp_grp = p.add_argument_group("Export options")
     exp_grp.add_argument(
-        "--sweep-yaml",
-        type=Path,
-        default=Path("sweep/wandb_sweep/train_mgpcgrl_unseen.yaml"),
-        help="WandB sweep yaml (encoder.ckpt_dir / ckpt_name 목록).",
-    )
-    exp_grp.add_argument(
-        "--ckpt-dir-override",
+        "--ckpt-dir",
         type=str,
-        default=None,
-        help="sweep yaml의 encoder.ckpt_dir 를 덮어씀.",
+        default="/mnt/nas/mgpcgrl/mgpcgrl_encoder_unseen",
+        help="체크포인트 루트 디렉토리. <ckpt_dir>/<name>/ckpts/ 구조를 자동 스캔.",
     )
     exp_grp.add_argument("--dataset-game", type=str, default="all")
     exp_grp.add_argument(
@@ -117,7 +112,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--max-checkpoints",
         type=int,
         default=0,
-        help="0 = sweep yaml 전체 체크포인트 사용",
+        help="0 = ckpt_dir 내 전체 체크포인트 사용",
     )
     exp_grp.add_argument(
         "--fail-on-missing",
@@ -143,6 +138,16 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _parse_steps(steps_str: str) -> set[str]:
+    steps = {s.strip().lower() for s in steps_str.split(",") if s.strip()}
+    invalid = steps - _VALID_STEPS
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            f"알 수 없는 step: {invalid}. 가능한 값: {_VALID_STEPS}"
+        )
+    return steps
+
+
 # ─────────────────────────────────────────────────────────
 # 단계별 실행 함수
 # ─────────────────────────────────────────────────────────
@@ -153,8 +158,7 @@ def _run_export_stage(args: argparse.Namespace) -> Path:
     from exporter.checkpoint_csv import _to_number_or_str
 
     cfg = ExportConfig(
-        sweep_yaml=args.sweep_yaml,
-        ckpt_dir_override=args.ckpt_dir_override,
+        ckpt_dir=args.ckpt_dir,
         output_dir=args.output_dir,
         dataset_game=args.dataset_game,
         dataset_reward_enum=_to_number_or_str(args.dataset_reward_enum),
@@ -190,27 +194,39 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
-    if args.skip_export and args.skip_visualize:
-        parser.error("--skip-export 와 --skip-visualize 를 동시에 지정할 수 없습니다.")
+    try:
+        steps = _parse_steps(args.steps)
+    except argparse.ArgumentTypeError as e:
+        parser.error(str(e))
+
+    if not steps:
+        parser.error("--steps 에 최소 하나의 단계를 지정해야 합니다. (export / visualize)")
+
+    run_export = "export" in steps
+    run_visualize = "visualize" in steps
 
     all_csv: Optional[Path] = args.all_csv
+    ordered_steps = [s for s in ["export", "visualize"] if s in steps]
+    total = len(ordered_steps)
 
-    # ── Step 1: Export ──
-    if not args.skip_export:
+    # ── Step: Export ──
+    if run_export:
+        n = ordered_steps.index("export") + 1
         logger.info("=" * 60)
-        logger.info("STEP 1/2 : Export — checkpoint inference → CSV")
+        logger.info("STEP %d/%d : Export — checkpoint inference → CSV", n, total)
         logger.info("=" * 60)
         all_csv = _run_export_stage(args)
     else:
-        logger.info("STEP 1/2 : Export  [SKIPPED]")
+        logger.info("STEP export  [SKIPPED]")
         if all_csv is None:
             all_csv = args.output_dir / "all_checkpoints.csv"
         logger.info("Using CSV: %s", all_csv)
 
-    # ── Step 2: Visualize ──
-    if not args.skip_visualize:
+    # ── Step: Visualize ──
+    if run_visualize:
+        n = ordered_steps.index("visualize") + 1
         logger.info("=" * 60)
-        logger.info("STEP 2/2 : Visualize — CSV → plots")
+        logger.info("STEP %d/%d : Visualize — CSV → plots", n, total)
         logger.info("=" * 60)
         if all_csv is None or not Path(all_csv).is_file():
             logger.error(
@@ -221,11 +237,10 @@ def main() -> None:
             sys.exit(1)
         _run_visualize_stage(Path(all_csv), args)
     else:
-        logger.info("STEP 2/2 : Visualize  [SKIPPED]")
+        logger.info("STEP visualize  [SKIPPED]")
 
     logger.info("Pipeline complete.")
 
 
 if __name__ == "__main__":
     main()
-

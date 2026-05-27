@@ -161,8 +161,8 @@ def plot_scatter_by_game_and_split(
     ]
     fig.legend(handles=handles, title="Game", fontsize=9, title_fontsize=9,
                loc="lower center", ncol=len(cfg.games),
-               bbox_to_anchor=(0.5, -0.08), framealpha=0.8)
-    plt.tight_layout(rect=(0.0, 0.05, 1.0, 0.95))
+               bbox_to_anchor=(0.5, -0.12), framealpha=0.8)
+    plt.tight_layout(rect=(0.0, 0.7, 1.0, 0.95))
     plt.subplots_adjust(wspace=0.25)
 
     out = cfg.output_dir / f"scatter_by_game_{split}.png"

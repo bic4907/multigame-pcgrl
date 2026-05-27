@@ -1092,8 +1092,8 @@ def train_and_evaluate_ratio(
                         selected_reg_per_enum[e] = float(epoch_per_enum_reg_raw[e] / epoch_per_enum_cnt[e])
                     total_reg_sum += selected_reg_per_enum[e] * float(epoch_per_enum_cnt[e])
                     total_reg_cnt += float(epoch_per_enum_cnt[e])
-            else:
-                selected_reg_per_enum[e] = float(np.nan)
+                else:
+                    selected_reg_per_enum[e] = float(np.nan)
 
             overall_reg = float(total_reg_sum / total_reg_cnt) if total_reg_cnt > 0 else float(np.nan)
             wandb.log(
@@ -1181,6 +1181,33 @@ def _get_game_color(game: str, color_map: Optional[Dict[str, str]] = None, fallb
         "#393b79", "#637939", "#8c6d31", "#843c39", "#8c564b",
     ]
     return fallback_colors[fallback_seed % len(fallback_colors)]
+
+
+def _compute_scatter_trendline(
+    x: np.ndarray,
+    y: np.ndarray,
+) -> Tuple[float, float, float]:
+    """Return (r, slope, intercept) for finite (x, y) pairs.
+
+    If not enough finite pairs exist, returns NaN values.
+    """
+    x_arr = np.asarray(x, dtype=float).reshape(-1)
+    y_arr = np.asarray(y, dtype=float).reshape(-1)
+    finite_mask = np.isfinite(x_arr) & np.isfinite(y_arr)
+    x_arr = x_arr[finite_mask]
+    y_arr = y_arr[finite_mask]
+
+    if x_arr.size < 2 or y_arr.size < 2:
+        return float("nan"), float("nan"), float("nan")
+    if np.std(x_arr) < 1e-12 or np.std(y_arr) < 1e-12:
+        return float("nan"), float("nan"), float("nan")
+
+    try:
+        r = float(np.corrcoef(x_arr, y_arr)[0, 1])
+        slope, intercept = np.polyfit(x_arr, y_arr, 1)
+    except Exception:
+        return float("nan"), float("nan"), float("nan")
+    return r, float(slope), float(intercept)
 
 
 def create_fewshot_plot(
@@ -1306,10 +1333,20 @@ def create_scatter_plots(
         lo = float(min(target.min(), pred.min())) if len(pred) else 0.0
         hi = float(max(target.max(), pred.max())) if len(pred) else 1.0
         ax.plot([lo, hi], [lo, hi], linestyle="--", color="#888", linewidth=1)
+        r, slope, intercept = _compute_scatter_trendline(target, pred)
+        if np.isfinite(r):
+            ax.plot(
+                [lo, hi],
+                [slope * lo + intercept, slope * hi + intercept],
+                linestyle="-",
+                color="#1b9e77",
+                linewidth=1,
+            )
 
         name = _REWARD_ENUM_NAMES.get(int(e), f"enum_{e}")
         mae = float(np.mean(np.abs(pred - target))) if len(pred) else float("nan")
-        ax.set_title(f"{name}\nMAE={mae:.4f}", fontsize=8)
+        r_txt = f"{r:.4f}" if np.isfinite(r) else "nan"
+        ax.set_title(f"{name}\nMAE={mae:.4f} | r={r_txt}", fontsize=8)
         ax.set_xlabel("target", fontsize=7)
         ax.set_ylabel("pred", fontsize=7)
         ax.tick_params(labelsize=6)
@@ -1398,10 +1435,20 @@ def create_regression_scatter_plots_per_enum(
         lo = float(min(target.min(), pred.min()))
         hi = float(max(target.max(), pred.max()))
         ax.plot([lo, hi], [lo, hi], linestyle="--", color="#888", linewidth=1)
+        r, slope, intercept = _compute_scatter_trendline(target, pred)
+        if np.isfinite(r):
+            ax.plot(
+                [lo, hi],
+                [slope * lo + intercept, slope * hi + intercept],
+                linestyle="-",
+                color="#1b9e77",
+                linewidth=1,
+            )
 
         name = _REWARD_ENUM_NAMES.get(int(e), f"enum_{e}")
         mae = float(np.mean(np.abs(pred - target)))
-        ax.set_title(f"{name} | MAE={mae:.4f}", fontsize=8)
+        r_txt = f"{r:.4f}" if np.isfinite(r) else "nan"
+        ax.set_title(f"{name}\\nMAE={mae:.4f} | r={r_txt}", fontsize=8)
         ax.set_xlabel("target", fontsize=7)
         ax.set_ylabel("pred", fontsize=7)
         ax.tick_params(labelsize=6)
@@ -1559,24 +1606,12 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
 
         # ── Scatter plots (최대 포인트 개수 제한) ──
         max_pts = int(getattr(config, "n_max_points", 1000))
-        scatter_norm_path = create_scatter_plots(
-            scatter_data, out_dir=config.exp_dir,
-            max_points=max_pts, seed=config.seed, space="norm",
-        )
-        regression_scatter_norm_paths = create_regression_scatter_plots_per_enum(
-            scatter_data, out_dir=config.exp_dir,
-            max_points=max_pts, seed=config.seed, space="norm",
-        )
         regression_scatter_paths = create_regression_scatter_plots_per_enum(
             scatter_data, out_dir=config.exp_dir,
             max_points=max_pts, seed=config.seed, space="raw",
         )
         if wandb.run is not None:
             wb_imgs = {}
-            if scatter_norm_path:
-                wb_imgs["regression_scatter_norm"] = wandb.Image(scatter_norm_path)
-            for e, path in regression_scatter_norm_paths.items():
-                wb_imgs[f"regression_scatter_norm/enum_{int(e)}"] = wandb.Image(path)
             for e, path in regression_scatter_paths.items():
                 wb_imgs[f"regression_scatter/enum_{int(e)}"] = wandb.Image(path)
             if wb_imgs:

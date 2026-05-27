@@ -857,7 +857,7 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # ── loss 가중치 ──
     contrastive_weight: float = 1.0    # contrastive loss 가중치
     cls_weight: float = 1.0            # reward_enum 분류 loss 가중치
-    reg_weight: float = 0.1            # condition 회귀 loss 가중치
+    reg_weight: float = 1.0            # condition 회귀 loss 가중치
 
     # ── regression loss 종류 ──
     # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
@@ -879,6 +879,15 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # ── Step 기반 체크포인트 / 평가 주기 ──
     ckpt_freq: int = 1000   # 체크포인트 저장 주기 (steps, 0이면 비활성)
     scatter_freq: int = 500  # scatter plot 업로드 주기 (epochs, 0/음수면 비활성)
+
+    # ── Unseen 게임 전용 로깅 주기 ──
+    unseen_eval_freq: int = 100    # unseen regression 메트릭 로깅 주기 (epochs, 0이면 비활성)
+    unseen_scatter_freq: int = 500  # unseen scatter plot 로깅 주기 (epochs, 0이면 비활성)
+
+    # ── Unseen 평가 데이터 비율 ──
+    # unseen_ratio  : 학습 데이터에 흘러들어가는 unseen 게임 데이터 비율 (train pool 기준)
+    # eval_unseen_ratio : unseen_eval_freq 평가에 사용할 unseen test set 비율 (0.0~1.0, 1.0=전체)
+    eval_unseen_ratio: float = 1.0
 
 
 @dataclass

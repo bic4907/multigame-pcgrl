@@ -42,41 +42,69 @@ def _enc_str(encoder_config) -> str:
     return f'_enc-{h}'
 
 
-def _mgpcgrl_enc_str(config) -> str:
-    """MGPCGRL 전용: config 파라미터(unseen_abbr, unseen_ratio, seen_ratio)로 경로 suffix 생성.
+def _to_pstr(v: float) -> str:
+    """0.05 → '0p05', 1.0 → '1' 형태로 변환."""
+    return f"{v:g}".replace('.', 'p')
+
+
+def _build_unseen_suffix(un_abbr, ur, sr) -> str:
+    """un_abbr/ur/sr → '_un-XX_ur-YY_sr-ZZ' 형태 suffix.
+
+    모두 None/empty 이면 빈 문자열을 반환한다 (unseen 정보가 없으면 생략).
+    """
+    parts = []
+    if un_abbr:
+        parts.append(f'un-{un_abbr}')
+    if ur is not None:
+        parts.append(f'ur-{_to_pstr(ur)}')
+    if sr is not None:
+        parts.append(f'sr-{_to_pstr(sr)}')
+    return ('_' + '_'.join(parts)) if parts else ''
+
+
+def _parse_unseen_from_ckpt(ckpt_name: str):
+    """encoder ckpt 이름에서 (un_abbr, ur, sr) 추출. 없으면 None."""
+    if not ckpt_name:
+        return None, None, None
+    import re
+    m_abbr = re.search(r'_unseen-([^_]+)_', ckpt_name)
+    m_ur   = re.search(r'_ur-([\d.]+)_', ckpt_name)
+    m_sr   = re.search(r'_sr-([\d.]+)_', ckpt_name)
+    return (
+        m_abbr.group(1) if m_abbr else None,
+        float(m_ur.group(1)) if m_ur else None,
+        float(m_sr.group(1)) if m_sr else None,
+    )
+
+
+
+def _unseen_suffix(config) -> str:
+    """공통 unseen suffix 빌더 (VIPCGRL / MGPCGRL 공용).
 
     우선순위:
-      1. config.train_unseen_abbr / config.train_unseen_ratio / config.train_seen_ratio (명시 파라미터)
-      2. config.reward_seen_games + config.dataset_seen_ratio 에서 자동 계산
-      3. 폴백: encoder ckpt 해시
-    """
-    def _to_pstr(v: float) -> str:
-        s = f"{v:g}"            # e.g. 0.05 → "0.05", 1.0 → "1"
-        return s.replace('.', 'p')
+      1. config.train_unseen_abbr / config.train_unseen_ratio / config.train_seen_ratio (명시 파라미터, MGPCGRL only)
+      2. config.encoder.ckpt_name 에서 파싱 (VIPCGRL / MGPCGRL 공통)
+      3. config.reward_seen_games 에서 자동 계산 (un_abbr only, MGPCGRL only)
 
-    # ── 1. 명시 파라미터 우선 ────────────────────────────────────────────────
+    unseen 정보가 전혀 없으면 빈 문자열을 반환한다 (suffix 생략).
+    형식: '_un-XX_ur-YY_sr-ZZ'
+    """
+    # ── 1. 명시 파라미터 (MGPCGRL config 에만 존재) ──────────────────────────
     un_abbr = getattr(config, 'train_unseen_abbr', None)   # e.g. "zd"
     ur      = getattr(config, 'train_unseen_ratio', None)  # e.g. 0.05
     sr      = getattr(config, 'train_seen_ratio', None)    # e.g. 1.0
 
-    # ── 2. encoder.ckpt_name 에서 파싱 ─────────────────────────────────────
-    # ur 실험 패턴: clipdec-game-all_unseen-{abbr}_ur-{ratio}_exp-def_{seed}
-    # sr 실험 패턴: clipdec-game-all_sr-{sr}_unseen-{abbr}_ur-{ratio}_exp-def_{seed}
+    # ── 2. encoder.ckpt_name 에서 파싱 ──────────────────────────────────────
     if un_abbr is None or ur is None or sr is None:
-        import re
-        ckpt_name = getattr(getattr(config, 'encoder', None), 'ckpt_name', None) or ""
-        if ckpt_name:
-            m_abbr = re.search(r'_unseen-([^_]+)_', ckpt_name)
-            m_ur   = re.search(r'_ur-([\d.]+)_', ckpt_name)
-            m_sr   = re.search(r'_sr-([\d.]+)_', ckpt_name)
-            if un_abbr is None and m_abbr:
-                un_abbr = m_abbr.group(1)
-            if ur is None and m_ur:
-                ur = float(m_ur.group(1))
-            if sr is None and m_sr:
-                sr = float(m_sr.group(1))
+        enc_cfg = getattr(config, 'encoder', None)
+        ckpt_name = (getattr(enc_cfg, 'ckpt_name', None)
+                     or getattr(enc_cfg, 'ckpt_path', None) or "")
+        c_un, c_ur, c_sr = _parse_unseen_from_ckpt(ckpt_name)
+        if un_abbr is None: un_abbr = c_un
+        if ur is None:      ur      = c_ur
+        if sr is None:      sr      = c_sr
 
-    # ── 3. reward_seen_games + dataset_seen_ratio 에서 자동 계산 ────────────
+    # ── 3. reward_seen_games 에서 자동 계산 (un_abbr only, MGPCGRL fallback) ─
     if un_abbr is None:
         seen_games = getattr(config, 'reward_seen_games', []) or []
         if seen_games:
@@ -93,16 +121,8 @@ def _mgpcgrl_enc_str(config) -> str:
                         seen_abbrs.add(abbr)
                 un_abbr = ''.join(abbr_parts)
 
-    if ur is None:
-        return '_ur-unknown'
-
-    parts = []
-    if un_abbr:
-        parts.append(f'un-{un_abbr}')
-    parts.append(f'ur-{_to_pstr(ur)}')
-    if sr is not None:
-        parts.append(f'sr-{_to_pstr(sr)}')
-    return '_' + '_'.join(parts)
+    # unseen 정보가 전혀 없으면 suffix 생략
+    return _build_unseen_suffix(un_abbr, ur, sr)
 
 
 def get_exp_group(config) -> str:
@@ -147,11 +167,12 @@ def get_exp_group(config) -> str:
     # MGPCGRL: explicit param-based path (un-XX / ur-XX / sr-XX)
     if hasattr(config, 'decoder'):
         rdm = getattr(config, 'reward_decoder_mode', 'unseen')
-        enc = _mgpcgrl_enc_str(config)
+        enc = _unseen_suffix(config)
         return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{enc}'
 
-    # VIPCGRL: encoder ckpt hash suffix
-    enc = _enc_str(config.encoder)
+    # VIPCGRL: encoder ckpt 이름에서 unseen 정보 파싱해 suffix 추가 (MGPCGRL 와 동일 규칙).
+    # unseen 정보가 없으면 suffix 생략.
+    enc = _unseen_suffix(config)
     if getattr(config, 'use_clip', False):
         return f'vipcgrl_game-{game}{re_s}{exp_s}{enc}'
 

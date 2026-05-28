@@ -276,6 +276,9 @@ class IPCGRLConfig(CPCGRLConfig):
 
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
+    # BERT 기반이므로 기본값은 False (CLIPTrainConfig/IPCGRLEncoderMGConfig 와 맞출 것)
+    prepend_game_desc: bool = True
+
     wandb_project: Optional[str] = f'{PREFIX}train_ipcgrl'
 
 
@@ -310,6 +313,9 @@ class VIPCGRLConfig(CPCGRLConfig):
     # (full name 리스트, e.g. ["dungeon", "doom", "zelda"]). 비어있지 않으면
     # train_setting.json에 seen/unseen split이 기록되어 WandB 로깅에 사용된다.
     reward_seen_games: List[str] = field(default_factory=list)
+
+    # instruction 앞에 게임 설명 prefix를 붙일지 여부 (encoder 학습과 동일하게 맞춰야 함)
+    prepend_game_desc: bool = True
 
 
 @dataclass

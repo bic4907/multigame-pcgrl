@@ -437,17 +437,27 @@ def _build_reward_and_condition_with_decoder(
     return reward_i, condition
 
 
-def _tokenize_texts(sample_list, encoder_config):
+def _tokenize_texts(sample_list, encoder_config, prepend_game_desc: bool = False):
     """샘플 리스트에서 CLIP 토크나이저로 input_ids / attention_mask 를 반환한다."""
     from transformers import CLIPProcessor
+    import random as _random
 
     model_name = "openai/clip-vit-base-patch32"
     processor = CLIPProcessor.from_pretrained(model_name)
 
+    # prepend_game_desc 정의를 인코더 학습 코드와 공유
+    from encoder.data.clip_batch import _prepend_game_desc
+
+    # 재현성을 위해 고정 시드로 rng 생성
+    _rng = _random.Random(42)
+
     texts, has_text = [], []
     for sample in sample_list:
         if sample.instruction is not None and len(sample.instruction.strip()) > 0:
-            texts.append(sample.instruction)
+            inst = sample.instruction
+            if prepend_game_desc and getattr(sample, "game", None):
+                inst = _prepend_game_desc(inst, sample.game, _rng)
+            texts.append(inst)
             has_text.append(True)
         else:
             texts.append("")
@@ -614,11 +624,14 @@ def _checkpoint_signature_for_cache(variables) -> str:
         return "unknown"
 
 
-def _build_clip_embedding_cache_path(sample_list, *, ckpt_signature: str) -> tuple[str, Path]:
+def _build_clip_embedding_cache_path(
+    sample_list, *, ckpt_signature: str, prepend_game_desc: bool = False
+) -> tuple[str, Path]:
     """CLIP 임베딩 캐시 키와 저장 경로를 생성한다."""
     hasher = hashlib.sha256()
     hasher.update(b"clip-latent-embedding-cache-v2")
     hasher.update(f"|ckpt_signature={ckpt_signature}".encode("utf-8"))
+    hasher.update(f"|prepend_game_desc={prepend_game_desc}".encode("utf-8"))
 
     for sample in sample_list:
         hasher.update(f"|game={getattr(sample, 'game', '')}".encode("utf-8"))
@@ -770,9 +783,11 @@ def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None
         variables = _restore_encoder_checkpoint(encoder_config, variables)
 
     ckpt_signature = _checkpoint_signature_for_cache(variables)
+    _prepend_game_desc_flag = getattr(config, "prepend_game_desc", False)
     cache_key, cache_path = _build_clip_embedding_cache_path(
         sample_list,
         ckpt_signature=ckpt_signature,
+        prepend_game_desc=_prepend_game_desc_flag,
     )
     if cache_path.exists():
         try:
@@ -814,7 +829,10 @@ def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None
         module is not None and variables is not None,
     )
 
-    input_ids, attention_mask, has_text = _tokenize_texts(sample_list, encoder_config)
+    _prepend_game_desc_flag = getattr(config, "prepend_game_desc", False)
+    input_ids, attention_mask, has_text = _tokenize_texts(
+        sample_list, encoder_config, prepend_game_desc=_prepend_game_desc_flag
+    )
     clip_embeddings = _encode_texts_batched(module, variables, input_ids, attention_mask)
     result = _postprocess_embeddings(clip_embeddings, has_text, nlp_input_dim)
 

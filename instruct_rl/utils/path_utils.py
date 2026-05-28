@@ -51,13 +51,14 @@ def _build_unseen_suffix(un_abbr, ur, sr) -> str:
     """un_abbr/ur/sr → '_un-XX_ur-YY_sr-ZZ' 형태 suffix.
 
     모두 None/empty 이면 빈 문자열을 반환한다 (unseen 정보가 없으면 생략).
+    sr == 1.0 이면 실험명에 포함하지 않는다.
     """
     parts = []
     if un_abbr:
         parts.append(f'un-{un_abbr}')
     if ur is not None:
         parts.append(f'ur-{_to_pstr(ur)}')
-    if sr is not None:
+    if sr is not None and sr != 1.0:
         parts.append(f'sr-{_to_pstr(sr)}')
     return ('_' + '_'.join(parts)) if parts else ''
 

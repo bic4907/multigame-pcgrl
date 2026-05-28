@@ -11,7 +11,7 @@ parameters:
   seed:
     values: [0]
   n_envs:
-    value: 600
+    value: 500
   overwrite:
     value: false
   encoder.ckpt_dir:
@@ -53,10 +53,10 @@ parameters:
       "clipdec-game-all_unseen-pkzddmsk_ur-0.0_exp-def_0",
       "clipdec-game-all_unseen-dgzddmsk_ur-0.0_exp-def_0",
     ]
+  game_setting_mode:
+    value: 'encoder_seen'
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_oracle'
-  reward_decoder_mode:
-    value: 'noop'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_encoderseen'
 command:
   - ${interpreter}
   - ${program}

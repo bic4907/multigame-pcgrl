@@ -3,6 +3,7 @@ import logging
 import gymnax
 import jax
 import yaml
+import uuid
 from os.path import basename, dirname
 
 from conf.config import Config, EncoderConfig
@@ -129,6 +130,10 @@ def get_exp_dir(config):
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
+    if getattr(config, 'random_exp_name', False):
+        config.exp_name = uuid.uuid4().hex[:8]
+        logger.info('Generated random experiment name: %s', config.exp_name)
+
     if config.aug_type is not None and config.embed_type is not None and config.instruct is not None:
         config.instruct_csv = f'{config.aug_type}/{config.embed_type}/{config.instruct}'
 
@@ -161,6 +166,10 @@ def init_config(config: Config):
 
 def init_clip_config(config: Config):
     config.n_gpus = jax.local_device_count()
+
+    if getattr(config, 'random_exp_name', False):
+        config.exp_name = uuid.uuid4().hex[:8]
+        logger.info('Generated random experiment name: %s', config.exp_name)
 
     if config.aug_type is not None and config.embed_type is not None and config.instruct is not None:
         config.instruct_csv = f'{config.aug_type}/{config.embed_type}/{config.instruct}'

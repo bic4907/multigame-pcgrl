@@ -1,4 +1,4 @@
-program: train_mgpcgrl.py
+program: eval_mgpcgrl.py
 method: grid
 metric:
   goal: minimize
@@ -8,12 +8,8 @@ parameters:
     values: ['all']
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
-  seed:
-    values: [0]
-  n_envs:
-    value: 600
-  overwrite:
-    value: false
+  reevaluate:
+    value: true
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_encoder_unseen'
   encoder.ckpt_name:
@@ -53,10 +49,10 @@ parameters:
       "clipdec-game-all_unseen-pkzddmsk_ur-0.0_exp-def_0",
       "clipdec-game-all_unseen-dgzddmsk_ur-0.0_exp-def_0",
     ]
+  game_setting_mode:
+    value: 'encoder_seen'
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_oracle'
-  reward_decoder_mode:
-    value: 'noop'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_encoderseen'
 command:
   - ${interpreter}
   - ${program}

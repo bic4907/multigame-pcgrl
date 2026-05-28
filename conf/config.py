@@ -214,7 +214,7 @@ class DecoderConfig:
 @dataclass
 class TrainConfig(Config):
     overwrite: bool = False
-    ckpt_freq: int = int(5e6)
+    ckpt_freq: int = int(4e6)
     render_freq: int = 50
     n_render_eps: int = 3
     eval_freq: int = 5000
@@ -276,6 +276,9 @@ class IPCGRLConfig(CPCGRLConfig):
 
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
+    # BERT 기반이므로 기본값은 False (CLIPTrainConfig/IPCGRLEncoderMGConfig 와 맞출 것)
+    prepend_game_desc: bool = True
+
     wandb_project: Optional[str] = f'{PREFIX}train_ipcgrl'
 
 
@@ -310,6 +313,9 @@ class VIPCGRLConfig(CPCGRLConfig):
     # (full name 리스트, e.g. ["dungeon", "doom", "zelda"]). 비어있지 않으면
     # train_setting.json에 seen/unseen split이 기록되어 WandB 로깅에 사용된다.
     reward_seen_games: List[str] = field(default_factory=list)
+
+    # instruction 앞에 게임 설명 prefix를 붙일지 여부 (encoder 학습과 동일하게 맞춰야 함)
+    prepend_game_desc: bool = True
 
 
 @dataclass
@@ -857,7 +863,7 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # ── loss 가중치 ──
     contrastive_weight: float = 1.0    # contrastive loss 가중치
     cls_weight: float = 1.0            # reward_enum 분류 loss 가중치
-    reg_weight: float = 0.1            # condition 회귀 loss 가중치
+    reg_weight: float = 1.0            # condition 회귀 loss 가중치
 
     # ── regression loss 종류 ──
     # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
@@ -875,6 +881,19 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
 
     prepend_game_desc: bool = True
     n_epochs: int = 5000
+
+    # ── Step 기반 체크포인트 / 평가 주기 ──
+    ckpt_freq: int = 1000   # 체크포인트 저장 주기 (steps, 0이면 비활성)
+    scatter_freq: int = 500  # scatter plot 업로드 주기 (epochs, 0/음수면 비활성)
+
+    # ── Unseen 게임 전용 로깅 주기 ──
+    unseen_eval_freq: int = 100    # unseen regression 메트릭 로깅 주기 (epochs, 0이면 비활성)
+    unseen_scatter_freq: int = 500  # unseen scatter plot 로깅 주기 (epochs, 0이면 비활성)
+
+    # ── Unseen 평가 데이터 비율 ──
+    # unseen_ratio  : 학습 데이터에 흘러들어가는 unseen 게임 데이터 비율 (train pool 기준)
+    # eval_unseen_ratio : unseen_eval_freq 평가에 사용할 unseen test set 비율 (0.0~1.0, 1.0=전체)
+    eval_unseen_ratio: float = 1.0
 
 
 @dataclass

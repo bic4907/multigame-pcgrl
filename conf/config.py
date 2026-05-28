@@ -493,6 +493,9 @@ class CPCGRLEvalConfig(EvalConfig):
     # True이면 체크포인트 없어도 진행 (WARNING 출력). False(기본)이면 체크포인트 없을 시 에러.
     ignore_checkpoint: bool = False
 
+    # instruction 앞에 게임 설명 prefix를 붙일지 여부 (encoder 학습과 동일하게 맞춰야 함)
+    prepend_game_desc: bool = True
+
     wandb_project: Optional[str] = f"{PREFIX}eval_cpcgrl"
 
 @dataclass
@@ -595,6 +598,7 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     # 학습 시 seen/unseen 게임 목록 — reward_decoder_config.json에서 자동 주입됨.
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
+
 
     # ── 경로 식별용 파라미터 (encoder ckpt 해시 대체) ─────────────────────────
     # train 시 MGPCGRLConfig와 동일한 값을 지정해야 exp_dir가 일치함.

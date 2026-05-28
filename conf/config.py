@@ -214,7 +214,7 @@ class DecoderConfig:
 @dataclass
 class TrainConfig(Config):
     overwrite: bool = False
-    ckpt_freq: int = int(5e6)
+    ckpt_freq: int = int(4e6)
     render_freq: int = 50
     n_render_eps: int = 3
     eval_freq: int = 5000

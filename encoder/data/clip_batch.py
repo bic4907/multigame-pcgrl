@@ -47,7 +47,7 @@ class CLIPDataset:
     is_train: np.ndarray
     reward_enum_targets: np.ndarray = None   # (N,) 0-indexed reward_enum
     condition_targets: np.ndarray = None     # (N,) condition float value
-    quantized_condition_targets: np.ndarray = None  # (N,) quantized bin index (0~3, CUSTOM_THRESHOLDS 기준)
+    quantized_condition_targets: np.ndarray = None  # (N,) quantized bin index (0~7, CUSTOM_THRESHOLDS 기준 — 8 bins)
 
 @dataclass
 class CLIPEmbedData:
@@ -340,7 +340,7 @@ class CLIPDatasetBuilder:
             threshold_key = f"{s.game}_{feature_name}"
             thresholds = CUSTOM_THRESHOLDS.get(threshold_key)
             if thresholds is not None and condition_value is not None:
-                quantized_bin = int(np.digitize(condition_value, thresholds))  # 0, 1, 2, 3
+                quantized_bin = int(np.digitize(condition_value, thresholds))  # 0~7 (8 bins)
             else:
                 quantized_bin = 0  # threshold 없는 조합은 단일 bin
 

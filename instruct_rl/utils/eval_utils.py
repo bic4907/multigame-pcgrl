@@ -64,9 +64,16 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
         logger.info(f"Loaded eval instruct from dataset: {eval_inst.reward_i.shape[0]} samples")
 
         # 샘플 메타데이터 DataFrame (game, instruction, reward_enum)
+        # instruction_prefix(name/desc/none)가 'none' 이 아닌 경우, CLIP 임베딩 계산과
+        # 동일한 seed(42)로 prefix를 적용해서 results_tb 의 instruction 컬럼이
+        # 실제로 CLIP 에 입력된 텍스트를 반영하도록 한다.
+        from instruct_rl.utils.dataset_loader_helpers.preprocessing import build_effective_instructions
+        _effective_instructions = build_effective_instructions(
+            samples, instruction_prefix=getattr(config, 'instruction_prefix', 'none')
+        )
         eval_inst_meta = pd.DataFrame({
             'game':        [s.game for s in samples],
-            'instruction': [getattr(s, 'instruction', None) for s in samples],
+            'instruction': _effective_instructions,
             'reward_enum': [s.meta.get('reward_enum', None) for s in samples],
         })
 

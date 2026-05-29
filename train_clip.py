@@ -179,8 +179,7 @@ def make_train(config: CLIPTrainConfig):
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
-            prepend_game_prefix=config.prepend_game_prefix,
-            prepend_game_desc=config.prepend_game_desc,
+            instruction_prefix=config.instruction_prefix,
             tile_offset=getattr(config.encoder, 'tile_offset', 0),
         )
 

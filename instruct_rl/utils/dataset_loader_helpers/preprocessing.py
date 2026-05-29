@@ -83,3 +83,43 @@ def preprocess_samples(samples: list, *, longtail_cut: bool = True) -> list:
         )
 
     return samples
+
+
+def build_effective_instructions(samples: list, *, instruction_prefix) -> list:
+    """samples 의 instruction 에 instruction_prefix(name/desc/none) 를 적용한 리스트를 반환한다.
+
+    instruction_prefix in {"name", "desc"} 이면 CLIP 임베딩 계산(_tokenize_texts)과
+    동일한 seed(42)로 prefix 를 적용하므로, 임베딩에 실제로 입력된 텍스트와
+    일치하는 문자열을 얻을 수 있다.
+
+    train / eval 양쪽에서 동일 함수를 사용하여 일관성을 유지한다.
+    """
+    raw = [getattr(s, 'instruction', None) for s in samples]
+
+    import random as _random
+    from encoder.data.clip_batch import (
+        apply_instruction_prefix,
+        _normalize_instruction_prefix_mode,
+    )
+
+    mode = _normalize_instruction_prefix_mode(instruction_prefix)
+    if mode == "none":
+        return raw
+
+    # _tokenize_texts 와 동일한 고정 시드(42) → 임베딩 입력 텍스트와 일치.
+    _rng = _random.Random(42)
+    result = [
+        apply_instruction_prefix(inst, s.game, _rng, mode)
+        if inst and getattr(s, 'game', None)
+        else inst
+        for inst, s in zip(raw, samples)
+    ]
+    logger.info(
+        "build_effective_instructions: instruction_prefix='%s', %d samples "
+        "(example: '%s')",
+        mode,
+        len(result),
+        result[0][:120] if result else "",
+    )
+    return result
+

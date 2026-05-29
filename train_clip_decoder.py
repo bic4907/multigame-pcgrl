@@ -457,8 +457,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             max_len=config.encoder.token_max_len,
             train_ratio=config.train_ratio,
             max_samples=config.max_samples,
-            prepend_game_prefix=config.prepend_game_prefix,
-            prepend_game_desc=config.prepend_game_desc,
+            instruction_prefix=config.instruction_prefix,
             longtail_cut=config.longtail_cut,
         )
 
@@ -1552,8 +1551,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             max_len=config.encoder.token_max_len,
             train_ratio=1.0,  # 자체 split 수행 → 빌더의 split 사용 안 함
             max_samples=config.max_samples,
-            prepend_game_prefix=config.prepend_game_prefix,
-            prepend_game_desc=config.prepend_game_desc,
+            instruction_prefix=config.instruction_prefix,
             longtail_cut=config.longtail_cut,
         )
 

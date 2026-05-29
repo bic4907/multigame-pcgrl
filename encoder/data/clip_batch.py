@@ -9,7 +9,7 @@ import logging
 from os.path import abspath, join, dirname, basename, splitext
 from tqdm import tqdm
 from functools import partial
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from transformers import CLIPProcessor
 from PIL import Image
 import random
@@ -179,6 +179,47 @@ def _prepend_game_desc(instruction: str, game: str, rng: random.Random) -> str:
     return prefix + instruction
 
 
+# ── 통합 instruction prefix dispatcher ───────────────────────────────────────
+# mode: "name" / "desc" / "none" (또는 None) — 게임 이름 prefix, 게임 설명 prefix,
+#       prefix 없음을 각각 지정한다.
+INSTRUCTION_PREFIX_MODES = ("name", "desc", "none")
+
+
+def _normalize_instruction_prefix_mode(mode) -> str:
+    if mode is None:
+        return "none"
+    s = str(mode).strip().lower()
+    if s in ("", "off", "false"):
+        return "none"
+    if s not in INSTRUCTION_PREFIX_MODES:
+        raise ValueError(
+            f"Unknown instruction_prefix mode: {mode!r} "
+            f"(expected one of {INSTRUCTION_PREFIX_MODES})"
+        )
+    return s
+
+
+def apply_instruction_prefix(
+    instruction: str, game: str, rng: random.Random, mode
+) -> str:
+    """단일 instruction 에 mode 에 따른 prefix 를 붙여 반환.
+
+    mode == "name" → _prepend_game_prefix
+    mode == "desc" → _prepend_game_desc
+    mode == "none" → instruction 그대로
+    """
+    if not instruction or not game:
+        return instruction
+    m = _normalize_instruction_prefix_mode(mode)
+    if m == "none":
+        return instruction
+    if m == "name":
+        return _prepend_game_prefix(instruction, game, rng)
+    if m == "desc":
+        return _prepend_game_desc(instruction, game, rng)
+    return instruction
+
+
 class CLIPDatasetBuilder:
     def __init__(self,
                  processor: CLIPProcessor,
@@ -187,8 +228,7 @@ class CLIPDatasetBuilder:
                  train_ratio:float=0.8,
                  max_len:int=77,
                  max_samples: int = None,
-                 prepend_game_prefix: bool = False,
-                 prepend_game_desc: bool = False,
+                 instruction_prefix: Optional[str] = "name",
                  longtail_cut: bool = True,
                  tile_offset: int = 0,
                  ):
@@ -200,8 +240,7 @@ class CLIPDatasetBuilder:
         self.train_ratio = train_ratio
         self.tile_offset = tile_offset
         self.max_samples = max_samples
-        self.prepend_game_prefix = prepend_game_prefix
-        self.prepend_game_desc = prepend_game_desc
+        self.instruction_prefix = _normalize_instruction_prefix_mode(instruction_prefix)
         self.longtail_cut = longtail_cut
 
         # Create game_name to index mapping
@@ -272,23 +311,19 @@ class CLIPDatasetBuilder:
         language_inst_list = [s.instruction for s in samples]
 
         # ── 게임 prefix 추가 (옵션) ──
-        if self.prepend_game_prefix or self.prepend_game_desc:
+        if self.instruction_prefix != "none":
             prefix_rng = random.Random(42)  # 재현 가능하도록 고정 시드
             game_list = [s.game for s in samples]
-            if self.prepend_game_desc:
-                language_inst_list = [
-                    _prepend_game_desc(inst, game, prefix_rng) if inst else inst
-                    for inst, game in zip(language_inst_list, game_list)
-                ]
-                logger.info(f"Prepended game description to {len(language_inst_list)} instructions "
-                            f"(example: '{language_inst_list[0][:100]}...')")
-            else:
-                language_inst_list = [
-                    _prepend_game_prefix(inst, game, prefix_rng) if inst else inst
-                    for inst, game in zip(language_inst_list, game_list)
-                ]
-                logger.info(f"Prepended game prefix to {len(language_inst_list)} instructions "
-                            f"(example: '{language_inst_list[0][:80]}...')")
+            language_inst_list = [
+                apply_instruction_prefix(inst, game, prefix_rng, self.instruction_prefix)
+                if inst else inst
+                for inst, game in zip(language_inst_list, game_list)
+            ]
+            logger.info(
+                f"Prepended instruction_prefix='{self.instruction_prefix}' to "
+                f"{len(language_inst_list)} instructions "
+                f"(example: '{language_inst_list[0][:100]}...')"
+            )
 
         # Extract reward annotation (game_name, reward_enum, conditions) combination
         reward_cond_list = []

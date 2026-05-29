@@ -234,6 +234,15 @@ class TrainConfig(Config):
 
     multimodal_condition: bool = False
 
+    use_embedding_cache: bool = False # TODO remove
+
+    # ── instruction prefix mode (train/eval/encoder 공통) ─────────────────
+    # "name" (기본): "In Zelda, ..." 같이 게임 이름 prefix
+    # "desc"      : "(traverse a room, fight creatures, ...) ..." 같이 게임 설명 prefix
+    # "none"/None : prefix 미적용
+    # 인코더 학습 시 사용한 값과 RL 학습/평가에서 동일해야 임베딩이 일치한다.
+    instruction_prefix: Optional[str] = "name"
+
 
 @dataclass
 class CPCGRLConfig(TrainConfig):
@@ -276,8 +285,6 @@ class IPCGRLConfig(CPCGRLConfig):
 
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
-    # BERT 기반이므로 기본값은 False (CLIPTrainConfig/IPCGRLEncoderMGConfig 와 맞출 것)
-    prepend_game_desc: bool = True
 
     wandb_project: Optional[str] = f'{PREFIX}train_ipcgrl'
 
@@ -314,8 +321,6 @@ class VIPCGRLConfig(CPCGRLConfig):
     # train_setting.json에 seen/unseen split이 기록되어 WandB 로깅에 사용된다.
     reward_seen_games: List[str] = field(default_factory=list)
 
-    # instruction 앞에 게임 설명 prefix를 붙일지 여부 (encoder 학습과 동일하게 맞춰야 함)
-    prepend_game_desc: bool = True
 
 
 @dataclass
@@ -499,8 +504,6 @@ class CPCGRLEvalConfig(EvalConfig):
     # True이면 체크포인트 없어도 진행 (WARNING 출력). False(기본)이면 체크포인트 없을 시 에러.
     ignore_checkpoint: bool = False
 
-    # instruction 앞에 게임 설명 prefix를 붙일지 여부 (encoder 학습과 동일하게 맞춰야 함)
-    prepend_game_desc: bool = True
 
     wandb_project: Optional[str] = f"{PREFIX}eval_cpcgrl"
 
@@ -791,10 +794,8 @@ class CLIPTrainConfig(Config):
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
 
-    # instruction 앞에 게임 이름 prefix를 붙일지 여부 (e.g. "In Zelda, ...")
-    prepend_game_prefix: bool = False
-    # instruction 앞에 게임 설명 prefix를 붙일지 여부 (e.g. "In a top-down dungeon adventure, ...")
-    prepend_game_desc: bool = True
+    # instruction prefix mode: "name" (e.g. "In Zelda, ...") / "desc" / "none" (또는 None)
+    instruction_prefix: Optional[str] = "name"
 
     # overwrite
     embed_type: str = "humanai"
@@ -883,7 +884,6 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # 테스트셋 분할 시드 (재현 가능)
     split_seed: int = 42
 
-    prepend_game_desc: bool = True
     n_epochs: int = 5000
 
     # ── Step 기반 체크포인트 / 평가 주기 ──
@@ -967,8 +967,8 @@ class IPCGRLEncoderMGConfig(RewardConfig):
     unseen_games: str = ""
 
     # Annotation 데이터셋 설정 (CLIPTrainConfig 와 동일한 변인 통제)
-    prepend_game_prefix: bool = False
-    prepend_game_desc: bool = True
+    # instruction_prefix mode: "name" (기본) / "desc" / "none" (또는 None)
+    instruction_prefix: Optional[str] = "name"
 
     # MLP 인코더 (apply_encoder_model 에서 model='mlp' 분기 사용)
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))

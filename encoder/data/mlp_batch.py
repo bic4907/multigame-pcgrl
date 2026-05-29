@@ -71,8 +71,10 @@ class MLPDatasetBuilder:
     train_ratio : float
     max_len : int
     max_samples : int | None
-    prepend_game_prefix : bool
-    prepend_game_desc : bool
+    prepend 옵션 (단일 instruction_prefix)
+    -------------------------------------
+    instruction_prefix : str | None
+        "name" / "desc" / "none" (또는 None) — CLIPDatasetBuilder 와 동일.
     longtail_cut : bool
 
     Parameters  (MLP 전용)
@@ -92,8 +94,7 @@ class MLPDatasetBuilder:
         train_ratio: float = 0.8,
         max_len: int = 77,
         max_samples: Optional[int] = None,
-        prepend_game_prefix: bool = False,
-        prepend_game_desc: bool = False,
+        instruction_prefix: Optional[str] = "name",
         longtail_cut: bool = True,
         tile_offset: int = 0,
         # MLP 전용
@@ -113,8 +114,7 @@ class MLPDatasetBuilder:
             train_ratio=train_ratio,
             max_len=max_len,
             max_samples=max_samples,
-            prepend_game_prefix=prepend_game_prefix,
-            prepend_game_desc=prepend_game_desc,
+            instruction_prefix=instruction_prefix,
             longtail_cut=longtail_cut,
             tile_offset=tile_offset,
         )

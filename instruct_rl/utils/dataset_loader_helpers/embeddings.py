@@ -340,9 +340,11 @@ def _build_reward_and_condition_with_decoder(
         )
 
     ckpt_signature = _checkpoint_signature_for_cache(decoder_vars)
+    _instr_prefix = _resolve_instruction_prefix(config)
     cache_key, cache_path = _build_decoder_reward_cache_path(
         sample_list,
         ckpt_signature=ckpt_signature,
+        instruction_prefix=_instr_prefix,
     )
 
     # ── Validate norm stats exist before cache check (required for denorm) ──
@@ -360,7 +362,8 @@ def _build_reward_and_condition_with_decoder(
         sorted(_ext_norm_min.keys()),
     )
 
-    if cache_path.exists():
+    _use_cache = getattr(config, "use_embedding_cache", True)
+    if _use_cache and cache_path.exists():
         try:
             cached = np.load(cache_path)
             reward_i_cached = cached["reward_i"]
@@ -437,7 +440,7 @@ def _build_reward_and_condition_with_decoder(
     return reward_i, condition
 
 
-def _tokenize_texts(sample_list, encoder_config, prepend_game_desc: bool = False):
+def _tokenize_texts(sample_list, encoder_config, instruction_prefix: str = "none"):
     """샘플 리스트에서 CLIP 토크나이저로 input_ids / attention_mask 를 반환한다."""
     from transformers import CLIPProcessor
     import random as _random
@@ -445,8 +448,8 @@ def _tokenize_texts(sample_list, encoder_config, prepend_game_desc: bool = False
     model_name = "openai/clip-vit-base-patch32"
     processor = CLIPProcessor.from_pretrained(model_name)
 
-    # prepend_game_desc 정의를 인코더 학습 코드와 공유
-    from encoder.data.clip_batch import _prepend_game_desc
+    # instruction_prefix dispatcher 를 인코더 학습 코드와 공유
+    from encoder.data.clip_batch import apply_instruction_prefix
 
     # 재현성을 위해 고정 시드로 rng 생성
     _rng = _random.Random(42)
@@ -455,8 +458,8 @@ def _tokenize_texts(sample_list, encoder_config, prepend_game_desc: bool = False
     for sample in sample_list:
         if sample.instruction is not None and len(sample.instruction.strip()) > 0:
             inst = sample.instruction
-            if prepend_game_desc and getattr(sample, "game", None):
-                inst = _prepend_game_desc(inst, sample.game, _rng)
+            if getattr(sample, "game", None):
+                inst = apply_instruction_prefix(inst, sample.game, _rng, instruction_prefix)
             texts.append(inst)
             has_text.append(True)
         else:
@@ -464,11 +467,15 @@ def _tokenize_texts(sample_list, encoder_config, prepend_game_desc: bool = False
             has_text.append(False)
 
     num_valid = sum(1 for flag in has_text if flag)
-    logger.debug(
-        "Tokenize CLIP texts: total=%d, non_empty=%d, max_len=%d",
-        len(sample_list),
+    _example = next((t for t in texts if t), "")
+    logger.info(
+        "Prepended instruction_prefix='%s' to %d instructions "
+        "(total=%d, max_len=%d, example: '%s')",
+        instruction_prefix,
         num_valid,
+        len(sample_list),
         encoder_config.token_max_len,
+        _example[:120],
     )
 
     inputs = processor(
@@ -624,14 +631,23 @@ def _checkpoint_signature_for_cache(variables) -> str:
         return "unknown"
 
 
+def _resolve_instruction_prefix(config) -> str:
+    """config에서 instruction_prefix 모드 문자열을 읽어 normalize한다.
+
+    Returns "name" / "desc" / "none" 중 하나.
+    """
+    from encoder.data.clip_batch import _normalize_instruction_prefix_mode
+    return _normalize_instruction_prefix_mode(getattr(config, "instruction_prefix", "none"))
+
+
 def _build_clip_embedding_cache_path(
-    sample_list, *, ckpt_signature: str, prepend_game_desc: bool = False
+    sample_list, *, ckpt_signature: str, instruction_prefix: str = "none"
 ) -> tuple[str, Path]:
     """CLIP 임베딩 캐시 키와 저장 경로를 생성한다."""
     hasher = hashlib.sha256()
     hasher.update(b"clip-latent-embedding-cache-v2")
     hasher.update(f"|ckpt_signature={ckpt_signature}".encode("utf-8"))
-    hasher.update(f"|prepend_game_desc={prepend_game_desc}".encode("utf-8"))
+    hasher.update(f"|instruction_prefix={instruction_prefix}".encode("utf-8"))
 
     for sample in sample_list:
         hasher.update(f"|game={getattr(sample, 'game', '')}".encode("utf-8"))
@@ -643,11 +659,16 @@ def _build_clip_embedding_cache_path(
     return cache_key, CLIP_EMBED_CACHE_DIR / f"{cache_key}.npy"
 
 
-def _build_decoder_reward_cache_path(sample_list, *, ckpt_signature: str) -> tuple[str, Path]:
+def _build_decoder_reward_cache_path(
+    sample_list, *, ckpt_signature: str, instruction_prefix: str = "none"
+) -> tuple[str, Path]:
     """디코더 reward/condition 예측 캐시 키와 저장 경로를 생성한다."""
     hasher = hashlib.sha256()
     hasher.update(b"decoder-reward-cache-v4-text-embed")
     hasher.update(f"|ckpt_signature={ckpt_signature}".encode("utf-8"))
+    # 디코더 입력은 CLIP text embedding이므로 instruction_prefix 가 바뀌면
+    # text embedding도 바뀐다 → 캐시 키에 반드시 포함해야 한다.
+    hasher.update(f"|instruction_prefix={instruction_prefix}".encode("utf-8"))
 
     for sample in sample_list:
         hasher.update(f"|game={getattr(sample, 'game', '')}".encode("utf-8"))
@@ -783,13 +804,14 @@ def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None
         variables = _restore_encoder_checkpoint(encoder_config, variables)
 
     ckpt_signature = _checkpoint_signature_for_cache(variables)
-    _prepend_game_desc_flag = getattr(config, "prepend_game_desc", False)
+    _instr_prefix = _resolve_instruction_prefix(config)
     cache_key, cache_path = _build_clip_embedding_cache_path(
         sample_list,
         ckpt_signature=ckpt_signature,
-        prepend_game_desc=_prepend_game_desc_flag,
+        instruction_prefix=_instr_prefix,
     )
-    if cache_path.exists():
+    _use_cache = getattr(config, "use_embedding_cache", True)
+    if _use_cache and cache_path.exists():
         try:
             cached = np.load(cache_path)
             expected_shape = (len(sample_list), nlp_input_dim)
@@ -829,9 +851,9 @@ def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None
         module is not None and variables is not None,
     )
 
-    _prepend_game_desc_flag = getattr(config, "prepend_game_desc", False)
+    _instr_prefix = _resolve_instruction_prefix(config)
     input_ids, attention_mask, has_text = _tokenize_texts(
-        sample_list, encoder_config, prepend_game_desc=_prepend_game_desc_flag
+        sample_list, encoder_config, instruction_prefix=_instr_prefix
     )
     clip_embeddings = _encode_texts_batched(module, variables, input_ids, attention_mask)
     result = _postprocess_embeddings(clip_embeddings, has_text, nlp_input_dim)

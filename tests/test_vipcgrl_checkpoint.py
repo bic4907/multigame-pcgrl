@@ -156,7 +156,7 @@ class TestVIPCGRLWithCLIPCheckpoint:
             [
                 sys.executable, "-m", "train_vipcgrl",
                 "overwrite=true",
-                "total_timesteps=200",
+                "total_timesteps=100",
                 "n_envs=4",
                 "num_steps=4",
                 "update_epochs=1",

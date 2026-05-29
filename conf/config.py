@@ -234,7 +234,7 @@ class TrainConfig(Config):
 
     multimodal_condition: bool = False
 
-    use_embedding_cache: bool = False # TODO remove
+    use_embedding_cache: bool = True
 
     # ── instruction prefix mode (train/eval/encoder 공통) ─────────────────
     # "name" (기본): "In Zelda, ..." 같이 게임 이름 prefix

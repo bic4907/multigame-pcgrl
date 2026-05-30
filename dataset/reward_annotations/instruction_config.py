@@ -27,33 +27,33 @@ _SUPPORTED_GAMES = ["doom", "zelda", "sokoban", "pokemon", "dungeon"]
 # None = 해당 (game, feature) 조합에 threshold 없음
 # threshold 3개 → 4 구간: 매우 적음 / 다소 적음 / 다소 많음 / 매우 많음
 CUSTOM_THRESHOLDS: Dict[str, Optional[List[float]]] = {
-    "dungeon_region":             [1.5, 4.5, 14.5],
-    "dungeon_path_length":        [23.5, 32.5, 44.5],
+    "dungeon_region":             [0.5,  1.5,  3.0,  4.5,  9.5,  14.5, 19.5],
+    "dungeon_path_length":        [17.5, 23.5, 28.0, 32.5, 38.5, 44.5, 50.5],
     "dungeon_interactable_count": None,
-    "dungeon_hazard_count":       [6.5, 10.5, 18.5],
-    "dungeon_collectable_count":  [8.5, 11.5, 15.5],
+    "dungeon_hazard_count":       [3.5,  6.5,  8.5,  10.5, 14.5, 18.5, 22.5],
+    "dungeon_collectable_count":  [5.5,  8.5,  10.0, 11.5, 13.5, 15.5, 19.5],
 
-    "doom_region":                [1.5, 2.5, 3.5],
-    "doom_path_length":           [23.5, 27.5, 30.5],
-    "doom_interactable_count":    [0.5, 3.5, 6.5],
-    "doom_hazard_count":          [1.5, 3.5, 5.5],
-    "doom_collectable_count":     [1.5, 2.5, 5.5],
+    "doom_region":                [0.5,  1.5,  2.0,  2.5,  3.0,  3.5,  4.5],
+    "doom_path_length":           [21.5, 23.5, 25.5, 27.5, 29.0, 30.5, 32.5],
+    "doom_interactable_count":    [-0.5, 0.5,  2.0,  3.5,  5.0,  6.5,  8.5],
+    "doom_hazard_count":          [0.5,  1.5,  2.5,  3.5,  4.5,  5.5,  7.5],
+    "doom_collectable_count":     [0.5,  1.5,  2.0,  2.5,  4.0,  5.5,  7.5],
 
-    "zelda_region":               [1.5, 2.5, 4.5],
-    "zelda_path_length":          [16.5, 21.5, 22.5],
-    "zelda_interactable_count":   [4.5, 8.5, 26.5],
-    "zelda_hazard_count":         [5.5, 10.5, 18.5],
-    "zelda_collectable_count":    [1.5, 3.5, 14.5],
+    "zelda_region":               [0.5,  1.5,  2.0,  2.5,  3.5,  4.5,  6.5],
+    "zelda_path_length":          [14.5, 16.5, 19.0, 21.5, 22.0, 22.5, 23.5],
+    "zelda_interactable_count":   [2.5,  4.5,  6.5,  8.5,  17.5, 26.5, 35.5],
+    "zelda_hazard_count":         [3.5,  5.5,  8.0,  10.5, 14.5, 18.5, 22.5],
+    "zelda_collectable_count":    [0.5,  1.5,  2.5,  3.5,  9.0,  14.5, 19.5],
 
-    "pokemon_region":             [1.5, 2.5, 4.5],
-    "pokemon_path_length":        [18.5, 23.5, 29.5],
-    "pokemon_interactable_count": [0.5, 20.5, 60.5],
-    "pokemon_hazard_count":       [11.5, 44.5, 76.5],
-    "pokemon_collectable_count":  [0.5, 2.5, 6.5],
+    "pokemon_region":             [0.5,  1.5,  2.0,  2.5,  3.5,  4.5,  6.5],
+    "pokemon_path_length":        [16.5, 18.5, 21.0, 23.5, 26.5, 29.5, 32.5],
+    "pokemon_interactable_count": [-0.5, 0.5,  10.5, 20.5, 40.5, 60.5, 80.5],
+    "pokemon_hazard_count":       [5.5,  11.5, 28.0, 44.5, 60.5, 76.5, 92.5],
+    "pokemon_collectable_count":  [-0.5, 0.5,  1.5,  2.5,  4.5,  6.5,  9.5],
 
-    "sokoban_region":             [1.5, 2.5, 3.5],
-    "sokoban_path_length":        [17.5, 21.5, 25.5],
-    "sokoban_interactable_count": [3.5, 6.5, 9.5],
+    "sokoban_region":             [0.5,  1.5,  2.0,  2.5,  3.0,  3.5,  4.5],
+    "sokoban_path_length":        [13.5, 17.5, 19.5, 21.5, 23.5, 25.5, 29.5],
+    "sokoban_interactable_count": [1.5,  3.5,  5.0,  6.5,  8.0,  9.5,  12.5],
     "sokoban_hazard_count":       None,
     "sokoban_collectable_count":  None,
 }
@@ -315,123 +315,119 @@ UNIFIED_COLOR_DESCS: Dict[int, str] = {
 
 # ── Zone 레이블 (feature별) ───────────────────────────────────────────────────────
 FEATURE_ZONE_LABELS: Dict[str, List[str]] = {
-    "region":             ["very few regions",          "somewhat few regions",
-                           "somewhat many regions",     "very many regions"],
-    "path_length":        ["very short path",           "somewhat short path",
-                           "somewhat long path",        "very long path"],
-    "interactable_count": ["very few interactive",      "somewhat few interactive",
-                           "somewhat many interactive", "very many interactive"],
-    "hazard_count":       ["very few hazards",          "somewhat few hazards",
-                           "somewhat many hazards",     "very many hazards"],
-    "collectable_count":  ["very few collectables",     "somewhat few collectables",
-                           "somewhat many collectables","very many collectables"],
+    "region": [
+        "very few regions",
+        "few regions",
+        "slightly few regions",
+        "moderate regions",
+        "slightly many regions",
+        "several regions",
+        "many regions",
+        "very many regions",
+    ],
+    "path_length": [
+        "very short path",
+        "short path",
+        "slightly short path",
+        "moderate path",
+        "slightly long path",
+        "medium path",
+        "long path",
+        "very long path",
+    ],
+    "interactable_count": [
+        "very few interactive",
+        "few interactive",
+        "slightly few interactive",
+        "moderate interactive",
+        "slightly many interactive",
+        "several interactive",
+        "many interactive",
+        "very many interactive",
+    ],
+    "hazard_count": [
+        "very few hazards",
+        "few hazards",
+        "slightly few hazards",
+        "moderate hazards",
+        "slightly many hazards",
+        "several hazards",
+        "many hazards",
+        "very many hazards",
+    ],
+    "collectable_count": [
+        "very few collectables",
+        "few collectables",
+        "slightly few collectables",
+        "moderate collectables",
+        "slightly many collectables",
+        "several collectables",
+        "many collectables",
+        "very many collectables",
+    ],
 }
 
-# ── 어휘 세트: feature × intensity level(0~3) → 추천 표현 목록 ────────────────────
-# level 0 = 가장 적음/짧음, level 3 = 가장 많음/긺
+# ── 어휘 세트: feature × intensity level(0~7) → 추천 표현 목록 ────────────────────
+# level 0 = 가장 적음/짧음, level 7 = 가장 많음/긺
+# 기존 4레벨×4단어 → 8레벨×2단어 (각 레벨을 2개의 하위 레벨로 분할)
 VOCAB_SETS: Dict[str, List[List[str]]] = {
     "region": [
-        # level 0 — very few regions (fully connected map)
-        [
-            "few",
-            "sparse",
-            "small",
-            "marginal",
-        ],
-
-        # level 1 — somewhat few regions (lightly divided)
-        [
-            "some",
-            "moderate",
-            "slight",
-            "certain",
-        ],
-
-        # level 2 — somewhat many regions (noticeably split)
-        [
-            "several",
-            "balanced",
-            "multiple",
-            "partitioned",
-        ],
-
-        # level 3 — very many regions (heavily fragmented)
-        [
-            "fragmented",
-            "numerous",
-            "large",
-            "many",
-        ],
+        # level 0 — very few regions (lower)
+        ["few",          "sparse"],
+        # level 1 — very few regions (upper)
+        ["small",        "marginal"],
+        # level 2 — somewhat few regions (lower)
+        ["some",         "moderate"],
+        # level 3 — somewhat few regions (upper)
+        ["slight",       "certain"],
+        # level 4 — somewhat many regions (lower)
+        ["several",      "balanced"],
+        # level 5 — somewhat many regions (upper)
+        ["multiple",     "partitioned"],
+        # level 6 — very many regions (lower)
+        ["fragmented",   "numerous"],
+        # level 7 — very many regions (upper)
+        ["large",        "many"],
     ],
 
     "path_length": [
-        # level 0 — very short
-        [
-            "tiny",
-            "nano",
-            "minimal",
-            "micro",
-        ],
-
-        # level 1 — somewhat short
-        [
-            "short",
-            "limited",
-            "restricted",
-            "condenced",
-        ],
-
-        # level 2 — somewhat long
-        [
-            "moderate",
-            "reasonable",
-            "medium",
-            "balanced",
-        ],
-
-        # level 3 — very long
-        [
-            "long",
-            "large",
-            "lengthly",
-            "extensive"
-        ],
+        # level 0 — very short (lower)
+        ["tiny",         "nano"],
+        # level 1 — very short (upper)
+        ["minimal",      "micro"],
+        # level 2 — somewhat short (lower)
+        ["short",        "limited"],
+        # level 3 — somewhat short (upper)
+        ["restricted",   "condensed"],
+        # level 4 — somewhat long (lower)
+        ["moderate",     "reasonable"],
+        # level 5 — somewhat long (upper)
+        ["medium",       "balanced"],
+        # level 6 — very long (lower)
+        ["long",         "large"],
+        # level 7 — very long (upper)
+        ["lengthy",      "extensive"],
     ]
 }
 
 
 _COUNT_VOCAB: List[List[str]] = [
-    # level 0 — very few
-    [
-        "rare",
-        "few"
-        "sparse",
-        "marginal",
-    ],
-
-    # level 1 — somewhat few
-    [
-        "some",
-        "limited",
-        "slight",
-        "little",
-    ],
-
-    # level 2 — moderate / somewhat many
-    [
-        "moderate",
-        "reasonable",
-        "decent",
-        "suitable",
-    ],
-
-    # level 3 — very many
-    [
-        "many",
-        "numerous",
-        "plentiful",
-        "abundant",
-    ],
+    # level 0 — very few (lower)
+    ["rare",       "few"],
+    # level 1 — very few (upper)
+    ["sparse",     "marginal"],
+    # level 2 — somewhat few (lower)
+    ["some",       "limited"],
+    # level 3 — somewhat few (upper)
+    ["slight",     "little"],
+    # level 4 — moderate (lower)
+    ["moderate",   "reasonable"],
+    # level 5 — moderate (upper)
+    ["decent",     "suitable"],
+    # level 6 — very many (lower)
+    ["many",       "numerous"],
+    # level 7 — very many (upper)
+    ["plentiful",  "abundant"],
 ]
 
 

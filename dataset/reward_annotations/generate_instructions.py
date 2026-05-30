@@ -171,11 +171,12 @@ def build_user_prompt(
     # zone_label → 0-based index for vocab lookup, 1-based for display
     zone_idx_0: Optional[int] = None
     zone_display: Optional[str] = None
+    feat_zones = FEATURE_ZONE_LABELS.get(feature_name, [])
+    n_bins = len(feat_zones) if feat_zones else 8   # 동적으로 bin 수 결정 (현재 8)
     if thresholds is not None:
-        feat_zones = FEATURE_ZONE_LABELS.get(feature_name, [])
         try:
             zone_idx_0 = feat_zones.index(zone_label)        # 0-based
-            zone_display = f"intensity level {zone_idx_0 + 1}/4"
+            zone_display = f"intensity level {zone_idx_0 + 1}/{n_bins}"
         except ValueError:
             pass
 
@@ -183,7 +184,7 @@ def build_user_prompt(
     lines.append(f"- Feature: {feature_name}")
     lines.append(f"- Description: {FEATURE_DESCRIPTIONS.get(feature_name, feature_name)}")
     if zone_display is not None:
-        lines.append(f"- Intensity level: {zone_display} (scale: 1=lowest → 4=highest)")
+        lines.append(f"- Intensity level: {zone_display} (scale: 1=lowest → {n_bins}=highest)")
     elif thresholds is not None:
         lines.append("- Intensity level: N/A (threshold not defined for this combination)")
     else:
@@ -192,7 +193,7 @@ def build_user_prompt(
 
     if thresholds is not None:
         lines.append("## Intensity Reference")
-        lines.append(f"The measured intensity for this map is {zone_display} on a 4-point scale (1=lowest, 4=highest).")
+        lines.append(f"The measured intensity for this map is {zone_display} on a {n_bins}-point scale (1=lowest, {n_bins}=highest).")
         lines.append("")
     else:
         lines.append("## Intensity Reference\nNo threshold defined — describe based on what you observe in the map.\n")

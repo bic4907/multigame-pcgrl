@@ -74,6 +74,26 @@ wandb sweep --project aaai27_train_vipcgrl_unseen --entity st4889ha-gwangju-inst
 wandb sweep --project aaai27_eval_vipcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_vipcgrl_unseen.yaml
 ```
 
+### VIPCGRL (Fewshot)
+
+---
+
+**Train Encoder**
+```bash
+wandb sweep --project aaai27_encoder_vipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/encoder_vipcgrl_fewshot.yaml
+```
+
+**Train PCGRL**
+```bash
+wandb sweep --project aaai27_train_vipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl_fewshot.yaml
+```
+
+**Eval PCGRL**
+```bash
+wandb sweep --project aaai27_eval_vipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_vipcgrl_fewshot.yaml
+```
+
+
 ### VIPCGRL (`coef_human_sim=0`)
 
 ---

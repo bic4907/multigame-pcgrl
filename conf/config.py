@@ -884,7 +884,7 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # 테스트셋 분할 시드 (재현 가능)
     split_seed: int = 42
 
-    n_epochs: int = 5000
+    n_epochs: int = 3000
 
     # ── Step 기반 체크포인트 / 평가 주기 ──
     ckpt_freq: int = 1000   # 체크포인트 저장 주기 (steps, 0이면 비활성)

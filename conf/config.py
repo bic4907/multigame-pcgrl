@@ -779,7 +779,7 @@ class CLIPTrainConfig(Config):
     n_max_points: int = 1000
     embed_visualize_freq: int = 500
 
-    n_epochs: int = 5000
+    n_epochs: int = 3000
     lr: float = 1.0e-3
     weight_decay: float = 1e-5
     train_ratio: float = 0.99

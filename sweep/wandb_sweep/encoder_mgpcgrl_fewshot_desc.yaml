@@ -1,0 +1,40 @@
+program: train_clip_decoder.py
+project: aaai27_encoder_mgpcgrl_fewshot_desc
+method: grid
+metric:
+  goal: minimize
+  name: val/loss
+parameters:
+  game:
+    value: 'all'
+  overwrite:
+    value: false
+  instruction_prefix:
+    value: 'desc'
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_desc'
+  unseen_ratio:
+    value: 0.1
+  unseen_games:
+    values:
+      # 1 unseen game
+      - 'zd'
+      - 'dm'
+      - 'sk'
+      # 2 unseen games
+      - 'zddm'
+      - 'zdsk'
+      - 'dmsk'
+      # 3 unseen games
+      - 'pkzddm'
+      - 'dgzddm'
+      - 'zddmsk'
+      # 4 unseen games
+      - 'pkdgzddm'
+      - 'pkzddmsk'
+      - 'dgzddmsk'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# total runs: 1 ur x 12 unseen_games = 12 runs

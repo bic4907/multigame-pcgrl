@@ -150,6 +150,25 @@ wandb sweep --project aaai27_train_mgpcgrl_unseen --entity st4889ha-gwangju-inst
 wandb sweep --project aaai27_eval_mgpcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_unseen.yaml
 ```
 
+### MGPCGRL (Unseen, `instruction_prefix=desc`)
+
+---
+
+**Train Encoder**
+```bash
+wandb sweep --project aaai27_train_mgpcgrl_encoder_unseen_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder_unseen_desc.yaml
+```
+
+**Train PCGRL**
+```bash
+wandb sweep --project aaai27_train_mgpcgrl_unseen_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_unseen_desc.yaml
+```
+
+**Eval PCGRL**
+```bash
+wandb sweep --project aaai27_eval_mgpcgrl_unseen_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_unseen_desc.yaml
+```
+
 ### MGPCGRL (All Decoder Rewards)
 
 ---
@@ -206,6 +225,25 @@ wandb sweep --project aaai27_train_mgpcgrl_fewshot --entity st4889ha-gwangju-ins
 **Eval PCGRL**
 ```bash
 wandb sweep --project aaai27_eval_mgpcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_fewshot.yaml
+```
+
+### MGPCGRL (Fewshot, `instruction_prefix=desc`)
+
+---
+
+**Train Encoder**
+```bash
+wandb sweep --project aaai27_encoder_mgpcgrl_fewshot_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/encoder_mgpcgrl_fewshot_desc.yaml
+```
+
+**Train PCGRL**
+```bash
+wandb sweep --project aaai27_train_mgpcgrl_fewshot_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_fewshot_desc.yaml
+```
+
+**Eval PCGRL**
+```bash
+wandb sweep --project aaai27_eval_mgpcgrl_fewshot_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_fewshot_desc.yaml
 ```
 
 

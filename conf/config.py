@@ -794,7 +794,7 @@ class CLIPTrainConfig(Config):
     max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
 
-    # instruction prefix mode: "name" (e.g. "In Zelda, ...") / "desc" / "none" (또는 None)
+    # instruction prefix mode: "name" (e.g. "In Zelda, ...") / "desc" / "mix" / "none" (또는 None)
     instruction_prefix: Optional[str] = "name"
 
     # overwrite

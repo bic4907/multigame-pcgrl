@@ -182,7 +182,7 @@ def _prepend_game_desc(instruction: str, game: str, rng: random.Random) -> str:
 # ── 통합 instruction prefix dispatcher ───────────────────────────────────────
 # mode: "name" / "desc" / "none" (또는 None) — 게임 이름 prefix, 게임 설명 prefix,
 #       prefix 없음을 각각 지정한다.
-INSTRUCTION_PREFIX_MODES = ("name", "desc", "none")
+INSTRUCTION_PREFIX_MODES = ("name", "desc", "mix", "none")
 
 
 def _normalize_instruction_prefix_mode(mode) -> str:
@@ -197,6 +197,13 @@ def _normalize_instruction_prefix_mode(mode) -> str:
             f"(expected one of {INSTRUCTION_PREFIX_MODES})"
         )
     return s
+
+def _prepend_game_mix(instruction: str, game: str, rng: random.Random) -> str:
+    """name/desc 중 하나를 랜덤하게 선택하여 prefix를 붙인다."""
+    if rng.random() < 0.5:
+        return _prepend_game_prefix(instruction, game, rng)
+    else:
+        return _prepend_game_desc(instruction, game, rng)
 
 
 def apply_instruction_prefix(
@@ -217,6 +224,8 @@ def apply_instruction_prefix(
         return _prepend_game_prefix(instruction, game, rng)
     if m == "desc":
         return _prepend_game_desc(instruction, game, rng)
+    if m == "mix":
+        return _prepend_game_mix(instruction, game, rng)
     return instruction
 
 

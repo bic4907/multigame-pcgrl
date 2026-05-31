@@ -34,5 +34,4 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-# 총 runs: 1 ur × 12 unseen_games = 12 runs
 

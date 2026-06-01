@@ -57,7 +57,19 @@ def main(config: VIPCGRLConfig):
             )
             config.dataset_seen_ratio = seen_ratio
 
-        # ── game_setting_mode=encoder_seen: seen 게임만 학습 대상으로 설정 ──
+        # ── unseen_ratio 주입: encoder 학습 때 쓴 unseen 게임 데이터 비율을 그대로 사용 ──
+        unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
+        if unseen_ratio != config.dataset_unseen_ratio:
+            logger.info(
+                "Auto-setting dataset_unseen_ratio=%.4f from encoder dataset_setting.json",
+                unseen_ratio,
+            )
+            config.dataset_unseen_ratio = unseen_ratio
+
+        # ── game 범위 결정 ──────────────────────────────────────────────────────
+        # game_setting_mode=encoder_seen: seen 게임만 학습 대상이 원칙이나,
+        # unseen_ratio > 0 인 경우 encoder 가 실제로 unseen 게임도 일부 봤으므로
+        # 해당 비율만큼 unseen 게임도 RL 학습에 포함한다 → game="all" 로 확장.
         if config.game_setting_mode == "encoder_seen":
             seen_games = dataset_setting.get("seen_games", [])
             if seen_games:
@@ -66,11 +78,22 @@ def main(config: VIPCGRLConfig):
                     game_str = "all"
                 else:
                     game_str = "".join(seen_abbrs)
-                logger.info(
-                    "game_setting_mode=encoder_seen → setting game='%s' (seen_games=%s)",
-                    game_str, seen_games,
-                )
-                config.game = game_str
+
+                if unseen_ratio > 0.0:
+                    # encoder 가 unseen 게임도 일부 학습 → RL 에도 포함 (unseen_ratio 비율)
+                    logger.info(
+                        "game_setting_mode=encoder_seen + unseen_ratio=%.4f > 0 "
+                        "→ expanding game to 'all' (dataset_unseen_ratio=%.4f)",
+                        unseen_ratio, unseen_ratio,
+                    )
+                    config.game = "all"
+                else:
+                    # unseen_ratio=0: unseen 게임은 완전히 미학습 → seen 게임만 유지
+                    logger.info(
+                        "game_setting_mode=encoder_seen → setting game='%s' (seen_games=%s)",
+                        game_str, seen_games,
+                    )
+                    config.game = game_str
             else:
                 logger.warning(
                     "game_setting_mode=encoder_seen but dataset_setting.json has empty seen_games "

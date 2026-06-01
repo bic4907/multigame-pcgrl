@@ -311,6 +311,12 @@ class VIPCGRLConfig(CPCGRLConfig):
     # 1.0 = 전체 seen 게임 데이터 사용 (기본값), 0.0~1.0 = seen 게임 데이터 prefix 비율
     dataset_seen_ratio: float = 1.0
 
+    # encoder 학습 시 사용한 unseen_ratio — dataset_setting.json에서 자동 주입됨.
+    # None(기본값) = 기존 동작 유지 (per-game ratio 필터링 비활성).
+    # VIPCGRL에서만 사용: 0.0 = unseen 게임 미로드, 0.0~1.0 = unseen 게임 prefix 비율.
+    # MGPCGRL은 항상 1.0(full)으로 주입하여 모든 unseen 게임 데이터를 로드한다.
+    dataset_unseen_ratio: Optional[float] = None
+
     # ── game_setting_mode: 학습에 사용할 게임 범위 선택 ──
     # "all"          : 전체 게임 사용
     # "encoder_seen" : encoder 학습 시 seen 게임만 사용 (기본값, dataset_setting.json에서 자동 읽음)
@@ -350,6 +356,14 @@ class MGPCGRLConfig(VIPCGRLConfig):
     train_unseen_ratio: Optional[float] = None
     # encoder 학습 시 seen game 데이터 비율 (0.0 ~ 1.0)
     train_seen_ratio: Optional[float] = None
+
+    # ── reward_unseen_ratio: unseen 게임 내 metadata/decoder 경계 ─────────────
+    # dataset_setting.json 의 unseen_ratio 에서 자동 주입됨.
+    # 각 unseen 게임의 샘플을 순서 기준으로 분할:
+    #   앞쪽 (reward_unseen_ratio 비율) → metadata (GT condition, encoder 학습 데이터)
+    #   나머지 (1 - reward_unseen_ratio) → reward decoder 로 condition 예측
+    # 0.0 (기본값) = 모든 unseen 샘플에 decoder 적용 (zero-shot 동작)
+    reward_unseen_ratio: float = 0.0
 
 
 

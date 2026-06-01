@@ -122,14 +122,54 @@ def load_dataset_instruct(config):
         f"Check that reward annotations exist."
     )
 
-    # ── dataset_seen_ratio: 게임당 seen_ratio 비율만큼 샘플 prefix 사용 ──
+    # ── per-game ratio 필터링 ──────────────────────────────────────────────────
+    # dataset_unseen_ratio 가 명시된 경우: seen/unseen 게임별 다른 비율 적용
+    #   seen  게임 → dataset_seen_ratio
+    #   unseen 게임 → dataset_unseen_ratio  (0.0 이면 해당 게임 제외)
+    # dataset_unseen_ratio 가 None(미설정)인 경우: 기존 동작 (dataset_seen_ratio 만 사용)
     dataset_seen_ratio = getattr(config, "dataset_seen_ratio", 1.0)
-    if dataset_seen_ratio < 1.0:
+    dataset_unseen_ratio = getattr(config, "dataset_unseen_ratio", None)
+
+    if dataset_unseen_ratio is not None:
         from collections import defaultdict
+        from conf.game_utils import compute_seen_unseen_split as _cu_split
+        _reward_seen_raw = getattr(config, "reward_seen_games", None) or []
+        _seen_set, _ = _cu_split(_reward_seen_raw)
+        reward_seen_set: set = set(_seen_set)
+        # doom / doom2 alias: encoder 가 한쪽을 seen 으로 기록하면 양쪽 모두 seen 으로 처리
+        if "doom" in reward_seen_set or "doom2" in reward_seen_set:
+            reward_seen_set.update({"doom", "doom2"})
+
         game_buckets: dict = defaultdict(list)
         for s in samples:
             game_buckets[s.game].append(s)
         filtered: list = []
+        for game, bucket in sorted(game_buckets.items()):
+            is_seen = game in reward_seen_set
+            ratio = dataset_seen_ratio if is_seen else dataset_unseen_ratio
+            if ratio <= 0.0:
+                logger.info(
+                    "per-game ratio: game=%s (%s) ratio=0 → skipped",
+                    game, "seen" if is_seen else "unseen",
+                )
+                continue
+            n_use = max(1, int(len(bucket) * ratio)) if ratio < 1.0 else len(bucket)
+            filtered.extend(bucket[:n_use])
+            logger.info(
+                "per-game ratio: game=%s (%s) %.4f  %d → %d samples",
+                game, "seen" if is_seen else "unseen", ratio, len(bucket), n_use,
+            )
+        samples = filtered
+        logger.info(
+            "per-game ratio filtering done: total %d samples", len(samples),
+        )
+    elif dataset_seen_ratio < 1.0:
+        # 기존 동작: 모든 게임에 동일한 seen_ratio 적용
+        from collections import defaultdict
+        game_buckets = defaultdict(list)
+        for s in samples:
+            game_buckets[s.game].append(s)
+        filtered = []
         for game, bucket in sorted(game_buckets.items()):
             n_use = max(1, int(len(bucket) * dataset_seen_ratio))
             filtered.extend(bucket[:n_use])

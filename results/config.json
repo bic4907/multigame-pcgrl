@@ -4,7 +4,7 @@
     "num_workers": 10
   },
   "experiments": {
-    "allseen": {
+    "fullshot": {
       "target_projects": [
         "aaai27_eval_random",
         "aaai27_eval_cpcgrl",
@@ -18,12 +18,10 @@
       "re_baseline_label":          "CPCGRL",
       "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
     },
-    "unseen": {
+    "zeroshot": {
       "target_projects": [
         "aaai27_eval_vipcgrl_unseen",
-        "aaai27_eval_mgpcgrl_unseen",
-        "aaai27_eval_mgpcgrl_all",
-        "aaai27_eval_mgpcgrl_oracle"
+        "aaai27_eval_mgpcgrl_unseen"
       ],
       "seen_baseline_project": "aaai27_eval_mgpcgrl",
       "seen_baseline_label":   "MGPCGRL",
@@ -39,6 +37,14 @@
       "target_projects": [
         "aaai27_eval_mgpcgrl_unseen_ratios_2_GT"
       ]
+    },
+    "fewshot": {
+      "target_projects": [
+        "aaai27_eval_vipcgrl_fewshot_deprecated",
+        "aaai27_eval_mgpcgrl_fewshot_deprecated"
+      ],
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
     }
   },
   "project_display_names": {
@@ -53,7 +59,9 @@
     "aaai27_eval_mgpcgrl_all":   "MGPCGRL (all)",
     "aaai27_eval_mgpcgrl_oracle":"MGPCGRL (oracle)",
     "aaai27_eval_vipcgrl_unseen":"VIPCGRL",
-    "aaai27_eval_mgpcgrl_unseen_ratios_2_GT": "MGPCGRL (GT)"
+    "aaai27_eval_mgpcgrl_unseen_ratios_2_GT": "MGPCGRL (GT)",
+    "aaai27_eval_vipcgrl_fewshot_deprecated": "VIPCGRL (fewshot)",
+    "aaai27_eval_mgpcgrl_fewshot_deprecated": "MGPCGRL (fewshot)"
   },
   "project_colors": {
     "aaai27_eval_random":         "#aaaaaa",
@@ -66,7 +74,9 @@
     "aaai27_eval_mgpcgrl":        "#2166ac",
     "aaai27_eval_mgpcgrl_unseen": "#2166ac",
     "aaai27_eval_mgpcgrl_all":    "#4393c3",
-    "aaai27_eval_mgpcgrl_oracle": "#92c5de"
+    "aaai27_eval_mgpcgrl_oracle": "#92c5de",
+    "aaai27_eval_vipcgrl_fewshot_deprecated": "#762a83",
+    "aaai27_eval_mgpcgrl_fewshot_deprecated": "#4393c3"
   },
   "games": {
     "colors": {

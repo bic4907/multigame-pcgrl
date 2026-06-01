@@ -238,23 +238,51 @@ def _build_reward_and_condition(
     # ── 3. decoder로 덮어쓸 target_indices 결정 ───────────────────────────────
     if reward_decoder_mode == "unseen":
         reward_seen_games = set(getattr(config, "reward_seen_games", None) or [])
-        # Treat doom and doom2 as a single game group — if either is in encoder
-        # seen_games, mark both as seen for filtering purposes.
+        # doom / doom2 alias
         if "doom" in reward_seen_games or "doom2" in reward_seen_games:
             reward_seen_games.update({"doom", "doom2"})
-        if reward_seen_games:
-            target_indices = [i for i, s in enumerate(sample_list) if s.game not in reward_seen_games]
-            logger.info(
-                "Reward/Condition mode: unseen→decoder "
-                "(seen=%d samples kept as metadata, unseen=%d samples → decoder)",
-                n - len(target_indices),
-                len(target_indices),
-            )
-        else:
+
+        if not reward_seen_games:
             logger.warning(
                 "reward_decoder_mode=unseen but reward_seen_games is empty — decoder applied to all games"
             )
             target_indices = list(range(n))
+        else:
+            reward_unseen_ratio = float(getattr(config, "reward_unseen_ratio", 0.0))
+
+            if reward_unseen_ratio > 0.0:
+                # ── few-shot 분할: 각 unseen 게임 내에서 샘플을 순서 기준으로 분할 ──
+                # 앞쪽 (reward_unseen_ratio 비율) → metadata 유지 (encoder 학습분)
+                # 나머지 (1 - reward_unseen_ratio) → decoder 적용
+                from collections import defaultdict
+                unseen_game_indices: dict = defaultdict(list)
+                for i, s in enumerate(sample_list):
+                    if s.game not in reward_seen_games:
+                        unseen_game_indices[s.game].append(i)
+
+                decoder_set: set = set()
+                for game, indices in unseen_game_indices.items():
+                    n_meta = int(len(indices) * reward_unseen_ratio)
+                    # 앞쪽 n_meta 개 → metadata, 나머지 → decoder
+                    for idx in indices[n_meta:]:
+                        decoder_set.add(idx)
+
+                target_indices = sorted(decoder_set)
+                n_meta_total = n - len(target_indices)
+                logger.info(
+                    "Reward/Condition mode: unseen→split (reward_unseen_ratio=%.4f) "
+                    "metadata=%d samples, decoder=%d samples",
+                    reward_unseen_ratio, n_meta_total, len(target_indices),
+                )
+            else:
+                # ── zero-shot: 모든 unseen 게임 샘플에 decoder 적용 ──────────
+                target_indices = [i for i, s in enumerate(sample_list) if s.game not in reward_seen_games]
+                logger.info(
+                    "Reward/Condition mode: unseen→decoder (zero-shot) "
+                    "(seen=%d samples metadata, unseen=%d samples → decoder)",
+                    n - len(target_indices),
+                    len(target_indices),
+                )
     else:
         # "all": 전체를 decoder로 덮어쓴다
         target_indices = list(range(n))

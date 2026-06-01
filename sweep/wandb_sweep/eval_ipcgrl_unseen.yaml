@@ -1,0 +1,60 @@
+program: eval_ipcgrl.py
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0]
+  reevaluate:
+    value: true
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/ipcgrl_encoder_unseen'
+  encoder.ckpt_name:
+    values: [
+      # 1 unseen game
+#      "ipcgrl-enc-mg-game-all_unseen-pk_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-dg_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-zd_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-dm_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-sk_enc-mlp_exp-def_0",
+      # 2 unseen games
+#      "ipcgrl-enc-mg-game-all_unseen-pkdg_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-pkzd_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-pkdm_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-pksk_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-dgzd_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-dgdm_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-dgsk_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-zddm_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-zdsk_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-dmsk_enc-mlp_exp-def_0",
+      # 3 unseen games
+#      "ipcgrl-enc-mg-game-all_unseen-pkdgzd_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-pkdgdm_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-pkdgsk_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-pkzddm_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-pkzdsk_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-pkdmsk_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-dgzddm_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-dgzdsk_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-dgdmsk_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-zddmsk_enc-mlp_exp-def_0",
+      # 4 unseen games
+      "ipcgrl-enc-mg-game-all_unseen-pkdgzddm_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-pkdgzdsk_enc-mlp_exp-def_0",
+#      "ipcgrl-enc-mg-game-all_unseen-pkdgdmsk_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-pkzddmsk_enc-mlp_exp-def_0",
+      "ipcgrl-enc-mg-game-all_unseen-dgzddmsk_enc-mlp_exp-def_0",
+    ]
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/ipcgrl_unseen'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+

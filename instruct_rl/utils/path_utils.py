@@ -151,8 +151,11 @@ def get_exp_group(config) -> str:
         return f'cpcgrl_game-{game}{re_s}{exp_s}'
 
     # IPCGRL: BERT embedding
+    # encoder ckpt 이름에서 unseen 정보 파싱해 suffix 추가 (VIPCGRL / MGPCGRL 와 동일 규칙).
+    # unseen 정보가 없으면 suffix 생략.
     if getattr(config, 'use_nlp', False):
-        return f'ipcgrl_game-{game}{re_s}{exp_s}'
+        enc = _unseen_suffix(config)
+        return f'ipcgrl_game-{game}{re_s}{exp_s}{enc}'
 
     # PretrainedCLIP: model=pretrained_clip, enc suffix 없음
     if getattr(config, 'model', None) == 'pretrained_clip':

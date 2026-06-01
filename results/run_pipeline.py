@@ -6,8 +6,10 @@ Aborts the pipeline on the first failure by default.
 
 Usage:
     python results/run_pipeline.py                         # full pipeline (steps 1-6)
-    python results/run_pipeline.py --experiment allseen    # allseen experiment
-    python results/run_pipeline.py --experiment unseen
+    python results/run_pipeline.py --experiment fullshot    # fullshot experiment
+    python results/run_pipeline.py --experiment zeroshot
+    python results/run_pipeline.py --experiment fewshot
+    python results/run_pipeline.py --exclude-experiments fewshot seen_ratio_progress  # 특정 experiment 제외
     python results/run_pipeline.py --steps 3               # single step
     python results/run_pipeline.py --steps 3 4 5 6         # multiple steps
     python results/run_pipeline.py --steps 6               # 분석 리포트만 생성
@@ -19,8 +21,7 @@ Step numbers:
     1  eval_downloader          Download eval artifacts from W&B
     2  make_eval_summary        ctrl_sim.csv → per-eval results/summary.csv
     3  benchmark               summary/results.csv → Markdown/CSV tables + plots
-                                (allseen 등 일반 실험 전용; unseen 에서는 생략)
-    4  condition_progress_report  condition vs metric plots + Markdown report
+                                (fullshot 등 일반 실험 전용; zeroshot 에서는 생략)    4  condition_progress_report  condition vs metric plots + Markdown report
     6  analysis_report          모델 간 % 비교 + Baseline 대비 분석을 한글 Markdown 으로 저장
                                 (allseen / unseen 모두 적용)
     9  seen_ratio_progress      train_seen_ratio(데이터 양) 증가에 따른 unseen 게임
@@ -31,7 +32,7 @@ Step numbers:
     11 seen_count_progress      unseen 게임 개수별 bar chart — method 간 unseen/seen 성능 비교
                                  (unseen_count_progress → seen_count_progress.py 실행;
                                   unseen_count_progress.png + seen_progress.png 출력)
-                                 (unseen 전용; 다른 실험에서는 생략)
+                                 (zeroshot 전용; 다른 실험에서는 생략)
 
 NOTE: step 5 (seen_unseen_report), 7 (unseen_count_progress), 8 (game_impact_analysis)
       스크립트 파일은 results/utils/experiment/ 아래에 보존되어 있으나
@@ -89,7 +90,7 @@ STEPS: list[dict] = [
         "id": 3,
         "name": "benchmark",
         "script": _HERE / "utils/experiment/benchmark.py",
-        "description": "summary/results.csv → Markdown/CSV tables + comparison plots (allseen 전용)",
+        "description": "summary/results.csv → Markdown/CSV tables + comparison plots (fullshot 전용)",
     },
     {
         "id": 4,
@@ -119,19 +120,20 @@ STEPS: list[dict] = [
         "id": 11,
         "name": "unseen_count_progress",
         "script": _HERE / "utils/experiment/seen_count_progress.py",
-        "description": "unseen 게임 개수별 bar chart — method 간 unseen/seen 성능 비교 (unseen 전용)",
+        "description": "unseen 게임 개수별 bar chart — method 간 unseen/seen 성능 비교 (zeroshot 전용)",
     },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
 _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
-    "unseen":   {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
+    "zeroshot":   {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
+    "fewshot":    {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
     "seen_ratio_progress":       {3, 4, 10, 11},    # seen_ratio_progress 전용 — step 9만 실행
     "condition_shift_analysis":  {3, 4, 6, 9, 11},  # condition_shift_analysis 전용 — step 10만 실행
     "unseen_ratio_ngames":       {3, 9, 10},         # benchmark / seen_ratio_progress / condition_shift 생략
     None:                        {9, 10, 11},        # experiment 미지정 시 생략
 }
-# allseen 등 unseen / seen_ratio_progress / condition_shift_analysis 아닌 실험: 9, 10, 11 생략
+# fullshot 등 zeroshot / fewshot / seen_ratio_progress / condition_shift_analysis 아닌 실험: 9, 10, 11 생략
 _DEFAULT_SKIP: set[int] = {9, 10, 11}
 
 
@@ -144,8 +146,10 @@ def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
         epilog=f"""
 examples:
   python results/run_pipeline.py                       # run all steps (1-6)
-  python results/run_pipeline.py --experiment allseen
-  python results/run_pipeline.py --experiment unseen
+  python results/run_pipeline.py --experiment fullshot
+  python results/run_pipeline.py --experiment zeroshot
+  python results/run_pipeline.py --experiment fewshot
+  python results/run_pipeline.py --exclude-experiments fewshot seen_ratio_progress
   python results/run_pipeline.py --steps 3             # table generation only
   python results/run_pipeline.py --steps 4 5           # condition report + seen/unseen report
   python results/run_pipeline.py --steps 6             # 한글 분석 리포트만 생성
@@ -154,10 +158,10 @@ examples:
   python results/run_pipeline.py --list                # list step descriptions
 
 note:
-  step 3 (benchmark)             — allseen 등 일반 실험에서만 실행; unseen 에서는 자동 생략
-  step 6 (analysis_report)       — allseen / unseen 모두 실행; 한글 Markdown 리포트 생성
+  step 3 (benchmark)             — fullshot 등 일반 실험에서만 실행; zeroshot / fewshot 에서는 자동 생략
+  step 6 (analysis_report)       — fullshot / zeroshot / fewshot 모두 실행; 한글 Markdown 리포트 생성
   step 9 (seen_ratio_progress)   — seen_ratio_progress 실험에서만 실행; train_seen_ratio vs progress 꺾은선 그래프
-  step 11 (seen_count_progress)  — unseen 에서만 실행; unseen 개수별 subplot
+  step 11 (seen_count_progress)  — zeroshot 에서만 실행; unseen 개수별 subplot
 
 available experiments: {_exp_hint}
         """,
@@ -170,6 +174,17 @@ available experiments: {_exp_hint}
         help=(
             f"Experiment group to run (choices: {_exp_hint}). "
             "Passed as --experiment to every step script."
+        ),
+    )
+    parser.add_argument(
+        "--exclude-experiments",
+        nargs="+",
+        default=[],
+        metavar="EXPERIMENT",
+        help=(
+            "Experiment names to skip when running the full pipeline "
+            "(ignored if --experiment is specified). "
+            f"Choices: {_exp_hint}"
         ),
     )
     parser.add_argument(
@@ -369,7 +384,11 @@ def main(default_experiment: str | None = None) -> None:
     if args.experiment:
         experiments_to_run = [args.experiment]
     elif all_exp_names:
-        experiments_to_run = all_exp_names
+        exclude_set = set(args.exclude_experiments or [])
+        experiments_to_run = [e for e in all_exp_names if e not in exclude_set]
+        if exclude_set:
+            excluded = [e for e in all_exp_names if e in exclude_set]
+            _log.info("제외된 experiments: %s", excluded)
     else:
         experiments_to_run = [None]   # experiment 없이 전체 실행
 

@@ -33,6 +33,26 @@ wandb sweep --project aaai27_eval_ipcgrl --entity st4889ha-gwangju-institute-of-
 ```
 
 
+### IPCGRL (Unseen)
+
+---
+
+**Train Encoder**
+```bash
+wandb sweep --project aaai27_train_ipcgrl_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_ipcgrl_encoder_unseen.yaml
+```
+
+**Train PCGRL**
+```bash
+wandb sweep --project aaai27_train_ipcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_ipcgrl_unseen.yaml
+```
+
+**Eval PCGRL**
+```bash
+wandb sweep --project aaai27_eval_ipcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_ipcgrl_unseen.yaml
+```
+
+
 ### VIPCGRL
 
 ---

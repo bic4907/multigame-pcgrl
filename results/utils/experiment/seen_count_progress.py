@@ -357,7 +357,7 @@ def write_subplot_grid(
     bar_width   = GROUP_WIDTH / n_methods
 
     fig, ax = plt.subplots(
-        figsize=(max(1.1 * n_groups + 1.6, 4.0), 2.4),
+        figsize=(0.6 * max(1.1 * n_groups + 1.6, 4.0), 2.4),
     )
 
     x_center = list(range(n_groups))
@@ -521,7 +521,7 @@ def write_seen_subplot_grid(
     bar_width   = GROUP_WIDTH / n_methods
 
     fig, ax = plt.subplots(
-        figsize=(max(1.1 * n_groups + 1.6, 4.0), 2.4),
+        figsize=(0.6 * max(1.1 * n_groups + 1.6, 4.0), 2.4),
     )
 
     x_center = list(range(n_groups))
@@ -682,7 +682,7 @@ def write_all_subplot_grid(
     bar_width   = GROUP_WIDTH / n_methods
 
     fig, ax = plt.subplots(
-        figsize=(max(1.1 * n_groups + 1.6, 4.0), 2.4),
+        figsize=(0.6 * max(1.1 * n_groups + 1.6, 4.0), 2.4),
     )
 
     x_center = list(range(n_groups))
@@ -888,7 +888,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args    = parse_args()
-    run_dir = make_run_dir("seen_count_progress", cfg=_CFG)
+    run_dir = make_run_dir("progress", cfg=_CFG)
     log     = setup_logger(run_dir, name=__file__)
     log.debug("run_dir   : %s", run_dir)
 
@@ -956,123 +956,56 @@ def main() -> None:
 
     # ── 테이블 ────────────────────────────────────────────────────────────
     write_table_csv(
-        run_dir / "seen_count_table.csv", norm_rows, metric_order
+        run_dir / "progress_table.csv", norm_rows, metric_order
     )
     write_table_markdown(
-        run_dir / "seen_count_table.md", norm_rows, metric_order, args.decimals
+        run_dir / "progress_table.md", norm_rows, metric_order, args.decimals
     )
-    log.info("table     : %s", run_dir / "seen_count_table.md")
+    log.info("table     : %s", run_dir / "progress_table.md")
 
     # ── 플롯 ──────────────────────────────────────────────────────────────
     _hl = hlines or None
     if not args.no_plot:
         try:
             write_subplot_grid(
-                run_dir / "seen_count_progress.png",
+                run_dir / "unseen.png",
                 norm_rows, metric_order,
                 ymin_progress=args.ymin,
                 hlines=_hl,
             )
-            log.info("plot (all re): %s", run_dir / "seen_count_progress.png")
+            log.info("plot (unseen): %s", run_dir / "unseen.png")
         except RuntimeError as e:
             log.error("Plot generation failed: %s", e)
             raise SystemExit(str(e)) from e
 
-        # ── seen 게임 progress (unseen 게임 수 증가에 따른 seen 성능 변화) ──
+        # ── seen 게임 progress ────────────────────────────────────────────
         has_seen = any(r.get("game_split") == "seen" for r in norm_rows)
         if has_seen:
             try:
                 write_seen_subplot_grid(
-                    run_dir / "seen_progress.png",
+                    run_dir / "seen.png",
                     norm_rows, metric_order,
                     ymin_progress=args.ymin,
                     hlines=_hl,
                 )
-                log.info("plot (seen, all re): %s", run_dir / "seen_progress.png")
+                log.info("plot (seen): %s", run_dir / "seen.png")
             except RuntimeError as e:
                 log.error("Plot (seen) generation failed: %s", e)
         else:
-            log.warning("seen 게임 데이터가 없어 seen_progress.png 를 생략합니다.")
+            log.warning("seen 게임 데이터가 없어 seen.png 를 생략합니다.")
 
         # ── 전체 게임 progress (seen + unseen 합산) ───────────────────────
         try:
             write_all_subplot_grid(
-                run_dir / "all_progress.png",
+                run_dir / "all.png",
                 norm_rows, metric_order,
                 ymin_progress=args.ymin,
                 hlines=_hl,
             )
-            log.info("plot (all,  all re): %s", run_dir / "all_progress.png")
+            log.info("plot (all): %s", run_dir / "all.png")
         except RuntimeError as e:
             log.error("Plot (all) generation failed: %s", e)
 
-        if args.per_reward_enum:
-            re_vals = sorted(
-                {r["reward_enum"] for r in norm_rows if r.get("game_split") == "unseen"},
-                key=sort_key_reward_enum,
-            )
-            for re in re_vals:
-                # reward_enum 별 baseline mean
-                _hl_re = None
-                if hlines:
-                    _re_means: dict[str, dict[str, float]] = {}
-                    _brows_raw_local = collect_baseline_rows(
-                        input_root, metric_order, args.baseline_project.strip()
-                    ) if _bp and _bp != "none" else []
-                    if _brows_raw_local:
-                        _brows_norm_re = apply_normalization(
-                            _brows_raw_local, norm_scale, metric_order
-                        )
-                        _bm_re = compute_baseline_mean(
-                            _brows_norm_re, metric_order, reward_enum=re
-                        )
-                        if _bm_re:
-                            _bl = next(iter(hlines))
-                            _re_means[_bl] = _bm_re
-                    _hl_re = _re_means or None
-
-                # unseen per-RE
-                try:
-                    write_subplot_grid(
-                        run_dir / f"seen_count_progress_re{re}.png",
-                        norm_rows, metric_order,
-                        reward_enum=re, title_suffix=f" (re={re})",
-                        ymin_progress=args.ymin,
-                        hlines=_hl_re,
-                    )
-                    log.info("plot (unseen, re=%s): %s", re,
-                             run_dir / f"seen_count_progress_re{re}.png")
-                except RuntimeError as e:
-                    log.error("Plot re=%s failed: %s", re, e)
-
-                # seen per-RE
-                if has_seen:
-                    try:
-                        write_seen_subplot_grid(
-                            run_dir / f"seen_progress_re{re}.png",
-                            norm_rows, metric_order,
-                            reward_enum=re, title_suffix=f" (re={re})",
-                            ymin_progress=args.ymin,
-                            hlines=_hl_re,
-                        )
-                        log.info("plot (seen, re=%s): %s", re,
-                                 run_dir / f"seen_progress_re{re}.png")
-                    except RuntimeError as e:
-                        log.error("Plot seen re=%s failed: %s", re, e)
-
-                # all per-RE (seen + unseen)
-                try:
-                    write_all_subplot_grid(
-                        run_dir / f"all_progress_re{re}.png",
-                        norm_rows, metric_order,
-                        reward_enum=re, title_suffix=f" (re={re})",
-                        ymin_progress=args.ymin,
-                        hlines=_hl_re,
-                    )
-                    log.info("plot (all,  re=%s): %s", re,
-                             run_dir / f"all_progress_re{re}.png")
-                except RuntimeError as e:
-                    log.error("Plot all re=%s failed: %s", re, e)
 
     log.info(
         "rows_found: %d  (unseen: %d  seen: %d)",

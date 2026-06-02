@@ -20,6 +20,7 @@
     },
     "zeroshot": {
       "target_projects": [
+        "aaai27_eval_pretrained_clip",
         "aaai27_eval_vipcgrl_unseen",
         "aaai27_eval_mgpcgrl_unseen"
       ],
@@ -40,8 +41,8 @@
     },
     "fewshot": {
       "target_projects": [
-        "aaai27_eval_vipcgrl_fewshot_deprecated",
-        "aaai27_eval_mgpcgrl_fewshot_deprecated"
+        "aaai27_eval_vipcgrl_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot"
       ],
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
@@ -54,12 +55,15 @@
     "aaai27_eval_ipcgrl":        "IPCGRL",
     "aaai27_eval_vipcgrl":       "VIPCGRL",
     "aaai27_eval_random":        "Random",
-    "aaai27_eval_pretrained_clip":  "Pretrained CLIP",
+    "aaai27_eval_pretrained_clip":  "Pre. CLIP",
     "aaai27_eval_mgpcgrl_unseen":"MGPCGRL",
     "aaai27_eval_mgpcgrl_all":   "MGPCGRL (all)",
     "aaai27_eval_mgpcgrl_oracle":"MGPCGRL (oracle)",
     "aaai27_eval_vipcgrl_unseen":"VIPCGRL",
     "aaai27_eval_mgpcgrl_unseen_ratios_2_GT": "MGPCGRL (GT)",
+    "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
+    "aaai27_eval_vipcgrl_fewshot":            "VIPCGRL (fewshot)",
+    "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (fewshot)",
     "aaai27_eval_vipcgrl_fewshot_deprecated": "VIPCGRL (fewshot)",
     "aaai27_eval_mgpcgrl_fewshot_deprecated": "MGPCGRL (fewshot)"
   },
@@ -76,7 +80,10 @@
     "aaai27_eval_mgpcgrl_all":    "#4393c3",
     "aaai27_eval_mgpcgrl_oracle": "#92c5de",
     "aaai27_eval_vipcgrl_fewshot_deprecated": "#762a83",
-    "aaai27_eval_mgpcgrl_fewshot_deprecated": "#4393c3"
+    "aaai27_eval_mgpcgrl_fewshot_deprecated": "#4393c3",
+    "aaai27_eval_ipcgrl_fewshot":             "#1a9641",
+    "aaai27_eval_vipcgrl_fewshot":            "#7b3294",
+    "aaai27_eval_mgpcgrl_fewshot":            "#2166ac"
   },
   "games": {
     "colors": {

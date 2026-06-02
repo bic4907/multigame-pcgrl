@@ -92,18 +92,8 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/benchmark.py",
         "description": "summary/results.csv → Markdown/CSV tables + comparison plots (fullshot 전용)",
     },
-    {
-        "id": 4,
-        "name": "condition_progress_report",
-        "script": _HERE / "utils/experiment/condition_progress_report.py",
-        "description": "ctrl_sim.csv → condition vs metric plots + Markdown report",
-    },
-    {
-        "id": 6,
-        "name": "analysis_report",
-        "script": _HERE / "utils/experiment/analysis_report.py",
-        "description": "모델 간 수치 비교 + Baseline 대비 % 변화량을 한글 Markdown 리포트로 저장",
-    },
+    # step 4 (condition_progress_report) — 비활성화
+    # step 6 (analysis_report) — 비활성화
     {
         "id": 9,
         "name": "seen_ratio_progress",
@@ -118,9 +108,9 @@ STEPS: list[dict] = [
     },
     {
         "id": 11,
-        "name": "unseen_count_progress",
+        "name": "progress",
         "script": _HERE / "utils/experiment/seen_count_progress.py",
-        "description": "unseen 게임 개수별 bar chart — method 간 unseen/seen 성능 비교 (zeroshot 전용)",
+        "description": "unseen 게임 개수별 progress bar chart — all.png / unseen.png / seen.png 출력 (zeroshot 전용)",
     },
 ]
 

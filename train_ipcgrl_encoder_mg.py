@@ -30,6 +30,7 @@ Usage:
 from __future__ import annotations
 
 import datetime
+import json
 import logging
 import math
 import os
@@ -140,6 +141,32 @@ def make_train(config: IPCGRLEncoderMGConfig):
         )
         mlp_ds = builder.get_dataset()
         cond_norm_min, cond_norm_max = builder.get_condition_norm_stats()
+
+        # ── dataset_setting.json 저장 (train_ipcgrl.py에서 자동 주입에 사용됨) ──
+        all_games = sorted(multigame_ds.count_by_game().keys())
+        seen_games = [g for g in all_games if g not in unseen_game_set]
+        unseen_games = [g for g in all_games if g in unseen_game_set]
+        
+        logger.info("=" * 70)
+        logger.info("  Seen/Unseen Split (train_ipcgrl_encoder_mg)")
+        logger.info("  Seen games   : %s", seen_games)
+        logger.info("  Unseen games : %s", unseen_games)
+        logger.info("  Seen ratio   : %.4f", config.seen_ratio)
+        logger.info("  Unseen ratio : %.4f", config.unseen_ratio)
+        logger.info("=" * 70)
+        
+        os.makedirs(config.exp_dir, exist_ok=True)
+        dataset_setting = {
+            "all_games": all_games,
+            "seen_games": seen_games,
+            "unseen_games": unseen_games,
+            "unseen_ratio": config.unseen_ratio,
+            "seen_ratio": config.seen_ratio,
+        }
+        dataset_setting_path = os.path.join(config.exp_dir, "dataset_setting.json")
+        with open(dataset_setting_path, "w") as f:
+            json.dump(dataset_setting, f, indent=2, ensure_ascii=False)
+        logger.info("Dataset setting saved: %s", dataset_setting_path)
 
         n_train = int(mlp_ds.is_train.sum())
         n_val = int((~mlp_ds.is_train).sum())

@@ -1,5 +1,5 @@
 program: train_mgpcgrl.py
-project: aaai27_train_mgpcgrl_seen_ratios
+project: aaai27_train_mgpcgrl_seen_ratios_0602
 method: grid
 metric:
   goal: minimize
@@ -16,7 +16,7 @@ parameters:
   overwrite:
     value: false
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios_0602'
   encoder.ckpt_name:
     values:
       # ── seen_ratio: 0.0 (ur=0.0 고정) ────────────────────────────────────
@@ -59,7 +59,7 @@ parameters:
       - "clipdec-game-all_sr-0.5_unseen-pkzddmsk_ur-0.0_exp-def_0"
       - "clipdec-game-all_sr-0.5_unseen-dgzddmsk_ur-0.0_exp-def_0"
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios_0602'
 command:
   - ${interpreter}
   - ${program}

@@ -1,5 +1,5 @@
 program: train_clip_decoder.py
-project: aaai27_encoder_mgpcgrl_unseen_ratios
+project: aaai27_encoder_mgpcgrl_unseen_ratios_0602
 method: grid
 metric:
   goal: minimize
@@ -10,7 +10,7 @@ parameters:
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios_0602'
   unseen_ratio:
     values: [0.0, 0.1, 0.5, 1.0]
   unseen_games:

@@ -625,7 +625,7 @@ def write_re_overall_plot(
         return
 
     fig, axes = plt.subplots(
-        1, n_metrics, figsize=(1.6 * n_metrics + 0.4, 3.0), squeeze=False
+        1, n_metrics, figsize=(1.6 * n_metrics + 0.4, 2.2), squeeze=False
     )
 
     bar_total_span = 0.7
@@ -644,7 +644,7 @@ def write_re_overall_plot(
                 continue
             x = -bar_total_span / 2 + (j + 0.5) * bar_width
             drew_any = True
-            ax.bar(
+            bars = ax.bar(
                 [x], [float(stat["mean"])], width=bar_width,
                 yerr=[float(stat["std"])], capsize=3,
                 label=_project_display_name(folder),
@@ -652,6 +652,14 @@ def write_re_overall_plot(
                 alpha=0.9,
             )
             y_uppers.append(float(stat["mean"]) + float(stat["std"]))
+            # 막대 위에 숫자 표시
+            for bar in bars:
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + max(float(stat["mean"]), 1e-6) * 0.02,
+                    f"{float(stat['mean']):.2f}",
+                    ha="center", va="bottom", fontsize=6.5, color="black",
+                )
 
         # ── 기준선 수평선 ─────────────────────────────────────────────────
         if baseline_project and baseline_project in by_folder:
@@ -666,9 +674,7 @@ def write_re_overall_plot(
                 baseline_legend_added = True
                 y_uppers.append(y_val)
 
-        ax.set_title(METRIC_DISPLAY_NAMES.get(metric, metric))
-        if ci == 0:
-            ax.set_ylabel("Score", rotation=90, labelpad=8)
+        ax.set_ylabel("Progress", rotation=90, labelpad=8)
         ax.set_xticks([0], [""])
         ax.tick_params(axis="x", length=0)
         ax.set_xlim(-0.5, 0.5)
@@ -771,10 +777,18 @@ def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
                 y_uppers.append(float(mean) + float(std))
             if means:
                 drew_any = True
-                ax.bar(xs, means, width=bar_width, yerr=stds, capsize=2,
-                       label=_project_display_name(folder),
-                       color=folder_color[folder], edgecolor="none",
-                       alpha=0.9)
+                bars = ax.bar(xs, means, width=bar_width, yerr=stds, capsize=2,
+                              label=_project_display_name(folder),
+                              color=folder_color[folder], edgecolor="none",
+                              alpha=0.9)
+                # 막대 위에 숫자 표시
+                for bar, m in zip(bars, means):
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        bar.get_height() + max(m, 1e-6) * 0.02,
+                        f"{m:.2f}",
+                        ha="center", va="bottom", fontsize=6.5, color="black",
+                    )
 
         # ── seen baseline 수평선 (텍스트 애노테이션 없음) ─────────────────
         if baseline_project:
@@ -792,9 +806,7 @@ def write_seen_unseen_plot(output_path: Path, plot_rows: list[dict],
                 baseline_legend_added = True
                 y_uppers.append(y_val)
 
-        ax.set_title(metric_label)
-        if ci == 0:
-            ax.set_ylabel("Score", rotation=90, labelpad=8)
+        ax.set_ylabel("Progress", rotation=90, labelpad=8)
         ax.set_xticks(x_center, [f"re={r}" for r in rewards])
         ax.tick_params(axis="x", labelrotation=0)
         ax.set_xlim(-0.5, len(rewards) - 0.5)
@@ -906,9 +918,15 @@ def main() -> None:
                     baseline_project=re_baseline,
                     baseline_label=re_bl_label,
                 )
+                write_re_overall_plot(
+                    run_dir / "seen.png", norm_rows, ["progress"],
+                    baseline_project=re_baseline,
+                    baseline_label=re_bl_label,
+                )
                 write_game_reward_subplots(run_dir / "re_game.png", norm_rows, metric_order)
                 log.info("plot      : %s", run_dir / "re.png")
                 log.info("plot_overall: %s", run_dir / "re_overall.png")
+                log.info("plot (seen.png): %s", run_dir / "seen.png")
                 log.info("plot_game : %s", run_dir / "re_game.png")
 
             except RuntimeError as e:

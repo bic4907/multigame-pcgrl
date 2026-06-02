@@ -20,7 +20,6 @@
     },
     "zeroshot": {
       "target_projects": [
-        "aaai27_eval_pretrained_clip",
         "aaai27_eval_vipcgrl_unseen",
         "aaai27_eval_mgpcgrl_unseen"
       ],
@@ -46,6 +45,14 @@
       ],
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "instruction_type": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot_desc"
+      ],
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
     }
   },
   "project_display_names": {
@@ -63,7 +70,8 @@
     "aaai27_eval_mgpcgrl_unseen_ratios_2_GT": "MGPCGRL (GT)",
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
     "aaai27_eval_vipcgrl_fewshot":            "VIPCGRL (fewshot)",
-    "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (fewshot)",
+    "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (prefix=name)",
+    "aaai27_eval_mgpcgrl_fewshot_desc":       "MGPCGRL (prefix=desc)",
     "aaai27_eval_vipcgrl_fewshot_deprecated": "VIPCGRL (fewshot)",
     "aaai27_eval_mgpcgrl_fewshot_deprecated": "MGPCGRL (fewshot)"
   },
@@ -83,7 +91,8 @@
     "aaai27_eval_mgpcgrl_fewshot_deprecated": "#4393c3",
     "aaai27_eval_ipcgrl_fewshot":             "#1a9641",
     "aaai27_eval_vipcgrl_fewshot":            "#7b3294",
-    "aaai27_eval_mgpcgrl_fewshot":            "#2166ac"
+    "aaai27_eval_mgpcgrl_fewshot":            "#2166ac",
+    "aaai27_eval_mgpcgrl_fewshot_desc":       "#4393c3"
   },
   "games": {
     "colors": {

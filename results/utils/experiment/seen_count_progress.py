@@ -392,7 +392,8 @@ def write_subplot_grid(
                 )
 
     ax.set_xticks(x_center)
-    ax.set_xticklabels([f"Unseen = {n}" for n in n_unseen_vals])
+    ax.set_xticklabels([str(n) for n in n_unseen_vals])
+    ax.set_xlabel("# Unseen games", labelpad=6)
     ax.set_xlim(-0.5, n_groups - 0.5)
     ax.set_ylabel(y_label + title_suffix, rotation=90, labelpad=8)
     ax.set_ylim(auto_bottom, auto_top)
@@ -555,7 +556,8 @@ def write_seen_subplot_grid(
                 )
 
     ax.set_xticks(x_center)
-    ax.set_xticklabels([f"Unseen = {n}" for n in n_unseen_vals])
+    ax.set_xticklabels([str(n) for n in n_unseen_vals])
+    ax.set_xlabel("# Unseen games", labelpad=6)
     ax.set_xlim(-0.5, n_groups - 0.5)
     ax.set_ylabel(y_label + title_suffix, rotation=90, labelpad=8)
     ax.set_ylim(auto_bottom, auto_top)
@@ -716,7 +718,8 @@ def write_all_subplot_grid(
                 )
 
     ax.set_xticks(x_center)
-    ax.set_xticklabels([f"Unseen = {n}" for n in n_unseen_vals])
+    ax.set_xticklabels([str(n) for n in n_unseen_vals])
+    ax.set_xlabel("# Unseen games", labelpad=6)
     ax.set_xlim(-0.5, n_groups - 0.5)
     ax.set_ylabel(y_label + title_suffix, rotation=90, labelpad=8)
     ax.set_ylim(auto_bottom, auto_top)

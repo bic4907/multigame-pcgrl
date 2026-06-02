@@ -285,8 +285,21 @@ class IPCGRLConfig(CPCGRLConfig):
 
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
-
     wandb_project: Optional[str] = f'{PREFIX}train_ipcgrl'
+
+    # ── encoder unseen 실험 지원 (mgpcgrl/vipcgrl 과 동일 시맨틱) ──────────────
+    # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
+    # 1.0 = 전체 seen 게임 데이터 사용 (기본값), 0.0~1.0 = seen 게임 데이터 prefix 비율
+    dataset_seen_ratio: float = 1.0
+
+    # encoder 학습 시 사용한 unseen_ratio — dataset_setting.json에서 자동 주입됨.
+    # None(기본값) = 기존 동작 유지 (per-game ratio 필터링 비활성).
+    dataset_unseen_ratio: Optional[float] = None
+
+    # encoder 학습 시 seen 게임 목록 — dataset_setting.json에서 자동 주입됨.
+    # (full name 리스트, e.g. ["dungeon", "doom", "zelda"]). 비어있지 않으면
+    # train_setting.json에 seen/unseen split이 기록되어 WandB 로깅에 사용된다.
+    reward_seen_games: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -647,6 +660,13 @@ class IPCGRLEvalConfig(CPCGRLEvalConfig):
 
     wandb_project: Optional[str] = f"{PREFIX}eval_ipcgrl"
 
+    # ── encoder 학습 시 seen_ratio (analysis only) ──────────────────────────────
+    train_seen_ratio: float = 1.0
+
+    # ── 학습 시 seen/unseen 게임 목록 — dataset_setting.json에서 자동 주입됨 ──
+    seen_games: List[str] = field(default_factory=list)
+    unseen_games: List[str] = field(default_factory=list)
+
 
 @dataclass
 class CollectBufferConfig(CPCGRLConfig):
@@ -979,6 +999,12 @@ class IPCGRLEncoderMGConfig(RewardConfig):
     # Unseen 게임 설정 (2글자 약어, e.g. "zd"=zelda, "pkzd"=pokemon+zelda)
     # 빈 문자열 = 제외 없음 (전체 게임 학습)
     unseen_games: str = ""
+
+    # ── Seen/Unseen 데이터 비율 (CLIPTrainConfig와 동일) ──
+    # unseen_ratio: unseen 학습 풀 중 사용할 비율 (0.0=zero-shot, 1.0=전부)
+    unseen_ratio: float = 0.0
+    # seen_ratio: seen 게임 데이터 비율 (1.0=전부 사용)
+    seen_ratio: float = 1.0
 
     # Annotation 데이터셋 설정 (CLIPTrainConfig 와 동일한 변인 통제)
     # instruction_prefix mode: "name" (기본) / "desc" / "none" (또는 None)

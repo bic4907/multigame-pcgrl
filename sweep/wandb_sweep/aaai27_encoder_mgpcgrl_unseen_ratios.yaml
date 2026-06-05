@@ -35,4 +35,4 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-# 총 runs: 4 ur × 12 unseen_games = 48 runs
+# 총 runs: 4 ur × 12 unseen_games = 48 runs (3-unseen: pkzddm / dgzddm / zddmsk)

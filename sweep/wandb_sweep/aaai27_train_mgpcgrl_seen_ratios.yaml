@@ -14,7 +14,7 @@ parameters:
   n_envs:
     value: 600
   overwrite:
-    value: false
+    value: true
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen_ratios_0602'
   encoder.ckpt_name:

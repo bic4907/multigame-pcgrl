@@ -882,6 +882,9 @@ class FinetunedCLIPEncoderTrainConfig(CLIPTrainConfig):
 
     embed_type: str = "finetuned_clip"
 
+    instruction_prefix: Optional[str] = "name"
+
+
 
 @dataclass
 class CLIPEvalConfig(EvalConfig):

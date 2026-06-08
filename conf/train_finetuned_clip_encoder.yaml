@@ -14,6 +14,3 @@ encoder:
 
 # 기본 데이터 옵션
 game: all
-prepend_game_prefix: false
-prepend_game_desc: true
-

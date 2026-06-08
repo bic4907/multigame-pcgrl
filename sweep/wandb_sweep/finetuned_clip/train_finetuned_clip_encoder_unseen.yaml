@@ -22,8 +22,6 @@ parameters:
     value: 256
   lr:
     value: 5.0e-6
-  # unseen 게임 split (2글자 약어 — dg=dungeon, pk=pokemon, sk=sokoban, dm=doom, zd=zelda)
-  # 총 30개 조합 (1+2+3+4 unseen games; C(5,1)+C(5,2)+C(5,3)+C(5,4) = 5+10+10+5 = 30)
   unseen_games:
     values:
       # 1 unseen game

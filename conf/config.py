@@ -392,6 +392,9 @@ class PretrainedCLIPPCGRLConfig(CPCGRLConfig):
     vec_cont: bool = False
     nlp_input_dim: int = 512  # encoder.output_dim (pretrained CLIP latent space, no projection)
 
+    # HuggingFace CLIP은 RGB 이미지(3채널)를 기대 — render_level_from_arr가 RGB 타일 이미지 생성
+    clip_input_channel: int = 3
+
     use_pretrained_clip_reward: bool = True
     wandb_project: Optional[str] = f'{PREFIX}train_pretrained_clip_pcgrl'
 

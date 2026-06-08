@@ -315,19 +315,16 @@ wandb sweep --project aaai27_eval_pretrained_clip --entity st4889ha-gwangju-inst
 
 **Train Encoder**
 ```bash
-wandb sweep --project aaai27_train_finetuned_clip_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_finetuned_clip_encoder_unseen.yaml
-```
-```bash
-bash run_docker.sh python train_finetuned_clip_encoder.py saves_dir=/mnt/nas/mgpcgrl/finetuned_clip_encoder
+wandb sweep --project aaai27_train_finetuned_clip_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/finetuned_clip/train_finetuned_clip_encoder_unseen.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_finetuned_clip_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_finetuned_clip_unseen.yaml
+wandb sweep --project aaai27_train_finetuned_clip_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/finetuned_clip/train_finetuned_clip_unseen.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_finetuned_clip_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_finetuned_clip_unseen.yaml
+wandb sweep --project aaai27_eval_finetuned_clip_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/finetuned_clip/eval_finetuned_clip_unseen.yaml
 ```
 

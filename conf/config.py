@@ -392,6 +392,9 @@ class PretrainedCLIPPCGRLConfig(CPCGRLConfig):
     vec_cont: bool = False
     nlp_input_dim: int = 512  # encoder.output_dim (pretrained CLIP latent space, no projection)
 
+    # HuggingFace CLIP은 RGB 이미지(3채널)를 기대 — render_level_from_arr가 RGB 타일 이미지 생성
+    clip_input_channel: int = 3
+
     use_pretrained_clip_reward: bool = True
     wandb_project: Optional[str] = f'{PREFIX}train_pretrained_clip_pcgrl'
 
@@ -421,6 +424,11 @@ class FinetunedCLIPPCGRLConfig(PretrainedCLIPPCGRLConfig):
 
     # ── encoder unseen 실험 지원 (mgpcgrl/vipcgrl 와 동일 시맨틱) ──
     dataset_seen_ratio: float = 1.0
+
+    # encoder 학습 시 unseen 게임 데이터 비율 (dataset_setting.json에서 자동 주입).
+    # None이면 기존 동작(전 게임에 dataset_seen_ratio 적용) 유지.
+    dataset_unseen_ratio: Optional[float] = None
+
     reward_seen_games: List[str] = field(default_factory=list)
     game_setting_mode: str = "all"
 
@@ -874,6 +882,9 @@ class FinetunedCLIPEncoderTrainConfig(CLIPTrainConfig):
 
     embed_type: str = "finetuned_clip"
 
+    instruction_prefix: Optional[str] = "name"
+
+
 
 @dataclass
 class CLIPEvalConfig(EvalConfig):
@@ -1046,4 +1057,3 @@ cs.store(name="eval_bert", node=BertEvalConfig)
 
 cs.store(name="train_reward", node=RewardTrainConfig)
 cs.store(name="train_ipcgrl_encoder_mg_schema", node=IPCGRLEncoderMGConfig)
-

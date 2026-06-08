@@ -744,6 +744,8 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
             "encoder_ckpt_name":   _enc_ckpt_name,
             "seen_games":          _seen,
             "unseen_games":        _unseen,
+            "N_SEEN_GAMES":        len(_seen),
+            "N_UNSEEN_GAMES":      len(_unseen),
         }
         if _rdm is not None:
             _rdm_data["reward_decoder_mode"] = _rdm
@@ -761,6 +763,8 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
                     "encoder_ckpt_name": _enc_ckpt_name,
                     "seen_games":        _seen,
                     "unseen_games":      _unseen,
+                    "N_SEEN_GAMES":      len(_seen),
+                    "N_UNSEEN_GAMES":    len(_unseen),
                 },
                 allow_val_change=True,
             )

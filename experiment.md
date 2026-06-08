@@ -301,11 +301,11 @@ wandb sweep --project aaai27_eval_random --entity st4889ha-gwangju-institute-of-
 ---
 
 ```bash
-wandb sweep --project aaai27_train_pretrained_clip --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_pretrained_clip.yaml
+wandb sweep --project aaai27_train_pretrained_clip --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/pretrained_clip/train_pretrained_clip.yaml
 ```
 
 ```bash
-wandb sweep --project aaai27_eval_pretrained_clip --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_pretrained_clip.yaml
+wandb sweep --project aaai27_eval_pretrained_clip --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/pretrained_clip/eval_pretrained_clip.yaml
 ```
 
 

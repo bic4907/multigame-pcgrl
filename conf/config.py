@@ -424,6 +424,11 @@ class FinetunedCLIPPCGRLConfig(PretrainedCLIPPCGRLConfig):
 
     # ── encoder unseen 실험 지원 (mgpcgrl/vipcgrl 와 동일 시맨틱) ──
     dataset_seen_ratio: float = 1.0
+
+    # encoder 학습 시 unseen 게임 데이터 비율 (dataset_setting.json에서 자동 주입).
+    # None이면 기존 동작(전 게임에 dataset_seen_ratio 적용) 유지.
+    dataset_unseen_ratio: Optional[float] = None
+
     reward_seen_games: List[str] = field(default_factory=list)
     game_setting_mode: str = "all"
 
@@ -1049,4 +1054,3 @@ cs.store(name="eval_bert", node=BertEvalConfig)
 
 cs.store(name="train_reward", node=RewardTrainConfig)
 cs.store(name="train_ipcgrl_encoder_mg_schema", node=IPCGRLEncoderMGConfig)
-

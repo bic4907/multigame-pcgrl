@@ -37,7 +37,7 @@
       "99": "UNKNOWN"
     },
     "_tile_images": {
-      "0": "void.png",
+      "0": "floor.png",
       "1": "wall.png",
       "2": "floor.png",
       "3": "door.png",
@@ -143,16 +143,16 @@
       "99": "UNKNOWN"
     },
     "_tile_images": {
-      "0": "empty.png",
-      "1": "solid.png",
-      "2": "empty.png",
-      "3": "scorpion.png",
-      "4": "interactable.png",
-      "5": "rtreasure.png",
-      "6": "scorpion.png",
-      "7": "interactable.png",
-      "8": "empty.png",
-      "99": "empty.png"
+      "0": "doom_empty.png",
+      "1": "doom_wall.png",
+      "2": "doom_empty.png",
+      "3": "doom_hazard.png",
+      "4": "doom_interact.png",
+      "5": "doom_collect.png",
+      "6": "doom_hazard.png",
+      "7": "doom_interact.png",
+      "8": "doom_empty.png",
+      "99": "doom_empty.png"
     },
     "mapping": {
       "0":  1,
@@ -201,7 +201,7 @@
     },
     "_tile_images": {
       "0": "empty.png",
-      "1": "path_e.png",
+      "1": "empty.png",
       "2": "solid.png",
       "3": "bat.png",
       "4": "treasure.png"
@@ -233,8 +233,7 @@
       "0": "pokemon/wall.png",
       "1": "pokemon/wall.png",
       "2": "pokemon/floor_0.png",
-      "3": "pokemon/pokeball.png",
-      "4": "pokemon/pokeball.png",
+      "3": "pokemon/floor_4.png",
       "5": "pokemon/door.png",
       "6": "pokemon/water.png",
       "7": "pokemon/fence.png",
@@ -266,10 +265,10 @@
       "5": "PLAYER"
     },
     "_tile_images": {
-      "0": "empty.png",
-      "1": "solid.png",
-      "4": "rtreasure.png",
-      "5": "interactable.png"
+      "0": "sokoban_empty.png",
+      "1": "sokoban_wall.png",
+      "4": "sokoban_collectable.png",
+      "5": "sokoban_interact.png"
     },
     "mapping": {
       "0": 0,

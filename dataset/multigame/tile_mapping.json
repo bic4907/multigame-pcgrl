@@ -36,6 +36,18 @@
       "8": "FLOOD",
       "99": "UNKNOWN"
     },
+    "_tile_images": {
+      "0": "void.png",
+      "1": "wall.png",
+      "2": "floor.png",
+      "3": "door.png",
+      "4": "block.png",
+      "5": "stair.png",
+      "6": "monster.png",
+      "7": "element.png",
+      "8": "wall.png",
+      "99": "void.png"
+    },
     "mapping": {
       "0":  1,
       "1":  1,
@@ -130,6 +142,18 @@
       "8": "STAIR",
       "99": "UNKNOWN"
     },
+    "_tile_images": {
+      "0": "empty.png",
+      "1": "solid.png",
+      "2": "empty.png",
+      "3": "scorpion.png",
+      "4": "interactable.png",
+      "5": "rtreasure.png",
+      "6": "scorpion.png",
+      "7": "interactable.png",
+      "8": "empty.png",
+      "99": "empty.png"
+    },
     "mapping": {
       "0":  1,
       "1":  1,
@@ -209,7 +233,7 @@
       "0": "pokemon/wall.png",
       "1": "pokemon/wall.png",
       "2": "pokemon/floor_0.png",
-      "3": "bat.png",
+      "3": "pokemon/pokeball.png",
       "4": "pokemon/pokeball.png",
       "5": "pokemon/door.png",
       "6": "pokemon/water.png",
@@ -244,8 +268,8 @@
     "_tile_images": {
       "0": "empty.png",
       "1": "solid.png",
-      "4": "treasure.png",
-      "5": "player.png"
+      "4": "rtreasure.png",
+      "5": "interactable.png"
     },
     "mapping": {
       "0": 0,

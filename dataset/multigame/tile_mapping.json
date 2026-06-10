@@ -37,12 +37,12 @@
       "99": "UNKNOWN"
     },
     "_tile_images": {
-      "0": "floor.png",
-      "1": "wall.png",
-      "2": "floor.png",
-      "3": "door.png",
-      "4": "block.png",
-      "5": "stair.png",
+      "0": "wall.png",
+      "1": "floor.png",
+      "2": "wall.png",
+      "3": "floor.png",
+      "4": "monster.png",
+      "5": "zelda_collectable.png",
       "6": "monster.png",
       "7": "element.png",
       "8": "wall.png",
@@ -143,11 +143,11 @@
       "99": "UNKNOWN"
     },
     "_tile_images": {
-      "0": "doom_empty.png",
-      "1": "doom_wall.png",
-      "2": "doom_empty.png",
-      "3": "doom_hazard.png",
-      "4": "doom_interact.png",
+      "0": "doom_wall.png",
+      "1": "doom_empty.png",
+      "2": "doom_wall.png",
+      "3": "doom_interact.png",
+      "4": "doom_hazard.png",
       "5": "doom_collect.png",
       "6": "doom_hazard.png",
       "7": "doom_interact.png",
@@ -204,9 +204,9 @@
       "0": "empty.png",
       "1": "empty.png",
       "2": "solid.png",
-      "3": "bat.png",
-      "4": "treasure.png",
-      "5": "dungeon_interactable.png"
+      "3": "dungeon_interactable.png",
+      "4": "bat.png",
+      "5": "treasure.png"
     },
     "mapping": {
       "0": 0,
@@ -234,8 +234,8 @@
     },
     "_tile_images": {
       "0": "pokemon/tree.png",
-      "1": "pokemon/tree.png",
-      "2": "pokemon/floor_0.png",
+      "1": "pokemon/floor_0.png",
+      "2": "pokemon/tree.png",
       "3": "pokemon/floor_4.png",
       "4": "pokemon/water.png",
       "5": "pokemon/pokeball.png",
@@ -270,9 +270,11 @@
     },
     "_tile_images": {
       "0": "sokoban_empty.png",
-      "1": "sokoban_wall.png",
-      "4": "sokoban_collectable.png",
-      "5": "sokoban_interact.png"
+      "1": "sokoban_empty.png",
+      "2": "sokoban_wall.png",
+      "3": "sokoban_interact.png",
+      "4": "sokoban_hazard.png",
+      "5": "sokoban_collectable.png"
     },
     "mapping": {
       "0": 0,

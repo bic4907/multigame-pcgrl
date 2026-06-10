@@ -3,13 +3,17 @@ dataset/multigame/render.py
 ===========================
 타일 그리드 렌더링 유틸리티.
 
+- 팔레트 기반 렌더링 (array_to_rgb, render_sample 등)
+- 타일 이미지 기반 렌더링 (GameLevelRenderer)
+
 외부 의존: numpy, Pillow (PIL)
 Pillow가 없을 경우 numpy 배열만 반환.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -176,4 +180,240 @@ def save_grid(
     out.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(canvas, mode="RGB").save(str(out))
     return out
+
+
+# ── 타일 이미지 기반 렌더링 ───────────────────────────────────────────────────────
+
+class GameLevelRenderer:
+    """
+    타일 이미지 기반 게임 레벨 렌더러.
+
+    tile_mapping.json과 tile_ims/ 디렉토리를 사용하여
+    각 타일을 실제 타일 이미지로 렌더링합니다.
+    """
+
+    def __init__(self, tile_ims_dir: Optional[Union[str, Path]] = None):
+        """
+        Parameters
+        ----------
+        tile_ims_dir : 타일 이미지 디렉토리 경로 (기본값: 현재 디렉토리의 tile_ims)
+        """
+        if tile_ims_dir is None:
+            current_dir = Path(__file__).parent
+            tile_ims_dir = current_dir / "tile_ims"
+
+        self.tile_ims_dir = Path(tile_ims_dir)
+        self.mapping_file = self.tile_ims_dir.parent / "tile_mapping.json"
+
+        # tile_mapping.json 로드
+        with open(self.mapping_file, 'r', encoding='utf-8') as f:
+            self.tile_mapping = json.load(f)
+
+        # 타일 이미지 캐시
+        self._tile_cache = {}
+
+    def _load_tile_image(self, game: str, tile_id: int, tile_size: int = 16) -> np.ndarray:
+        """
+        특정 게임의 타일 ID에 해당하는 이미지를 로드합니다.
+
+        Parameters
+        ----------
+        game : 게임 이름 (dungeon, doom, pokemon, sokoban, zelda)
+        tile_id : 타일 ID
+        tile_size : 타일 크기 (픽셀)
+
+        Returns
+        -------
+        np.ndarray : (tile_size, tile_size, 3) RGB 이미지
+        """
+        cache_key = (game, tile_id, tile_size)
+        if cache_key in self._tile_cache:
+            return self._tile_cache[cache_key]
+
+        # tile_mapping.json에서 타일 이미지 경로 찾기
+        game_config = self.tile_mapping.get(game, {})
+        tile_images = game_config.get("_tile_images", {})
+
+        # 타일 ID를 문자열로 변환
+        tile_id_str = str(tile_id)
+
+        # 해당 타일 이미지 파일명 찾기
+        if tile_id_str in tile_images:
+            tile_filename = tile_images[tile_id_str]
+        else:
+            tile_filename = "empty.png"
+
+        # 파일 경로 구성
+        if tile_filename.startswith("pokemon/"):
+            tile_path = self.tile_ims_dir / tile_filename
+        else:
+            tile_path = self.tile_ims_dir / game / tile_filename
+
+        # 이미지 로드
+        if not tile_path.exists():
+            # 플레이스홀더 생성 (회색)
+            tile_img = np.full((tile_size, tile_size, 3), 128, dtype=np.uint8)
+        else:
+            from PIL import Image
+            img = Image.open(tile_path).convert('RGB')
+            if img.size != (tile_size, tile_size):
+                img = img.resize((tile_size, tile_size), Image.NEAREST)
+            tile_img = np.array(img)
+
+        # 캐시에 저장
+        self._tile_cache[cache_key] = tile_img
+        return tile_img
+
+    def render(
+        self,
+        game: str,
+        level: np.ndarray,
+        tile_size: int = 16,
+        save_path: Optional[Union[str, Path]] = None,
+        show_tile_numbers: bool = False
+    ):
+        """
+        게임 레벨을 타일 이미지로 렌더링합니다.
+
+        Parameters
+        ----------
+        game : 게임 이름 (dungeon, doom, pokemon, sokoban, zelda)
+        level : 게임 레벨 배열 (2D numpy array, 각 셀은 타일 ID)
+        tile_size : 각 타일의 픽셀 크기
+        save_path : 저장 경로 (None이면 저장하지 않음)
+        show_tile_numbers : 타일 번호를 이미지 위에 표시할지 여부
+
+        Returns
+        -------
+        PIL.Image.Image : 렌더링된 이미지
+        """
+        from PIL import Image, ImageDraw, ImageFont
+
+        if not isinstance(level, np.ndarray):
+            level = np.array(level)
+
+        if level.ndim != 2:
+            raise ValueError(f"Level must be 2D array, got shape {level.shape}")
+
+        height, width = level.shape
+
+        # 렌더링 캔버스 생성
+        canvas = np.zeros((height * tile_size, width * tile_size, 3), dtype=np.uint8)
+
+        # 각 타일 렌더링
+        for y in range(height):
+            for x in range(width):
+                tile_id = int(level[y, x])
+                tile_img = self._load_tile_image(game, tile_id, tile_size)
+
+                # 캔버스에 타일 배치
+                y_start = y * tile_size
+                y_end = y_start + tile_size
+                x_start = x * tile_size
+                x_end = x_start + tile_size
+                canvas[y_start:y_end, x_start:x_end] = tile_img
+
+        # PIL 이미지로 변환
+        img = Image.fromarray(canvas, mode='RGB')
+
+        # 타일 번호 표시
+        if show_tile_numbers:
+            draw = ImageDraw.Draw(img)
+
+            # 폰트 크기 설정
+            font_size = max(8, int(tile_size * 0.45))
+            font = None
+
+            try:
+                font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
+            except Exception:
+                try:
+                    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+                except:
+                    try:
+                        font = ImageFont.load_default()
+                    except:
+                        return img
+
+            # 각 타일 위에 번호 표시
+            for y in range(height):
+                for x in range(width):
+                    tile_id = int(level[y, x])
+                    text = str(tile_id)
+
+                    x_pos = x * tile_size + tile_size // 2
+                    y_pos = y * tile_size + tile_size // 2
+
+                    try:
+                        if hasattr(font, 'getbbox'):
+                            bbox = font.getbbox(text)
+                            text_width = bbox[2] - bbox[0]
+                            text_height = bbox[3] - bbox[1]
+                        else:
+                            text_width = len(text) * font_size // 2
+                            text_height = font_size
+                    except:
+                        text_width = len(text) * font_size // 2
+                        text_height = font_size
+
+                    text_x = x_pos - text_width // 2
+                    text_y = y_pos - text_height // 2
+
+                    # 배경 사각형
+                    padding = 1
+                    rect_bbox = [
+                        text_x - padding,
+                        text_y - padding,
+                        text_x + text_width + padding,
+                        text_y + text_height + padding
+                    ]
+                    draw.rectangle(rect_bbox, fill=(0, 0, 0, 180))
+
+                    # 텍스트 그리기
+                    try:
+                        draw.text((text_x, text_y), text, fill=(255, 255, 255), font=font)
+                    except Exception:
+                        pass
+
+        # 저장
+        if save_path is not None:
+            save_path = Path(save_path)
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            img.save(save_path)
+
+        return img
+
+
+def render_game_level(
+    game: str,
+    level: np.ndarray,
+    tile_size: int = 16,
+    save_path: Optional[Union[str, Path]] = None,
+    show_tile_numbers: bool = False,
+    tile_ims_dir: Optional[Union[str, Path]] = None
+):
+    """
+    게임 레벨을 타일 이미지로 렌더링하는 편의 함수.
+
+    Parameters
+    ----------
+    game : 게임 이름
+    level : 2D numpy array
+    tile_size : 타일 크기 (픽셀)
+    save_path : 저장 경로
+    show_tile_numbers : 타일 번호 표시 여부
+    tile_ims_dir : 타일 이미지 디렉토리 (선택)
+
+    Returns
+    -------
+    PIL.Image.Image : 렌더링된 이미지
+    """
+    renderer = GameLevelRenderer(tile_ims_dir=tile_ims_dir)
+    return renderer.render(
+        game,
+        level,
+        tile_size=tile_size,
+        save_path=save_path,
+        show_tile_numbers=show_tile_numbers
+    )
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
 
-from .csv_rows import h5_folder_name, reward_enum_game_rows_from_run_csv, row_key
+from .csv_rows import condition_bucket_key, h5_folder_name, reward_enum_condition_rows_from_run_csv, row_key
 from .models import RunResult
 from .utils import reward_enum_value, safe_slug, unique_methods
 
@@ -91,18 +91,18 @@ def render_image_table_assets(
     run_results: list[RunResult],
     output_dir: Path,
     *,
-    max_rows_per_reward_enum: int = 10,
+    max_rows_per_condition: int = 4,
     seed_i: int = 0,
     tile_size: int = 12,
 ) -> tuple[list[dict[str, str]], dict[tuple[str, str], Path], dict[str, Path]]:
-    rows_by_reward_enum_game = {}
+    rows_by_reward_enum_condition_game = {}
     for run_result in run_results:
         if run_result.csv_dir is None:
             continue
-        for row in reward_enum_game_rows_from_run_csv(run_result, max_rows_per_reward_enum):
-            key = (reward_enum_value(row), row.get("game"))
-            rows_by_reward_enum_game.setdefault(key, row)
-    rows = list(rows_by_reward_enum_game.values())
+        for row in reward_enum_condition_rows_from_run_csv(run_result, max_rows_per_condition):
+            key = (reward_enum_value(row), condition_bucket_key(row), row.get("game"), row.get("row_i"))
+            rows_by_reward_enum_condition_game.setdefault(key, row)
+    rows = list(rows_by_reward_enum_condition_game.values())
     if not rows:
         return [], {}, {}
 
@@ -147,4 +147,3 @@ def render_image_table_assets(
             dataset_images[key] = rendered_gt.relative_to(output_dir)
 
     return rows, method_images, dataset_images
-

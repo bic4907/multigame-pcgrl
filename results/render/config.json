@@ -1,0 +1,14 @@
+[
+  {
+    "method": "IPCGRL",
+    "wandb_run_url": "https://wandb.ai/st4889ha-gwangju-institute-of-science-and-technology/aaai27_eval_random/runs/random_random_exp-def_s-0--ev_re-0_game-all-20260609113312"
+  },
+  {
+    "method": "VIPCGRL",
+    "wandb_run_url": "https://wandb.ai/st4889ha-gwangju-institute-of-science-and-technology/aaai27_eval_random/runs/random_random_exp-def_s-0--ev_re-0_game-all-20260609113312"
+  },
+  {
+    "method": "MGPCGRL",
+    "wandb_run_url": "https://wandb.ai/st4889ha-gwangju-institute-of-science-and-technology/aaai27_eval_random/runs/random_random_exp-def_s-0--ev_re-0_game-all-20260609113312"
+  }
+]

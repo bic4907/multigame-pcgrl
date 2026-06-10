@@ -37,7 +37,7 @@ from __future__ import annotations
 import csv
 import logging
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 import numpy as np
 
@@ -1227,6 +1227,83 @@ class MultiGameDataset:
             img.save(str(out))
             return out
         return img
+
+    def render_sample(
+        self,
+        sample: GameSample,
+        tile_size: int = 16,
+        save_path: Optional[Union[str, Path]] = None,
+        show_tile_numbers: bool = False
+    ) -> "Image.Image":
+        """
+        샘플을 타일 이미지로 렌더링합니다.
+        
+        Parameters
+        ----------
+        sample : GameSample 객체
+        tile_size : 타일 크기 (픽셀)
+        save_path : 저장 경로
+        show_tile_numbers : 타일 번호 표시 여부
+        
+        Returns
+        -------
+        PIL.Image.Image : 렌더링된 이미지
+        
+        Examples
+        --------
+        >>> ds = MultiGameDataset()
+        >>> sample = ds[0]
+        >>> img = ds.render_sample(sample, tile_size=20, show_tile_numbers=True)
+        >>> img.save("level.png")
+        """
+        from .render import GameLevelRenderer
+        renderer = GameLevelRenderer()
+        return renderer.render(
+            game=sample.game,
+            level=sample.array,
+            tile_size=tile_size,
+            save_path=save_path,
+            show_tile_numbers=show_tile_numbers
+        )
+    
+    def render_level(
+        self,
+        game: str,
+        level: np.ndarray,
+        tile_size: int = 16,
+        save_path: Optional[Union[str, Path]] = None,
+        show_tile_numbers: bool = False
+    ) -> "Image.Image":
+        """
+        게임 레벨을 타일 이미지로 직접 렌더링합니다.
+        
+        Parameters
+        ----------
+        game : 게임 이름 (dungeon, doom, pokemon, sokoban, zelda)
+        level : 2D numpy array
+        tile_size : 타일 크기 (픽셀)
+        save_path : 저장 경로
+        show_tile_numbers : 타일 번호 표시 여부
+        
+        Returns
+        -------
+        PIL.Image.Image : 렌더링된 이미지
+        
+        Examples
+        --------
+        >>> ds = MultiGameDataset()
+        >>> level = np.random.randint(1, 5, (16, 16))
+        >>> img = ds.render_level("dungeon", level, tile_size=20)
+        """
+        from .render import GameLevelRenderer
+        renderer = GameLevelRenderer()
+        return renderer.render(
+            game=game,
+            level=level,
+            tile_size=tile_size,
+            save_path=save_path,
+            show_tile_numbers=show_tile_numbers
+        )
 
     def mapping_rows(self, game: str):
         """tile_mapping.json 기준 원본 타일 -> unified 매핑 row 목록."""

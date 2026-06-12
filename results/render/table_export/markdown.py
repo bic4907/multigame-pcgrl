@@ -4,7 +4,14 @@ from collections import defaultdict
 from pathlib import Path
 import shutil
 
-from .csv_rows import CONDITION_BUCKETS, condition_bucket_key, condition_bucket_label, row_key, row_label
+from .csv_rows import (
+    CONDITION_BUCKETS,
+    annotate_condition_percentiles,
+    condition_bucket_key,
+    condition_bucket_label,
+    row_key,
+    row_label,
+)
 from .models import RunResult
 from .render_assets import render_image_table_assets
 from .utils import reward_enum_section_title, reward_enum_value, safe_slug, unique_methods
@@ -126,6 +133,7 @@ def export_markdown_table(config, run_results: list[RunResult], output_path: Pat
         condition_targets=condition_targets,
         num_episodes=num_episodes,
     )
+    annotate_condition_percentiles(rows)
 
     lines = ["# W&B Eval Render Table", ""]
 

@@ -90,6 +90,17 @@ def _parse_args() -> argparse.Namespace:
         default=0,
         help="Rows per reward_enum ranking in report.md. 0 means all pairs.",
     )
+    parser.add_argument(
+        "--render-config",
+        type=Path,
+        default=_DEFAULT_RENDER_CONFIG,
+        help="JSON file containing condition_contrast_targets for focused plots.",
+    )
+    parser.add_argument(
+        "--skip-config-target-plots",
+        action="store_true",
+        help="Do not draw focused plots from render config condition_contrast_targets.",
+    )
     return parser.parse_args()
 
 
@@ -358,6 +369,116 @@ def plot_reward_enum_distributions(df: pd.DataFrame, out_dir: Path, bins: int) -
     plt.close(fig)
 
 
+def _point_stats(values: np.ndarray, condition_value: float) -> dict[str, float | int]:
+    n = int(values.size)
+    if n == 0:
+        return {"n": 0, "count": 0, "pct": 0.0, "cdf": 0.0}
+    count = int(np.sum(values == condition_value))
+    return {
+        "n": n,
+        "count": count,
+        "pct": count / n,
+        "cdf": float(np.sum(values <= condition_value) / n),
+    }
+
+
+def _load_config_targets(config_path: Path) -> list[dict]:
+    if not config_path.exists():
+        return []
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    if not isinstance(config, dict):
+        return []
+    targets = config.get("condition_contrast_targets", [])
+    return targets if isinstance(targets, list) else []
+
+
+def plot_config_target_distributions(
+    df: pd.DataFrame,
+    config_path: Path,
+    out_dir: Path,
+    bins: int,
+) -> pd.DataFrame:
+    targets = _load_config_targets(config_path)
+    target_dir = out_dir / "plots" / "config_targets"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    if not targets:
+        return pd.DataFrame()
+
+    rows: list[dict] = []
+    cmap = plt.get_cmap("tab10")
+
+    for idx, target in enumerate(targets, start=1):
+        reward_enum = int(target["reward_enum"])
+        condition_value = float(target["condition_value"])
+        games = target.get("games") or [target.get("game_a"), target.get("game_b")]
+        games = [str(game) for game in games if game]
+        if len(games) != 2:
+            raise ValueError(f"condition_contrast_targets[{idx}] must define exactly two games: {target}")
+
+        re_df = df[(df["reward_enum"] == reward_enum) & (df["game"].isin(games))]
+        if re_df.empty:
+            continue
+
+        feature_names = sorted(str(v) for v in re_df["feature_name"].dropna().unique())
+        feature_name = ", ".join(feature_names) if feature_names else f"reward_enum_{reward_enum}"
+        edges = _hist_edges(re_df["condition"].to_numpy(float), bins=bins)
+
+        fig, ax = plt.subplots(figsize=(5, 3))
+        for game_i, game in enumerate(games):
+            values = re_df.loc[re_df["game"] == game, "condition"].to_numpy(float)
+            stats = _point_stats(values, condition_value)
+            color = cmap(game_i)
+            if values.size:
+                centers, density = _smooth_density(values, edges)
+                ax.fill_between(centers, density, alpha=0.10, color=color)
+                ax.plot(centers, density, linewidth=2.0, color=color, label=game)
+            rows.append(
+                {
+                    "target_i": idx,
+                    "reward_enum": reward_enum,
+                    "feature_name": feature_name,
+                    "condition_value": condition_value,
+                    "game": game,
+                    "paired_game": games[1 - game_i],
+                    "n": int(stats["n"]),
+                    "count": int(stats["count"]),
+                    "pct": float(stats["pct"]),
+                    "cdf": float(stats["cdf"]),
+                    "note": target.get("note", ""),
+                }
+            )
+
+        ax.axvline(
+            condition_value,
+            color="black",
+            linewidth=1.4,
+            linestyle="--",
+            label=f"value={_numeric_for_label(condition_value)}",
+        )
+        ax.set_title(feature_name)
+        ax.set_xlabel("condition value")
+        ax.set_ylabel("density")
+        ax.grid(True, alpha=0.25)
+        ax.legend(frameon=False)
+        fig.tight_layout()
+
+        game_slug = "_vs_".join(_safe_filename(game) for game in games)
+        value_slug = _safe_filename(_numeric_for_label(condition_value))
+        out_name = f"{idx:02d}_re{reward_enum}_{_safe_filename(feature_name)}_{game_slug}_v{value_slug}.png"
+        fig.savefig(target_dir / out_name, dpi=180, bbox_inches="tight")
+        plt.close(fig)
+
+    target_df = pd.DataFrame(rows)
+    if target_df.empty:
+        return target_df
+    target_df.to_csv(target_dir / "config_target_stats.csv", index=False)
+    return target_df
+
+
+def _numeric_for_label(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else f"{value:g}"
+
+
 def write_report(
     df: pd.DataFrame,
     summary: pd.DataFrame,
@@ -458,6 +579,14 @@ def main() -> None:
 
     plot_df = _sample_for_plots(df, args.plot_sample_per_game, args.plot_sample_seed)
     plot_reward_enum_distributions(plot_df, args.out_dir, bins=args.bins)
+    config_target_df = pd.DataFrame()
+    if not args.skip_config_target_plots:
+        config_target_df = plot_config_target_distributions(
+            plot_df,
+            args.render_config,
+            args.out_dir,
+            bins=args.bins,
+        )
     write_report(
         df,
         summary,
@@ -473,6 +602,8 @@ def main() -> None:
             f"Using {len(plot_df):,} rows for plots "
             f"(max {args.plot_sample_per_game:,} per game/reward_enum, seed={args.plot_sample_seed})"
         )
+    if not config_target_df.empty:
+        print(f"Wrote {len(config_target_df):,} config target stats rows from {args.render_config}")
     print(f"Wrote outputs to {args.out_dir}")
     print("Lowest-overlap pairs:")
     print(pairwise.head(min(args.top_k, 10)).to_string(index=False))

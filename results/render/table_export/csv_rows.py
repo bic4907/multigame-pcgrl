@@ -64,6 +64,8 @@ def condition_bucket_key(row: dict[str, str]) -> str:
 
 
 def condition_bucket_label(row: dict[str, str]) -> str:
+    if row.get("_condition_bucket_label"):
+        return row["_condition_bucket_label"]
     key = condition_bucket_key(row)
     return dict(CONDITION_BUCKETS).get(key, "Condition unknown")
 
@@ -205,7 +207,146 @@ def reward_enum_condition_rows_from_run_csv(
     return selected
 
 
+def _condition_distance(row: dict[str, str], target_value: float) -> tuple[float, float]:
+    value = condition_value(row)
+    if value is None:
+        return (float("inf"), float("inf"))
+    return (abs(value - target_value), value)
+
+
+def condition_contrast_rows_from_run_csv(
+    run_result: RunResult,
+    targets: list[dict],
+) -> list[dict[str, str]]:
+    """Select rows only for config-defined game/condition targets.
+
+    Each config target contributes at most one row per listed game for the
+    matching reward_enum. If the exact condition_value is absent in eval CSV,
+    the nearest available condition row is used so the render table remains
+    populated.
+    """
+    rows = rows_from_run_csv(run_result, max_rows=10_000)
+    selected: list[dict[str, str]] = []
+    seen: set[tuple[int, str, str]] = set()
+
+    for fallback_i, target in enumerate(targets, start=1):
+        target_i = int(target.get("_target_i", fallback_i))
+        reward_enum = int(target["reward_enum"])
+        target_value = float(target["condition_value"])
+        games = target.get("games") or [target.get("game_a"), target.get("game_b")]
+        games = [str(game) for game in games if game]
+
+        for game in games:
+            candidates = [
+                row for row in rows
+                if row.get("game") == game and reward_enum_value(row) == reward_enum
+            ]
+            if not candidates:
+                continue
+
+            best = min(candidates, key=lambda row: _condition_distance(row, target_value))
+            row_i = best.get("row_i", "")
+            key = (target_i, game, row_i)
+            if key in seen:
+                continue
+
+            out = dict(best)
+            out["_condition_bucket"] = f"target_{target_i}"
+            out["_condition_bucket_label"] = f"Config target {target_i}: {target.get('note') or f'condition={_numeric_text(str(target_value))}'}"
+            out["_target_condition_value"] = _numeric_text(str(target_value))
+            out["_target_condition_distance"] = _numeric_text(str(_condition_distance(best, target_value)[0]))
+            selected.append(out)
+            seen.add(key)
+
+    return selected
+
+
+def condition_contrast_pair_rows_from_run_csv(
+    run_result: RunResult,
+    targets: list[dict],
+    num_episodes: int,
+) -> list[dict]:
+    rows = rows_from_run_csv(run_result, max_rows=10_000)
+    paired_rows: list[dict] = []
+    for fallback_i, target in enumerate(targets, start=1):
+        target_i = int(target.get("_target_i", fallback_i))
+        reward_enum = int(target["reward_enum"])
+        target_value = float(target["condition_value"])
+        games = target.get("games") or [target.get("game_a"), target.get("game_b")]
+        games = [str(game) for game in games if game]
+        if len(games) != 2:
+            continue
+
+        member_lists: list[list[dict[str, str]]] = []
+        for game in games:
+            candidates = [
+                row for row in rows
+                if row.get("game") == game and reward_enum_value(row) == reward_enum
+            ]
+            candidates = sorted(candidates, key=lambda row: _condition_distance(row, target_value))
+
+            selected: list[dict[str, str]] = []
+            seen_instructions: set[str] = set()
+            for row in candidates:
+                instruction = row.get("instruction", "")
+                if instruction in seen_instructions:
+                    continue
+                out = dict(row)
+                out["_condition_bucket"] = f"target_{target_i}"
+                out["_condition_bucket_label"] = f"Config target {target_i}: {target.get('note') or f'condition={_numeric_text(str(target_value))}'}"
+                out["_target_condition_value"] = _numeric_text(str(target_value))
+                out["_target_condition_distance"] = _numeric_text(str(_condition_distance(row, target_value)[0]))
+                selected.append(out)
+                seen_instructions.add(instruction)
+                if len(selected) >= num_episodes:
+                    break
+
+            if len(selected) < num_episodes:
+                seen_rows = {row.get("row_i") for row in selected}
+                for row in candidates:
+                    if row.get("row_i") in seen_rows:
+                        continue
+                    out = dict(row)
+                    out["_condition_bucket"] = f"target_{target_i}"
+                    out["_condition_bucket_label"] = f"Config target {target_i}: {target.get('note') or f'condition={_numeric_text(str(target_value))}'}"
+                    out["_target_condition_value"] = _numeric_text(str(target_value))
+                    out["_target_condition_distance"] = _numeric_text(str(_condition_distance(row, target_value)[0]))
+                    selected.append(out)
+                    seen_rows.add(row.get("row_i"))
+                    if len(selected) >= num_episodes:
+                        break
+
+            if not selected:
+                break
+            member_lists.append(selected)
+
+        if len(member_lists) != 2:
+            continue
+
+        bucket_label = member_lists[0][0].get("_condition_bucket_label", f"Config target {target_i}")
+        for episode_i in range(num_episodes):
+            members = [
+                member_lists[0][episode_i % len(member_lists[0])],
+                member_lists[1][episode_i % len(member_lists[1])],
+            ]
+            paired_rows.append(
+                {
+                    "row_i": str(episode_i),
+                    "game": "pair",
+                    "reward_enum": str(reward_enum),
+                    "_row_key": f"{target_i:02d}_re{reward_enum}_episode{episode_i:02d}",
+                    "_condition_bucket": f"target_{target_i}",
+                    "_condition_bucket_label": bucket_label,
+                    "_episode_i": str(episode_i),
+                    "_pair_members": members,
+                }
+            )
+    return paired_rows
+
+
 def row_key(row: dict[str, str]) -> str:
+    if row.get("_row_key"):
+        return row["_row_key"]
     row_i = row.get("row_i", "x")
     game = row.get("game", "game")
     reward_enum = row.get("reward_enum", "re")
@@ -213,11 +354,24 @@ def row_key(row: dict[str, str]) -> str:
 
 
 def row_label(row: dict[str, str]) -> str:
+    if row.get("_pair_members"):
+        lines = []
+        for member in row["_pair_members"]:
+            instruction = member.get("instruction") or "-"
+            c_value = _numeric_text(str(condition_value(member)))
+            lines.append(f"{member.get('game', '-')}: {instruction} (c={c_value})")
+        return "<br>".join(markdown_escape(line) for line in lines)
+
     parts = [
         f"Game: {row.get('game', '-')}",
         f"Task: {task_name(row)}",
         f"Condition: {condition_text(row)}",
     ]
+    if row.get("_target_condition_value"):
+        parts.append(
+            f"Target: condition_{reward_enum_value(row)}={row['_target_condition_value']} "
+            f"(Δ={row.get('_target_condition_distance', '-')})"
+        )
     instruction = row.get("instruction")
     if instruction:
         parts.append(f"Instruction: {instruction}")

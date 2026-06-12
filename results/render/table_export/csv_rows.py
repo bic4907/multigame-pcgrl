@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from bisect import bisect_right
 import csv
+import json
+import math
 from pathlib import Path
 
 from .models import RunResult
@@ -31,6 +34,12 @@ def _numeric_text(value: str) -> str:
     return f"{numeric:g}"
 
 
+def _percentile_text(value: float) -> str:
+    if math.isclose(value, round(value)):
+        return f"{int(round(value))}%"
+    return f"{value:.1f}%"
+
+
 def _row_identity(row: dict[str, str]) -> tuple[str, str, str]:
     return (
         row.get("row_i", ""),
@@ -57,6 +66,89 @@ def condition_value(row: dict[str, str]) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _latest_ann_files(cache_dir: Path) -> list[tuple[str, Path]]:
+    if not cache_dir.exists():
+        return []
+
+    ann_files = []
+    for game_dir in sorted(path for path in cache_dir.iterdir() if path.is_dir()):
+        candidates = sorted(game_dir.glob("*.ann.json"), key=lambda path: path.stat().st_mtime)
+        if candidates:
+            ann_files.append((game_dir.name.lower(), candidates[-1]))
+    return ann_files
+
+
+def _annotation_condition_value(row: dict, reward_enum: int) -> float | None:
+    value = row.get(f"condition_{reward_enum}")
+    if value is None and 1 <= reward_enum <= 5:
+        value = row.get(f"condition_{reward_enum - 1}")
+    if value in (None, ""):
+        return None
+    try:
+        value_f = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value_f):
+        return None
+    return value_f
+
+
+def _load_dataset_condition_distributions(
+    cache_dir: Path,
+) -> dict[tuple[str, int], list[float]]:
+    distributions: dict[tuple[str, int], list[float]] = {}
+    for fallback_game, ann_path in _latest_ann_files(cache_dir):
+        payload = json.loads(ann_path.read_text(encoding="utf-8"))
+        game = str(payload.get("game") or fallback_game).lower()
+        for row in payload.get("annotations", []):
+            try:
+                reward_enum = int(row["reward_enum"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            value = _annotation_condition_value(row, reward_enum)
+            if value is None:
+                continue
+            distributions.setdefault((game, reward_enum), []).append(value)
+
+    for values in distributions.values():
+        values.sort()
+    return distributions
+
+
+def _condition_percentile(row: dict, distributions: dict[tuple[str, int], list[float]]) -> float | None:
+    value = condition_value(row)
+    if value is None:
+        return None
+    values = distributions.get((str(row.get("game", "")).lower(), reward_enum_value(row)))
+    if not values:
+        return None
+    return 100.0 * bisect_right(values, value) / len(values)
+
+
+def annotate_condition_percentiles(
+    rows: list[dict],
+    cache_dir: Path = Path("dataset/multigame/cache/artifacts"),
+) -> list[dict]:
+    distributions = _load_dataset_condition_distributions(cache_dir)
+    if not distributions:
+        return rows
+
+    for row in rows:
+        members = row.get("_pair_members")
+        if members:
+            target_rows = members
+        else:
+            target_rows = [row]
+
+        for target_row in target_rows:
+            percentile = _condition_percentile(target_row, distributions)
+            if percentile is None:
+                continue
+            target_row["_condition_percentile"] = f"{percentile:.6f}"
+            target_row["_condition_percentile_text"] = _percentile_text(percentile)
+    return rows
 
 
 def condition_bucket_key(row: dict[str, str]) -> str:
@@ -359,13 +451,19 @@ def row_label(row: dict[str, str]) -> str:
         for member in row["_pair_members"]:
             instruction = member.get("instruction") or "-"
             c_value = _numeric_text(str(condition_value(member)))
-            lines.append(f"{member.get('game', '-')}: {instruction} (c={c_value})")
+            percentile = member.get("_condition_percentile_text")
+            condition_suffix = f"c={c_value}, p={percentile}" if percentile else f"c={c_value}"
+            lines.append(f"{member.get('game', '-')}: {instruction} ({condition_suffix})")
         return "<br>".join(markdown_escape(line) for line in lines)
+
+    condition = condition_text(row)
+    if row.get("_condition_percentile_text"):
+        condition = f"{condition} (p={row['_condition_percentile_text']})"
 
     parts = [
         f"Game: {row.get('game', '-')}",
         f"Task: {task_name(row)}",
-        f"Condition: {condition_text(row)}",
+        f"Condition: {condition}",
     ]
     if row.get("_target_condition_value"):
         parts.append(

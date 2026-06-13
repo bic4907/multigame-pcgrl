@@ -260,19 +260,23 @@ class RewardDecoder(nn.Module):
         changed = jnp.max(jnp.abs(diff), axis=-1, keepdims=True)     # (B,H,W,1)
         feat = jnp.concatenate([prev_map, curr_map, diff, changed], axis=-1)
 
-        B, H, W, _ = feat.shape
-
-        # ── Conv stem: extract local transition features ──
+        # ── Conv stem: extract local transition features + downsample ──
+        # NOTE: a strided conv halves the spatial resolution (16x16 → 8x8) so the
+        # subsequent self-attention runs over ~64 tokens instead of 256. This
+        # keeps O(N^2) attention memory ~16x smaller (critical to avoid CUDA OOM
+        # at large batch sizes) while still preserving where/what changed.
         x = nn.Conv(self.hidden_dim, (3, 3), padding="SAME", name="stem_conv1")(feat)
         x = nn.gelu(x)
         x = nn.LayerNorm()(x)
-        x = nn.Conv(self.hidden_dim, (3, 3), padding="SAME", name="stem_conv2")(x)
+        x = nn.Conv(self.hidden_dim, (3, 3), strides=(2, 2), padding="SAME", name="stem_conv2")(x)
         x = nn.gelu(x)
 
+        B, Hd, Wd, _ = x.shape
+
         # ── Tokenize spatial grid ──
-        tokens = x.reshape(B, H * W, self.hidden_dim)
+        tokens = x.reshape(B, Hd * Wd, self.hidden_dim)
         pos_embed = self.param(
-            "pos_embed", nn.initializers.normal(0.02), (1, H * W, self.hidden_dim)
+            "pos_embed", nn.initializers.normal(0.02), (1, Hd * Wd, self.hidden_dim)
         )
         tokens = tokens + pos_embed
 

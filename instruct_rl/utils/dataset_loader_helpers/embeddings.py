@@ -114,7 +114,10 @@ def _build_instruct(sample_list, config):
 
     use_clip = getattr(config, "use_clip", False)
     needs_clip_embed = use_clip and config.nlp_input_dim > 0
-    needs_decoder_pred = use_clip and hasattr(config, "decoder")
+    uses_transition_reward_model = (
+        getattr(config, "reward_model_type", "enum_condition") == "transition"
+    )
+    needs_decoder_pred = use_clip and hasattr(config, "decoder") and not uses_transition_reward_model
 
     shared_module, shared_variables = None, None
     if needs_clip_embed or needs_decoder_pred:
@@ -139,6 +142,7 @@ def _build_instruct(sample_list, config):
         shared_module=shared_module,
         shared_variables=shared_variables,
     )
+    reward_model_mask = _build_reward_model_mask(sample_list, config)
     logger.info(
         "Built Instruct tensors: embedding=%s, reward_i=%s, condition=%s",
         embedding.shape,
@@ -164,7 +168,54 @@ def _build_instruct(sample_list, config):
         embedding=embedding,
         condition_id=condition_id,
         level=level_array,
+        reward_model_mask=reward_model_mask,
     )
+
+
+def _build_reward_model_mask(sample_list, config):
+    """Return 1 for instructions whose rollout reward should use the reward model."""
+    n = len(sample_list)
+    if getattr(config, "reward_model_type", "enum_condition") != "transition":
+        return jnp.zeros((n, 1), dtype=jnp.float32)
+
+    mode = getattr(config, "reward_decoder_mode", "unseen")
+    if mode == "noop":
+        return jnp.zeros((n, 1), dtype=jnp.float32)
+    if mode == "all":
+        return jnp.ones((n, 1), dtype=jnp.float32)
+
+    reward_seen_games = set(getattr(config, "reward_seen_games", None) or [])
+    if "doom" in reward_seen_games or "doom2" in reward_seen_games:
+        reward_seen_games.update({"doom", "doom2"})
+    if not reward_seen_games:
+        logger.warning(
+            "reward_model_type=transition and reward_decoder_mode=unseen, "
+            "but reward_seen_games is empty — reward model applied to all samples"
+        )
+        return jnp.ones((n, 1), dtype=jnp.float32)
+
+    mask = np.zeros((n, 1), dtype=np.float32)
+    reward_unseen_ratio = float(getattr(config, "reward_unseen_ratio", 0.0))
+    if reward_unseen_ratio > 0.0:
+        from collections import defaultdict
+        unseen_game_indices = defaultdict(list)
+        for i, s in enumerate(sample_list):
+            if s.game not in reward_seen_games:
+                unseen_game_indices[s.game].append(i)
+        for _, indices in unseen_game_indices.items():
+            n_meta = int(len(indices) * reward_unseen_ratio)
+            for idx in indices[n_meta:]:
+                mask[idx, 0] = 1.0
+    else:
+        for i, s in enumerate(sample_list):
+            if s.game not in reward_seen_games:
+                mask[i, 0] = 1.0
+    logger.info(
+        "Transition reward model mask: metadata=%d, reward_model=%d",
+        int((mask == 0).sum()),
+        int((mask == 1).sum()),
+    )
+    return jnp.array(mask, dtype=jnp.float32)
 
 
 def _load_shared_clip_module_and_ckpt(config):
@@ -233,6 +284,9 @@ def _build_reward_and_condition(
     # ── 2. "noop" 모드 또는 decoder 미사용: 메타데이터 그대로 반환 ─────────────
     if reward_decoder_mode == "noop" or not use_decoder:
         logger.info("Reward/Condition mode: noop (metadata only, decoder not applied)")
+        return jnp.array(reward_i_arr, dtype=jnp.int32), jnp.array(condition_arr, dtype=jnp.float32)
+    if getattr(config, "reward_model_type", "enum_condition") == "transition":
+        logger.info("Reward/Condition mode: transition reward model (metadata kept; dynamic reward during rollout)")
         return jnp.array(reward_i_arr, dtype=jnp.int32), jnp.array(condition_arr, dtype=jnp.float32)
 
     # ── 3. decoder로 덮어쓸 target_indices 결정 ───────────────────────────────
@@ -959,4 +1013,3 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
 
     logger.info("BERT embeddings shape: %s", cls_embeddings.shape)
     return jnp.array(cls_embeddings, dtype=jnp.float32)
-

@@ -191,96 +191,118 @@ class ContrastiveModule(nn.Module):
         return output_dict
 
 
+class _TransformerBlock(nn.Module):
+    """Pre-norm Transformer encoder block (MHSA + MLP)."""
+    dim: int
+    num_heads: int = 4
+    mlp_ratio: float = 4.0
+    dropout_rate: float = 0.1
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray, training: bool = False) -> jnp.ndarray:
+        # ── Multi-head self-attention ──
+        h = nn.LayerNorm()(x)
+        h = nn.MultiHeadDotProductAttention(
+            num_heads=self.num_heads,
+            dropout_rate=self.dropout_rate,
+        )(h, h, deterministic=not training)
+        x = x + h
+        # ── Feed-forward ──
+        h = nn.LayerNorm()(x)
+        h = nn.Dense(int(self.dim * self.mlp_ratio))(h)
+        h = nn.gelu(h)
+        h = nn.Dropout(self.dropout_rate)(h, deterministic=not training)
+        h = nn.Dense(self.dim)(h)
+        h = nn.Dropout(self.dropout_rate)(h, deterministic=not training)
+        x = x + h
+        return x
+
+
 class RewardDecoder(nn.Module):
-    """Embedding → (reward_enum classification, condition regression) 디코더.
+    """Universal transition reward model (spatial, attention-based).
 
-    Architecture
-    ------------
-    Shared trunk (MLP) → 분기
-      ├─ Classification head (hidden → num_reward_classes)  : reward_enum 분류
-      └─ Regression head    (hidden → sigmoid → [0,1])      : 정규화된 condition 예측
-          → denorm 시 cond_min/cond_max 로 원래 스케일 복원
+    Instead of consuming pre-computed state *embeddings*, this module ingests the
+    spatial one-hot tile maps of the previous/next state plus an explicit change
+    (diff) feature map.  A small conv stem extracts local features which are then
+    processed by a ViT-style Transformer whose tokens are conditioned on the
+    instruction (text) embedding.  The scalar transition reward is read out from
+    a dedicated CLS token.
 
-    cond_norm_min / cond_norm_max 는 Flax state variable ("norm_stats" collection)
-    로 저장되어, 체크포인트에 함께 포함된다.  학습되지 않는 상수이다.
-
-    Parameters
-    ----------
-    num_reward_classes : int
-        reward_enum 종류 수 (예: 6).
-    hidden_dim : int
-        MLP hidden dimension.
-    num_layers : int
-        shared trunk hidden layer 수 (≥1).
-    dropout_rate : float
-        Dropout rate.
-    cond_norm_min_init : jnp.ndarray | None
-        (num_reward_classes,) — 초기화 시 전달하는 reward_enum별 condition min 값.
-    cond_norm_max_init : jnp.ndarray | None
-        (num_reward_classes,) — 초기화 시 전달하는 reward_enum별 condition max 값.
+    Input feature maps (per cell):
+      - prev one-hot map        : C channels (what tile was there)
+      - curr one-hot map        : C channels (what tile is there now)
+      - signed diff (curr-prev) : C channels (which categories were removed/added)
+      - changed mask            : 1 channel  (where *any* change happened)
     """
-    num_reward_classes: int = 6
+    num_reward_classes: int = 6   # kept for construction compatibility
     hidden_dim: int = 128
     num_layers: int = 2
     dropout_rate: float = 0.1
-    cond_norm_min_init: jnp.ndarray = None
-    cond_norm_max_init: jnp.ndarray = None
+    num_heads: int = 4
 
     @nn.compact
-    def __call__(self, embed: jnp.ndarray, training: bool = False):
+    def __call__(
+        self,
+        text_embed: jnp.ndarray,
+        prev_map: jnp.ndarray,
+        curr_map: jnp.ndarray,
+        training: bool = False,
+    ):
         """
         Args:
-            embed: (B, D) — 인코더 임베딩 (L2-normalized).
+            text_embed: (B, D_text)         — instruction embedding (L2-normalized)
+            prev_map:   (B, H, W, C)        — s_t  one-hot (+ coord) feature map
+            curr_map:   (B, H, W, C)        — s_t+1 one-hot (+ coord) feature map
         Returns:
-            reward_logits:      (B, num_reward_classes) — reward_enum 분류 logits
-            condition_pred:     (B, num_reward_classes) — 정규화된 [0,1] condition 예측 (loss용)
-            condition_pred_raw: (B, num_reward_classes) — 원래 스케일 condition 예측 (추론용)
+            reward: (B,) scalar transition reward
         """
-        # ── Norm stats를 state variable로 등록 (학습 불가, 체크포인트에 저장) ──
-        _default_min = jnp.zeros(self.num_reward_classes) if self.cond_norm_min_init is None else self.cond_norm_min_init
-        _default_max = jnp.ones(self.num_reward_classes)  if self.cond_norm_max_init is None else self.cond_norm_max_init
+        diff = curr_map - prev_map                                   # (B,H,W,C)
+        changed = jnp.max(jnp.abs(diff), axis=-1, keepdims=True)     # (B,H,W,1)
+        feat = jnp.concatenate([prev_map, curr_map, diff, changed], axis=-1)
 
-        cond_min = self.variable(
-            "norm_stats", "cond_norm_min",
-            lambda: _default_min,
-        ).value
-        cond_max = self.variable(
-            "norm_stats", "cond_norm_max",
-            lambda: _default_max,
-        ).value
+        B, H, W, _ = feat.shape
 
-        # stop_gradient: 역전파에서 제외
-        cond_min = jax.lax.stop_gradient(cond_min)
-        cond_max = jax.lax.stop_gradient(cond_max)
+        # ── Conv stem: extract local transition features ──
+        x = nn.Conv(self.hidden_dim, (3, 3), padding="SAME", name="stem_conv1")(feat)
+        x = nn.gelu(x)
+        x = nn.LayerNorm()(x)
+        x = nn.Conv(self.hidden_dim, (3, 3), padding="SAME", name="stem_conv2")(x)
+        x = nn.gelu(x)
 
-        # ── Shared trunk ──
-        x = embed
-        for _ in range(self.num_layers):
-            x = nn.Dense(self.hidden_dim)(x)
-            x = nn.gelu(x)
-            x = nn.LayerNorm()(x)
-            x = nn.Dropout(self.dropout_rate)(x, deterministic=not training)
+        # ── Tokenize spatial grid ──
+        tokens = x.reshape(B, H * W, self.hidden_dim)
+        pos_embed = self.param(
+            "pos_embed", nn.initializers.normal(0.02), (1, H * W, self.hidden_dim)
+        )
+        tokens = tokens + pos_embed
 
-        # ── Classification head (reward_enum) ──
-        cls_h = nn.Dense(self.hidden_dim // 2, name="cls_hidden")(x)
-        cls_h = nn.gelu(cls_h)
-        reward_logits = nn.Dense(self.num_reward_classes, name="reward_cls_head")(cls_h)
+        # ── Instruction token (text conditioning) ──
+        text_token = nn.Dense(self.hidden_dim, name="text_proj")(text_embed)
+        text_token = text_token[:, None, :]                          # (B,1,D)
 
-        # ── Regression head (condition value per reward_enum) ──
-        reg_h = nn.Dense(self.hidden_dim // 2, name="reg_hidden")(x)
-        reg_h = nn.gelu(reg_h)
-        reg_logits = nn.Dense(self.num_reward_classes, name="condition_reg_head")(reg_h)
+        # ── Learnable CLS readout token ──
+        cls = self.param("cls_token", nn.initializers.normal(0.02), (1, 1, self.hidden_dim))
+        cls = jnp.broadcast_to(cls, (B, 1, self.hidden_dim))
 
-        # sigmoid → [0, 1] 정규화 공간 (loss는 이 값으로 계산)
-        condition_pred = jax.nn.sigmoid(reg_logits)
+        x = jnp.concatenate([cls, text_token, tokens], axis=1)       # (B, 2+H*W, D)
+        x = nn.Dropout(self.dropout_rate)(x, deterministic=not training)
 
-        # 역변환 → 원래 스케일 (추론 시 사용)
-        # log1p 공간에서 정규화되었으므로: denorm → expm1
-        scale = cond_max - cond_min                              # (num_classes,)
-        condition_pred_log = condition_pred * scale + cond_min          # log1p 공간
-        condition_pred_raw = jnp.expm1(jnp.maximum(condition_pred_log, 0.0))  # 원래 스케일
+        # ── Transformer encoder ──
+        for i in range(self.num_layers):
+            x = _TransformerBlock(
+                dim=self.hidden_dim,
+                num_heads=self.num_heads,
+                dropout_rate=self.dropout_rate,
+                name=f"block_{i}",
+            )(x, training=training)
+        x = nn.LayerNorm()(x)
 
-        return reward_logits, condition_pred, condition_pred_raw
+        # ── Reward read-out from CLS token ──
+        pooled = x[:, 0]                                             # (B, D)
+        h = nn.Dense(self.hidden_dim // 2, name="head_hidden")(pooled)
+        h = nn.gelu(h)
+        reward = nn.Dense(1, name="reward_head")(h)
+        return jnp.squeeze(reward, axis=-1)
 
 
 class ContrastiveDecoderModule(nn.Module):
@@ -339,6 +361,8 @@ class ContrastiveDecoderModule(nn.Module):
             input_ids: jnp.ndarray = None,
             attention_mask: jnp.ndarray = None,
             pixel_values: jnp.ndarray = None,
+            prev_pixel_values: jnp.ndarray = None,
+            curr_pixel_values: jnp.ndarray = None,
             reward_enum: jnp.ndarray = None,
             mode: str = "text_state",
             training: bool = False,
@@ -346,7 +370,7 @@ class ContrastiveDecoderModule(nn.Module):
         output_dict = dict()
         modes = mode.split("_")
 
-        if "state" in modes:
+        if "state" in modes and pixel_values is not None:
             state_embed = self.encode_state(pixel_values, training, reward_enum=reward_enum)
             output_dict["state_embed"] = state_embed
             output_dict["text_state_temperature"] = self.text_state_temperature
@@ -360,14 +384,20 @@ class ContrastiveDecoderModule(nn.Module):
 
         output_dict['text_state_temperature'] = self.text_state_temperature
 
-        # ── 디코더: state embedding 으로부터 reward_enum & condition 예측 ──
-        if "state" in modes:
-            reward_logits, condition_pred, condition_pred_raw = self.decoder(
-                output_dict["state_embed"], training=training
+        if (
+            "text_embed" in output_dict
+            and prev_pixel_values is not None
+            and curr_pixel_values is not None
+        ):
+            # Spatial reward model: feed prev/curr feature maps directly so the
+            # decoder can reason about *where* and *what* changed via its own
+            # conv + attention feature extractor (no pre-pooled state embedding).
+            output_dict["reward_pred"] = self.decoder(
+                output_dict["text_embed"],
+                prev_pixel_values,
+                curr_pixel_values,
+                training=training,
             )
-            output_dict["reward_logits"] = reward_logits
-            output_dict["condition_pred"] = condition_pred              # [0,1] 정규화 (loss용)
-            output_dict["condition_pred_raw"] = condition_pred_raw      # 원래 스케일 (추론용)
 
         return output_dict
 
@@ -513,8 +543,7 @@ def get_cnnclip_decoder_encoder(config: EncoderConfig, decoder_config=None,
         hidden_dim=decoder_config.hidden_dim,
         num_layers=decoder_config.num_layers,
         dropout_rate=config.dropout_rate,
-        cond_norm_min_init=cond_norm_min,
-        cond_norm_max_init=cond_norm_max,
+        num_heads=getattr(decoder_config, "num_heads", 4),
     )
 
     # reward_enum one-hot 채널 추가 여부 결정

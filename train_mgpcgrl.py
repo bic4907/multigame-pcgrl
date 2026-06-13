@@ -20,6 +20,8 @@ from conf.config import MGPCGRLConfig
 from conf.game_utils import GAME_ABBR, GAME_ABBR_INV
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.train_utils import main_entry
+from instruct_rl.utils.path_utils import init_config
+from encoder.utils.decoder_reward import build_transition_reward_inject_fn
 
 logger = logging.getLogger(__name__)
 
@@ -123,9 +125,18 @@ def main(config: MGPCGRLConfig):
     else:
         logger.warning("dataset_setting.json not found at %s", dataset_setting_path)
 
+    if config.initialize is None or config.initialize:
+        config = init_config(config)
+        config.initialize = False
+
+    inject_reward_fn = None
+    if getattr(config, "reward_model_type", "enum_condition") == "transition":
+        inject_reward_fn = build_transition_reward_inject_fn(config)
+
     main_entry(
         config,
         inject_obs_fn=inject_vipcgrl_obs,
+        inject_reward_fn=inject_reward_fn,
     )
 
 

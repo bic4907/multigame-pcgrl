@@ -503,7 +503,14 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
             act_shape=config.act_shape,
         )
 
-    elif config.model == "cnnclipconv" and hasattr(config, 'decoder'):
+    elif (
+        config.model == "cnnclipconv"
+        and hasattr(config, 'decoder')
+        and (
+            getattr(config, "reward_model_type", "enum_condition") != "transition"
+            or getattr(config.decoder, "cnn_reward_enum_onehot", False)
+        )
+    ):
         network = EncoderCLIPConvForward(
             config=config.encoder,
             encoder=get_cnnclip_decoder_encoder(

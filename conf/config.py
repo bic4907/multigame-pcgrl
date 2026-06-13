@@ -348,6 +348,7 @@ class MGPCGRLConfig(VIPCGRLConfig):
 
     # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
     use_decoder_reward_shaping: bool = True
+    reward_model_type: str = "transition"
 
     # sim reward 사용 가능하되 기본값은 0.0 (비활성). 양수로 설정 시 활성화.
     coef_human_sim: float = 0.0

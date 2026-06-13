@@ -1,6 +1,6 @@
 """tests/test_mgpcgrl_checkpoint.py
 
-train_clip_decoder -> train_mg_pcgrl 체크포인트 파이프라인 통합 테스트.
+train_clip_decoder -> train_mgpcgrl transition reward-model checkpoint pipeline.
 
 1) train_clip_decoder.py 를 dry-run 하여 디코더 체크포인트를 /tmp 에 저장
 2) 저장된 체크포인트를 /tmp/pretrained_decoders 구조로 구성
@@ -131,6 +131,12 @@ def decoder_ckpt_dir(tmp_base):
         shutil.copy2(src_norm_stats, dst_norm_stats)
         logger.info(f"[decoder_ckpt_dir] norm_stats.json copied to: {dst_norm_stats}")
 
+    src_dataset_setting = os.path.join(norm_stats_dir, "dataset_setting.json")
+    if os.path.isfile(src_dataset_setting):
+        dst_dataset_setting = os.path.join(os.path.dirname(dst), "dataset_setting.json")
+        shutil.copy2(src_dataset_setting, dst_dataset_setting)
+        logger.info(f"[decoder_ckpt_dir] dataset_setting.json copied to: {dst_dataset_setting}")
+
     logger.info(f"[decoder_ckpt_dir] source: {found_ckpts}")
     logger.info(f"[decoder_ckpt_dir] copied to: {dst}")
     logger.info(f"[decoder_ckpt_dir] contents: {os.listdir(dst)}")
@@ -173,10 +179,9 @@ class TestMGPCGRLWithDecoderCheckpoint:
                 sys.executable,
                 "-m",
                 "train_mgpcgrl",
-                # game=dg : 디코더 ckpt 가 game=dg 환경에서 학습되었으므로
-                # train_mg_pcgrl 도 동일한 게임으로 인코더를 초기화해야
-                # Conv_0 입력 채널 수(=base+onehot=10) 가 일치한다.
-                "game=dg",
+                # game=zd is unseen relative to the dg-trained reward model,
+                # so the rollout must actually use the transition reward model.
+                "game=zd",
                 "overwrite=true",
                 "total_timesteps=100",
                 "n_envs=4",
@@ -210,36 +215,20 @@ class TestMGPCGRLWithDecoderCheckpoint:
 
         combined_output = result.stdout + result.stderr
 
-        # ── 1. Decoder checkpoint loading log ──
-        assert (
-            "top-level keys: ['decoder', 'encoders_state', 'encoders_text', 'text_state_temperature']" in combined_output
-            or "top-level keys: ['decoder', 'encoders_state', 'encoders_text', 'text_state_temperature']" in combined_output.lower()
-        ), (
-            "디코더 체크포인트 로딩 로그를 찾을 수 없습니다.\n"
+        assert "Transition reward model hook ready" in combined_output, (
+            "transition reward model hook 로딩 로그를 찾을 수 없습니다.\n"
             f"stdout (last 2000):\n{result.stdout[-2000:]}\n"
             f"stderr (last 2000):\n{result.stderr[-2000:]}"
         )
 
-        # ── 2. Norm stats loaded log (denorm pipeline verification) ──
-        # "Norm stats loaded from" appears on cache miss;
-        # "Norm stats ready for denorm" appears always (even on cache hit).
-        assert (
-            "Norm stats loaded from" in combined_output
-            or "Norm stats ready for denorm" in combined_output
-        ), (
-            "Expected norm stats load log in train_mgpcgrl output — "
-            "norm_stats.json was not found or loaded during inference.\n"
+        assert "variables keys: ['params']" in combined_output, (
+            "reward model checkpoint variables 로딩 로그를 찾을 수 없습니다.\n"
             f"stdout (last 2000):\n{result.stdout[-2000:]}\n"
             f"stderr (last 2000):\n{result.stderr[-2000:]}"
         )
 
-        # ── 3. Denorm log (cache miss) OR cache-hit with valid norm stats (cache hit) ──
-        assert (
-            "Denorm applied" in combined_output
-            or "Decoder reward cache HIT" in combined_output
-        ), (
-            "Expected 'Denorm applied' or 'Decoder reward cache HIT' in train_mgpcgrl output — "
-            "condition denorm pipeline did not run.\n"
+        assert "Transition reward model mask: metadata=0, reward_model=1000" in combined_output, (
+            "unseen instruction samples should use the transition reward model.\n"
             f"stdout (last 2000):\n{result.stdout[-2000:]}\n"
             f"stderr (last 2000):\n{result.stderr[-2000:]}"
         )

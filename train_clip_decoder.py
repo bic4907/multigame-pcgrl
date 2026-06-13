@@ -103,6 +103,8 @@ def subset_clip_dataset(dataset: CLIPDataset, indices: np.ndarray) -> CLIPDatase
         reward_enum_targets=dataset.reward_enum_targets[idx],
         condition_targets=dataset.condition_targets[idx],
         quantized_condition_targets=dataset.quantized_condition_targets[idx],
+        level_maps=dataset.level_maps[idx] if dataset.level_maps is not None else None,
+        condition_values=dataset.condition_values[idx] if dataset.condition_values is not None else None,
     )
 
 
@@ -235,6 +237,8 @@ def train_step(
             batch.input_ids,
             batch.attention_mask,
             batch.pixel_values,
+            prev_pixel_values=batch.prev_pixel_values,
+            curr_pixel_values=batch.curr_pixel_values,
             reward_enum=batch.reward_enum_target,
             mode=mode,
             training=is_train,
@@ -253,43 +257,34 @@ def train_step(
         )
         contrastive_loss = state_mask * (s2t_loss + t2s_loss) / 2.0
 
-        # ── Decoder: reward_enum classification ──
-        reward_logits = outputs["reward_logits"]
-        reward_target = batch.reward_enum_target
-        cls_loss = jnp.mean(
-            optax.softmax_cross_entropy_with_integer_labels(reward_logits, reward_target)
-        )
-        reward_pred = jnp.argmax(reward_logits, axis=-1)
-        reward_accuracy = jnp.mean(reward_pred == reward_target)
-
-        # ── (3) Decoder: condition regression loss (huber or mae) ──
-        condition_pred = outputs["condition_pred"]    # (B, num_classes) — [0,1] 정규화
-        condition_target = batch.condition_target      # (B,) — [0,1] 정규화
-        # 각 샘플의 predicted condition을 gt reward_enum 인덱스로 gather
-        per_sample_cond = condition_pred[jnp.arange(condition_pred.shape[0]), reward_target]
-        abs_diff = jnp.abs(per_sample_cond - condition_target)
-
-        # 원본 스케일로 변환한 값/타깃 및 오차 (로깅용)
-        condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes) — 원래 linear 스케일
-        per_sample_cond_raw = condition_pred_raw[jnp.arange(condition_pred_raw.shape[0]), reward_target]
-        target_log = condition_target * (norm_max_arr[reward_target] - norm_min_arr[reward_target]) + norm_min_arr[reward_target]
-        target_raw = jnp.expm1(jnp.maximum(target_log, 0.0))
-        abs_diff_raw = jnp.abs(per_sample_cond_raw - target_raw)
-
+        # ── Decoder: direct transition reward regression ──
+        reward_value_pred = outputs["reward_pred"]
+        reward_value_target = batch.reward_target
+        reward_abs_diff = jnp.abs(reward_value_pred - reward_value_target)
         if regression_loss == "huber":
-            reg_per_sample = jnp.where(abs_diff <= 1.0, 0.5 * abs_diff ** 2, abs_diff - 0.5)
-            reg_per_sample_raw = jnp.where(abs_diff_raw <= 1.0, 0.5 * abs_diff_raw ** 2, abs_diff_raw - 0.5)
-        else:  # mae
-            reg_per_sample = abs_diff
-            reg_per_sample_raw = abs_diff_raw
-        reg_loss = jnp.mean(reg_per_sample)
-        reg_loss_raw = jnp.mean(reg_per_sample_raw)
-        # linear 공간 normalized [0,1] MAE (모니터링용 — gradient 계산에 불포함)
-        # norm_min/max는 log1p 공간이므로 expm1로 linear 스케일로 복원 후 정규화
-        linear_min = jnp.expm1(norm_min_arr[reward_target])
-        linear_max = jnp.expm1(norm_max_arr[reward_target])
-        linear_range = linear_max - linear_min + 1e-8
-        condition_mae_normalized = jnp.mean(jnp.abs(per_sample_cond_raw - target_raw) / linear_range)
+            reward_reg_per_sample = jnp.where(
+                reward_abs_diff <= 1.0,
+                0.5 * reward_abs_diff ** 2,
+                reward_abs_diff - 0.5,
+            )
+        else:
+            reward_reg_per_sample = reward_abs_diff
+        reward_loss = jnp.mean(reward_reg_per_sample)
+
+        # Legacy enum/condition metrics kept so the existing logging/eval loop
+        # can run while the optimized target is now scalar reward.
+        reward_target = batch.reward_enum_target
+        cls_loss = jnp.array(0.0, dtype=jnp.float32)
+        reward_pred = reward_target
+        reward_accuracy = jnp.array(1.0, dtype=jnp.float32)
+        condition_target = batch.condition_target
+        per_sample_cond = condition_target
+        per_sample_cond_raw = reward_value_pred
+        target_raw = reward_value_target
+        abs_diff = reward_abs_diff
+        abs_diff_raw = reward_abs_diff
+        reg_loss = reward_loss
+        reg_loss_raw = reward_loss
 
         # ── Per-reward_enum regression 메트릭 ──
         per_enum_huber = jnp.zeros(num_reward_classes)
@@ -301,17 +296,16 @@ def train_step(
         for eidx in range(num_reward_classes):
             mask = (reward_target == eidx).astype(jnp.float32)        # (B,)
             count = jnp.sum(mask) + 1e-8                               # 0-div 방지
-            per_enum_huber = per_enum_huber.at[eidx].set(jnp.sum(reg_per_sample * mask) / count)
+            per_enum_huber = per_enum_huber.at[eidx].set(jnp.sum(reward_reg_per_sample * mask) / count)
             per_enum_mae = per_enum_mae.at[eidx].set(jnp.sum(abs_diff * mask) / count)
-            per_enum_huber_raw = per_enum_huber_raw.at[eidx].set(jnp.sum(reg_per_sample_raw * mask) / count)
+            per_enum_huber_raw = per_enum_huber_raw.at[eidx].set(jnp.sum(reward_reg_per_sample * mask) / count)
             per_enum_mae_raw = per_enum_mae_raw.at[eidx].set(jnp.sum(abs_diff_raw * mask) / count)
             per_enum_count = per_enum_count.at[eidx].set(jnp.sum(mask))
 
         # ── Total Loss ──
         total_loss = (
             contrastive_weight * contrastive_loss
-            + cls_weight * cls_loss
-            + reg_weight * reg_loss
+            + reg_weight * reward_loss
         )
 
         metrics = {
@@ -326,6 +320,9 @@ def train_step(
             "cls_loss": cls_loss,
             "reg_loss": reg_loss,
             "reg_loss_raw": reg_loss_raw,
+            "reward_loss": reward_loss,
+            "reward_value_pred": reward_value_pred,
+            "reward_value_target": reward_value_target,
             "reward_accuracy": reward_accuracy,
             "reward_pred": reward_pred,  # (B,) per-sample predictions
             "abs_diff": abs_diff,        # (B,) per-sample |pred_cond - target_cond| (normalized)
@@ -573,9 +570,12 @@ def evaluate_per_game(
             input_ids=input_ids,
             attention_mask=attention_mask,
             pixel_values=pixel_values,
+            prev_pixel_values=pixel_values,
+            curr_pixel_values=pixel_values,
             duplicate_matrix=duplicate_matrix,
             reward_enum_target=reward_enum_target,
             condition_target=condition_target,
+            reward_target=np.zeros((len(indices),), dtype=np.float32),
         )
         batch = jax.device_put(batch)
 
@@ -821,6 +821,8 @@ def get_train_state(config, rng_key, cond_norm_min=None, cond_norm_max=None):
             input_ids,
             attention_mask,
             pixel_values,
+            prev_pixel_values=pixel_values,
+            curr_pixel_values=pixel_values,
             reward_enum=jnp.zeros((1,), dtype=jnp.int32),
             mode=config.encoder.mode,
             training=False,
@@ -833,9 +835,10 @@ def get_train_state(config, rng_key, cond_norm_min=None, cond_norm_max=None):
         def _create_mask(variables):
             import jax.tree_util as jtu
 
-            flat = jtu.tree_map(lambda _: True, variables.get("params", {}))
-            frozen = jtu.tree_map(lambda _: False, variables.get("norm_stats", {}))
-            return {"params": flat, "norm_stats": frozen}
+            mask = {"params": jtu.tree_map(lambda _: True, variables.get("params", {}))}
+            if "norm_stats" in variables:
+                mask["norm_stats"] = jtu.tree_map(lambda _: False, variables.get("norm_stats", {}))
+            return mask
 
         mask = _create_mask(variables)
         tx = optax.masked(

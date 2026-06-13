@@ -48,6 +48,8 @@ class CLIPDataset:
     reward_enum_targets: np.ndarray = None   # (N,) 0-indexed reward_enum
     condition_targets: np.ndarray = None     # (N,) condition float value
     quantized_condition_targets: np.ndarray = None  # (N,) quantized bin index (0~7, CUSTOM_THRESHOLDS 기준 — 8 bins)
+    level_maps: np.ndarray = None          # (N,H,W) env tile ids (1-based, BORDER excluded)
+    condition_values: np.ndarray = None    # (N,num_reward_classes) raw condition values
 
 @dataclass
 class CLIPEmbedData:
@@ -66,14 +68,17 @@ class CLIPContrastiveBatch:
 
 @dataclass
 class CLIPDecoderBatch:
-    """Contrastive + Decoder 학습용 배치."""
+    """Contrastive + transition reward model 학습용 배치."""
     class_ids: np.ndarray
     input_ids: np.ndarray
     attention_mask: np.ndarray
     pixel_values: np.ndarray
+    prev_pixel_values: np.ndarray
+    curr_pixel_values: np.ndarray
     duplicate_matrix: np.ndarray     # (B, B)
     reward_enum_target: np.ndarray   # (B,)  — 0-indexed reward_enum 클래스
     condition_target: np.ndarray     # (B,)  — condition 값 (regression target)
+    reward_target: np.ndarray = None # (B,)  — annotated scalar reward for (s_t,s_t+1)
 
 
 
@@ -276,6 +281,8 @@ class CLIPDatasetBuilder:
                 reward_enum_targets=np.array(self.preprocessed_dataset_dict["reward_enum_targets"]),
                 condition_targets=np.array(self.preprocessed_dataset_dict["condition_targets"]),
                 quantized_condition_targets=np.array(self.preprocessed_dataset_dict["quantized_condition_targets"]),
+                level_maps=np.array(self.preprocessed_dataset_dict["level_maps"]),
+                condition_values=np.array(self.preprocessed_dataset_dict["condition_values"]),
             )
 
     def preprocess_paired_data(self):
@@ -313,9 +320,10 @@ class CLIPDatasetBuilder:
         # unified 카테고리: 0=empty, 1=wall, 2=interactive, 3=hazard, 4=collectable (5개)
         # map2onehot은 value-1 을 index로 쓰므로 category 0(empty)은 all-zeros(implicit bg),
         # category 1-4는 채널 0-3에 정확히 표현된다.
-        level_arrays = jnp.stack([s.array for s in samples], 0)  # (N, 16, 16)
-        level_arrays = map2onehot_batch(level_arrays, num_classes=NUM_CATEGORIES)  # (N, 16, 16, NUM_CATEGORIES)
-        level_arrays = add_coord_channel_batch(level_arrays)  # (N, 16, 16, 7)
+        raw_level_arrays = np.stack([np.asarray(s.array, dtype=np.int32) for s in samples], 0)  # (N, 16, 16)
+        level_arrays = map2onehot_batch(jnp.array(raw_level_arrays), num_classes=NUM_CATEGORIES)  # (N, 16, 16, NUM_CATEGORIES)
+        level_arrays = add_coord_channel_batch(level_arrays)  # (N, 16, 16, C+2)
+        env_level_maps = raw_level_arrays + (1 if raw_level_arrays.min() == 0 else 0)
 
         language_inst_list = [s.instruction for s in samples]
 
@@ -424,6 +432,18 @@ class CLIPDatasetBuilder:
             float(rc[2]) if rc[2] is not None else 0.0
             for rc in reward_cond_list
         ], dtype=np.float32)
+        num_condition_classes = max(
+            5,
+            int(np.max(reward_enum_targets)) + 1 if len(reward_enum_targets) else 5,
+        )
+        condition_values = np.full(
+            (len(samples), num_condition_classes), -1.0, dtype=np.float32
+        )
+        for idx, s in enumerate(samples):
+            conds = s.meta.get("conditions", {})
+            for j in range(condition_values.shape[1]):
+                val = conds.get(j, conds.get(str(j), -1))
+                condition_values[idx, j] = float(val)
 
         # ── log1p 변환: right-skewed 분포의 high-value 영역 확장 ──
         # 데이터 특성: 낮은 값에 밀집 / 높은 값은 long-tail → log1p로 균등화
@@ -463,9 +483,11 @@ class CLIPDatasetBuilder:
             "input_ids":            inst_input_ids,
             "attention_masks":      inst_attention_masks,
             "pixel_values":         level_arrays,
+            "level_maps":           env_level_maps,
             "is_train":             is_train,
             "reward_enum_targets":  reward_enum_targets,
             "condition_targets":    condition_targets,
+            "condition_values":     condition_values,
             "quantized_condition_targets": quantized_condition_targets,
         }
 
@@ -489,6 +511,8 @@ class CLIPDatasetBuilder:
             reward_enum_targets=self.dataset.reward_enum_targets[train_mask],
             condition_targets=self.dataset.condition_targets[train_mask],
             quantized_condition_targets=self.dataset.quantized_condition_targets[train_mask],
+            level_maps=self.dataset.level_maps[train_mask],
+            condition_values=self.dataset.condition_values[train_mask],
         )
         test_dataset = CLIPDataset(
             class_ids=self.dataset.class_ids[test_mask],
@@ -500,6 +524,8 @@ class CLIPDatasetBuilder:
             reward_enum_targets=self.dataset.reward_enum_targets[test_mask],
             condition_targets=self.dataset.condition_targets[test_mask],
             quantized_condition_targets=self.dataset.quantized_condition_targets[test_mask],
+            level_maps=self.dataset.level_maps[test_mask],
+            condition_values=self.dataset.condition_values[test_mask],
         )
 
         return train_dataset, test_dataset
@@ -565,10 +591,17 @@ def create_clip_embedding_table(embed_queue, reward_df: pd.DataFrame):
 
 
 def create_clip_decoder_batch(dataset: CLIPDataset, batch_size: int, rng_key: jax.random.PRNGKey) -> CLIPDecoderBatch:
-    """Create batches for contrastive + decoder training."""
+    """Create batches for contrastive + transition reward-model training.
+
+    A synthetic transition is sampled on the fly:
+    base level -> randomized/permuted s_t -> one-tile edit s_t+1.
+    The scalar target is annotated with the same evaluator reward used by RL.
+    """
     n_samples = len(dataset.input_ids)
     shuffled_indices = jax.random.permutation(rng_key, n_samples)
     shuffled_indices = np.array(shuffled_indices)
+    seed = int(jax.random.randint(rng_key, (), 0, 2**31 - 1))
+    np_rng = np.random.default_rng(seed)
 
     for start_idx in range(0, n_samples, batch_size):
         end_idx = min(start_idx + batch_size, n_samples)
@@ -582,19 +615,106 @@ def create_clip_decoder_batch(dataset: CLIPDataset, batch_size: int, rng_key: ja
         input_ids = dataset.input_ids[batch_indices]
         attention_mask = dataset.attention_masks[batch_indices]
         pixel_values = dataset.pixel_values[batch_indices]
+        level_maps = dataset.level_maps[batch_indices]
         duplicate_matrix = np.equal.outer(class_ids, class_ids).astype(np.float32)
         reward_enum_target = dataset.reward_enum_targets[batch_indices]
         condition_target = dataset.condition_targets[batch_indices]
+        condition_values = dataset.condition_values[batch_indices]
+        prev_maps, curr_maps = _sample_reward_transitions(level_maps, np_rng)
+        prev_pixel_values = _maps_to_pixel_values(prev_maps)
+        curr_pixel_values = _maps_to_pixel_values(curr_maps)
+        reward_target = _compute_transition_rewards(
+            reward_enum_target, condition_values, prev_maps, curr_maps
+        )
 
         yield CLIPDecoderBatch(
             class_ids=class_ids,
             input_ids=input_ids,
             attention_mask=attention_mask,
             pixel_values=pixel_values,
+            prev_pixel_values=prev_pixel_values,
+            curr_pixel_values=curr_pixel_values,
             duplicate_matrix=duplicate_matrix,
             reward_enum_target=reward_enum_target,
             condition_target=condition_target,
+            reward_target=reward_target,
         )
+
+
+def _sample_reward_transitions(
+    level_maps: np.ndarray,
+    rng: np.random.Generator,
+    noop_prob: float = 0.1,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Build diverse one-edit transitions from dataset maps.
+
+    The previous state keeps a random fraction of a spatial permutation and a
+    random fraction of Dirichlet-sampled tiles. The next state edits exactly one
+    tile, matching the PCGRL edit surface. With probability ``noop_prob`` the
+    edit keeps the same tile value so the reward model also sees zero-delta
+    transitions that are common during RL rollouts.
+    """
+    maps = np.asarray(level_maps, dtype=np.int32)
+    batch, h, w = maps.shape
+    tile_min = int(maps.min())
+    tile_max = int(maps.max())
+    tile_values = np.arange(tile_min, tile_max + 1, dtype=np.int32)
+    prev = np.empty_like(maps)
+    curr = np.empty_like(maps)
+    n_cells = h * w
+
+    for i in range(batch):
+        flat = maps[i].reshape(-1).copy()
+        perm_prob = rng.uniform(0.0, 1.0)
+        permuted = flat[rng.permutation(n_cells)]
+        perm_mask = rng.random(n_cells) < perm_prob
+        flat[perm_mask] = permuted[perm_mask]
+
+        random_prob = rng.uniform(0.0, 0.5)
+        alpha = rng.uniform(0.2, 3.0, size=len(tile_values))
+        probs = rng.dirichlet(alpha)
+        random_tiles = rng.choice(tile_values, size=n_cells, p=probs)
+        random_mask = rng.random(n_cells) < random_prob
+        flat[random_mask] = random_tiles[random_mask]
+
+        next_flat = flat.copy()
+        edit_idx = int(rng.integers(0, n_cells))
+        old_val = next_flat[edit_idx]
+        if len(tile_values) > 1 and rng.random() >= noop_prob:
+            # Change the tile to a *different* value.
+            choices = tile_values[tile_values != old_val]
+            next_flat[edit_idx] = int(rng.choice(choices))
+        # else: keep old_val → zero-delta (no-op) transition.
+
+        prev[i] = flat.reshape(h, w)
+        curr[i] = next_flat.reshape(h, w)
+
+    return prev, curr
+
+
+def _maps_to_pixel_values(env_maps: np.ndarray) -> np.ndarray:
+    """Convert 1-based env maps to encoder pixel values with coord channels."""
+    zero_based = np.asarray(env_maps, dtype=np.int32) - 1
+    onehot = map2onehot_batch(jnp.array(zero_based), num_classes=NUM_CATEGORIES)
+    pixels = add_coord_channel_batch(onehot)
+    return np.asarray(pixels, dtype=np.float32)
+
+
+def _compute_transition_rewards(
+    reward_enum_target: np.ndarray,
+    condition_values: np.ndarray,
+    prev_maps: np.ndarray,
+    curr_maps: np.ndarray,
+) -> np.ndarray:
+    from evaluator import get_reward_batch
+
+    rewards = get_reward_batch(
+        jnp.array(reward_enum_target, dtype=jnp.int32).reshape(-1, 1),
+        jnp.array(condition_values, dtype=jnp.float32),
+        jnp.array(prev_maps, dtype=jnp.int32),
+        jnp.array(curr_maps, dtype=jnp.int32),
+    )
+    return np.asarray(jax.device_get(rewards), dtype=np.float32)
 
 if __name__ == "__main__":
     rng_key = jax.random.PRNGKey(0)

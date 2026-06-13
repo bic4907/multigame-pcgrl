@@ -235,7 +235,11 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
 
                 enc_param = enc_state["params"]["params"]
                 if config.encoder.model in ["clip", "cnnclip"]:
-                    enc_param = enc_param
+                    if getattr(config, "reward_model_type", "enum_condition") == "transition":
+                        enc_param = {
+                            k: v for k, v in enc_param.items()
+                            if k != "decoder"
+                        }
                 else:
                     def get_encoder_params_recursive(params, key):
                         if key in params:
@@ -319,6 +323,8 @@ def apply_encoder_params(runner_state, encoder_params, config):
     logger.info(
         f"Parameters loaded from encoder checkpoint ({config.encoder.ckpt_path})"
     )
+    if getattr(config, "reward_model_type", "enum_condition") == "transition" and "decoder" in encoder_params:
+        encoder_params = {k: v for k, v in encoder_params.items() if k != "decoder"}
     runner_state.train_state.params["params"]["subnet"]["encoder"] = encoder_params
 
     logger.info("-" * 80)

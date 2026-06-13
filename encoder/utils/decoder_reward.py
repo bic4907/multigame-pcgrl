@@ -57,12 +57,15 @@ def load_decoder(
     rng = jax.random.PRNGKey(0)
     dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
     dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
-    dummy_pix = jnp.ones((1, 16, 16, 6), dtype=jnp.float32)
+    from dataset.multigame.tile_utils import NUM_CATEGORIES
+    dummy_pix = jnp.ones((1, 16, 16, NUM_CATEGORIES + 2), dtype=jnp.float32)
     dummy_reward_enum = jnp.zeros((1,), dtype=jnp.int32)
 
     mode = "text_state" if encoder_config.state else "text"
     variables_template = module.init(
         rng, dummy_ids, dummy_mask, dummy_pix,
+        prev_pixel_values=dummy_pix,
+        curr_pixel_values=dummy_pix,
         reward_enum=dummy_reward_enum,
         mode=mode, training=False,
     )
@@ -148,6 +151,11 @@ def reward_decode(
     condition : (N, num_classes) jnp.float32
         예측된 condition 벡터. 선택된 enum 슬롯만 값이 채워지고 나머지는 -1.
     """
+    raise NotImplementedError(
+        "Enum/condition reward decoding has been replaced by the transition "
+        "reward model. Use predict_transition_reward or "
+        "build_transition_reward_inject_fn instead."
+    )
     from tqdm import tqdm
 
     n = text_embeddings.shape[0]
@@ -223,6 +231,10 @@ def predict_reward_condition(
     instruction_embedding : (n_envs, D)
         사전학습된 CLIP encoder를 통과한 latent embedding (e.g. 64-dim).
     """
+    raise NotImplementedError(
+        "Enum/condition reward prediction has been replaced by direct scalar "
+        "transition reward prediction. Use predict_transition_reward instead."
+    )
     n_envs = instruction_embedding.shape[0]
 
     # ContrastiveDecoderModule 내부 decoder 서브모듈을 직접 호출한다.
@@ -300,4 +312,91 @@ def build_decoder_reward_inject_fn(config) -> Callable:
             num_reward_classes=config.decoder_reward_classes,
         )
 
+    return _inject_reward_fn
+
+
+def _env_maps_to_pixel_values(env_maps: jnp.ndarray, num_classes: int) -> jnp.ndarray:
+    from instruct_rl.utils.level_processing_utils import add_coord_channel_batch, map2onehot_batch
+
+    zero_based = env_maps.astype(jnp.int32) - 1
+    onehot = map2onehot_batch(zero_based, num_classes=num_classes)
+    return add_coord_channel_batch(onehot)
+
+
+def predict_transition_reward(
+    apply_fn,
+    variables: dict,
+    instruction_embedding: jnp.ndarray,
+    prev_env_map: jnp.ndarray,
+    curr_env_map: jnp.ndarray,
+    *,
+    num_classes: int = 5,
+) -> jnp.ndarray:
+    """Predict scalar reward for (instruction, s_t, s_t+1)."""
+    prev_pix = _env_maps_to_pixel_values(prev_env_map, num_classes=num_classes)
+    curr_pix = _env_maps_to_pixel_values(curr_env_map, num_classes=num_classes)
+
+    reward = apply_fn(
+        variables,
+        instruction_embedding,
+        prev_pix,
+        curr_pix,
+        False,
+        method=lambda m, text_embed, prev_map, curr_map, training=False: m.decoder(
+            text_embed, prev_map, curr_map, training=training
+        ),
+    )
+    return jax.lax.stop_gradient(jnp.clip(reward, -2.0, 2.0))
+
+
+def build_transition_reward_inject_fn(config) -> Callable:
+    """Build train_utils reward hook for the universal transition reward model."""
+    from conf.config import DecoderConfig
+    from evaluator import get_reward_batch
+
+    decoder_cfg = DecoderConfig(
+        num_reward_classes=config.decoder.num_reward_classes,
+        hidden_dim=getattr(config.decoder, "hidden_dim", DecoderConfig.hidden_dim),
+        num_layers=getattr(config.decoder, "num_layers", DecoderConfig.num_layers),
+        output_dim=getattr(config.decoder, "output_dim", DecoderConfig.output_dim),
+        cnn_reward_enum_onehot=getattr(
+            config.decoder,
+            "cnn_reward_enum_onehot",
+            DecoderConfig.cnn_reward_enum_onehot,
+        ),
+    )
+    apply_fn, variables = load_decoder(
+        ckpt_dir=config.encoder.ckpt_path,
+        encoder_config=config.encoder,
+        decoder_config=decoder_cfg,
+    )
+
+    def _inject_reward_fn(prev_env_state, curr_env_state, instruct_sample, network_apply, network_params, last_obs):
+        prev_map = prev_env_state.env_state.env_map
+        curr_map = curr_env_state.env_state.env_map
+        annotated_reward = get_reward_batch(
+            instruct_sample.reward_i,
+            instruct_sample.condition,
+            prev_map,
+            curr_map,
+            map_size=config.map_width,
+            placement_w_amount=config.placement_w_amount,
+            placement_w_spread=config.placement_w_spread,
+            special_tile_penalty_weight=config.special_tile_penalty_weight,
+        )
+        model_reward = predict_transition_reward(
+            apply_fn,
+            variables,
+            instruct_sample.embedding,
+            prev_map,
+            curr_map,
+            num_classes=max(1, int(config.clip_input_channel) - 2),
+        )
+        mask = getattr(instruct_sample, "reward_model_mask", None)
+        if mask is None:
+            mask = jnp.ones_like(model_reward)
+        mask = jnp.ravel(mask).astype(jnp.float32)
+        return jnp.where(mask > 0.5, model_reward, annotated_reward)
+
+    logger.info("Transition reward model hook ready: ckpt=%s", config.encoder.ckpt_path)
     return _inject_reward_fn

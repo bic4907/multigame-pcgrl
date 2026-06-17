@@ -138,6 +138,8 @@ def make_train(config: IPCGRLEncoderMGConfig):
             tile_offset=getattr(config.encoder, 'tile_offset', 0),
             exclude_games=unseen_game_set,
             nlp_input_dim=config.nlp_input_dim,
+            unseen_ratio=config.unseen_ratio,
+            seen_ratio=config.seen_ratio,
         )
         mlp_ds = builder.get_dataset()
         cond_norm_min, cond_norm_max = builder.get_condition_norm_stats()

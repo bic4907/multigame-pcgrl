@@ -814,6 +814,9 @@ class CLIPTrainConfig(Config):
     overwrite: bool = False
     ckpt_freq: int = int(50)
 
+    tsne_freq: int = 100
+    tsne_samples: int = 1000
+
     # Goal img path
     img_data_path: str = "./human_dataset"
     instruct: str = "scn-1_se-whole"

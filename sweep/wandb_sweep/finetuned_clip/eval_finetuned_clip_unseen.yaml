@@ -9,13 +9,13 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0]
+    values: [0, 1, 2, 3, 4]
   n_envs:
     value: 500
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/finetuned_clip'
+    value: '/mnt/nas/mgpcgrl/finetuned_clip_unseen'
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/finetuned_clip_encoder'
   encoder.ckpt_name:

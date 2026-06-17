@@ -814,7 +814,7 @@ class CLIPTrainConfig(Config):
     overwrite: bool = False
     ckpt_freq: int = int(50)
 
-    tsne_freq: int = 100
+    tsne_freq: int = 3000
     tsne_samples: int = 1000
 
     # Goal img path

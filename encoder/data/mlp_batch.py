@@ -80,10 +80,15 @@ class MLPDatasetBuilder:
     Parameters  (MLP 전용)
     ----------------------
     exclude_games : set[str] | None
-        학습(is_train=True)에서 제외할 게임 이름 집합 (unseen 게임).
-        CLIPDatasetBuilder 의 split 결과에서 해당 게임을 is_train=False 로 고정.
+        unseen 게임 이름 집합. ``unseen_ratio`` 만큼만 학습에 포함하고
+        나머지는 is_train=False (val) 로 돌려 zero/few-shot 평가에 사용한다.
     nlp_input_dim : int
         BERT 임베딩 차원 (기본 768).
+    unseen_ratio : float
+        unseen 게임(train pool) 중 학습에 사용할 비율 (few-shot ratio).
+        0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen train pool 전부.
+    seen_ratio : float
+        seen 게임(train pool) 중 학습에 사용할 비율. 1.0 = 전부 사용.
     """
 
     def __init__(
@@ -100,11 +105,15 @@ class MLPDatasetBuilder:
         # MLP 전용
         exclude_games: Optional[Set[str]] = None,
         nlp_input_dim: int = 768,
+        unseen_ratio: float = 0.0,
+        seen_ratio: float = 1.0,
     ) -> None:
         from encoder.data.clip_batch import CLIPDatasetBuilder
 
         self.exclude_games: Set[str] = exclude_games or set()
         self.nlp_input_dim = nlp_input_dim
+        self.unseen_ratio = float(unseen_ratio)
+        self.seen_ratio = float(seen_ratio)
 
         # 1. CLIPDatasetBuilder 로 전처리 (필터·prefix·정규화·split·pixel_values)
         self._clip_builder = CLIPDatasetBuilder(
@@ -128,15 +137,11 @@ class MLPDatasetBuilder:
         # 3. game_names 추출 (CLIPDataset 에서는 reward_cond 안에 있음)
         game_names = np.array(d["game_type"])
 
-        # 4. is_train: CLIPDatasetBuilder split + unseen 제외
-        is_train = clip_ds.is_train.copy()
-        if self.exclude_games:
-            excluded_mask = np.isin(game_names, list(self.exclude_games))
-            is_train[excluded_mask] = False
-            logger.info(
-                "Exclude games %s from train: %d → %d train samples",
-                self.exclude_games, clip_ds.is_train.sum(), is_train.sum(),
-            )
+        # 4. is_train: CLIPDatasetBuilder split + few-shot ratio 적용
+        #    - seen  게임: train pool 중 seen_ratio prefix 만 학습에 사용
+        #    - unseen 게임: train pool 중 unseen_ratio prefix 만 학습에 사용
+        #      (나머지는 is_train=False 로 돌려 zero/few-shot 평가에 사용)
+        is_train = self._apply_fewshot_split(game_names, clip_ds.is_train.copy())
 
         # 5. 요약 로그
         self._log_split(game_names, is_train)
@@ -174,13 +179,44 @@ class MLPDatasetBuilder:
         fake_samples = [_FakeSample(inst) for inst in instructions]
         return np.array(_compute_bert_embeddings(fake_samples, self.nlp_input_dim))
 
+    def _apply_fewshot_split(
+        self, game_names: np.ndarray, is_train: np.ndarray
+    ) -> np.ndarray:
+        """게임별 train pool 에 few-shot ratio 를 적용한다.
+
+        CLIPDatasetBuilder 의 자연 train/val split 결과(``is_train``)를 받아
+        각 게임의 train pool(is_train=True) 중 ratio prefix 만 학습에 남긴다.
+
+        - seen  게임 (game ∉ exclude_games): seen_ratio prefix 사용
+        - unseen 게임 (game ∈ exclude_games): unseen_ratio prefix 사용
+          (unseen_ratio=0.0 → 전부 제외 = 기존 exclude_games 동작 = zero-shot)
+
+        prefix 선택은 자연 인덱스 순서 기준으로 결정적(deterministic)이며,
+        CLIP few-shot(``build_train_indices_for_ratio`` 의 pool[:n_use])과
+        동일한 시맨틱을 갖는다.
+        """
+        new_is_train = is_train.copy()
+        for game in sorted(set(game_names.tolist())):
+            is_unseen = game in self.exclude_games
+            ratio = self.unseen_ratio if is_unseen else self.seen_ratio
+            if ratio >= 1.0:
+                continue  # 전부 사용 → 변경 없음
+            game_train_idx = np.where((game_names == game) & is_train)[0]
+            n_use = int(len(game_train_idx) * ratio)
+            drop_idx = game_train_idx[n_use:]  # ratio 초과분은 학습 제외
+            new_is_train[drop_idx] = False
+        return new_is_train
+
     def _log_split(self, game_names: np.ndarray, is_train: np.ndarray) -> None:
         unique_games = sorted(set(game_names))
         logger.info("=" * 60)
-        logger.info("  MLPDataset split  (exclude=%s)", self.exclude_games or "none")
+        logger.info(
+            "  MLPDataset split  (unseen=%s, unseen_ratio=%.4f, seen_ratio=%.4f)",
+            self.exclude_games or "none", self.unseen_ratio, self.seen_ratio,
+        )
         for g in unique_games:
             mask = game_names == g
-            tag = "(unseen-excl)" if g in self.exclude_games else "(seen)"
+            tag = "(unseen)" if g in self.exclude_games else "(seen)"
             logger.info(
                 "  %-12s %s  total=%d, train=%d, val=%d",
                 g, tag, mask.sum(), (mask & is_train).sum(), (mask & ~is_train).sum(),

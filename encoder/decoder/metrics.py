@@ -23,7 +23,7 @@ def evaluate_per_game(
     norm_min_arr: jnp.ndarray = None,
     norm_max_arr: jnp.ndarray = None,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, Dict[str, np.ndarray]], Dict[int, float]]:
-    """고정된 테스트셋에서 **게임별** reward accuracy 와 reg_loss를 계산한다.
+    """Compute per-game reward accuracy and regression loss on the fixed test set.
 
     Returns
     -------
@@ -52,7 +52,7 @@ def evaluate_per_game(
         indices = np.arange(start_idx, end_idx)
         actual_size = len(indices)
 
-        # 마지막 배치 패딩
+        # Pad the final batch.
         if actual_size < batch_size:
             pad = np.arange(batch_size - actual_size) % n_test
             indices = np.concatenate([indices, pad])
@@ -102,7 +102,7 @@ def evaluate_per_game(
         batch_target_raw = np.array(jax.device_get(metrics["per_sample_cond_target_raw"]))
         all_preds.extend(preds[:actual_size].tolist())
         all_targets.extend(targets[:actual_size].tolist())
-        # batch-level reg_loss를 actual_size만큼 복제 (batch 평균이므로)
+        # Repeat batch-level reg_loss for actual_size samples because it is a batch mean.
         all_reg_losses.extend([batch_reg] * actual_size)
         all_abs_diffs.extend(batch_abs_diff[:actual_size].tolist())
         all_abs_diffs_raw.extend(batch_abs_diff_raw[:actual_size].tolist())
@@ -112,7 +112,7 @@ def evaluate_per_game(
         all_pred_raw.extend(batch_pred_raw[:actual_size].tolist())
         all_target_raw.extend(batch_target_raw[:actual_size].tolist())
 
-    # ── Per-game accuracy 집계 ──
+    # Aggregate per-game accuracy.
     all_preds_arr = np.array(all_preds[:n_test])
     all_targets_arr = np.array(all_targets[:n_test])
     all_reg_arr = np.array(all_reg_losses[:n_test])
@@ -151,7 +151,7 @@ def evaluate_per_game(
         per_game_acc["unseen_overall"] = float(correct[unseen_mask].mean())
         per_game_reg["unseen_overall"] = float(all_reg_arr[unseen_mask].mean())
 
-    # ── Per reward_enum 통계 (전체 테스트셋 기준) ──
+    # Per-reward_enum statistics over the full test set.
     all_pred_norm_arr = np.array(all_pred_norm[:n_test])
     all_target_norm_arr = np.array(all_target_norm[:n_test])
     all_pred_raw_arr = np.array(all_pred_raw[:n_test])
@@ -182,7 +182,7 @@ def _build_scatter_data_from_arrays(
     target_raw: np.ndarray,
     game_names: Optional[np.ndarray] = None,
 ) -> Dict[int, Dict[str, np.ndarray]]:
-    """훈련 중 수집한 per-sample 예측/타깃으로 enum별 scatter dict 생성."""
+    """Build per-enum scatter data from per-sample predictions and targets collected during training."""
     if len(reward_enums) == 0:
         return {}
 
@@ -226,7 +226,7 @@ def _compute_train_set_metrics_from_arrays(
     train_game_names: np.ndarray,
     unseen_game_names: Set[str],
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, float]]:
-    """학습 중 수집한 per-sample 값으로 train-set 지표를 재구성한다."""
+    """Reconstruct train-set metrics from per-sample values collected during training."""
     reward_pred_arr = np.asarray(reward_pred, dtype=np.int64)
     reward_target_arr = np.asarray(reward_target, dtype=np.int64)
     reg_loss_arr = np.asarray(reg_loss, dtype=np.float32)

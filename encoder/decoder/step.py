@@ -72,14 +72,14 @@ def train_step(
         state_mask = jnp.any(state_embed != 0).astype(jnp.float32)
         text_state_temperature = outputs["text_state_temperature"]
 
-        # ── Contrastive Loss ──
+        # Contrastive loss.
         temperature = jnp.clip(text_state_temperature, jnp.log(0.01), jnp.log(100))
         s2t_loss, t2s_loss, s2t_correct_pr, t2s_correct_pr, s2t_top1, t2s_top1 = pairwise_contrastive_loss_accuracy(
             state_embed, text_embed, temperature
         )
         contrastive_loss = state_mask * (s2t_loss + t2s_loss) / 2.0
 
-        # ── Decoder: reward_enum classification ──
+        # Decoder reward_enum classification.
         reward_logits = outputs["reward_logits"]
         reward_target = batch.reward_enum_target
         cls_loss = jnp.mean(
@@ -88,15 +88,15 @@ def train_step(
         reward_pred = jnp.argmax(reward_logits, axis=-1)
         reward_accuracy = jnp.mean(reward_pred == reward_target)
 
-        # ── (3) Decoder: condition regression loss (huber or mae) ──
-        condition_pred = outputs["condition_pred"]    # (B, num_classes) — [0,1] 정규화
-        condition_target = batch.condition_target      # (B,) — [0,1] 정규화
-        # 각 샘플의 predicted condition을 gt reward_enum 인덱스로 gather
+        # Decoder condition regression loss (Huber or MAE).
+        condition_pred = outputs["condition_pred"]    # (B, num_classes), normalized to [0, 1]
+        condition_target = batch.condition_target      # (B,), normalized to [0, 1]
+        # Gather each sample's predicted condition at its target reward_enum index.
         per_sample_cond = condition_pred[jnp.arange(condition_pred.shape[0]), reward_target]
         abs_diff = jnp.abs(per_sample_cond - condition_target)
 
-        # 원본 스케일로 변환한 값/타깃 및 오차 (로깅용)
-        condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes) — 원래 linear 스케일
+        # Values, targets, and errors converted to raw scale for logging.
+        condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes), raw linear scale
         per_sample_cond_raw = condition_pred_raw[jnp.arange(condition_pred_raw.shape[0]), reward_target]
         target_log = condition_target * (norm_max_arr[reward_target] - norm_min_arr[reward_target]) + norm_min_arr[reward_target]
         target_raw = jnp.expm1(jnp.maximum(target_log, 0.0))
@@ -110,14 +110,14 @@ def train_step(
             reg_per_sample_raw = abs_diff_raw
         reg_loss = jnp.mean(reg_per_sample)
         reg_loss_raw = jnp.mean(reg_per_sample_raw)
-        # linear 공간 normalized [0,1] MAE (모니터링용 — gradient 계산에 불포함)
-        # norm_min/max는 log1p 공간이므로 expm1로 linear 스케일로 복원 후 정규화
+        # Normalized [0, 1] MAE in linear space for monitoring only; excluded from gradients.
+        # norm_min/max are in log1p space, so restore to linear scale with expm1 before normalizing.
         linear_min = jnp.expm1(norm_min_arr[reward_target])
         linear_max = jnp.expm1(norm_max_arr[reward_target])
         linear_range = linear_max - linear_min + 1e-8
         condition_mae_normalized = jnp.mean(jnp.abs(per_sample_cond_raw - target_raw) / linear_range)
 
-        # ── Per-reward_enum regression 메트릭 ──
+        # Per-reward_enum regression metrics.
         per_enum_huber = jnp.zeros(num_reward_classes)
         per_enum_mae = jnp.zeros(num_reward_classes)
         per_enum_huber_raw = jnp.zeros(num_reward_classes)
@@ -126,14 +126,14 @@ def train_step(
 
         for eidx in range(num_reward_classes):
             mask = (reward_target == eidx).astype(jnp.float32)        # (B,)
-            count = jnp.sum(mask) + 1e-8                               # 0-div 방지
+            count = jnp.sum(mask) + 1e-8                               # avoid division by zero
             per_enum_huber = per_enum_huber.at[eidx].set(jnp.sum(reg_per_sample * mask) / count)
             per_enum_mae = per_enum_mae.at[eidx].set(jnp.sum(abs_diff * mask) / count)
             per_enum_huber_raw = per_enum_huber_raw.at[eidx].set(jnp.sum(reg_per_sample_raw * mask) / count)
             per_enum_mae_raw = per_enum_mae_raw.at[eidx].set(jnp.sum(abs_diff_raw * mask) / count)
             per_enum_count = per_enum_count.at[eidx].set(jnp.sum(mask))
 
-        # ── Total Loss ──
+        # Total loss.
         total_loss = (
             contrastive_weight * contrastive_loss
             + cls_weight * cls_loss
@@ -161,7 +161,7 @@ def train_step(
             "per_enum_reg_loss_raw": per_enum_huber_raw,
             "per_enum_reg_loss_raw_mae": per_enum_mae_raw,
             "per_enum_count": per_enum_count,
-            # ── per-sample scatter / per-enum 통계 용 ──
+            # Per-sample scatter and per-enum statistics.
             "per_sample_cond_norm": per_sample_cond,           # (B,) normalized [0,1] pred
             "per_sample_cond_target_norm": condition_target,   # (B,) normalized [0,1] target
             "per_sample_cond_raw": per_sample_cond_raw,        # (B,) linear-scale pred

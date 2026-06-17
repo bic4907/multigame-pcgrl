@@ -13,10 +13,10 @@ import jax.numpy as jnp
 import numpy as np
 import wandb
 from tqdm import tqdm
-from transformers import CLIPProcessor
 
 from conf.config import CLIPDecoderTrainConfig
 from encoder.data.clip_batch import CLIPDataset, CLIPDatasetBuilder, create_clip_decoder_batch
+from encoder.data.processor import load_clip_text_processor
 from encoder.data.split import (
     build_train_indices_for_ratio,
     parse_unseen_game_names,
@@ -31,9 +31,8 @@ from .metrics import (
 )
 from .state import get_train_state
 from .step import train_step
+from .tsne import run_tsne_epoch
 from .visualization import (
-    collect_tsne_embeddings,
-    create_and_upload_tsne,
     create_regression_scatter_plots_per_enum,
 )
 from encoder.utils.training import build_multigame_dataset, save_encoder_checkpoint, save_norm_stats
@@ -49,10 +48,10 @@ def make_train(config: CLIPDecoderTrainConfig):
         rng_key, subkey = jax.random.split(rng_key)
         dataset = build_multigame_dataset(config)
 
-        # ── 학습 전 reward_enum / condition 범위 요약 출력 ──
+        # Log reward_enum and condition ranges before training.
         _log_reward_condition_summary(dataset)
 
-        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        processor = load_clip_text_processor()
         dataset_builder = CLIPDatasetBuilder(
             processor=processor,
             paired_data=dataset,
@@ -71,13 +70,13 @@ def make_train(config: CLIPDecoderTrainConfig):
         # ── Save norm stats to ckpt directory (used for denorm during inference) ──
         save_norm_stats(config, cond_norm_min, cond_norm_max)
 
-        # scatter plot용 class_id → game_name 매핑
+        # class_id -> game_name mapping for scatter plots.
         class_id2game_name = {}
         full_ds = dataset_builder.get_dataset()
         for cid, rc in zip(full_ds.class_ids, full_ds.reward_cond):
             class_id2game_name[int(cid)] = rc.get("game_name", "unknown")
 
-        # ── 정규화 파라미터 출력 ──
+        # Log normalization parameters.
         logger.info("  Per-reward_enum condition normalization applied:")
         logger.info(f"  {'enum(0idx)':>10}  {'name':<22} {'raw_min':>10}  {'raw_max':>10}  {'→ normalized':>12}")
         for eidx in sorted(cond_norm_min.keys()):
@@ -100,7 +99,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             mode += "_state"
         config.encoder.mode = mode
 
-        # ── norm stats를 jnp 배열로 변환 (모델 내 역변환용) ──
+        # Convert norm stats to JAX arrays for model-side denormalization.
         num_cls = config.decoder.num_reward_classes
         norm_min_arr = jnp.array([cond_norm_min.get(i, 0.0) for i in range(num_cls)], dtype=jnp.float32)
         norm_max_arr = jnp.array([cond_norm_max.get(i, 1.0) for i in range(num_cls)], dtype=jnp.float32)
@@ -132,20 +131,20 @@ def train_and_evaluate_ratio(
     unseen_eval_ds: Optional[CLIPDataset] = None,
     unseen_eval_game_names: Optional[np.ndarray] = None,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, Dict[str, np.ndarray]], Dict[int, float]]:
-    """하나의 few-shot ratio에 대해 모델을 처음부터 학습하고 평가한다.
+    """Train a model from scratch and evaluate it for one few-shot ratio.
 
     Returns
     -------
     per_game_acc, per_game_reg_loss, per_game_enum_diff, scatter_data, per_enum_reg_loss
 
-    NOTE: 성능은 **train set** 기준으로 리포트한다.
+    NOTE: performance is reported on the train set.
     """
 
     n_train = len(train_ds.class_ids)
     n_train_batch = max(1, math.ceil(n_train / config.batch_size))
     num_cls = config.decoder.num_reward_classes
 
-    # steps_per_epoch 업데이트
+    # Update steps_per_epoch.
     config.steps_per_epoch = n_train_batch
 
     mode = "text"
@@ -167,7 +166,7 @@ def train_and_evaluate_ratio(
     )
 
 
-    # ── train_ds 기준 평가용 game_names ──
+    # Game names aligned with train_ds for evaluation.
     train_game_names = np.array(
         [rc["game_name"] for rc in train_ds.reward_cond]
     )
@@ -178,18 +177,18 @@ def train_and_evaluate_ratio(
 
     # ── Training Loop ──
     n_train_batch = math.ceil(len(train_ds.class_ids) / config.batch_size)
-    scatter_freq: int = int(getattr(config, "scatter_freq", 1000))  # scatter plot 업로드 주기
+    scatter_freq: int = int(getattr(config, "scatter_freq", 1000))  # scatter plot upload frequency
     max_pts: int = int(getattr(config, "n_max_points", 1000))
 
-    # ── t-SNE 설정 ──────────────────────────────────────────────────────────
-    tsne_freq:     int  = int(getattr(config, "tsne_freq", 0))        # 0 이면 비활성화
-    tsne_samples:  int  = int(getattr(config, "tsne_samples", 1000))  # 샘플 개수
+    # t-SNE settings.
+    tsne_freq:     int  = int(getattr(config, "tsne_freq", 0))        # disabled when 0
+    tsne_samples:  int  = int(getattr(config, "tsne_samples", 1000))  # number of samples
     if tsne_freq > 0:
         logger.info("  t-SNE enabled: freq=%d, samples=%d", tsne_freq, tsne_samples)
 
-    # ── Unseen game 평가 서브셋 ──
-    # unseen_eval_ds가 주입된 경우(전체 unseen pool 기반): 그대로 사용
-    # 아닌 경우: test set에서 unseen 샘플만 필터링 (fallback)
+    # Unseen-game evaluation subset.
+    # Use injected unseen_eval_ds as-is when provided from the full unseen pool.
+    # Otherwise, fall back to unseen samples filtered from the test set.
     if unseen_eval_ds is not None and unseen_eval_game_names is not None and len(unseen_eval_ds.class_ids) > 0:
         unseen_test_ds = unseen_eval_ds
         unseen_test_game_names_arr = unseen_eval_game_names
@@ -285,7 +284,7 @@ def train_and_evaluate_ratio(
                 epoch_per_enum_reg_raw += batch_per_enum_raw_mae * batch_per_enum_cnt
                 epoch_per_enum_cnt += batch_per_enum_cnt
 
-                # ── Scatter / per-sample 집계 (실제 train 샘플만) ──
+                # Scatter and per-sample aggregation for actual training samples only.
                 actual_size = min(config.batch_size, max(0, n_train - batch_idx * config.batch_size))
                 if actual_size > 0:
                     batch_reward_target = np.array(jax.device_get(batch.reward_enum_target))[:actual_size].astype(int).tolist()
@@ -333,7 +332,7 @@ def train_and_evaluate_ratio(
             epoch_t2s_correct_pr /= n_batches
             epoch_temperature /= n_batches
 
-        # ── 에폭 단위 scatter + epoch 기반 train-set 지표 ──
+        # Epoch-level scatter data and train-set metrics.
         epoch_scatter_data = _build_scatter_data_from_arrays(
             np.array(epoch_reward_enums, dtype=np.int64),
             np.array(epoch_pred_norm, dtype=np.float32),
@@ -366,7 +365,7 @@ def train_and_evaluate_ratio(
                 epoch_reg_loss_raw, epoch_cls_loss, epoch_contrastive_loss,
             )
 
-        # ── W&B 스칼라 로깅 (매 에폭) ──
+        # W&B scalar logging for every epoch.
         if wandb.run is not None:
             selected_reg_per_enum = {}
             total_reg_cnt = 0.0
@@ -408,7 +407,7 @@ def train_and_evaluate_ratio(
                 }
             )
 
-        # ── W&B Scatter plot 업로드 (scatter_freq 에폭마다, raw 공간만) ──
+        # Upload W&B scatter plots every scatter_freq epochs, raw space only.
         if wandb.run is not None and scatter_freq > 0 and (epoch + 1) % scatter_freq == 0:
             scatter_data_mid = epoch_scatter_data
             regression_scatter_paths = create_regression_scatter_plots_per_enum(
@@ -426,8 +425,8 @@ def train_and_evaluate_ratio(
                 wandb.log(epoch_imgs)
                 logger.info("  Scatter plot uploaded to wandb (epoch %d)", epoch + 1)
 
-        # ── W&B Unseen 평가 (unseen_eval_freq / unseen_scatter_freq 에폭마다, test set 기반) ──
-        # test set 기반이므로 unseen_ratio 설정과 무관하게 동작
+        # W&B unseen evaluation every unseen_eval_freq / unseen_scatter_freq epochs, based on the test set.
+        # This is test-set based, so it is independent of unseen_ratio.
         _unseen_eval_freq: int = int(getattr(config, "unseen_eval_freq", 100))
         _unseen_scatter_freq: int = int(getattr(config, "unseen_scatter_freq", 500))
         _do_unseen_eval = _unseen_eval_freq > 0 and (epoch + 1) % _unseen_eval_freq == 0
@@ -471,40 +470,23 @@ def train_and_evaluate_ratio(
                     wandb.log(_unseen_imgs)
                     logger.info("  Unseen scatter plot uploaded to wandb (epoch %d)", epoch + 1)
 
-        # ── Checkpoint 저장 ──
+        # Save checkpoints.
         if hasattr(config, 'ckpt_freq') and config.ckpt_freq > 0:
             if (epoch + 1) % config.ckpt_freq == 0:
                 save_encoder_checkpoint(config, train_state, step=epoch + 1)
 
-        # ── t-SNE 시각화 (tsne_freq 에폭마다) ───────────────────────────────
         if tsne_freq > 0 and (epoch + 1) % tsne_freq == 0:
             try:
-                logger.info("  t-SNE 시작 (epoch %d)...", epoch + 1)
-                # 임베딩 추출 (JAX JIT, 빠름)
-                embed_data = collect_tsne_embeddings(
+                run_tsne_epoch(
                     train_state=train_state,
                     dataset=train_ds,
                     game_names=train_game_names,
                     mode=mode,
-                    n_samples=tsne_samples,
-                    batch_size=config.batch_size,
-                    seed=config.seed + epoch,
-                )
-                
-                # t-SNE 계산 및 업로드 (동기 실행)
-                has_state_mode = config.encoder.state
-                create_and_upload_tsne(
-                    text_embeds=embed_data["text_embed"],
-                    state_embeds=embed_data["state_embed"],
-                    game_names=embed_data["game_names"],
-                    epoch=epoch + 1,
-                    out_dir=config.exp_dir,
-                    tag="train",
-                    seed=config.seed + epoch,
-                    has_state=has_state_mode,
+                    epoch=epoch,
+                    config=config,
                 )
             except Exception as exc:
-                logger.warning("  t-SNE 실패 (epoch %d): %s", epoch + 1, exc)
+                logger.warning("  t-SNE failed (epoch %d): %s", epoch + 1, exc)
 
     per_game_acc = epoch_per_game_acc
     per_game_reg = epoch_per_game_reg
@@ -520,16 +502,16 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
     def train(rng_key):
         rng_key, subkey = jax.random.split(rng_key)
 
-        # ── 1. 전체 데이터셋 빌드 (한 번만) ──
+        # Build the full dataset once.
         dataset = build_multigame_dataset(config)
-        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        processor = load_clip_text_processor()
 
         dataset_builder = CLIPDatasetBuilder(
             processor=processor,
             paired_data=dataset,
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
-            train_ratio=1.0,  # 자체 split 수행 → 빌더의 split 사용 안 함
+            train_ratio=1.0,  # Split manually; do not use the builder split.
             max_samples=config.max_samples,
             instruction_prefix=config.instruction_prefix,
             longtail_cut=config.longtail_cut,
@@ -541,7 +523,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         # ── Save norm stats to ckpt directory (used for denorm during inference) ──
         save_norm_stats(config, cond_norm_min, cond_norm_max)
 
-        # ── 2. Seen/Unseen 게임 파싱 ──
+        # Parse seen/unseen games.
         unseen_game_set = parse_unseen_game_names(config.unseen_games)
         all_game_names = np.array(
             [rc["game_name"] for rc in full_dataset.reward_cond]
@@ -558,7 +540,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         logger.info("  Total samples: %d", len(full_dataset.class_ids))
         logger.info("=" * 70)
 
-        # ── N_SEEN_GAMES / N_UNSEEN_GAMES를 wandb.config에 기록 ──
+        # Record N_SEEN_GAMES / N_UNSEEN_GAMES in wandb.config.
         if wandb.run is not None:
             wandb.config.update(
                 {
@@ -568,7 +550,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
                 allow_val_change=True,
             )
 
-        # ── 데이터셋 설정 JSON 저장 ──
+        # Save dataset settings JSON.
         os.makedirs(config.exp_dir, exist_ok=True)
         dataset_setting = {
             "all_games": unique_games,
@@ -586,7 +568,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             logger.warning("No unseen games found in dataset — treating all games as seen.")
             unseen_game_set = set()
 
-        # ── 3. 게임별 train pool / test 분할 (seed 고정) ──
+        # Split per-game train pools and test sets with a fixed seed.
         game_train_pool, game_test, _ = split_dataset_by_game(
             full_dataset,
             unseen_game_set,
@@ -594,7 +576,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             test_seed=config.split_seed,
         )
 
-        # 고정 테스트 인덱스 (모든 게임)
+        # Fixed test indices for all games.
         test_indices = np.concatenate(
             [game_test[g] for g in sorted(game_test.keys())]
         )
@@ -603,7 +585,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             [rc["game_name"] for rc in test_ds.reward_cond]
         )
 
-        # 로깅: 분할 요약
+        # Log split summary.
         logger.info("  Test set (fixed, seed=%d):", config.split_seed)
         for g in sorted(game_test.keys()):
             tag = "(unseen)" if g in unseen_game_set else "(seen)"
@@ -613,8 +595,8 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             )
         logger.info("  Total test: %d", len(test_indices))
 
-        # ── Unseen 평가 풀: 전체 unseen game 데이터에서 eval_unseen_ratio만큼 샘플링 ──
-        # unseen_ratio(학습)와 완전히 독립 — 전체 full_dataset에서 직접 샘플링
+        # Unseen eval pool: sample eval_unseen_ratio from all unseen-game data.
+        # Independent of training unseen_ratio; sample directly from full_dataset.
         _eval_unseen_ratio = float(getattr(config, "eval_unseen_ratio", 1.0))
         if unseen_game_set and _eval_unseen_ratio > 0.0:
             _all_unseen_mask = np.array([g in unseen_game_set for g in all_game_names], dtype=bool)
@@ -637,7 +619,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             unseen_eval_ds = None
             unseen_eval_game_names_arr = np.array([])
 
-        # ── 4. 단일 unseen_ratio 학습 ──
+        # Train with a single unseen_ratio.
         ratio = config.unseen_ratio
 
         train_indices = build_train_indices_for_ratio(
@@ -675,9 +657,9 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             unseen_eval_game_names=unseen_eval_game_names_arr,
         )
 
-        # W&B 로깅 (unseen 로그 제거)
+        # W&B logging; unseen final logs are omitted.
 
-        # ── Scatter plots (최대 포인트 개수 제한) ──
+        # Scatter plots with a maximum point limit.
         max_pts = int(getattr(config, "n_max_points", 1000))
         regression_scatter_paths = create_regression_scatter_plots_per_enum(
             scatter_data, out_dir=config.exp_dir,
@@ -690,7 +672,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             if wb_imgs:
                 wandb.log(wb_imgs)
 
-        # ── 5. 결과 저장 ──
+        # Save results.
         save_data = {
             str(ratio): {
                 "accuracy": per_game_acc,
@@ -705,14 +687,14 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         results_path = os.path.join(config.exp_dir, "fewshot_results.json")
         with open(results_path, "w") as f:
             json.dump(save_data, f, indent=2, ensure_ascii=False)
-        # ── 최종 요약 테이블 ──
+        # Final summary table.
         summary_games = [g for g in sorted(unique_games)] + ["overall", "seen_overall", "unseen_overall"]
         rows = [
             (g, f"{per_game_acc.get(g, float('nan')):.4f}", f"{per_game_reg.get(g, float('nan')):.4f}")
             for g in summary_games
         ]
         table_str = simple_table(rows, headers=["game", "train_acc", "train_reg_loss"])
-        logger.info("── Per-game performance (train set) ──")
+        logger.info("-- Per-game performance (train set) --")
         for line in table_str.splitlines():
             logger.info(line)
         logger.info("Results saved: %s", results_path)

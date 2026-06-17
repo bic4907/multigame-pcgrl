@@ -16,9 +16,9 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 
 
 def parse_unseen_game_names(unseen_str: Optional[str]) -> Set[str]:
-    """2글자 약어 문자열 → full game name set.
+    """Convert a two-character abbreviation string to full game names.
 
-    None 또는 빈 문자열이면 빈 set을 반환한다.
+    Return an empty set for None or an empty string.
 
     Examples
     --------
@@ -37,7 +37,7 @@ def parse_unseen_game_names(unseen_str: Optional[str]) -> Set[str]:
 
 
 def subset_clip_dataset(dataset: CLIPDataset, indices: np.ndarray) -> CLIPDataset:
-    """CLIPDataset에서 주어진 인덱스의 서브셋을 추출한다."""
+    """Return a subset of CLIPDataset for the given indices."""
     idx = np.asarray(indices, dtype=int)
     return CLIPDataset(
         class_ids=dataset.class_ids[idx],
@@ -62,17 +62,17 @@ def split_dataset_by_game(
     Dict[str, np.ndarray],  # game → test indices
     np.ndarray,             # all game names (per sample)
 ]:
-    """전체 데이터셋을 게임별로 train pool / test 로 분할한다.
+    """Split the full dataset into per-game train pools and test sets.
 
-    - 모든 게임(seen + unseen)에서 ``test_ratio`` 만큼 테스트 세트로 분리
-    - 분할은 ``test_seed`` 로 결정 → 동일한 시드에서 항상 같은 테스트셋
-    - train pool 내 unseen 게임 데이터의 실제 사용량은 sweep ratio 에 의해 결정
+    - Split ``test_ratio`` from every game (seen and unseen) into the test set.
+    - ``test_seed`` makes the split deterministic.
+    - The sweep ratio controls how much unseen-game data is used from each train pool.
 
     Returns
     -------
     game_train_pool : {game_name: ndarray of indices}
     game_test       : {game_name: ndarray of indices}
-    all_game_names  : ndarray of str  (길이 = len(full_dataset.class_ids))
+    all_game_names  : ndarray of str  (length = len(full_dataset.class_ids))
     """
     all_game_names = np.array(
         [rc["game_name"] for rc in full_dataset.reward_cond]
@@ -89,7 +89,7 @@ def split_dataset_by_game(
         perm = rng.permutation(game_indices)
         n_test = max(1, int(len(perm) * test_ratio))
         game_test[game] = perm[:n_test]
-        game_train_pool[game] = perm[n_test:]  # 고정 순서 (ratio 서브셋은 prefix)
+        game_train_pool[game] = perm[n_test:]  # Fixed order; ratio subsets take prefixes.
         tag = "(unseen)" if game in unseen_game_names else "(seen)"
         logger.debug(
             "split_dataset_by_game [%s] %s: total=%d, train_pool=%d, test=%d",
@@ -105,12 +105,12 @@ def build_train_indices_for_ratio(
     ratio: float,
     seen_ratio: float = 1.0,
 ) -> np.ndarray:
-    """주어진 few-shot ``ratio`` 에 대해 학습 인덱스를 구성한다.
+    """Build training indices for a given few-shot ``ratio``.
 
-    - Seen 게임: train pool 중 seen_ratio 비율만큼 (prefix) 사용
-    - Unseen 게임: train pool 중 ratio 비율만큼 (prefix) 사용
-    - ratio=0.0 이면 unseen 게임의 학습 데이터 = 0
-    - seen_ratio=0.0 이면 seen 게임의 학습 데이터 = 0
+    - Seen games: use a ``seen_ratio`` prefix from the train pool.
+    - Unseen games: use a ``ratio`` prefix from the train pool.
+    - ``ratio=0.0`` means no unseen-game training samples.
+    - ``seen_ratio=0.0`` means no seen-game training samples.
     """
     train_indices: List[np.ndarray] = []
     for game, pool in sorted(game_train_pool.items()):

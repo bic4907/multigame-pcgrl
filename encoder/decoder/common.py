@@ -11,7 +11,7 @@ logger = logging.getLogger(basename(__file__))
 logger.setLevel(getattr(logging, log_level, logging.INFO))
 
 
-# reward_enum 이름 매핑 (0-based: CSV reward_enum은 0-indexed)
+# reward_enum name mapping (0-based; CSV reward_enum is 0-indexed).
 _REWARD_ENUM_NAMES = {
     0: "region",
     1: "path_length",
@@ -22,12 +22,12 @@ _REWARD_ENUM_NAMES = {
 
 
 def _log_reward_condition_summary(dataset: MultiGameDataset):
-    """학습 시작 전에 reward_enum별 condition 범위를 출력한다 (게임 구분 없이 enum 기준)."""
+    """Log condition ranges by reward_enum before training, aggregated across games."""
     from collections import defaultdict
 
     # reward_enum → [(game, condition_value)]
     enum_stats: dict = defaultdict(list)
-    # game → reward_enum → [condition_values]  (게임별 분해용)
+    # game -> reward_enum -> [condition_values], used for per-game breakdowns.
     game_enum_stats: dict = defaultdict(lambda: defaultdict(list))
 
     for s in dataset._samples:
@@ -45,7 +45,7 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
     logger.info("  Reward Enum & Condition Range Summary  (raw, before normalization)")
     logger.info("=" * 80)
 
-    # ── reward_enum별 전체 통계 ──
+    # Overall per-reward_enum statistics.
     logger.info(f"  {'enum':>5}  {'name':<22} {'count':>6}  {'min':>10}  {'max':>10}  {'mean':>10}  {'std':>10}")
     logger.info(f"  {'-'*5}  {'-'*22} {'-'*6}  {'-'*10}  {'-'*10}  {'-'*10}  {'-'*10}")
 
@@ -66,7 +66,7 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
 
     logger.info("")
 
-    # ── 게임별 분해 ──
+    # Per-game breakdown.
     for game in sorted(game_enum_stats.keys()):
         enum_dict = game_enum_stats[game]
         n_total = sum(len(v) for v in enum_dict.values())
@@ -84,11 +84,11 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
                 logger.info(f"    enum {re_id} ({name}): n={len(vals)}, range=N/A")
     logger.info("")
 
-    # 전체 요약
+    # Overall summary.
     all_enums = set(enum_stats.keys())
     logger.info(f"  Total games: {len(game_enum_stats)},  "
                 f"Unique reward_enums (0-based): {sorted(all_enums)},  "
                 f"num_reward_classes should be >= {max(all_enums) + 1 if all_enums else 0}")
     logger.info("=" * 80)
-    logger.info("  ※ Condition values will be min-max normalized per reward_enum to [0, 1]")
+    logger.info("  Note: condition values will be min-max normalized per reward_enum to [0, 1]")
     logger.info("=" * 80)

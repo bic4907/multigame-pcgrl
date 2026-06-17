@@ -48,7 +48,7 @@ from encoder.utils.path import get_ckpt_dir, init_config
 from instruct_rl.utils.img_preprocess import (clip_batch_preprocess,
                                               render_level_from_arr)
 from instruct_rl.utils.logger import get_wandb_name
-from train_clip_decoder import (build_train_indices_for_ratio,
+from encoder.data.split import (build_train_indices_for_ratio,
                                 parse_unseen_game_names, split_dataset_by_game,
                                 subset_clip_dataset)
 
@@ -389,4 +389,3 @@ def main(config: FinetunedCLIPEncoderTrainConfig):
 
 if __name__ == "__main__":
     main()
-

@@ -38,8 +38,8 @@ from encoder.utils.visualize import create_clip_embedding_figures
 
 from transformers import CLIPProcessor, FlaxCLIPModel
 
-# Seen/Unseen split helpers (train_clip_decoder.py 에서 재사용)
-from train_clip_decoder import (
+# Seen/Unseen split helpers
+from encoder.data.split import (
     parse_unseen_game_names,
     split_dataset_by_game,
     build_train_indices_for_ratio,

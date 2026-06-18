@@ -1,0 +1,31 @@
+program: train_clip_decoder.py
+project: aaai27_encoder_mgpcgrl_fewshot_prefix_none
+method: grid
+metric:
+  goal: minimize
+  name: val/loss
+parameters:
+  game:
+    value: 'all'
+  overwrite:
+    value: false
+  instruction_prefix:
+    value: 'none'
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_prefix_none'
+  unseen_ratio:
+    value: 0.1
+  unseen_games:
+    values:
+      # 2 unseen games
+      - 'zddm'
+      - 'zdsk'
+      - 'dmsk'
+      # 3 unseen games
+      - 'pkzddm'
+      - 'dgzddm'
+      - 'zddmsk'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

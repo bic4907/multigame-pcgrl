@@ -6,7 +6,6 @@
   "experiments": {
     "fullshot": {
       "target_projects": [
-        "aaai27_eval_pretrained_clip",
         "aaai27_eval_random",
         "aaai27_eval_cpcgrl",
         "aaai27_eval_ipcgrl",
@@ -19,28 +18,52 @@
       "re_baseline_label":          "CPCGRL",
       "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
     },
+    "zeroshot": {
+      "target_projects": [
+        "aaai27_eval_vipcgrl_unseen",
+        "aaai27_eval_mgpcgrl_unseen"
+      ],
+      "seen_baseline_project": "aaai27_eval_mgpcgrl",
+      "seen_baseline_label":   "MGPCGRL",
+      "re_oracle_project":     "aaai27_eval_cpcgrl",
+      "re_oracle_label":       "CPCGRL (Oracle)"
+    },
+    "seen_ratio_progress": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_unseen"
+      ]
+    },
+    "unseen_ratio_ngames": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_unseen_ratios_2_GT"
+      ]
+    },
     "fewshot": {
       "target_projects": [
-        "aaai27_eval_pretrained_clip",
-        "aaai27_eval_finetuned_clip_unseen",
-        "aaai27_eval_vipcgrl_unseen",
         "aaai27_eval_vipcgrl_fewshot",
-        "aaai27_eval_mgpcgrl_unseen",
         "aaai27_eval_mgpcgrl_fewshot"
+      ],
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "instruction_type": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot_desc",
+        "aaai27_eval_mgpcgrl_fewshot_mix"
       ],
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
     }
   },
   "project_display_names": {
-    "aaai27_eval_finetuned_clip_unseen": "CLIP (unseen)",
     "aaai27_eval_cpcgrl":        "CPCGRL",
     "aaai27_eval_vipcgrl_nosim": "VIPCGRL (nosim)",
     "aaai27_eval_mgpcgrl":       "MGPCGRL",
     "aaai27_eval_ipcgrl":        "IPCGRL",
     "aaai27_eval_vipcgrl":       "VIPCGRL",
     "aaai27_eval_random":        "Random",
-    "aaai27_eval_pretrained_clip":  "CLIP",
+    "aaai27_eval_pretrained_clip":  "Pre. CLIP",
     "aaai27_eval_mgpcgrl_unseen":"MGPCGRL",
     "aaai27_eval_mgpcgrl_all":   "MGPCGRL (all)",
     "aaai27_eval_mgpcgrl_oracle":"MGPCGRL (oracle)",
@@ -49,9 +72,10 @@
     "aaai27_eval_mgpcgrl_unseen_ratios_2_GT": "MGPCGRL (GT)",
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
     "aaai27_eval_vipcgrl_fewshot":            "VIPCGRL (fewshot)",
-    "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (fewshot)",
+    "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (prefix=name)",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "MGPCGRL (prefix=desc)",
-    "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)"
+    "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)",
+    "aaai27_eval_mgpcgrl_fewshot_deprecated": "MGPCGRL (fewshot)"
   },
   "project_colors": {
     "aaai27_eval_random":         "#aaaaaa",

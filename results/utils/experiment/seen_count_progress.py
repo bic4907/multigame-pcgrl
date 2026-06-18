@@ -22,6 +22,8 @@ unseen 실험 전용:
     all_progress_re{N}.png           — (--per-reward-enum 시) reward_enum 별
     seen_count_table.csv             — 집계 데이터
     seen_count_table.md              — Markdown 테이블
+    <experiment>_table.csv           — 논문 표 형태의 pivot CSV
+    <experiment>_table.tex           — 논문 표 형태의 LaTeX 테이블
 
 사용법:
     python results/utils/experiment/seen_count_progress.py
@@ -258,6 +260,34 @@ def aggregate_by_n_unseen_method(
     grouped: dict[tuple, list[dict]] = defaultdict(list)
     for r in filtered:
         grouped[(r.get("project", "unknown"), r["n_unseen"])].append(r)
+
+    result: dict[tuple, dict] = {}
+    for key, group_rows in grouped.items():
+        stats: dict = {}
+        for metric in metric_order:
+            stat = _seed_agg(group_rows, metric)
+            if stat:
+                stats[metric] = stat
+        result[key] = stats
+    return result
+
+
+def aggregate_by_n_seen_method(
+    rows: list[dict],
+    metric_order: list[str],
+    game_split: str | None = "unseen",
+    reward_enum: str | None = None,
+) -> dict[tuple, dict]:
+    """(project, n_seen) -> {metric: {mean, std, n}} 집계."""
+    filtered = [
+        r for r in rows
+        if (game_split is None or r.get("game_split") == game_split)
+        and (reward_enum is None or r["reward_enum"] == reward_enum)
+    ]
+
+    grouped: dict[tuple, list[dict]] = defaultdict(list)
+    for r in filtered:
+        grouped[(r.get("project", "unknown"), r["n_seen"])].append(r)
 
     result: dict[tuple, dict] = {}
     for key, group_rows in grouped.items():
@@ -831,6 +861,140 @@ def write_table_markdown(
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _ordered_projects(projects: set[str], experiment: str | None = None) -> list[str]:
+    folder_order = _get_experiment_folder_order(experiment)
+    ordered = [p for p in folder_order if p in projects]
+    return ordered + sorted(projects - set(ordered))
+
+
+def _format_mean_std(stat: dict | None, decimals: int) -> str:
+    if not stat:
+        return ""
+    return f"{stat['mean']:.{decimals}f} +- {stat['std']:.{decimals}f}"
+
+
+def _latex_escape(value: str) -> str:
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+    return "".join(replacements.get(ch, ch) for ch in value)
+
+
+def write_fewshot_table_csv(
+    output_path: Path,
+    rows: list[dict],
+    metric_order: list[str],
+    experiment: str | None,
+    decimals: int = 4,
+) -> None:
+    metric = metric_order[0]
+    unseen_agg = aggregate_by_n_seen_method(rows, [metric], game_split="unseen")
+    all_agg = aggregate_by_n_seen_method(rows, [metric], game_split=None)
+    unseen_rows = [r for r in rows if r.get("game_split") == "unseen"]
+    n_seen_vals = sorted({r["n_seen"] for r in unseen_rows})
+    projects = _ordered_projects({r["project"] for r in unseen_rows}, experiment)
+
+    headers = ["method"]
+    for n in n_seen_vals:
+        headers += [f"{n}_seen_unseen", f"{n}_seen_all"]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        for proj in projects:
+            rec = {"method": _project_display_name(proj)}
+            for n in n_seen_vals:
+                rec[f"{n}_seen_unseen"] = _format_mean_std(
+                    unseen_agg.get((proj, n), {}).get(metric),
+                    decimals,
+                )
+                rec[f"{n}_seen_all"] = _format_mean_std(
+                    all_agg.get((proj, n), {}).get(metric),
+                    decimals,
+                )
+            writer.writerow(rec)
+
+
+def write_fewshot_table_latex(
+    output_path: Path,
+    rows: list[dict],
+    metric_order: list[str],
+    experiment: str | None,
+    decimals: int = 4,
+    caption: str = "Few-shot generalization results.",
+    label: str = "tab:fewshot",
+) -> None:
+    metric = metric_order[0]
+    metric_label = METRIC_DISPLAY_NAMES.get(metric, metric)
+    unseen_agg = aggregate_by_n_seen_method(rows, [metric], game_split="unseen")
+    all_agg = aggregate_by_n_seen_method(rows, [metric], game_split=None)
+    unseen_rows = [r for r in rows if r.get("game_split") == "unseen"]
+    n_seen_vals = sorted({r["n_seen"] for r in unseen_rows})
+    projects = _ordered_projects({r["project"] for r in unseen_rows}, experiment)
+
+    colspec = "l" + "cc" * len(n_seen_vals)
+    group_header = "Method"
+    if n_seen_vals:
+        group_header += " & " + " & ".join(
+            rf"\multicolumn{{2}}{{c}}{{{n} Seen}}" for n in n_seen_vals
+        )
+    group_header += r" \\"
+    sub_header = ""
+    if n_seen_vals:
+        sub_header = " & " + " & ".join(["Unseen & All"] * len(n_seen_vals))
+    sub_header += r" \\"
+    cmidrule = ""
+    if n_seen_vals:
+        cmidrule = " ".join(
+            rf"\cmidrule(lr){{{2 + 2 * i}-{3 + 2 * i}}}"
+            for i in range(len(n_seen_vals))
+        )
+
+    lines = [
+        r"\begin{table}[t]",
+        r"\centering",
+        rf"\caption{{{_latex_escape(caption)}}}",
+        rf"\label{{{_latex_escape(label)}}}",
+        rf"\begin{{tabular}}{{{colspec}}}",
+        r"\toprule",
+        group_header,
+        cmidrule,
+        sub_header,
+        r"\midrule",
+    ]
+    for proj in projects:
+        cells = [_latex_escape(_project_display_name(proj))]
+        for n in n_seen_vals:
+            for agg in (unseen_agg, all_agg):
+                stat = agg.get((proj, n), {}).get(metric)
+                if stat:
+                    cells.append(
+                        rf"{stat['mean']:.{decimals}f}\std{{{stat['std']:.{decimals}f}}}"
+                    )
+                else:
+                    cells.append("-")
+        lines.append(" & ".join(cells) + r" \\")
+
+    lines += [
+        r"\bottomrule",
+        r"\end{tabular}",
+        rf"\vspace{{2pt}}\footnotesize{{Metric: {_latex_escape(metric_label)}.}}",
+        r"\end{table}",
+    ]
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Args
 # ---------------------------------------------------------------------------
@@ -850,7 +1014,7 @@ def parse_args() -> argparse.Namespace:
                         help="wandb_projects 루트 디렉토리")
     parser.add_argument("--metrics", nargs="+", default=None,
                         help="사용할 metric 목록 (기본: config.json default_order)")
-    parser.add_argument("--decimals", type=int, default=4)
+    parser.add_argument("--decimals", type=int, default=3)
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument(
         "--per-reward-enum", action="store_true",
@@ -964,7 +1128,24 @@ def main() -> None:
     write_table_markdown(
         run_dir / "progress_table.md", norm_rows, metric_order, args.decimals
     )
+    table_prefix = f"{experiment}_table" if experiment else "progress_table"
+    write_fewshot_table_csv(
+        run_dir / f"{table_prefix}.csv",
+        norm_rows,
+        metric_order,
+        experiment=experiment,
+        decimals=args.decimals,
+    )
+    write_fewshot_table_latex(
+        run_dir / f"{table_prefix}.tex",
+        norm_rows,
+        metric_order,
+        experiment=experiment,
+        decimals=args.decimals,
+    )
     log.info("table     : %s", run_dir / "progress_table.md")
+    log.info("table     : %s", run_dir / f"{table_prefix}.csv")
+    log.info("table     : %s", run_dir / f"{table_prefix}.tex")
 
     # ── 플롯 ──────────────────────────────────────────────────────────────
     _hl = hlines or None
@@ -1020,4 +1201,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

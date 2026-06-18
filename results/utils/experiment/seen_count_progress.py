@@ -73,6 +73,7 @@ from utils.experiment.benchmark import (
     METRIC_DISPLAY_NAMES,
     resolve_input_root,
     _get_experiment_folder_order,
+    _load_project_display_names,
     _project_display_name,
 )
 
@@ -81,6 +82,15 @@ _CFG = load_cfg()
 # progress 에만 ymin 고정 (나머지는 matplotlib 자동)
 _YMIN_DEFAULT: float = 0.6
 _FIXED_YMIN_METRICS: set[str] = {"progress"}
+
+
+def _save_figure_png_pdf(fig, output_path: Path, dpi: int = 200) -> Path:
+    """Save a figure as the requested path and as a same-name PDF."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=dpi, bbox_inches="tight")
+    pdf_path = output_path.with_suffix(".pdf")
+    fig.savefig(pdf_path, bbox_inches="tight")
+    return pdf_path
 
 
 # ---------------------------------------------------------------------------
@@ -391,7 +401,7 @@ def write_subplot_grid(
     )
 
     x_center = list(range(n_groups))
-    y_label = "Progress (Unseen game)"   # 고정 y축 레이블
+    y_label = "Progress"   # 고정 y축 레이블
 
     for j, proj in enumerate(projects):
         means, stds, xs = [], [], []
@@ -465,8 +475,7 @@ def write_subplot_grid(
     fig.subplots_adjust(top=0.84)
     fig.tight_layout(rect=(0, 0, 1, 0.90))
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    _save_figure_png_pdf(fig, output_path)
     plt.close(fig)
 
 
@@ -628,8 +637,7 @@ def write_seen_subplot_grid(
     fig.subplots_adjust(top=0.84)
     fig.tight_layout(rect=(0, 0, 1, 0.90))
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    _save_figure_png_pdf(fig, output_path)
     plt.close(fig)
 
 
@@ -790,8 +798,7 @@ def write_all_subplot_grid(
     fig.subplots_adjust(top=0.84)
     fig.tight_layout(rect=(0, 0, 1, 0.90))
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    _save_figure_png_pdf(fig, output_path)
     plt.close(fig)
 
 
@@ -1001,12 +1008,6 @@ def write_fewshot_table_latex(
 
 def parse_args() -> argparse.Namespace:
     _exp_names = list(_CFG.get("experiments", {}).keys())
-    # config에서 re_oracle_project 기본값 추출 (unseen 실험 기준)
-    _default_baseline = (
-        _CFG.get("experiments", {})
-            .get("unseen", {})
-            .get("re_oracle_project", "aaai27_eval_cpcgrl")
-    )
     parser = argparse.ArgumentParser(
         description="unseen 게임 개수별 subplot — method 간 unseen 성능 비교"
     )
@@ -1027,10 +1028,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--baseline-project",
-        default=_default_baseline,
+        default=None,
         metavar="PROJECT",
         help=(
-            f"가로 기준선으로 표시할 project (기본: {_default_baseline}). "
+            "가로 기준선으로 표시할 project "
+            "(기본: config의 progress_baseline_project 또는 re_oracle_project). "
             "'none' 으로 지정하면 기준선을 그리지 않는다."
         ),
     )
@@ -1062,6 +1064,9 @@ def main() -> None:
     experiment   = args.experiment or "unseen"
     folder_order = _get_experiment_folder_order(experiment)
     log.info("experiment: %s  folder_order=%s", experiment, folder_order)
+
+    import utils.experiment.benchmark as _bm
+    _bm._PROJECT_DISPLAY_NAMES = _load_project_display_names(experiment)
 
     input_root = resolve_input_root(args.input, _RESULTS_DIR)
     log.info("input_root: %s", input_root)
@@ -1099,9 +1104,16 @@ def main() -> None:
     # config의 re_oracle_project (기본 aaai27_eval_cpcgrl) 데이터를 읽어
     # metric 별 전체 평균을 구하고 가로선으로 표시한다.
     hlines: dict[str, dict[str, float]] = {}
-    _bp = (args.baseline_project or "").strip().lower()
+    exp_cfg = _CFG.get("experiments", {}).get(experiment, {})
+    baseline_project = args.baseline_project
+    if baseline_project is None:
+        baseline_project = exp_cfg.get(
+            "progress_baseline_project",
+            exp_cfg.get("re_oracle_project", "aaai27_eval_cpcgrl"),
+        )
+    _bp = (baseline_project or "").strip().lower()
     if _bp and _bp != "none":
-        baseline_proj = args.baseline_project.strip()
+        baseline_proj = baseline_project.strip()
         baseline_label = (
             args.baseline_label
             or _project_display_name(baseline_proj)

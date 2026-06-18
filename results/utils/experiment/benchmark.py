@@ -84,7 +84,15 @@ _PROJECT_DISPLAY_NAMES: dict[str, str] = _CFG.get("project_display_names", {})
 
 
 def _load_project_display_names(experiment: str | None) -> dict[str, str]:
-    return _CFG.get("project_display_names", {})
+    names = dict(_CFG.get("project_display_names", {}))
+    if experiment:
+        exp_names = (
+            _CFG.get("experiments", {})
+            .get(experiment, {})
+            .get("project_display_names", {})
+        )
+        names.update(exp_names)
+    return names
 
 
 def _project_display_name(folder: str) -> str:

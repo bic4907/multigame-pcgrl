@@ -30,6 +30,21 @@
       ],
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "domain_condition": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot_desc",
+        "aaai27_eval_mgpcgrl_fewshot_mix"
+      ],
+      "project_display_names": {
+        "aaai27_eval_mgpcgrl_fewshot":      "Name",
+        "aaai27_eval_mgpcgrl_fewshot_desc": "Description",
+        "aaai27_eval_mgpcgrl_fewshot_mix":  "Name+Desc"
+      },
+      "progress_baseline_project": "none",
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
     }
   },
   "project_display_names": {

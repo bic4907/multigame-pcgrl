@@ -118,6 +118,7 @@ STEPS: list[dict] = [
 _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
     "zeroshot":        {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
     "fewshot":         {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
+    "domain_condition":{3, 9, 10},        # fewshot과 동일 — step 11(progress) 사용
     "instruction_type":{3, 9, 10},        # fewshot과 동일 — step 11(progress) 사용
     "seen_ratio_progress":       {3, 4, 10, 11},    # seen_ratio_progress 전용 — step 9만 실행
     "condition_shift_analysis":  {3, 4, 6, 9, 11},  # condition_shift_analysis 전용 — step 10만 실행
@@ -471,4 +472,3 @@ def main(default_experiment: str | None = None) -> None:
 
 if __name__ == "__main__":
     main()
-

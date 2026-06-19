@@ -87,6 +87,7 @@ def load_dataset_instruct(config):
         include_zelda=("zelda" in game_names),
         use_tile_mapping=True,
         max_samples_per_game=getattr(config, "max_samples_per_game", 0),
+        instruction_field=getattr(config, "instruction_field", "uni"),
     )
 
     samples = list(ds) if load_game == "all" else ds.by_games(game_names)

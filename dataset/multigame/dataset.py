@@ -160,11 +160,13 @@ class MultiGameDataset:
         reward_annotations_dir: Path | str | None = None,  # deprecated: ignored, ann.json used
         max_samples_per_game: int = 0,
         max_samples_seed:     int = 42,
+        instruction_field:    str = "uni",   # "uni" = instruction_uni, "raw" = instruction_raw
         # 하위 호환: 구 파라미터명 지원
         boxoban_root:         Path | str | None = None,
         include_boxoban:      bool | None = None,
     ) -> None:
         self.use_tile_mapping: bool = use_tile_mapping
+        self._instruction_field: str = instruction_field  # "uni" or "raw"
 
         # 하위 호환 처리
         if boxoban_root is not None:
@@ -891,8 +893,11 @@ class MultiGameDataset:
                 uni = ann.get("instruction_uni")
                 target.meta["instruction_raw"] = str(raw) if raw and str(raw) != "None" else None
                 target.meta["instruction_uni"] = str(uni) if uni and str(uni) != "None" else None
-                # instruction 필드: instruction_uni 우선, 없으면 instruction_raw
-                instr = target.meta["instruction_uni"] or target.meta["instruction_raw"]
+                # instruction 필드: instruction_field 설정에 따라 선택
+                if self._instruction_field == "raw":
+                    instr = target.meta["instruction_raw"] or target.meta["instruction_uni"]
+                else:
+                    instr = target.meta["instruction_uni"] or target.meta["instruction_raw"]
                 target.instruction = instr if instr else None
                 if instr:
                     instr_count += 1
@@ -971,8 +976,13 @@ class MultiGameDataset:
                         if val != "":
                             conditions[ci] = float(val)
                     target.meta["conditions"] = conditions
-                    # instruction_uni를 직접 읽음 ("None" 또는 빈 값이면 None 처리)
-                    instr = ann.get("instruction_uni", "").strip()
+                    # instruction_field 설정에 따라 raw 또는 uni 선택
+                    if self._instruction_field == "raw":
+                        raw_val = ann.get("instruction_raw", "").strip()
+                        uni_val = ann.get("instruction_uni", "").strip()
+                        instr = raw_val if raw_val and raw_val != "None" else uni_val
+                    else:
+                        instr = ann.get("instruction_uni", "").strip()
                     target.instruction = instr if instr and instr != "None" else None
                     attached += 1
 

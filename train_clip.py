@@ -170,6 +170,7 @@ def make_train(config: CLIPTrainConfig):
             include_zelda=config.include_zelda,
             max_samples_per_game=config.max_samples_per_game,
             max_samples_seed=config.max_samples_seed,
+            instruction_field=getattr(config, "instruction_field", "uni"),
         )
 
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")

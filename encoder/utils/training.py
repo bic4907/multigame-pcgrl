@@ -55,6 +55,7 @@ def build_multigame_dataset(config: Config) -> MultiGameDataset:
         include_zelda=getattr(config, "include_zelda", False),
         max_samples_per_game=getattr(config, "max_samples_per_game", 0),
         max_samples_seed=getattr(config, "max_samples_seed", 42),
+        instruction_field=getattr(config, "instruction_field", "uni"),
     )
     dataset._game_str = getattr(config, "game", "all")
     logger.info(f"MultiGameDataset: {dataset}")

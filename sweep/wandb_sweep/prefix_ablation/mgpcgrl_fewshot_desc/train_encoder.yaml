@@ -14,7 +14,7 @@ parameters:
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_desc'
   unseen_ratio:
-    value: 0.1
+    value: 0.03
   unseen_games:
     values:
       # 1 unseen game

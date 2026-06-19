@@ -12,7 +12,7 @@ parameters:
   saves_dir:
     value: '/mnt/nas/mgpcgrl/ipcgrl_encoder_fewshot'
   unseen_ratio:
-    value: 0.1
+    value: 0.03
   seen_ratio:
     value: 1.0
   seed:

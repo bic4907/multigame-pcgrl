@@ -1,0 +1,7 @@
+{
+  "doom":    { "2": "door",     "3": "demon",   "4": "item"     },
+  "dungeon": { "2": "",         "3": "bat",     "4": "treasure" },
+  "pokemon": { "2": "water",    "3": "grass",   "4": "pokeball" },
+  "sokoban": { "2": "box",      "3": "",        "4": ""         },
+  "zelda":   { "2": "barrel",   "3": "monster", "4": "ruby"     }
+}

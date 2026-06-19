@@ -12,7 +12,7 @@ parameters:
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_encoder_unseen'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_zeroshot'
   unseen_games:
     values:
       # 1 unseen game

@@ -15,7 +15,7 @@ parameters:
   overwrite:
     value: false
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_encoder_unseen'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_zeroshot'
   encoder.ckpt_name:
     values: [
       # 1 unseen game
@@ -54,7 +54,7 @@ parameters:
       "clipdec-game-all_unseen-dgzddmsk_ur-0.0_exp-def_0",
     ]
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_unseen'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_zeroshot'
 command:
   - ${interpreter}
   - ${program}

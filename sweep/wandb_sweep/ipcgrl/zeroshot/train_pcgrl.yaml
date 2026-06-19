@@ -17,7 +17,7 @@ parameters:
 
   # ipcgrl encoder trained with train_ipcgrl_encoder_unseen.yaml
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/ipcgrl_encoder_unseen'
+    value: '/mnt/nas/mgpcgrl/ipcgrl_zeroshot'
   encoder.ckpt_name:
     values: [
       # 1 unseen game
@@ -56,7 +56,7 @@ parameters:
       "ipcgrl-enc-mg-game-all_unseen-dgzddmsk_ur-0.0_enc-mlp_exp-def_0",
     ]
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/ipcgrl_unseen'
+    value: '/mnt/nas/mgpcgrl/ipcgrl_zeroshot'
 command:
   - ${interpreter}
   - ${program}

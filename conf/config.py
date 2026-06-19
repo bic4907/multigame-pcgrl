@@ -244,9 +244,9 @@ class TrainConfig(Config):
     instruction_prefix: Optional[str] = "name"
 
     # ── instruction field 선택 (train/eval/encoder 공통) ──────────────────
-    # "uni" (기본): instruction_uni 사용 (통합 표현)
-    # "raw"       : instruction_raw 사용 (게임별 치환 표현)
-    instruction_field: str = "uni"
+    # "uni": instruction_uni 사용 (통합 표현)
+    # "raw" (기본): instruction_raw 사용 (게임별 치환 표현)
+    instruction_field: str = "raw"
 
 
 @dataclass
@@ -844,8 +844,8 @@ class CLIPTrainConfig(Config):
     # instruction prefix mode: "name" (e.g. "In Zelda, ...") / "desc" / "mix" / "none" (또는 None)
     instruction_prefix: Optional[str] = "name"
 
-    # instruction field 선택: "uni" (기본) / "raw"
-    instruction_field: str = "uni"
+    # instruction field 선택: "uni" / "raw" (기본)
+    instruction_field: str = "raw"
 
     # overwrite
     embed_type: str = "humanai"
@@ -1029,8 +1029,8 @@ class IPCGRLEncoderMGConfig(RewardConfig):
     # instruction_prefix mode: "name" (기본) / "desc" / "none" (또는 None)
     instruction_prefix: Optional[str] = "name"
 
-    # instruction field 선택: "uni" (기본) / "raw"
-    instruction_field: str = "uni"
+    # instruction field 선택: "uni" / "raw" (기본)
+    instruction_field: str = "raw"
 
     # MLP 인코더 (apply_encoder_model 에서 model='mlp' 분기 사용)
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))

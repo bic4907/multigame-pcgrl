@@ -1,0 +1,41 @@
+program: train_ipcgrl.py
+project: aaai27_train_ipcgrl_fewshot
+method: grid
+metric:
+  goal: maximize
+  name: unseen/mean_ep_return
+parameters:
+  game:
+    value: 'all'
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0, 1, 2]
+  n_envs:
+    value: 600
+  overwrite:
+    value: false
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/ipcgrl_encoder_fewshot'
+  encoder.ckpt_name:
+    values:
+      # ── unseen_ratio: 0.1 ─────────────────────────────────────────────────
+      - "ipcgrl-enc-mg-game-all_unseen-zd_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-dm_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-sk_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-zddm_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-zdsk_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-dmsk_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-pkzddm_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-dgzddm_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-zddmsk_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-pkdgzddm_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-pkzddmsk_ur-0.1_enc-mlp_exp-def_0"
+      - "ipcgrl-enc-mg-game-all_unseen-dgzddmsk_ur-0.1_enc-mlp_exp-def_0"
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/ipcgrl_fewshot'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+

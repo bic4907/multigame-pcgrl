@@ -1,28 +1,18 @@
-program: train_finetuned_clip_encoder.py
-project: aaai27_encoder_finetuned_clip_unseen
+program: train_clip_decoder.py
+project: aaai27_encoder_mgpcgrl_unseen
 method: grid
 metric:
   goal: minimize
-  name: total/val_loss
+  name: unseen/reg_unseen_overall
 parameters:
   game:
     values: ['all']
+  n_envs:
+    value: 600
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/finetuned_clip_encoder'
-  unseen_ratio:
-    value: 0.0
-  seen_ratio:
-    value: 1.0
-  seed:
-    values: [0]
-  n_epochs:
-    value: 100
-  batch_size:
-    value: 256
-  lr:
-    value: 5.0e-6
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_encoder_unseen'
   unseen_games:
     values:
       # 1 unseen game

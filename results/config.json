@@ -33,11 +33,13 @@
     },
     "domain_condition": {
       "target_projects": [
+        "aaai27_eval_mgpcgrl_prefix_none",
         "aaai27_eval_mgpcgrl_fewshot",
         "aaai27_eval_mgpcgrl_fewshot_desc",
         "aaai27_eval_mgpcgrl_fewshot_mix"
       ],
       "project_display_names": {
+        "aaai27_eval_mgpcgrl_prefix_none": "None",
         "aaai27_eval_mgpcgrl_fewshot":      "Name",
         "aaai27_eval_mgpcgrl_fewshot_desc": "Description",
         "aaai27_eval_mgpcgrl_fewshot_mix":  "Name+Desc"
@@ -65,6 +67,7 @@
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
     "aaai27_eval_vipcgrl_fewshot":            "VIPCGRL (fewshot)",
     "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (fewshot)",
+    "aaai27_eval_mgpcgrl_prefix_none":        "MGPCGRL (prefix=none)",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "MGPCGRL (prefix=desc)",
     "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)"
   },
@@ -86,6 +89,7 @@
     "aaai27_eval_ipcgrl_fewshot":             "#1a9641",
     "aaai27_eval_vipcgrl_fewshot":            "#7b3294",
     "aaai27_eval_mgpcgrl_fewshot":            "#2166ac",
+    "aaai27_eval_mgpcgrl_prefix_none":        "#b2182b",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "#4393c3",
     "aaai27_eval_mgpcgrl_fewshot_mix":        "#92c5de"
   },

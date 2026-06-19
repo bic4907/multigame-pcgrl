@@ -1,0 +1,18 @@
+program: train_clip.py
+project: aaai27_encoder_vipcgrl_fullshot
+method: grid
+metric:
+  goal: minimize
+  name: total/val_loss
+parameters:
+  game:
+    values: ['all']
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/vipcgrl_encoder'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# total runs: 1

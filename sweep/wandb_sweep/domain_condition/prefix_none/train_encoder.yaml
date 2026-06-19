@@ -1,5 +1,5 @@
 program: train_clip_decoder.py
-project: aaai27_encoder_mgpcgrl_fewshot_prefix_none
+project: aaai27_encoder_mgpcgrl_prefix_none
 method: grid
 metric:
   goal: minimize

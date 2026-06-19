@@ -3,95 +3,73 @@
 ---
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_cpcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_cpcgrl.yaml
+wandb sweep --project aaai27_train_cpcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/cpcgrl/train_pcgrl.yaml
 ```
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_cpcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_cpcgrl.yaml
+wandb sweep --project aaai27_eval_cpcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/cpcgrl/eval_pcgrl.yaml
 ```
 
 
 
-### IPCGRL
+### IPCGRL (Fullshot)
 
 ---
 
 **Train Encoder**
 ```bash
-bash run_docker.sh python train_ipcgrl_encoder_mg.py saves_dir=/mnt/nas/mgpcgrl/ipcgrl_encoder
+wandb sweep --project aaai27_encoder_ipcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/ipcgrl/fullshot/train_encoder.yaml
 ```
 
 
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_ipcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_ipcgrl.yaml
+wandb sweep --project aaai27_train_ipcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/ipcgrl/fullshot/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_ipcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_ipcgrl.yaml
+wandb sweep --project aaai27_eval_ipcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/ipcgrl/fullshot/eval_pcgrl.yaml
 ```
 
 
-### IPCGRL (Unseen)
+### IPCGRL (Fewshot)
 
 ---
 
 **Train Encoder**
 ```bash
-wandb sweep --project aaai27_train_ipcgrl_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_ipcgrl_encoder_unseen.yaml
+wandb sweep --project aaai27_encoder_ipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/ipcgrl/fewshot/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_ipcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_ipcgrl_unseen.yaml
+wandb sweep --project aaai27_train_ipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/ipcgrl/fewshot/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_ipcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_ipcgrl_unseen.yaml
+wandb sweep --project aaai27_eval_ipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/ipcgrl/fewshot/eval_pcgrl.yaml
 ```
 
 
-### VIPCGRL
+### VIPCGRL (Fullshot)
 
 ---
 
 **Train Encoder**
 ```bash
-wandb sweep --project aaai27_train_vipcgrl_encoder --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl_encoder.yaml
-```
-```bash
-bash run_docker.sh python train_clip.py saves_dir=/mnt/nas/mgpcgrl/vipcgrl_encoder
+wandb sweep --project aaai27_encoder_vipcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/vipcgrl/fullshot/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_vipcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl.yaml
+wandb sweep --project aaai27_train_vipcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/vipcgrl/fullshot/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_vipcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_vipcgrl.yaml
-```
-
-### VIPCGRL (Unseen)
-
----
-
-**Train Encoder**
-```bash
-wandb sweep --project aaai27_train_vipcgrl_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl_encoder_unseen.yaml
-```
-
-**Train PCGRL**
-```bash
-wandb sweep --project aaai27_train_vipcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl_unseen.yaml
-```
-
-**Eval PCGRL**
-```bash
-wandb sweep --project aaai27_eval_vipcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_vipcgrl_unseen.yaml
+wandb sweep --project aaai27_eval_vipcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/vipcgrl/fullshot/eval_pcgrl.yaml
 ```
 
 ### VIPCGRL (Fewshot)
@@ -100,131 +78,37 @@ wandb sweep --project aaai27_eval_vipcgrl_unseen --entity st4889ha-gwangju-insti
 
 **Train Encoder**
 ```bash
-wandb sweep --project aaai27_encoder_vipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/encoder_vipcgrl_fewshot.yaml
+wandb sweep --project aaai27_encoder_vipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/vipcgrl/fewshot/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_vipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl_fewshot.yaml
+wandb sweep --project aaai27_train_vipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/vipcgrl/fewshot/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_vipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_vipcgrl_fewshot.yaml
+wandb sweep --project aaai27_eval_vipcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/vipcgrl/fewshot/eval_pcgrl.yaml
 ```
 
 
-### VIPCGRL (`coef_human_sim=0`)
-
----
-
-**Train PCGRL**
-```bash
-wandb sweep --project aaai27_train_vipcgrl_nosim --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_vipcgrl_nosim.yaml
-```
-
-**Eval PCGRL**
-```bash
-wandb sweep --project aaai27_eval_vipcgrl_nosim --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_vipcgrl_nosim.yaml
-```
-
-
-### MGPCGRL
+### MGPCGRL (Fullshot)
 
 ---
 
 **Train Encoder**
 ```bash
-wandb sweep --project aaai27_train_mgpcgrl_encoder --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder.yaml
-```
-```bash
-bash run_docker.sh python train_clip_decoder.py saves_dir=/mnt/nas/mgpcgrl/mgpcgrl_encoder
+wandb sweep --project aaai27_encoder_mgpcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl/fullshot/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_mgpcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl.yaml
+wandb sweep --project aaai27_train_mgpcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl/fullshot/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_mgpcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl.yaml
-```
-
-### MGPCGRL (Unseen)
-
----
-
-**Train Encoder**
-```bash
-wandb sweep --project aaai27_train_mgpcgrl_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder_unseen.yaml
-```
-
-**Train PCGRL**
-```bash
-wandb sweep --project aaai27_train_mgpcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_unseen.yaml
-```
-
-**Eval PCGRL**
-```bash
-wandb sweep --project aaai27_eval_mgpcgrl_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_unseen.yaml
-```
-
-### MGPCGRL (Unseen, `instruction_prefix=desc`)
-
----
-
-**Train Encoder**
-```bash
-wandb sweep --project aaai27_train_mgpcgrl_encoder_unseen_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder_unseen_desc.yaml
-```
-
-**Train PCGRL**
-```bash
-wandb sweep --project aaai27_train_mgpcgrl_unseen_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_unseen_desc.yaml
-```
-
-**Eval PCGRL**
-```bash
-wandb sweep --project aaai27_eval_mgpcgrl_unseen_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_unseen_desc.yaml
-```
-
-### MGPCGRL (All Decoder Rewards)
-
----
-
-**Train Encoder (Same to `Unseen`**)
-```bash
-wandb sweep --project aaai27_train_mgpcgrl_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder_unseen.yaml
-```
-
-**Train PCGRL**
-```bash
-wandb sweep --project aaai27_train_mgpcgrl_all --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_all.yaml
-```
-
-**Eval PCGRL**
-```bash
-wandb sweep --project aaai27_eval_mgpcgrl_all --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_all.yaml
-```
-
-### MGPCGRL (Oracle)
-
----
-
-**Train Encoder (Same to `Unseen`**)
-```bash
-wandb sweep --project aaai27_train_mgpcgrl_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder_unseen.yaml
-```
-
-**Train PCGRL**
-```bash
-wandb sweep --project aaai27_train_mgpcgrl_oracle --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_oracle.yaml
-```
-
-**Eval PCGRL**
-```bash
-wandb sweep --project aaai27_eval_mgpcgrl_oracle --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_oracle.yaml
+wandb sweep --project aaai27_eval_mgpcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl/fullshot/eval_pcgrl.yaml
 ```
 
 
@@ -234,36 +118,17 @@ wandb sweep --project aaai27_eval_mgpcgrl_oracle --entity st4889ha-gwangju-insti
 
 **Train Encoder**
 ```bash
-wandb sweep --project aaai27_encoder_mgpcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/encoder_mgpcgrl_fewshot.yaml
+wandb sweep --project aaai27_encoder_mgpcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl/fewshot/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_mgpcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_fewshot.yaml
+wandb sweep --project aaai27_train_mgpcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl/fewshot/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_mgpcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_fewshot.yaml
-```
-
-### MGPCGRL (Fewshot, `instruction_prefix=desc`)
-
----
-
-**Train Encoder**
-```bash
-wandb sweep --project aaai27_encoder_mgpcgrl_fewshot_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/encoder_mgpcgrl_fewshot_desc.yaml
-```
-
-**Train PCGRL**
-```bash
-wandb sweep --project aaai27_train_mgpcgrl_fewshot_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_fewshot_desc.yaml
-```
-
-**Eval PCGRL**
-```bash
-wandb sweep --project aaai27_eval_mgpcgrl_fewshot_desc --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_fewshot_desc.yaml
+wandb sweep --project aaai27_eval_mgpcgrl_fewshot --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl/fewshot/eval_pcgrl.yaml
 ```
 
 
@@ -273,17 +138,17 @@ wandb sweep --project aaai27_eval_mgpcgrl_fewshot_desc --entity st4889ha-gwangju
 
 **Train Encoder**
 ```bash
-wandb sweep --project aaai27_train_mgpcgrl_encoder_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_encoder_unseen_ratios.yaml
+wandb sweep --project aaai27_encoder_mgpcgrl_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl_unseen_ratios/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_mgpcgrl_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/train_mgpcgrl_unseen_ratios.yaml
+wandb sweep --project aaai27_train_mgpcgrl_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl_unseen_ratios/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_mgpcgrl_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_mgpcgrl_unseen_ratios.yaml
+wandb sweep --project aaai27_eval_mgpcgrl_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl_unseen_ratios/eval_pcgrl.yaml
 ```
 
 
@@ -292,7 +157,7 @@ wandb sweep --project aaai27_eval_mgpcgrl_unseen_ratios --entity st4889ha-gwangj
 ---
 
 ```bash
-wandb sweep --project aaai27_eval_random --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/eval_random.yaml
+wandb sweep --project aaai27_eval_random --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/random/eval.yaml
 ```
 
 
@@ -307,24 +172,3 @@ wandb sweep --project aaai27_train_pretrained_clip --entity st4889ha-gwangju-ins
 ```bash
 wandb sweep --project aaai27_eval_pretrained_clip --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/pretrained_clip/eval_pretrained_clip.yaml
 ```
-
-
-### Finetuned CLIP (Unseen)
-
----
-
-**Train Encoder**
-```bash
-wandb sweep --project aaai27_train_finetuned_clip_encoder_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/finetuned_clip/train_finetuned_clip_encoder_unseen.yaml
-```
-
-**Train PCGRL**
-```bash
-wandb sweep --project aaai27_train_finetuned_clip_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/finetuned_clip/train_finetuned_clip_unseen.yaml
-```
-
-**Eval PCGRL**
-```bash
-wandb sweep --project aaai27_eval_finetuned_clip_unseen --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/finetuned_clip/eval_finetuned_clip_unseen.yaml
-```
-

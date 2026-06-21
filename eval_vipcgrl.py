@@ -48,8 +48,11 @@ def main(config: VIPCGRLEvalConfig):
             )
             config.train_seen_ratio = seen_ratio
 
+        # ── unseen_ratio: train_vipcgrl.py 와 동일한 game 확장 기준에 사용 ──
+        unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
+
         # ── game_setting_mode=encoder_seen: train 과 동일하게 config.game 을
-        #    encoder seen 게임 약어 subset 으로 덮어써서 exp_dir 매칭을 맞춘다.
+        #    encoder seen 게임 약어 subset 또는 all 로 덮어써서 exp_dir 매칭을 맞춘다.
         #    (train_vipcgrl.py 의 로직과 1:1 대응)
         if config.game_setting_mode == "encoder_seen":
             seen_games_raw = dataset_setting.get("seen_games", [])
@@ -61,7 +64,16 @@ def main(config: VIPCGRLEvalConfig):
                     game_str = "all"
                 else:
                     game_str = "".join(seen_abbrs)
-                if game_str != config.game:
+
+                if unseen_ratio > 0.0:
+                    # encoder 가 unseen 게임도 일부 학습 → train_vipcgrl 과 동일하게 all 로 확장.
+                    logger.info(
+                        "game_setting_mode=encoder_seen + unseen_ratio=%.4f > 0 "
+                        "→ expanding game to 'all' for exp_dir matching",
+                        unseen_ratio,
+                    )
+                    config.game = "all"
+                elif game_str != config.game:
                     logger.info(
                         "game_setting_mode=encoder_seen → overriding config.game "
                         "'%s' → '%s' (seen_games=%s) for exp_dir matching",
@@ -93,4 +105,3 @@ def main(config: VIPCGRLEvalConfig):
 
 if __name__ == "__main__":
     main()
-

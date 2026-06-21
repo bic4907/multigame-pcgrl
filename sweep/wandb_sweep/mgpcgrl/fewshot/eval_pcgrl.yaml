@@ -9,6 +9,8 @@ parameters:
     value: 'all'
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0, 1, 2]
   reevaluate:
     value: true
   overwrite:

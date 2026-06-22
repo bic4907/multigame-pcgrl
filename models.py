@@ -1,6 +1,6 @@
 import math
 from timeit import default_timer as timer
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 from flax.linen.initializers import constant, orthogonal
 import numpy as np
@@ -274,6 +274,7 @@ class NLPConvForward(nn.Module):
     hidden_dims: Tuple[int]
     nlp_input_dim: int
     activation: str = "relu"
+    embed_proj_type: Optional[str] = None  # 'affine': γ·x+β, RL end-to-end 학습
 
     @nn.compact
     def __call__(self, map_x, flat_x, nlp_x):
@@ -285,6 +286,13 @@ class NLPConvForward(nn.Module):
         h1, h2 = self.hidden_dims
 
         flat_action_dim = self.action_dim * math.prod(self.act_shape)
+
+        # embedding projection: adapter 와 동일 파라미터 수, PPO end-to-end 학습
+        if self.embed_proj_type == 'affine':
+            D = nlp_x.shape[-1]
+            gamma = self.param('ep_gamma', nn.initializers.ones, (D,))
+            beta = self.param('ep_beta', nn.initializers.zeros, (D,))
+            nlp_x = gamma * nlp_x + beta
 
         map_x, _ = crop_arf_vrf(map_x, self.arf_size, self.vrf_size)
 

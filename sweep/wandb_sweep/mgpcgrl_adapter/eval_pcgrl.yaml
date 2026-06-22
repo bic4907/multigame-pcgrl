@@ -20,35 +20,21 @@ parameters:
   decoder.adapter_type:
     values: [null, 'film', 'lora', 'moe']
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_encoder'
   encoder.ckpt_name:
     values: [
-      # ── unseen_ratio: 0.0 ──────────────────────────────────────────────────
-      "clipdec-game-all_unseen-zd_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-dm_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-sk_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-zddm_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-zdsk_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-dmsk_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-pkzddm_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-dgzddm_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-zddmsk_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-pkdgzddm_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-pkzddmsk_ur-0.0_exp-def_0",
-      "clipdec-game-all_unseen-dgzddmsk_ur-0.0_exp-def_0",
-      # ── unseen_ratio: 0.1 ──────────────────────────────────────────────────
-      "clipdec-game-all_unseen-zd_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-dm_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-sk_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-zddm_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-zdsk_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-dmsk_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-pkzddm_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-dgzddm_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-zddmsk_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-pkdgzddm_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-pkzddmsk_ur-0.1_exp-def_0",
-      "clipdec-game-all_unseen-dgzddmsk_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-zd_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-sk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-zddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-zdsk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dmsk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-pkzddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dgzddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-zddmsk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-pkdgzddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-pkzddmsk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dgzddmsk_ur-0.03_exp-def_0",
     ]
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter'
@@ -57,4 +43,4 @@ command:
   - ${program}
   - ${args_no_hyphens}
 # 전제: train_pcgrl.yaml sweep 완료 후 실행
-# 총 runs: 4 adapter_types × 24 encoder_ckpts × 5 enums = 480 runs
+# 총 runs: 4 adapter_types × 12 encoder_ckpts × 5 enums = 240 runs

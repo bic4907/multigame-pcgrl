@@ -1,18 +1,28 @@
-program: train_adapter.py
-project: aaai27_mgpcgrl_adapter_adapt
+program: eval_mgpcgrl.py
 method: grid
 metric:
   goal: minimize
-  name: adapter/film/final_loss
+  name: unseen/reg_unseen_overall
 parameters:
   wandb_project:
-    value: 'aaai27_mgpcgrl_adapter'
+    value: 'aaai27_eval_mgpcgrl_adapter_parameter'
+  game:
+    values: ['all']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  reevaluate:
+    value: true
   overwrite:
     value: true
+  train_seen_ratio:
+    value: 1.0
+  # ── train_pcgrl_adapter.yaml 과 동일한 값 지정 (exp_dir 매칭용) ──────────────
   decoder.adapter_type:
-    values: ['film', 'lora', 'moe']
+    values: [null, 'film']
+  embed_proj_type:
+    value: null
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_encoder'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_parameter_encoder'
   encoder.ckpt_name:
     values: [
       "clipdec-game-all_unseen-zd_ur-0.03_exp-def_0",
@@ -28,10 +38,11 @@ parameters:
       "clipdec-game-all_unseen-pkzddmsk_ur-0.03_exp-def_0",
       "clipdec-game-all_unseen-dgzddmsk_ur-0.03_exp-def_0",
     ]
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_parameter'
 command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-# 전제: mgpcgrl_crossmatch_encoder → mgpcgrl_adapter_encoder 복사 완료
-# adapter 저장: encoder.ckpt_dir/{ckpt_name}_adp-{type}/adapter_state.pkl
-# 총 runs: 3 adapter_types × 12 encoder_ckpts = 36 runs
+# 전제: train_pcgrl_adapter.yaml sweep 완료 후 실행
+# 총 runs: 2 adapter_types × 12 encoder_ckpts × 5 enums = 120 runs

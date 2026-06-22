@@ -174,7 +174,9 @@ def get_exp_group(config) -> str:
         enc = _unseen_suffix(config)
         _at = getattr(getattr(config, 'decoder', None), 'adapter_type', None)
         adapter_s = f'_adp-{_at}' if (_at and str(_at).lower() not in ('none', 'null')) else ''
-        return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{enc}{adapter_s}'
+        _ept = getattr(config, 'embed_proj_type', None)
+        eproj_s = f'_eproj-{_ept}' if (_ept and str(_ept).lower() not in ('none', 'null')) else ''
+        return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{enc}{adapter_s}{eproj_s}'
 
     # VIPCGRL: encoder ckpt 이름에서 unseen 정보 파싱해 suffix 추가 (MGPCGRL 와 동일 규칙).
     # unseen 정보가 없으면 suffix 생략.
@@ -485,7 +487,8 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 arf_size=config.arf_size, act_shape=config.act_shape,
                 vrf_size=config.vrf_size,
                 nlp_input_dim=config.nlp_input_dim,
-                hidden_dims=config.hidden_dims
+                hidden_dims=config.hidden_dims,
+                embed_proj_type=None,
             )
         )
 
@@ -499,7 +502,8 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 arf_size=config.arf_size, act_shape=config.act_shape,
                 vrf_size=config.vrf_size,
                 nlp_input_dim=config.nlp_input_dim,
-                hidden_dims=config.hidden_dims
+                hidden_dims=config.hidden_dims,
+                embed_proj_type=None,
             ),
             action_dim=action_dim,
             act_shape=config.act_shape,
@@ -518,7 +522,8 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 arf_size=config.arf_size, act_shape=config.act_shape,
                 vrf_size=config.vrf_size,
                 nlp_input_dim=config.nlp_input_dim,
-                hidden_dims=config.hidden_dims
+                hidden_dims=config.hidden_dims,
+                embed_proj_type=config.embed_proj_type,
             ),
             action_dim=action_dim,
             act_shape=config.act_shape,
@@ -534,7 +539,8 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 arf_size=config.arf_size, act_shape=config.act_shape,
                 vrf_size=config.vrf_size,
                 nlp_input_dim=config.nlp_input_dim,
-                hidden_dims=config.hidden_dims
+                hidden_dims=config.hidden_dims,
+                embed_proj_type=None,
             ),
             action_dim=action_dim,
             act_shape=config.act_shape,
@@ -550,7 +556,8 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 arf_size=config.arf_size, act_shape=config.act_shape,
                 vrf_size=config.vrf_size,
                 nlp_input_dim=config.nlp_input_dim,
-                hidden_dims=config.hidden_dims
+                hidden_dims=config.hidden_dims,
+                embed_proj_type=None,
             ),
             action_dim=action_dim,
             act_shape=config.act_shape,
@@ -569,7 +576,8 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 arf_size=config.arf_size, act_shape=config.act_shape,
                 vrf_size=config.vrf_size,
                 nlp_input_dim=config.nlp_input_dim,
-                hidden_dims=config.hidden_dims
+                hidden_dims=config.hidden_dims,
+                embed_proj_type=None,
             ),
             action_dim=action_dim,
             act_shape=config.act_shape,

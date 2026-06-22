@@ -1,18 +1,18 @@
 program: train_adapter.py
-project: aaai27_mgpcgrl_adapter_adapt
+project: aaai27_mgpcgrl_adapter_parameter_adapt
 method: grid
 metric:
   goal: minimize
   name: adapter/film/final_loss
 parameters:
   wandb_project:
-    value: 'aaai27_mgpcgrl_adapter'
+    value: 'aaai27_mgpcgrl_adapter_parameter'
   overwrite:
     value: true
   decoder.adapter_type:
-    values: ['film', 'lora', 'moe']
+    values: ['film']
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_encoder'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_parameter_encoder'
   encoder.ckpt_name:
     values: [
       "clipdec-game-all_unseen-zd_ur-0.03_exp-def_0",
@@ -32,6 +32,6 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-# 전제: mgpcgrl_crossmatch_encoder → mgpcgrl_adapter_encoder 복사 완료
-# adapter 저장: encoder.ckpt_dir/{ckpt_name}_adp-{type}/adapter_state.pkl
-# 총 runs: 3 adapter_types × 12 encoder_ckpts = 36 runs
+# adapter 저장: encoder.ckpt_dir/{ckpt_name}_adp-film/adapter_state.pkl
+# mgpcgrl_adapter sweep 에서 이미 학습된 경우 overwrite=true 이므로 재학습됨
+# 총 runs: 1 type × 12 encoder_ckpts = 12 runs

@@ -354,6 +354,9 @@ class VIPCGRLConfig(CPCGRLConfig):
     # train_setting.json에 seen/unseen split이 기록되어 WandB 로깅에 사용된다.
     reward_seen_games: List[str] = field(default_factory=list)
 
+    # None: 비활성 / "affine": γ·x+β (RL end-to-end 학습, FiLM adapter 와 동일 구조)
+    embed_proj_type: Optional[str] = None
+
 
 
 @dataclass

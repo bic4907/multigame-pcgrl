@@ -7,11 +7,13 @@ metric:
   name: adapter/film/final_loss
 parameters:
   wandb_project:
-    value: 'aaai27_mgpcgrl_adapter_parameter'
+    value: 'aaai27_mgpcgrl_adapter_parameter_adapt'
   overwrite:
     value: true
   decoder.adapter_type:
     values: ['film']
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_parameter_encoder'
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_parameter_encoder'
   encoder.ckpt_name:

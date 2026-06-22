@@ -83,9 +83,7 @@ def main(config: MGPCGRLConfig):
         raise ValueError("reward_unseen_ratio must be > 0 for adapter training.")
 
     saves_dir = getattr(config, "saves_dir", None) or config.encoder.ckpt_dir
-    # adp_ur을 이름에 포함하여 같은 enc_ur에 대한 다른 adp_ur 구분
-    _aur_str = f"{adp_ur:.2f}".rstrip("0").rstrip(".")
-    adapter_ckpt_name = f"{config.encoder.ckpt_name}_aur-{_aur_str}_adp-{_at}"
+    adapter_ckpt_name = f"{config.encoder.ckpt_name}_adp-{_at}"
     adapter_dir = os.path.join(saves_dir, adapter_ckpt_name)
     adapter_state_path = os.path.join(adapter_dir, "adapter_state.pkl")
 

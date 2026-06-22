@@ -17,7 +17,7 @@ parameters:
   n_envs:
     value: 600
   overwrite:
-    value: false
+    value: true
   train_seen_ratio:
     value: 1.0
   # ── parameter expansion 조건: adapter=null 고정, embed_proj_type=affine ──────

@@ -1,4 +1,6 @@
 program: train_mgpcgrl.py
+project: aaai27_train_mgpcgrl_adapter_parameter
+entity: st4889ha-gwangju-institute-of-science-and-technology
 method: grid
 metric:
   goal: minimize

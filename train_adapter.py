@@ -74,11 +74,13 @@ def main(config: MGPCGRLConfig):
         raise ValueError("decoder.adapter_type must be film/lora/moe for adapter training.")
 
     adp_ur = config.reward_unseen_ratio
-    if adp_ur <= 0.0:
-        raise ValueError("reward_unseen_ratio must be > 0 for adapter training.")
-
     _m = re.search(r"_ur-([\d.]+)_", config.encoder.ckpt_name)
     enc_ur = float(_m.group(1)) if _m else 0.0
+    if adp_ur <= 0.0:
+        adp_ur = enc_ur  # ckpt_name의 ur을 fallback으로 사용
+        config.reward_unseen_ratio = adp_ur
+    if adp_ur <= 0.0:
+        raise ValueError("reward_unseen_ratio must be > 0 for adapter training.")
 
     saves_dir = getattr(config, "saves_dir", None) or config.encoder.ckpt_dir
     # adp_ur을 이름에 포함하여 같은 enc_ur에 대한 다른 adp_ur 구분

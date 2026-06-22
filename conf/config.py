@@ -210,6 +210,15 @@ class DecoderConfig:
     # True이면 pixel_values에 (B, H, W, num_reward_classes) one-hot을 concat
     cnn_reward_enum_onehot: bool = False
 
+    # ── Few-shot adapter (text embedding → RewardDecoder 입력 공간) ──────────
+    # adapter_type: None(비활성) | "film" | "lora" | "moe"
+    adapter_type: Optional[str] = None
+    adapter_rank: int = 4
+    adapter_num_experts: int = 4
+    adapter_hidden_dim: int = 64
+    adapter_lr: float = 1e-2
+    adapter_steps: int = 500
+
 
 @dataclass
 class TrainConfig(Config):
@@ -377,13 +386,17 @@ class MGPCGRLConfig(VIPCGRLConfig):
 
     # ── reward_unseen_ratio: unseen 게임 내 metadata/decoder 경계 ─────────────
     # dataset_setting.json 의 unseen_ratio 에서 자동 주입됨.
-    # 각 unseen 게임의 샘플을 순서 기준으로 분할:
-    #   앞쪽 (reward_unseen_ratio 비율) → metadata (GT condition, encoder 학습 데이터)
-    #   나머지 (1 - reward_unseen_ratio) → reward decoder 로 condition 예측
+    # support (encoder 학습분) → metadata (GT condition)
+    # 나머지 → reward decoder 로 condition 예측
     # 0.0 (기본값) = 모든 unseen 샘플에 decoder 적용 (zero-shot 동작)
     reward_unseen_ratio: float = 0.0
 
-
+    # ── adapter sweep 편의 파라미터 (train_adapter.py 전용) ──────────────────
+    # ur: 인코더 학습 시 unseen_ratio, adp_ur: adapter 학습 시 unseen_ratio
+    # 세 필드가 모두 설정되면 encoder.ckpt_name 과 reward_unseen_ratio 자동 구성
+    ur: Optional[float] = None
+    adp_ur: Optional[float] = None
+    unseen_game: Optional[str] = None
 
 
 @dataclass

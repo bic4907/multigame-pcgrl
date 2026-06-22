@@ -1,0 +1,54 @@
+program: train_adapter.py
+project: aaai27_mgpcgrl_adapter_adapt
+method: grid
+metric:
+  goal: minimize
+  name: adapter/film/final_loss
+parameters:
+  wandb_project:
+    value: 'aaai27_mgpcgrl_adapter'
+  overwrite:
+    value: true
+  decoder.adapter_type:
+    values: ['film', 'lora', 'moe']
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter'
+  encoder.ckpt_name:
+    values: [
+      # ── unseen_ratio: 0.0 (zero-shot) ──────────────────────────────────────
+      # ur=0.0 은 support 없음 → adapter 학습 skip됨 (null과 동일 동작)
+      # 포함 이유: null baseline 과의 비교를 위해 동일 encoder set 유지
+      "clipdec-game-all_unseen-zd_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-dm_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-sk_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-zddm_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-zdsk_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-dmsk_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-pkzddm_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-dgzddm_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-zddmsk_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-pkdgzddm_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-pkzddmsk_ur-0.0_exp-def_0",
+      "clipdec-game-all_unseen-dgzddmsk_ur-0.0_exp-def_0",
+      # ── unseen_ratio: 0.1 (few-shot) ───────────────────────────────────────
+      "clipdec-game-all_unseen-zd_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-dm_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-sk_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-zddm_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-zdsk_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-dmsk_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-pkzddm_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-dgzddm_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-zddmsk_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-pkdgzddm_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-pkzddmsk_ur-0.1_exp-def_0",
+      "clipdec-game-all_unseen-dgzddmsk_ur-0.1_exp-def_0",
+    ]
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# 전제: copy_encoders_to_adapter.sh 로 mgpcgrl_unseen_ratios_0602 → mgpcgrl_adapter 복사 완료
+# adapter 저장: encoder.ckpt_dir/{ckpt_name}_adp-{type}/adapter_state.pkl
+# 실제 학습: ur=0.1 (12 enc × 3 type = 36 runs), ur=0.0은 skip됨
+# 총 등록 runs: 3 adapter_types × 24 encoder_ckpts = 72 runs

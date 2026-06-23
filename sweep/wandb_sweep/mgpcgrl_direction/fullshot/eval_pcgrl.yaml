@@ -1,0 +1,27 @@
+program: eval_mgpcgrl.py
+project: aaai27_eval_mgpcgrl_fullshot
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0]
+  reevaluate:
+    value: true
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_direction0623'
+  encoder.ckpt_name:
+    values: [
+      "clipdec-game-all_exp-def_0",
+    ]
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_direction0623'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

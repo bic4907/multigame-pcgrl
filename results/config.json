@@ -19,6 +19,17 @@
       "re_baseline_label":          "CPCGRL",
       "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
     },
+    "cpcgrl_quantbin0623": {
+      "target_projects": [
+        "aaai27_eval_cpcgrl",
+        "eval_cpcgrl_quantbin0623"
+      ],
+      "re_oracle_project":          "aaai27_eval_cpcgrl",
+      "re_oracle_label":            "CPCGRL (Oracle)",
+      "re_baseline_project":        "aaai27_eval_cpcgrl",
+      "re_baseline_label":          "CPCGRL",
+      "re_exclude_from_compare":    ["aaai27_eval_cpcgrl"]
+    },
     "fewshot": {
       "target_projects": [
         "aaai27_eval_pretrained_clip",
@@ -52,6 +63,7 @@
   "project_display_names": {
     "aaai27_eval_finetuned_clip_unseen": "CLIP (unseen)",
     "aaai27_eval_cpcgrl":        "CPCGRL",
+    "eval_cpcgrl_quantbin0623":  "CPCGRL (QuantBin)",
     "aaai27_eval_vipcgrl_nosim": "VIPCGRL (nosim)",
     "aaai27_eval_mgpcgrl":       "MGPCGRL",
     "aaai27_eval_ipcgrl":        "IPCGRL",
@@ -74,6 +86,7 @@
   "project_colors": {
     "aaai27_eval_random":         "#aaaaaa",
     "aaai27_eval_cpcgrl":         "#e66101",
+    "eval_cpcgrl_quantbin0623":   "#fdb863",
     "aaai27_eval_ipcgrl":         "#1a9641",
     "aaai27_eval_vipcgrl":        "#7b3294",
     "aaai27_eval_vipcgrl_nosim":  "#c2a5cf",

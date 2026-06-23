@@ -234,6 +234,16 @@ def train_step(
 
         return a2b_loss, b2a_loss, a2b_correct_pr, b2a_correct_pr, a2b_top1_accuracy, b2a_top1_accuracy
 
+    def safe_l2_normalize(x, axis=-1, eps=1e-6):
+        """0-vector 근처에서도 gradient가 NaN으로 터지지 않는 L2 normalize.
+
+        jnp.linalg.norm()은 zero-vector에서 gradient가 NaN이 되므로,
+        sum-of-squares + jax.lax.rsqrt(maximum(...)) 형태로 우회한다.
+        """
+        sq_norm = jnp.sum(x * x, axis=axis, keepdims=True)
+        inv_norm = jax.lax.rsqrt(jnp.maximum(sq_norm, eps * eps))
+        return x * inv_norm
+
     def continuous_direction_alignment(text_embed, game_id, reward_target, condition_target):
         """Continuous Task-wise Cross-game Direction Alignment Loss.
 
@@ -241,9 +251,13 @@ def train_step(
         slope vector를 OLS-style centered regression 으로 추정한 후, 같은 task 안의
         서로 다른 game 간 방향 벡터를 cosine distance 로 정렬한다.
 
+        주의: invalid (game, task) 그룹은 normalize **이전에** slope를 0으로 차단해야
+        한다. slope=0 인 그룹에 normalize gradient가 흐르면 NaN이 발생하고, 이후
+        mask를 곱해도 (NaN * 0 = NaN) 으로 parameter 전체가 오염된다.
+
         Returns: (loss, valid_pair_count)
         """
-        z = text_embed / (jnp.linalg.norm(text_embed, axis=-1, keepdims=True) + 1e-8)
+        z = safe_l2_normalize(text_embed, axis=-1, eps=1e-6)
         c = condition_target.astype(jnp.float32)
         G = num_games
         T = num_reward_classes
@@ -267,29 +281,32 @@ def train_step(
         m_dc = m * dc                                                      # (G, T, B)
         slope_num = (m_dc[..., None] * dz).sum(-2)                         # (G, T, D)
         slope_den = (m_dc * dc).sum(-1)                                    # (G, T) = sum m*dc^2
-        slope = slope_num / (slope_den[..., None] + 1e-8)                  # (G, T, D)
 
+        # ── valid group 판정 (slope 계산 전) ──
         c_var = slope_den / safe_n                                         # (G, T)
         valid = (n_gt >= float(delta_min_count)) & (c_var > delta_var_eps) # (G, T)
 
-        slope_norm = jnp.linalg.norm(slope, axis=-1, keepdims=True)
-        d_dir = slope / (slope_norm + 1e-8)                                # (G, T, D)
+        # ── slope_den이 매우 작은 invalid group에서 slope 폭주 방지 ──
+        safe_slope_den = jnp.where(valid, slope_den, 1.0)                  # (G, T)
+        slope = slope_num / safe_slope_den[..., None]                      # (G, T, D)
+        # invalid group은 normalize 이전에 완전히 0으로 차단
+        slope = jnp.where(valid[..., None], slope, 0.0)                    # (G, T, D)
+
+        # ── NaN-safe normalize + invalid 방향 재차단 ──
+        d_dir = safe_l2_normalize(slope, axis=-1, eps=1e-6)               # (G, T, D)
+        d_dir = jnp.where(valid[..., None], d_dir, 0.0)                    # (G, T, D)
 
         # task별 cross-game cosine: (G, G, T)
         cos_mat = jnp.einsum('gtd,htd->ght', d_dir, d_dir)
         pair_valid = valid[:, None, :] & valid[None, :, :]                 # (G, G, T)
         tri = jnp.triu(jnp.ones((G, G), dtype=bool), k=1)                  # (G, G)
         pair_valid = pair_valid & tri[:, :, None]
-        pair_valid_f = pair_valid.astype(jnp.float32)
 
-        pair_loss = (1.0 - cos_mat) * pair_valid_f
-        total_pairs = pair_valid_f.sum()
-        delta_loss = jnp.where(
-            total_pairs > 0,
-            pair_loss.sum() / jnp.maximum(total_pairs, 1.0),
-            0.0,
-        )
-        return delta_loss, total_pairs
+        # NaN * 0 방지: multiply mask 대신 where 사용
+        pair_loss = jnp.where(pair_valid, 1.0 - cos_mat, 0.0)
+        total_pairs = pair_valid.astype(jnp.float32).sum()
+        delta_loss = pair_loss.sum() / jnp.maximum(total_pairs, 1.0)
+        return delta_loss, total_pairs, slope_den
 
     def loss_fn(params):
         outputs = train_state.apply_fn(
@@ -371,12 +388,16 @@ def train_step(
 
         # ── Continuous Task-wise Cross-game Direction Alignment ──
         if delta_weight > 0.0:
-            delta_loss, delta_valid_pairs = continuous_direction_alignment(
+            delta_loss, delta_valid_pairs, delta_slope_den = continuous_direction_alignment(
                 text_embed, batch.game_id, reward_target, condition_target
             )
+            delta_max_slope_den = jnp.max(delta_slope_den)
+            delta_min_slope_den = jnp.min(delta_slope_den)
         else:
             delta_loss = jnp.array(0.0)
             delta_valid_pairs = jnp.array(0.0)
+            delta_max_slope_den = jnp.array(0.0)
+            delta_min_slope_den = jnp.array(0.0)
 
         # ── Total Loss ──
         total_loss = (
@@ -415,6 +436,11 @@ def train_step(
             # ── Continuous direction alignment ──
             "continuous_delta_loss": delta_loss,
             "valid_direction_pair_count": delta_valid_pairs,
+            # ── NaN 디버깅용 ──
+            "delta_is_nan": jnp.isnan(delta_loss).astype(jnp.float32),
+            "total_loss_is_nan": jnp.isnan(total_loss).astype(jnp.float32),
+            "delta_max_slope_den": delta_max_slope_den,
+            "delta_min_slope_den": delta_min_slope_den,
         }
         return total_loss, metrics
 

@@ -1701,6 +1701,27 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         with open(dataset_setting_path, "w") as f:
             json.dump(dataset_setting, f, indent=2, ensure_ascii=False)
         logger.info("Dataset setting saved: %s", dataset_setting_path)
+        
+        # ── Encoder 학습 설정 JSON 저장 (pcgrl train/eval에서 참조용) ──
+        encoder_config = {
+            "delta_weight": config.delta_weight,
+            "delta_min_group_samples": config.delta_min_group_samples,
+            "delta_var_eps": config.delta_var_eps,
+            "batch_size": config.batch_size,
+            "lr": config.lr,
+            "weight_decay": config.weight_decay,
+            "n_epochs": config.n_epochs,
+            "warmup_epochs": config.warmup_epochs,
+            "train_ratio": config.train_ratio,
+            "unseen_ratio": config.unseen_ratio,
+            "seen_ratio": config.seen_ratio,
+            "exp_name": config.exp_name,
+            "seed": config.seed,
+        }
+        encoder_config_path = os.path.join(config.exp_dir, "encoder_config.json")
+        with open(encoder_config_path, "w") as f:
+            json.dump(encoder_config, f, indent=2, ensure_ascii=False)
+        logger.info("Encoder config saved: %s", encoder_config_path)
 
         if not unseen_games:
             logger.warning("No unseen games found in dataset — treating all games as seen.")

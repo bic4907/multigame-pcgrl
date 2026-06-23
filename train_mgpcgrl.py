@@ -41,6 +41,22 @@ def main(config: MGPCGRLConfig):
     if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
         raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
+    # ── encoder의 encoder_config.json을 로드해서 config에 주입 (wandb 로깅용) ──
+    encoder_config_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "encoder_config.json")
+    if os.path.exists(encoder_config_path):
+        with open(encoder_config_path, "r") as f:
+            encoder_training_config = json.load(f)
+        # config에 저장하여 wandb에 자동으로 로깅되도록
+        config.encoder_training_config = encoder_training_config
+        logger.info("Loaded encoder training config from: %s", encoder_config_path)
+        logger.info("Encoder training settings: delta_weight=%.4f, batch_size=%d, lr=%.4f",
+                    encoder_training_config.get('delta_weight', 0.0),
+                    encoder_training_config.get('batch_size', 0),
+                    encoder_training_config.get('lr', 0.0))
+    else:
+        logger.warning("encoder_config.json not found at %s", encoder_config_path)
+        config.encoder_training_config = {}
+
     # ── encoder의 dataset_setting.json에서 seen_ratio / seen_games 주입 ──
     dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
     if os.path.exists(dataset_setting_path):

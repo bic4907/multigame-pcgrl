@@ -1,5 +1,5 @@
 program: eval_mgpcgrl.py
-project: aaai27_eval_mgpcgrl_fullshot
+project: aaai27_eval_mgpcgrl_fullshot_direction
 method: grid
 metric:
   goal: minimize
@@ -17,7 +17,9 @@ parameters:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_direction0623'
   encoder.ckpt_name:
     values: [
-      "clipdec-game-all_exp-def_0",
+      "clipdec-game-all_rdm-unseen_dw-0p03_s-0",
+      "clipdec-game-all_rdm-unseen_dw-0p05_s-0",
+      "clipdec-game-all_rdm-unseen_dw-0p1_s-0",
     ]
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_direction0623'

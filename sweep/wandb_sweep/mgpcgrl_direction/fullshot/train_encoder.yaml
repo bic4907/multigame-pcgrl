@@ -1,5 +1,5 @@
 program: train_clip_decoder.py
-project: aaai27_encoder_mgpcgrl_fullshot
+project: aaai27_encoder_mgpcgrl_fullshot_direction
 method: grid
 metric:
   goal: minimize
@@ -7,6 +7,10 @@ metric:
 parameters:
   game:
     values: ['all']
+  delta_weight:
+    values: [0.03, 0.05, 0.1]
+  seed:
+    values: [0]
   overwrite:
     value: false
   saves_dir:

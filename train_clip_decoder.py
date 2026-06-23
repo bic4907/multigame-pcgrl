@@ -1711,7 +1711,6 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             "lr": config.lr,
             "weight_decay": config.weight_decay,
             "n_epochs": config.n_epochs,
-            "warmup_epochs": config.warmup_epochs,
             "train_ratio": config.train_ratio,
             "unseen_ratio": config.unseen_ratio,
             "seen_ratio": config.seen_ratio,

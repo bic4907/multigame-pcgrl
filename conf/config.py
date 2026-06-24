@@ -647,6 +647,8 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
 
     ignore_checkpoint: bool = False
 
+    embed_proj_type: Optional[str] = None
+
     # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
     # 분석/로깅용으로만 사용하며, eval 데이터셋 필터링에는 적용되지 않음.
     train_seen_ratio: float = 1.0

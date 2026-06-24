@@ -173,11 +173,12 @@ def get_exp_group(config) -> str:
         rdm = getattr(config, 'reward_decoder_mode', 'unseen')
         enc = _unseen_suffix(config)
         
-        # delta_weight suffix (if non-zero)
-        delta_w = getattr(config, 'delta_weight', 0.0)
-        delta_s = f'_dw-{_to_pstr(delta_w)}' if delta_w != 0.0 else ''
+        # encoder delta_weight suffix (if non-zero)
+        # encoder 학습 시 사용한 delta_weight 값을 경로에 반영
+        encoder_delta_w = getattr(config, 'encoder_delta_weight', 0.0)
+        delta_s = f'_dw-{_to_pstr(encoder_delta_w)}' if encoder_delta_w != 0.0 else ''
         
-        return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{enc}{delta_s}'
+        return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{enc}{delta_s}{exp_s}'
 
     # VIPCGRL: encoder ckpt 이름에서 unseen 정보 파싱해 suffix 추가 (MGPCGRL 와 동일 규칙).
     # unseen 정보가 없으면 suffix 생략.

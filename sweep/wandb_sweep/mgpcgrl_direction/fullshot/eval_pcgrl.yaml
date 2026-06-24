@@ -10,13 +10,15 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0]
+    values: [0, 1, 2]
   reevaluate:
     value: true
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_direction0623'
   encoder.ckpt_name:
     values: [
+      "clipdec-game-all_exp-def_0",
+      "clipdec-game-all_exp-def_dw-0p05_0",
       "clipdec-game-all_exp-def_dw-0p03_0",
       "clipdec-game-all_exp-def_dw-0p1_0"
     ]

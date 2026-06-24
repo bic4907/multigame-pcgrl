@@ -10,6 +10,7 @@ raw condition 벡터를 nlp_obs 에 주입하여 평가한다.
 import json
 import logging
 import os
+import shutil
 
 import hydra
 
@@ -34,21 +35,22 @@ def main(config: MGPCGRLEvalConfig):
     if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
         raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
-    # ── encoder의 encoder_config.json을 로드해서 config에 주입 (wandb 로깅용) ──
+    # ── encoder_config.json에서 delta_weight 읽어서 config에 주입 (wandb 로깅용) ──
     encoder_config_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "encoder_config.json")
     if os.path.exists(encoder_config_path):
         with open(encoder_config_path, "r") as f:
             encoder_training_config = json.load(f)
-        # config에 저장하여 wandb에 자동으로 로깅되도록
-        config.encoder_training_config = encoder_training_config
-        logger.info("Loaded encoder training config from: %s", encoder_config_path)
-        logger.info("Encoder training settings: delta_weight=%.4f, batch_size=%d, lr=%.4f",
-                    encoder_training_config.get('delta_weight', 0.0),
-                    encoder_training_config.get('batch_size', 0),
-                    encoder_training_config.get('lr', 0.0))
+        # delta_weight만 config에 저장
+        config.encoder_delta_weight = encoder_training_config.get('delta_weight', 0.0)
+        logger.info("Loaded encoder delta_weight=%.4f from: %s", 
+                    config.encoder_delta_weight, encoder_config_path)
+        
+        # encoder_config.json을 PCGRL 평가 폴더로 복사 (나중에 참조 가능하도록)
+        config._encoder_config_src = encoder_config_path
     else:
         logger.warning("encoder_config.json not found at %s", encoder_config_path)
-        config.encoder_training_config = {}
+        config.encoder_delta_weight = 0.0
+        config._encoder_config_src = None
 
     # ── Read encoder's dataset_setting.json → inject train_seen_ratio + seen/unseen ──
     dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
@@ -80,6 +82,16 @@ def main(config: MGPCGRLEvalConfig):
         logger.warning("dataset_setting.json not found at %s", dataset_setting_path)
 
     main_eval_entry(config, inject_obs_fn=inject_vipcgrl_obs)
+    
+    # ── encoder_config.json을 PCGRL 평가 폴더로 복사 (참조용) ──
+    if hasattr(config, '_encoder_config_src') and config._encoder_config_src:
+        if hasattr(config, 'exp_dir') and config.exp_dir:
+            dst_path = os.path.join(config.exp_dir, "encoder_config.json")
+            try:
+                shutil.copy2(config._encoder_config_src, dst_path)
+                logger.info("Copied encoder_config.json to: %s", dst_path)
+            except Exception as e:
+                logger.warning("Failed to copy encoder_config.json: %s", e)
 
 
 if __name__ == "__main__":

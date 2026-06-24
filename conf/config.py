@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Iterable, List, Optional, Tuple, Union
 from hydra.core.config_store import ConfigStore
 from dataclasses import dataclass, field
 
@@ -383,6 +383,10 @@ class MGPCGRLConfig(VIPCGRLConfig):
     # 0.0 (기본값) = 모든 unseen 샘플에 decoder 적용 (zero-shot 동작)
     reward_unseen_ratio: float = 0.0
 
+    # ── encoder 학습 시 사용한 delta_weight (wandb 로깅/분석용) ──
+    # encoder_config.json에서 자동 주입됨. 0.0 = baseline (direction alignment 미사용).
+    encoder_delta_weight: float = 0.0
+
 
 
 
@@ -654,6 +658,9 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     train_unseen_abbr: Optional[str] = None
     train_unseen_ratio: Optional[float] = None
     train_seen_ratio: Optional[float] = None
+
+    # ── encoder 학습 시 사용한 delta_weight (wandb 로깅/분석용) ──
+    encoder_delta_weight: float = 0.0
 
 
 @dataclass

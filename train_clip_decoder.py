@@ -387,17 +387,13 @@ def train_step(
             per_enum_count = per_enum_count.at[eidx].set(jnp.sum(mask))
 
         # ── Continuous Task-wise Cross-game Direction Alignment ──
-        if delta_weight > 0.0:
-            delta_loss, delta_valid_pairs, delta_slope_den = continuous_direction_alignment(
-                text_embed, batch.game_id, reward_target, condition_target
-            )
-            delta_max_slope_den = jnp.max(delta_slope_den)
-            delta_min_slope_den = jnp.min(delta_slope_den)
-        else:
-            delta_loss = jnp.array(0.0)
-            delta_valid_pairs = jnp.array(0.0)
-            delta_max_slope_den = jnp.array(0.0)
-            delta_min_slope_den = jnp.array(0.0)
+        # delta_weight=0 이어도 alignment 상태를 모니터링할 수 있도록 항상 계산한다.
+        # (NaN-safe 구현이므로 weight=0 일 때도 안전하게 metric만 띄울 수 있음)
+        delta_loss, delta_valid_pairs, delta_slope_den = continuous_direction_alignment(
+            text_embed, batch.game_id, reward_target, condition_target
+        )
+        delta_max_slope_den = jnp.max(delta_slope_den)
+        delta_min_slope_den = jnp.min(delta_slope_den)
 
         # ── Total Loss ──
         total_loss = (
@@ -434,7 +430,8 @@ def train_step(
             "per_sample_cond_raw": per_sample_cond_raw,        # (B,) linear-scale pred
             "per_sample_cond_target_raw": target_raw,      # (B,) linear-scale target
             # ── Continuous direction alignment ──
-            "continuous_delta_loss": delta_loss,
+            "continuous_delta_loss": delta_loss,                          # raw alignment loss (weight 미적용, 항상 모니터링)
+            "continuous_delta_loss_weighted": delta_weight * delta_loss,  # objective에 실제 반영된 값
             "valid_direction_pair_count": delta_valid_pairs,
             # ── NaN 디버깅용 ──
             "delta_is_nan": jnp.isnan(delta_loss).astype(jnp.float32),
@@ -1084,6 +1081,7 @@ def train_and_evaluate_ratio(
         epoch_per_enum_cnt: np.ndarray = np.zeros(num_cls)
         epoch_delta_loss = 0.0
         epoch_delta_pair_count = 0.0
+        epoch_delta_loss_weighted = 0.0
         n_batches = 0
         epoch_reward_targets: List[int] = []
         epoch_reward_preds: List[int] = []
@@ -1140,6 +1138,7 @@ def train_and_evaluate_ratio(
                 epoch_per_enum_cnt += batch_per_enum_cnt
                 epoch_delta_loss += float(metrics["continuous_delta_loss"])
                 epoch_delta_pair_count += float(metrics["valid_direction_pair_count"])
+                epoch_delta_loss_weighted += float(metrics["continuous_delta_loss_weighted"])
 
                 # ── Scatter / per-sample 집계 (실제 train 샘플만) ──
                 actual_size = min(config.batch_size, max(0, n_train - batch_idx * config.batch_size))
@@ -1190,6 +1189,7 @@ def train_and_evaluate_ratio(
             epoch_temperature /= n_batches
             epoch_delta_loss /= n_batches
             epoch_delta_pair_count /= n_batches
+            epoch_delta_loss_weighted /= n_batches
 
         # ── 에폭 단위 scatter + epoch 기반 train-set 지표 ──
         epoch_scatter_data = _build_scatter_data_from_arrays(
@@ -1259,6 +1259,7 @@ def train_and_evaluate_ratio(
                     "train(decoder)/reg_loss": epoch_reg_loss_raw,
                     "train(decoder)/reg_loss_normalized": epoch_reg_loss,
                     "train(direction)/continuous_delta_loss": epoch_delta_loss,
+                    "train(direction)/continuous_delta_loss_weighted": epoch_delta_loss_weighted,
                     "train(direction)/valid_direction_pair_count": epoch_delta_pair_count,
                     **{
                         f"seen/regression/enum_{e}": selected_reg_per_enum[e]

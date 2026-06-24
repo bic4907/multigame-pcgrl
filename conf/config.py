@@ -140,7 +140,7 @@ class Config:
 
     # ── Action masking ────────────────────────────────────────────────────
     action_mask: bool = False
-    re01_action_mask: bool = False
+    re01_action_mask: bool = True
 
     exp_group: Optional[str] = None
 

@@ -38,7 +38,10 @@ def resolve_action_mask_config(config) -> None:
 
 
 def build_action_allowed_mask(env) -> jnp.ndarray:
-    """EMPTY/WALL 타일만 허용하는 정적 (action_dim,) bool 마스크."""
+    """EMPTY/WALL 타일만 허용하는 정적 (action_dim,) bool 마스크.
+    
+    Turtle representation의 move action (build=-1)은 항상 허용.
+    """
     action_dim = int(env.rep.action_space.n)
     builds = getattr(env.rep, "builds", None)
     if builds is None:
@@ -65,9 +68,12 @@ def build_action_allowed_mask(env) -> jnp.ndarray:
     else:
         return jnp.ones((action_dim,), dtype=bool)
 
-    return jnp.isin(
+    # Turtle의 move action (build=-1)은 항상 허용
+    is_move_action = action_tile_ids == -1
+    is_allowed_tile = jnp.isin(
         action_tile_ids, jnp.array(allowed_tile_ids, dtype=builds_np.dtype)
     )
+    return is_move_action | is_allowed_tile
 
 
 def apply_action_mask(pi, allowed: Optional[jnp.ndarray]):

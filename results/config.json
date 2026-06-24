@@ -58,6 +58,17 @@
       "progress_baseline_project": "none",
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "encoder_delta_weight_progress": {
+      "target_projects": [
+        "eval_mgpcgrl_direction0623",
+        "aaai27_eval_cpcgrl"
+      ],
+      "project_display_names": {
+        "eval_mgpcgrl_direction0623": "MGPCGRL Direction"
+      },
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
     }
   },
   "project_display_names": {
@@ -81,7 +92,8 @@
     "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (fewshot)",
     "aaai27_eval_mgpcgrl_prefix_none":        "MGPCGRL (prefix=none)",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "MGPCGRL (prefix=desc)",
-    "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)"
+    "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)",
+    "eval_mgpcgrl_direction0623":             "MGPCGRL Direction"
   },
   "project_colors": {
     "aaai27_eval_random":         "#aaaaaa",
@@ -104,7 +116,8 @@
     "aaai27_eval_mgpcgrl_fewshot":            "#2166ac",
     "aaai27_eval_mgpcgrl_prefix_none":        "#b2182b",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "#4393c3",
-    "aaai27_eval_mgpcgrl_fewshot_mix":        "#92c5de"
+    "aaai27_eval_mgpcgrl_fewshot_mix":        "#92c5de",
+    "eval_mgpcgrl_direction0623":             "#2166ac"
   },
   "games": {
     "colors": {

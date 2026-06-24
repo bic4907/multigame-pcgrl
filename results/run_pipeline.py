@@ -33,6 +33,9 @@ Step numbers:
                                  (unseen_count_progress → seen_count_progress.py 실행;
                                   unseen_count_progress.png + seen_progress.png 출력)
                                  (zeroshot 전용; 다른 실험에서는 생략)
+    12 encoder_delta_weight_progress
+                                encoder_delta_weight 변화에 따른 progress ablation plot
+                                (encoder_delta_weight_progress 전용; 다른 실험에서는 생략)
 
 NOTE: step 5 (seen_unseen_report), 7 (unseen_count_progress), 8 (game_impact_analysis)
       스크립트 파일은 results/utils/experiment/ 아래에 보존되어 있으나
@@ -112,6 +115,12 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/seen_count_progress.py",
         "description": "unseen 게임 개수별 progress bar chart — all.png / unseen.png / seen.png 출력 (zeroshot 전용)",
     },
+    {
+        "id": 12,
+        "name": "encoder_delta_weight_progress",
+        "script": _HERE / "utils/experiment/encoder_delta_weight_progress.py",
+        "description": "encoder_delta_weight 변화에 따른 progress ablation plot (전용)",
+    },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
@@ -123,10 +132,11 @@ _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
     "seen_ratio_progress":       {3, 4, 10, 11},    # seen_ratio_progress 전용 — step 9만 실행
     "condition_shift_analysis":  {3, 4, 6, 9, 11},  # condition_shift_analysis 전용 — step 10만 실행
     "unseen_ratio_ngames":       {3, 9, 10},         # benchmark / seen_ratio_progress / condition_shift 생략
-    None:                        {9, 10, 11},        # experiment 미지정 시 생략
+    "encoder_delta_weight_progress": {2, 3, 9, 10, 11},  # downloader + step 12만 실행
+    None:                        {9, 10, 11, 12},    # experiment 미지정 시 생략
 }
-# fullshot 등 zeroshot / fewshot / seen_ratio_progress / condition_shift_analysis 아닌 실험: 9, 10, 11 생략
-_DEFAULT_SKIP: set[int] = {9, 10, 11}
+# fullshot 등 전용 실험이 아닌 일반 실험: 9, 10, 11, 12 생략
+_DEFAULT_SKIP: set[int] = {9, 10, 11, 12}
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:

@@ -18,6 +18,8 @@ parameters:
     value: true
   train_seen_ratio:
     value: 1.0
+  seed:
+    values: [1, 2]
   # ── train_pcgrl_parameter.yaml 과 동일한 값 지정 (exp_dir 매칭용) ─────────────
   decoder.adapter_type:
     value: null

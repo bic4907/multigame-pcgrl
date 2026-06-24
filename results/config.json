@@ -31,6 +31,12 @@
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
     },
+    "adapter_parameter": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_adapter_parameter"
+      ],
+      "pipeline_skip_steps": [3, 9, 10, 11, 12]
+    },
     "domain_condition": {
       "target_projects": [
         "aaai27_eval_mgpcgrl_prefix_none",

@@ -24,6 +24,11 @@ from envs.pcgrl_env import gen_dummy_queued_state
 from evaluator import get_reward_batch
 from instruct_rl.dataclass import Instruct
 from instruct_rl.evaluate import get_loss_batch
+from instruct_rl.utils.action_mask import (
+    apply_action_mask,
+    build_action_allowed_mask,
+    resolve_action_mask_config,
+)
 from instruct_rl.utils.callbacks import (
     create_log_handler,
     eval_callback,
@@ -106,6 +111,19 @@ def make_train(
 
     env = LogWrapper(env)
     env.init_graphics()
+
+    # ── Static action mask (memory-efficient, computed once) ──────────────
+    resolve_action_mask_config(config)
+    static_action_allowed = (
+        build_action_allowed_mask(env) if config.action_mask else None
+    )
+    logger.info(
+        "Action masking: %s",
+        "enabled (EMPTY/WALL only)" if config.action_mask else "disabled",
+    )
+
+    def _apply_action_mask(pi):
+        return apply_action_mask(pi, static_action_allowed)
 
     def linear_schedule(count):
         frac = (
@@ -265,6 +283,7 @@ def make_train(
                     train_state.params, last_obs, rng=_rng,
                     return_text_embed=False, return_state_embed=False,
                 )
+                pi = _apply_action_mask(pi)
 
                 rng, _rng = jax.random.split(rng)
                 action = pi.sample(seed=_rng)
@@ -411,6 +430,7 @@ def make_train(
                             params, traj_batch.obs,
                             return_text_embed=False, return_state_embed=False,
                         )
+                        pi = _apply_action_mask(pi)
                         log_prob = pi.log_prob(traj_batch.action)
 
                         value_pred_clipped = traj_batch.value + (
@@ -516,6 +536,7 @@ def make_train(
                         train_state.params, last_obs,
                         return_text_embed=False, return_state_embed=False,
                     )
+                    pi = _apply_action_mask(pi)
                     action = pi.sample(seed=_rng)
                     log_prob = pi.log_prob(action)
 

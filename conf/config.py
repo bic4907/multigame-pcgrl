@@ -138,6 +138,14 @@ class Config:
     text_ratio: float = 1.0
     state_ratio: float = 1.0
 
+    # ── Action masking ────────────────────────────────────────────────────
+    # action_mask=True 이면 PCGRL 학습 시 EMPTY/WALL 타일만 설치 가능하도록
+    # policy logits 에 정적 마스크를 적용한다 (메모리 낭비 없이 전역 1회 계산).
+    action_mask: bool = False
+    # re01_action_mask=True 이고 dataset_reward_enum 의 모든 값이 0 또는 1 이면
+    # action_mask 를 자동으로 True 로 설정한다.
+    re01_action_mask: bool = False
+
     exp_group: Optional[str] = None
 
     _vid_dir: Optional[str] = None

@@ -37,6 +37,8 @@ def main(config: MGPCGRLEvalConfig):
 
     # ── encoder_config.json에서 delta_weight 읽어서 config에 주입 (wandb 로깅용) ──
     encoder_config_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "encoder_config.json")
+    encoder_config_src = None  # local variable로 저장 (config에 넣지 않음)
+    
     if os.path.exists(encoder_config_path):
         with open(encoder_config_path, "r") as f:
             encoder_training_config = json.load(f)
@@ -44,13 +46,10 @@ def main(config: MGPCGRLEvalConfig):
         config.encoder_delta_weight = encoder_training_config.get('delta_weight', 0.0)
         logger.info("Loaded encoder delta_weight=%.4f from: %s", 
                     config.encoder_delta_weight, encoder_config_path)
-        
-        # encoder_config.json을 PCGRL 평가 폴더로 복사 (나중에 참조 가능하도록)
-        config._encoder_config_src = encoder_config_path
+        encoder_config_src = encoder_config_path  # 복사를 위해 경로 저장
     else:
         logger.warning("encoder_config.json not found at %s", encoder_config_path)
         config.encoder_delta_weight = 0.0
-        config._encoder_config_src = None
 
     # ── Read encoder's dataset_setting.json → inject train_seen_ratio + seen/unseen ──
     dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
@@ -84,14 +83,14 @@ def main(config: MGPCGRLEvalConfig):
     main_eval_entry(config, inject_obs_fn=inject_vipcgrl_obs)
     
     # ── encoder_config.json을 PCGRL 평가 폴더로 복사 (참조용) ──
-    if hasattr(config, '_encoder_config_src') and config._encoder_config_src:
-        if hasattr(config, 'exp_dir') and config.exp_dir:
-            dst_path = os.path.join(config.exp_dir, "encoder_config.json")
-            try:
-                shutil.copy2(config._encoder_config_src, dst_path)
-                logger.info("Copied encoder_config.json to: %s", dst_path)
-            except Exception as e:
-                logger.warning("Failed to copy encoder_config.json: %s", e)
+    # main_eval_entry() 호출 후 exp_dir가 생성되었으므로 encoder ckpt 경로에서 복사
+    if encoder_config_src and hasattr(config, 'exp_dir') and config.exp_dir:
+        dst_path = os.path.join(config.exp_dir, "encoder_config.json")
+        try:
+            shutil.copy2(encoder_config_src, dst_path)
+            logger.info("Copied encoder_config.json to: %s", dst_path)
+        except Exception as e:
+            logger.warning("Failed to copy encoder_config.json: %s", e)
 
 
 if __name__ == "__main__":

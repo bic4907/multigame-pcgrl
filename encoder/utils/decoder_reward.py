@@ -206,7 +206,7 @@ def reward_decode(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  추론: state_embed → (reward_enum, condition)
+#  추론: instruction/text embedding → (reward_enum, condition)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def predict_reward_condition(

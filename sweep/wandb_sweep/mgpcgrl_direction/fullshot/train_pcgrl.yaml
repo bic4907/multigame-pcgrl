@@ -13,6 +13,8 @@ parameters:
     values: [0, 1, 2, 3, 4]
   overwrite:
     value: true
+  n_envs:
+    value: 600
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_direction0623'
   encoder.ckpt_name:

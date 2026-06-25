@@ -885,7 +885,7 @@ class FinetunedCLIPEncoderTrainConfig(CLIPTrainConfig):
     lr: float = 5.0e-6
     weight_decay: float = 0.1
     n_epochs: int = 100
-    batch_size: int = 256
+    batch_size: int = 128
     ckpt_freq: int = 50
 
     embed_type: str = "finetuned_clip"

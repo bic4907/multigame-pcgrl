@@ -187,7 +187,7 @@ def build_train_indices_for_ratio(
 #  Train Step (JIT) — reward_pred 추가
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9))
+@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 10))
 def train_step(
     train_state: TrainState,
     batch: CLIPDecoderBatch,
@@ -199,6 +199,7 @@ def train_step(
     reg_weight: float = 0.1,
     num_reward_classes: int = 5,
     regression_loss: str = "mae",
+    include_retrieval_ranks: bool = False,
     norm_min_arr: jnp.ndarray = None,
     norm_max_arr: jnp.ndarray = None,
 ):
@@ -211,11 +212,15 @@ def train_step(
 
         a2b_pos_logps = a2b_logps - 1e9 * (1 - batch.duplicate_matrix)
         b2a_pos_logps = b2a_logps - 1e9 * (1 - batch.duplicate_matrix)
-        pos_mask = batch.duplicate_matrix > 0
-        best_pos_logits_a2b = jnp.max(jnp.where(pos_mask, logits, -jnp.inf), axis=1)
-        best_pos_logits_b2a = jnp.max(jnp.where(pos_mask, logits, -jnp.inf), axis=0)
-        a2b_rank = 1 + jnp.sum(logits > best_pos_logits_a2b[:, None], axis=1)
-        b2a_rank = 1 + jnp.sum(logits > best_pos_logits_b2a[None, :], axis=0)
+        if include_retrieval_ranks:
+            pos_mask = batch.duplicate_matrix > 0
+            best_pos_logits_a2b = jnp.max(jnp.where(pos_mask, logits, -jnp.inf), axis=1)
+            best_pos_logits_b2a = jnp.max(jnp.where(pos_mask, logits, -jnp.inf), axis=0)
+            a2b_rank = 1 + jnp.sum(logits > best_pos_logits_a2b[:, None], axis=1)
+            b2a_rank = 1 + jnp.sum(logits > best_pos_logits_b2a[None, :], axis=0)
+        else:
+            a2b_rank = jnp.zeros((logits.shape[0],), dtype=jnp.int32)
+            b2a_rank = jnp.zeros((logits.shape[1],), dtype=jnp.int32)
 
         a2b_loss = -jnp.mean(jax.scipy.special.logsumexp(a2b_pos_logps, axis=1))
         b2a_loss = -jnp.mean(jax.scipy.special.logsumexp(b2a_pos_logps, axis=0))
@@ -347,8 +352,6 @@ def train_step(
             "text2state_correct_pr": t2s_correct_pr * state_mask,
             "state2text_top1_accuracy": s2t_top1 * state_mask,
             "text2state_top1_accuracy": t2s_top1 * state_mask,
-            "state2text_rank": s2t_rank,
-            "text2state_rank": t2s_rank,
             "text_state_temperature": text_state_temperature,
             "cls_loss": cls_loss,
             "reg_loss": reg_loss,
@@ -368,6 +371,11 @@ def train_step(
             "per_sample_cond_raw": per_sample_cond_raw,        # (B,) linear-scale pred
             "per_sample_cond_target_raw": target_raw,      # (B,) linear-scale target
         }
+        if include_retrieval_ranks:
+            metrics.update({
+                "state2text_rank": s2t_rank,
+                "text2state_rank": t2s_rank,
+            })
         return total_loss, metrics
 
     (loss, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(
@@ -555,6 +563,7 @@ def evaluate_per_game(
     sample_ids: Optional[np.ndarray] = None,
     epoch: Optional[int] = None,
     epoch_num: Optional[int] = None,
+    include_prediction_rows: bool = False,
 ) -> Tuple[
     Dict[str, float],
     Dict[str, float],
@@ -642,6 +651,7 @@ def evaluate_per_game(
             reg_weight=config.reg_weight,
             num_reward_classes=num_cls,
             regression_loss=config.regression_loss,
+            include_retrieval_ranks=include_prediction_rows,
             norm_min_arr=norm_min_arr,
             norm_max_arr=norm_max_arr,
         )
@@ -655,10 +665,9 @@ def evaluate_per_game(
         batch_target_norm = np.array(jax.device_get(metrics["per_sample_cond_target_norm"]))
         batch_pred_raw = np.array(jax.device_get(metrics["per_sample_cond_raw"]))
         batch_target_raw = np.array(jax.device_get(metrics["per_sample_cond_target_raw"]))
-        batch_state2text_rank = np.array(jax.device_get(metrics["state2text_rank"]))
-        batch_text2state_rank = np.array(jax.device_get(metrics["text2state_rank"]))
-        all_sample_ids.extend(sample_ids_arr[indices[:actual_size]].tolist())
-        all_class_ids.extend(np.asarray(class_ids).reshape(-1)[:actual_size].astype(int).tolist())
+        if include_prediction_rows:
+            all_sample_ids.extend(sample_ids_arr[indices[:actual_size]].tolist())
+            all_class_ids.extend(np.asarray(class_ids).reshape(-1)[:actual_size].astype(int).tolist())
         all_preds.extend(preds[:actual_size].tolist())
         all_targets.extend(targets[:actual_size].tolist())
         # batch-level reg_loss를 actual_size만큼 복제 (batch 평균이므로)
@@ -670,13 +679,16 @@ def evaluate_per_game(
         all_target_norm.extend(batch_target_norm[:actual_size].tolist())
         all_pred_raw.extend(batch_pred_raw[:actual_size].tolist())
         all_target_raw.extend(batch_target_raw[:actual_size].tolist())
-        all_state2text_rank.extend(batch_state2text_rank[:actual_size].astype(int).tolist())
-        all_text2state_rank.extend(batch_text2state_rank[:actual_size].astype(int).tolist())
+        if include_prediction_rows:
+            batch_state2text_rank = np.array(jax.device_get(metrics["state2text_rank"]))
+            batch_text2state_rank = np.array(jax.device_get(metrics["text2state_rank"]))
+            all_state2text_rank.extend(batch_state2text_rank[:actual_size].astype(int).tolist())
+            all_text2state_rank.extend(batch_text2state_rank[:actual_size].astype(int).tolist())
 
     # ── Per-game accuracy 집계 ──
     all_preds_arr = np.array(all_preds[:n_test])
     all_targets_arr = np.array(all_targets[:n_test])
-    all_class_ids_arr = np.array(all_class_ids[:n_test])
+    all_class_ids_arr = np.array(all_class_ids[:n_test]) if include_prediction_rows else np.array([])
     all_reg_arr = np.array(all_reg_losses[:n_test])
     all_abs_diff_arr = np.array(all_abs_diffs[:n_test])
     all_abs_diff_raw_arr = np.array(all_abs_diffs_raw[:n_test])
@@ -718,8 +730,8 @@ def evaluate_per_game(
     all_target_norm_arr = np.array(all_target_norm[:n_test])
     all_pred_raw_arr = np.array(all_pred_raw[:n_test])
     all_target_raw_arr = np.array(all_target_raw[:n_test])
-    all_state2text_rank_arr = np.array(all_state2text_rank[:n_test])
-    all_text2state_rank_arr = np.array(all_text2state_rank[:n_test])
+    all_state2text_rank_arr = np.array(all_state2text_rank[:n_test]) if include_prediction_rows else np.array([])
+    all_text2state_rank_arr = np.array(all_text2state_rank[:n_test]) if include_prediction_rows else np.array([])
 
     per_enum_reg_loss: Dict[int, float] = {}
     scatter_data: Dict[int, Dict[str, np.ndarray]] = {}
@@ -737,30 +749,31 @@ def evaluate_per_game(
         }
 
     prediction_rows: List[Dict[str, object]] = []
-    for i in range(n_test):
-        rc = test_ds.reward_cond[i]
-        game_name = str(test_game_names[i])
-        prediction_rows.append(
-            {
-                "sample_id": all_sample_ids[i],
-                "epoch": "" if epoch is None else int(epoch),
-                "epoch_num": "" if epoch_num is None else int(epoch_num),
-                "class_id": int(all_class_ids_arr[i]),
-                "game": game_name,
-                "is_unseen_game": bool(game_name in unseen_game_names),
-                "reward_enum_target": int(all_targets_arr[i]),
-                "reward_enum_pred": int(all_preds_arr[i]),
-                "state2text_rank": int(all_state2text_rank_arr[i]),
-                "text2state_rank": int(all_text2state_rank_arr[i]),
-                "condition_target_norm": float(all_target_norm_arr[i]),
-                "condition_pred_norm": float(all_pred_norm_arr[i]),
-                "condition_target_raw": float(all_target_raw_arr[i]),
-                "condition_pred_raw": float(all_pred_raw_arr[i]),
-                "game_idx": int(rc.get("game_idx", -1)) if isinstance(rc, dict) else "",
-                "condition_value": rc.get("condition_value", "") if isinstance(rc, dict) else "",
-                "quantized_bin": rc.get("quantized_bin", "") if isinstance(rc, dict) else "",
-            }
-        )
+    if include_prediction_rows:
+        for i in range(n_test):
+            rc = test_ds.reward_cond[i]
+            game_name = str(test_game_names[i])
+            prediction_rows.append(
+                {
+                    "sample_id": all_sample_ids[i],
+                    "epoch": "" if epoch is None else int(epoch),
+                    "epoch_num": "" if epoch_num is None else int(epoch_num),
+                    "class_id": int(all_class_ids_arr[i]),
+                    "game": game_name,
+                    "is_unseen_game": bool(game_name in unseen_game_names),
+                    "reward_enum_target": int(all_targets_arr[i]),
+                    "reward_enum_pred": int(all_preds_arr[i]),
+                    "state2text_rank": int(all_state2text_rank_arr[i]),
+                    "text2state_rank": int(all_text2state_rank_arr[i]),
+                    "condition_target_norm": float(all_target_norm_arr[i]),
+                    "condition_pred_norm": float(all_pred_norm_arr[i]),
+                    "condition_target_raw": float(all_target_raw_arr[i]),
+                    "condition_pred_raw": float(all_pred_raw_arr[i]),
+                    "game_idx": int(rc.get("game_idx", -1)) if isinstance(rc, dict) else "",
+                    "condition_value": rc.get("condition_value", "") if isinstance(rc, dict) else "",
+                    "quantized_bin": rc.get("quantized_bin", "") if isinstance(rc, dict) else "",
+                }
+            )
 
     return per_game_acc, per_game_reg, per_game_enum_diff, scatter_data, per_enum_reg_loss, prediction_rows
 
@@ -1360,10 +1373,12 @@ def train_and_evaluate_ratio(
         _unseen_scatter_freq: int = int(getattr(config, "unseen_scatter_freq", 500))
         _do_unseen_eval = _unseen_eval_freq > 0 and (epoch + 1) % _unseen_eval_freq == 0
         _do_unseen_scatter = _unseen_scatter_freq > 0 and (epoch + 1) % _unseen_scatter_freq == 0
+        _do_unseen_prediction_export = export_unseen_predictions and _do_unseen_eval
 
         _need_unseen_eval = (
-            _do_unseen_eval
+            (wandb.run is not None and _do_unseen_eval)
             or (wandb.run is not None and _do_unseen_scatter)
+            or _do_unseen_prediction_export
         )
         if unseen_test_ds is not None and _need_unseen_eval:
             rng_key, _eval_key = jax.random.split(rng_key)
@@ -1381,6 +1396,7 @@ def train_and_evaluate_ratio(
                 sample_ids=unseen_test_sample_ids,
                 epoch=epoch,
                 epoch_num=epoch + 1,
+                include_prediction_rows=_do_unseen_prediction_export,
             )
 
             if _do_unseen_eval and _unseen_per_enum_reg:
@@ -1391,7 +1407,7 @@ def train_and_evaluate_ratio(
                         "unseen/regression/overall": _unseen_overall_reg,
                     })
 
-            if _do_unseen_eval and export_unseen_predictions:
+            if _do_unseen_prediction_export:
                 assert unseen_prediction_csv_path is not None
                 _unseen_prediction_rows = _add_prediction_context(
                     _unseen_prediction_rows,

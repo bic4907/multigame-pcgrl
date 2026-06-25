@@ -951,6 +951,7 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # unseen_ratio  : 학습 데이터에 흘러들어가는 unseen 게임 데이터 비율 (train pool 기준)
     # eval_unseen_ratio : unseen_eval_freq 평가에 사용할 unseen test set 비율 (0.0~1.0, 1.0=전체)
     eval_unseen_ratio: float = 1.0
+    export_unseen_predictions_csv: bool = False
 
 
 @dataclass

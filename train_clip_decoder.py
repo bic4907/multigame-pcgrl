@@ -16,11 +16,13 @@ Usage
 """
 
 import datetime
+import csv
 import json
 import math
 import os
 import shutil
 import logging
+import uuid
 from collections import deque
 from functools import partial
 from os.path import basename
@@ -525,7 +527,17 @@ def evaluate_per_game(
     mode: str,
     norm_min_arr: jnp.ndarray = None,
     norm_max_arr: jnp.ndarray = None,
-) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, Dict[str, np.ndarray]], Dict[int, float]]:
+    sample_ids: Optional[np.ndarray] = None,
+    epoch: Optional[int] = None,
+    epoch_num: Optional[int] = None,
+) -> Tuple[
+    Dict[str, float],
+    Dict[str, float],
+    Dict[str, Dict[int, float]],
+    Dict[int, Dict[str, np.ndarray]],
+    Dict[int, float],
+    List[Dict[str, object]],
+]:
     """고정된 테스트셋에서 **게임별** reward accuracy 와 reg_loss를 계산한다.
 
     Returns
@@ -535,10 +547,23 @@ def evaluate_per_game(
     per_game_enum_diff : {game: {reward_enum: mean_abs_diff}}
     scatter_data       : {reward_enum: {"pred_norm","target_norm","pred_raw","target_raw"}}
     per_enum_reg_loss  : {reward_enum: mean_abs_diff (raw space)}
+    prediction_rows    : per-sample rows for CSV export
     """
     n_test = len(test_ds.input_ids)
+    if n_test == 0:
+        return {}, {}, {}, {}, {}, []
+
+    if sample_ids is None:
+        sample_ids_arr = np.arange(n_test)
+    else:
+        sample_ids_arr = np.asarray(sample_ids)
+        if len(sample_ids_arr) != n_test:
+            raise ValueError("sample_ids length must match test dataset length.")
+
     batch_size = config.batch_size
 
+    all_sample_ids: List[object] = []
+    all_class_ids: List[int] = []
     all_preds: List[int] = []
     all_targets: List[int] = []
     all_reg_losses: List[float] = []  # per-sample reg loss
@@ -603,6 +628,8 @@ def evaluate_per_game(
         batch_target_norm = np.array(jax.device_get(metrics["per_sample_cond_target_norm"]))
         batch_pred_raw = np.array(jax.device_get(metrics["per_sample_cond_raw"]))
         batch_target_raw = np.array(jax.device_get(metrics["per_sample_cond_target_raw"]))
+        all_sample_ids.extend(sample_ids_arr[indices[:actual_size]].tolist())
+        all_class_ids.extend(np.asarray(class_ids).reshape(-1)[:actual_size].astype(int).tolist())
         all_preds.extend(preds[:actual_size].tolist())
         all_targets.extend(targets[:actual_size].tolist())
         # batch-level reg_loss를 actual_size만큼 복제 (batch 평균이므로)
@@ -618,6 +645,7 @@ def evaluate_per_game(
     # ── Per-game accuracy 집계 ──
     all_preds_arr = np.array(all_preds[:n_test])
     all_targets_arr = np.array(all_targets[:n_test])
+    all_class_ids_arr = np.array(all_class_ids[:n_test])
     all_reg_arr = np.array(all_reg_losses[:n_test])
     all_abs_diff_arr = np.array(all_abs_diffs[:n_test])
     all_abs_diff_raw_arr = np.array(all_abs_diffs_raw[:n_test])
@@ -672,9 +700,94 @@ def evaluate_per_game(
             "target_norm": all_target_norm_arr[emask],
             "pred_raw": all_pred_raw_arr[emask],
             "target_raw": all_target_raw_arr[emask],
+            "game_names": np.asarray(test_game_names, dtype=object)[emask],
         }
 
-    return per_game_acc, per_game_reg, per_game_enum_diff, scatter_data, per_enum_reg_loss
+    prediction_rows: List[Dict[str, object]] = []
+    for i in range(n_test):
+        rc = test_ds.reward_cond[i]
+        game_name = str(test_game_names[i])
+        prediction_rows.append(
+            {
+                "sample_id": all_sample_ids[i],
+                "epoch": "" if epoch is None else int(epoch),
+                "epoch_num": "" if epoch_num is None else int(epoch_num),
+                "class_id": int(all_class_ids_arr[i]),
+                "game": game_name,
+                "is_unseen_game": bool(game_name in unseen_game_names),
+                "reward_enum_target": int(all_targets_arr[i]),
+                "reward_enum_pred": int(all_preds_arr[i]),
+                "condition_target_norm": float(all_target_norm_arr[i]),
+                "condition_pred_norm": float(all_pred_norm_arr[i]),
+                "condition_target_raw": float(all_target_raw_arr[i]),
+                "condition_pred_raw": float(all_pred_raw_arr[i]),
+                "game_idx": int(rc.get("game_idx", -1)) if isinstance(rc, dict) else "",
+                "condition_value": rc.get("condition_value", "") if isinstance(rc, dict) else "",
+                "quantized_bin": rc.get("quantized_bin", "") if isinstance(rc, dict) else "",
+            }
+        )
+
+    return per_game_acc, per_game_reg, per_game_enum_diff, scatter_data, per_enum_reg_loss, prediction_rows
+
+
+def _write_prediction_rows_csv(
+    rows: List[Dict[str, object]],
+    csv_path: str,
+    append: bool = False,
+) -> Optional[str]:
+    """Write decoder per-sample prediction rows to CSV."""
+    if not rows:
+        logger.warning("Skipping decoder prediction CSV export: no prediction rows.")
+        return None
+
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    fieldnames = list(rows[0].keys())
+    write_header = not append or not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0
+    mode = "a" if append else "w"
+    with open(csv_path, mode, newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if write_header:
+            writer.writeheader()
+        writer.writerows(rows)
+    action = "Appended" if append else "Saved"
+    logger.info("%s decoder prediction CSV: %s (%d rows)", action, csv_path, len(rows))
+    return csv_path
+
+
+def _compact_json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _add_prediction_context(
+    rows: List[Dict[str, object]],
+    context: Dict[str, object],
+) -> List[Dict[str, object]]:
+    """Attach run/train metadata columns used for grouping plots."""
+    if not rows:
+        return rows
+    return [{**row, **context} for row in rows]
+
+
+def _log_prediction_csv_artifact(csv_paths: Dict[str, Optional[str]]) -> None:
+    """Upload decoder prediction CSV files as a W&B artifact."""
+    if wandb.run is None:
+        logger.info("Skipping decoder prediction CSV artifact upload: wandb run is not initialized.")
+        return
+
+    valid_paths = {name: path for name, path in csv_paths.items() if path and os.path.exists(path)}
+    if not valid_paths:
+        logger.warning("Skipping decoder prediction CSV artifact upload: no CSV files found.")
+        return
+
+    artifact = wandb.Artifact(name="decoder_prediction_csv", type="dataset")
+    for artifact_name, local_path in valid_paths.items():
+        artifact.add_file(local_path, name=artifact_name)
+    logged_artifact = wandb.log_artifact(artifact)
+    if hasattr(logged_artifact, "wait"):
+        logged_artifact.wait()
+    wandb.run.summary["decoder_prediction_csv_uploaded"] = True
+    wandb.run.summary["decoder_prediction_csv_files"] = sorted(valid_paths.keys())
+    logger.info("Uploaded decoder prediction CSV files → wandb artifact (decoder_prediction_csv)")
 
 
 def _build_scatter_data_from_arrays(
@@ -872,6 +985,7 @@ def train_and_evaluate_ratio(
     ratio: float,
     unseen_eval_ds: Optional[CLIPDataset] = None,
     unseen_eval_game_names: Optional[np.ndarray] = None,
+    unseen_eval_sample_ids: Optional[np.ndarray] = None,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, Dict[str, np.ndarray]], Dict[int, float]]:
     """하나의 few-shot ratio에 대해 모델을 처음부터 학습하고 평가한다.
 
@@ -912,6 +1026,13 @@ def train_and_evaluate_ratio(
     train_game_names = np.array(
         [rc["game_name"] for rc in train_ds.reward_cond]
     )
+    train_games_sorted = sorted(set(train_game_names.tolist()))
+    train_seen_games = [g for g in train_games_sorted if g not in unseen_game_names]
+    train_unseen_games = [g for g in train_games_sorted if g in unseen_game_names]
+    train_game_counts = {
+        g: int(np.sum(train_game_names == g))
+        for g in train_games_sorted
+    }
 
     if n_train == 0:
         logger.warning("  ⚠ No training data for ratio=%.2f — skipping training", ratio)
@@ -928,20 +1049,50 @@ def train_and_evaluate_ratio(
     if unseen_eval_ds is not None and unseen_eval_game_names is not None and len(unseen_eval_ds.class_ids) > 0:
         unseen_test_ds = unseen_eval_ds
         unseen_test_game_names_arr = unseen_eval_game_names
-        logger.info("  Unseen eval pool: %d samples (injected, eval_unseen_ratio applied)", len(unseen_test_ds.class_ids))
+        unseen_test_sample_ids = unseen_eval_sample_ids
+        logger.info("  Unseen eval pool: %d samples (injected)", len(unseen_test_ds.class_ids))
     elif unseen_game_names:
         _unseen_test_mask = np.array([g in unseen_game_names for g in test_game_names], dtype=bool)
         _unseen_test_indices = np.where(_unseen_test_mask)[0]
         if len(_unseen_test_indices) > 0:
             unseen_test_ds = subset_clip_dataset(test_ds, _unseen_test_indices)
             unseen_test_game_names_arr = test_game_names[_unseen_test_indices]
+            unseen_test_sample_ids = _unseen_test_indices
             logger.info("  Unseen eval pool: %d samples (test set fallback)", len(_unseen_test_indices))
         else:
             unseen_test_ds = None
             unseen_test_game_names_arr = np.array([])
+            unseen_test_sample_ids = None
     else:
         unseen_test_ds = None
         unseen_test_game_names_arr = np.array([])
+        unseen_test_sample_ids = None
+
+    prediction_export_uid = uuid.uuid4().hex[:8]
+    unseen_prediction_csv_name = f"unseen_regression_predictions_{prediction_export_uid}.csv"
+    unseen_prediction_csv_path = os.path.join(config.exp_dir, unseen_prediction_csv_name)
+    prediction_context = {
+        "prediction_export_uid": prediction_export_uid,
+        "train_seen_games": _compact_json(train_seen_games),
+        "train_unseen_games": _compact_json(train_unseen_games),
+        "train_games": _compact_json(train_games_sorted),
+        "train_game_counts": _compact_json(train_game_counts),
+        "n_train_seen_games": len(train_seen_games),
+        "n_train_unseen_games": len(train_unseen_games),
+        "n_train_games": len(train_games_sorted),
+        "eval_unseen_games": _compact_json(sorted(unseen_game_names)),
+        "seen_ratio": float(getattr(config, "seen_ratio", 1.0)),
+        "unseen_ratio": float(ratio),
+        "eval_unseen_ratio": float(getattr(config, "eval_unseen_ratio", 1.0)),
+        "split_seed": int(getattr(config, "split_seed", 0)),
+        "seed": int(getattr(config, "seed", 0)),
+    }
+    logger.info(
+        "Decoder prediction CSV export uid=%s file=%s",
+        prediction_export_uid,
+        unseen_prediction_csv_name,
+    )
+
     epoch_scatter_data: Dict[int, Dict[str, np.ndarray]] = {}
     epoch_per_game_acc: Dict[str, float] = {}
     epoch_per_game_reg: Dict[str, float] = {}
@@ -1168,9 +1319,13 @@ def train_and_evaluate_ratio(
         _do_unseen_eval = _unseen_eval_freq > 0 and (epoch + 1) % _unseen_eval_freq == 0
         _do_unseen_scatter = _unseen_scatter_freq > 0 and (epoch + 1) % _unseen_scatter_freq == 0
 
-        if wandb.run is not None and unseen_test_ds is not None and (_do_unseen_eval or _do_unseen_scatter):
+        _need_unseen_eval = (
+            _do_unseen_eval
+            or (wandb.run is not None and _do_unseen_scatter)
+        )
+        if unseen_test_ds is not None and _need_unseen_eval:
             rng_key, _eval_key = jax.random.split(rng_key)
-            _, _, _, _unseen_scatter_data, _unseen_per_enum_reg = evaluate_per_game(
+            _, _, _, _unseen_scatter_data, _unseen_per_enum_reg, _unseen_prediction_rows = evaluate_per_game(
                 train_state,
                 unseen_test_ds,
                 unseen_test_game_names_arr,
@@ -1181,16 +1336,31 @@ def train_and_evaluate_ratio(
                 mode,
                 norm_min_arr,
                 norm_max_arr,
+                sample_ids=unseen_test_sample_ids,
+                epoch=epoch,
+                epoch_num=epoch + 1,
             )
 
             if _do_unseen_eval and _unseen_per_enum_reg:
                 _unseen_overall_reg = float(np.mean(list(_unseen_per_enum_reg.values())))
-                wandb.log({
-                    **{f"unseen/regression/enum_{_e}": _v for _e, _v in _unseen_per_enum_reg.items()},
-                    "unseen/regression/overall": _unseen_overall_reg,
-                })
+                if wandb.run is not None:
+                    wandb.log({
+                        **{f"unseen/regression/enum_{_e}": _v for _e, _v in _unseen_per_enum_reg.items()},
+                        "unseen/regression/overall": _unseen_overall_reg,
+                    })
 
-            if _do_unseen_scatter and _unseen_scatter_data:
+            if _do_unseen_eval and getattr(config, "export_unseen_predictions_csv", True):
+                _unseen_prediction_rows = _add_prediction_context(
+                    _unseen_prediction_rows,
+                    prediction_context,
+                )
+                _write_prediction_rows_csv(
+                    _unseen_prediction_rows,
+                    unseen_prediction_csv_path,
+                    append=True,
+                )
+
+            if wandb.run is not None and _do_unseen_scatter and _unseen_scatter_data:
                 _unseen_scatter_paths = create_regression_scatter_plots_per_enum(
                     _unseen_scatter_data,
                     out_dir=getattr(config, "exp_dir", "."),
@@ -1210,6 +1380,24 @@ def train_and_evaluate_ratio(
         if hasattr(config, 'ckpt_freq') and config.ckpt_freq > 0:
             if (epoch + 1) % config.ckpt_freq == 0:
                 save_encoder_checkpoint(config, train_state, step=epoch + 1)
+
+    if getattr(config, "export_unseen_predictions_csv", True):
+        if os.path.exists(unseen_prediction_csv_path):
+            _log_prediction_csv_artifact(
+                {
+                    unseen_prediction_csv_name: unseen_prediction_csv_path,
+                }
+            )
+        elif unseen_test_ds is None:
+            logger.warning(
+                "Skipping decoder prediction CSV artifact upload: unseen eval dataset is empty. "
+                "Check unseen_games and eval_unseen_ratio."
+            )
+        else:
+            logger.warning(
+                "Skipping decoder prediction CSV artifact upload: no CSV was written. "
+                "Check unseen_eval_freq and n_epochs."
+            )
 
     per_game_acc = epoch_per_game_acc
     per_game_reg = epoch_per_game_reg
@@ -1596,6 +1784,8 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             "unseen_games": unseen_games,
             "unseen_ratio": config.unseen_ratio,
             "seen_ratio": config.seen_ratio,
+            "eval_unseen_ratio": float(getattr(config, "eval_unseen_ratio", 1.0)),
+            "export_unseen_predictions_csv": bool(getattr(config, "export_unseen_predictions_csv", True)),
         }
         dataset_setting_path = os.path.join(config.exp_dir, "dataset_setting.json")
         with open(dataset_setting_path, "w") as f:
@@ -1656,6 +1846,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         else:
             unseen_eval_ds = None
             unseen_eval_game_names_arr = np.array([])
+            _unseen_eval_indices = None
 
         # ── 4. 단일 unseen_ratio 학습 ──
         ratio = config.unseen_ratio
@@ -1693,6 +1884,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             ratio=ratio,
             unseen_eval_ds=unseen_eval_ds,
             unseen_eval_game_names=unseen_eval_game_names_arr,
+            unseen_eval_sample_ids=_unseen_eval_indices,
         )
 
         # W&B 로깅 (unseen 로그 제거)

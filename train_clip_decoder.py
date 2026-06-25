@@ -211,6 +211,11 @@ def train_step(
 
         a2b_pos_logps = a2b_logps - 1e9 * (1 - batch.duplicate_matrix)
         b2a_pos_logps = b2a_logps - 1e9 * (1 - batch.duplicate_matrix)
+        pos_mask = batch.duplicate_matrix > 0
+        best_pos_logits_a2b = jnp.max(jnp.where(pos_mask, logits, -jnp.inf), axis=1)
+        best_pos_logits_b2a = jnp.max(jnp.where(pos_mask, logits, -jnp.inf), axis=0)
+        a2b_rank = 1 + jnp.sum(logits > best_pos_logits_a2b[:, None], axis=1)
+        b2a_rank = 1 + jnp.sum(logits > best_pos_logits_b2a[None, :], axis=0)
 
         a2b_loss = -jnp.mean(jax.scipy.special.logsumexp(a2b_pos_logps, axis=1))
         b2a_loss = -jnp.mean(jax.scipy.special.logsumexp(b2a_pos_logps, axis=0))
@@ -229,7 +234,16 @@ def train_step(
             jnp.max(b2a_logps, axis=0) == jnp.max(b2a_pos_logps, axis=0)
         )
 
-        return a2b_loss, b2a_loss, a2b_correct_pr, b2a_correct_pr, a2b_top1_accuracy, b2a_top1_accuracy
+        return (
+            a2b_loss,
+            b2a_loss,
+            a2b_correct_pr,
+            b2a_correct_pr,
+            a2b_top1_accuracy,
+            b2a_top1_accuracy,
+            a2b_rank,
+            b2a_rank,
+        )
 
     def loss_fn(params):
         outputs = train_state.apply_fn(
@@ -250,7 +264,16 @@ def train_step(
 
         # ── Contrastive Loss ──
         temperature = jnp.clip(text_state_temperature, jnp.log(0.01), jnp.log(100))
-        s2t_loss, t2s_loss, s2t_correct_pr, t2s_correct_pr, s2t_top1, t2s_top1 = pairwise_contrastive_loss_accuracy(
+        (
+            s2t_loss,
+            t2s_loss,
+            s2t_correct_pr,
+            t2s_correct_pr,
+            s2t_top1,
+            t2s_top1,
+            s2t_rank,
+            t2s_rank,
+        ) = pairwise_contrastive_loss_accuracy(
             state_embed, text_embed, temperature
         )
         contrastive_loss = state_mask * (s2t_loss + t2s_loss) / 2.0
@@ -324,6 +347,8 @@ def train_step(
             "text2state_correct_pr": t2s_correct_pr * state_mask,
             "state2text_top1_accuracy": s2t_top1 * state_mask,
             "text2state_top1_accuracy": t2s_top1 * state_mask,
+            "state2text_rank": s2t_rank,
+            "text2state_rank": t2s_rank,
             "text_state_temperature": text_state_temperature,
             "cls_loss": cls_loss,
             "reg_loss": reg_loss,
@@ -574,6 +599,8 @@ def evaluate_per_game(
     all_target_norm: List[float] = []
     all_pred_raw: List[float] = []
     all_target_raw: List[float] = []
+    all_state2text_rank: List[int] = []
+    all_text2state_rank: List[int] = []
 
     for start_idx in range(0, n_test, batch_size):
         end_idx = min(start_idx + batch_size, n_test)
@@ -628,6 +655,8 @@ def evaluate_per_game(
         batch_target_norm = np.array(jax.device_get(metrics["per_sample_cond_target_norm"]))
         batch_pred_raw = np.array(jax.device_get(metrics["per_sample_cond_raw"]))
         batch_target_raw = np.array(jax.device_get(metrics["per_sample_cond_target_raw"]))
+        batch_state2text_rank = np.array(jax.device_get(metrics["state2text_rank"]))
+        batch_text2state_rank = np.array(jax.device_get(metrics["text2state_rank"]))
         all_sample_ids.extend(sample_ids_arr[indices[:actual_size]].tolist())
         all_class_ids.extend(np.asarray(class_ids).reshape(-1)[:actual_size].astype(int).tolist())
         all_preds.extend(preds[:actual_size].tolist())
@@ -641,6 +670,8 @@ def evaluate_per_game(
         all_target_norm.extend(batch_target_norm[:actual_size].tolist())
         all_pred_raw.extend(batch_pred_raw[:actual_size].tolist())
         all_target_raw.extend(batch_target_raw[:actual_size].tolist())
+        all_state2text_rank.extend(batch_state2text_rank[:actual_size].astype(int).tolist())
+        all_text2state_rank.extend(batch_text2state_rank[:actual_size].astype(int).tolist())
 
     # ── Per-game accuracy 집계 ──
     all_preds_arr = np.array(all_preds[:n_test])
@@ -687,6 +718,8 @@ def evaluate_per_game(
     all_target_norm_arr = np.array(all_target_norm[:n_test])
     all_pred_raw_arr = np.array(all_pred_raw[:n_test])
     all_target_raw_arr = np.array(all_target_raw[:n_test])
+    all_state2text_rank_arr = np.array(all_state2text_rank[:n_test])
+    all_text2state_rank_arr = np.array(all_text2state_rank[:n_test])
 
     per_enum_reg_loss: Dict[int, float] = {}
     scatter_data: Dict[int, Dict[str, np.ndarray]] = {}
@@ -717,6 +750,8 @@ def evaluate_per_game(
                 "is_unseen_game": bool(game_name in unseen_game_names),
                 "reward_enum_target": int(all_targets_arr[i]),
                 "reward_enum_pred": int(all_preds_arr[i]),
+                "state2text_rank": int(all_state2text_rank_arr[i]),
+                "text2state_rank": int(all_text2state_rank_arr[i]),
                 "condition_target_norm": float(all_target_norm_arr[i]),
                 "condition_pred_norm": float(all_pred_norm_arr[i]),
                 "condition_target_raw": float(all_target_raw_arr[i]),
@@ -750,7 +785,8 @@ def _write_prediction_rows_csv(
             writer.writeheader()
         writer.writerows(rows)
     action = "Appended" if append else "Saved"
-    logger.info("%s decoder prediction CSV: %s (%d rows)", action, csv_path, len(rows))
+    log_fn = logger.debug if append else logger.info
+    log_fn("%s decoder prediction CSV: %s (%d rows)", action, csv_path, len(rows))
     return csv_path
 
 
@@ -1068,30 +1104,36 @@ def train_and_evaluate_ratio(
         unseen_test_game_names_arr = np.array([])
         unseen_test_sample_ids = None
 
-    prediction_export_uid = uuid.uuid4().hex[:8]
-    unseen_prediction_csv_name = f"unseen_regression_predictions_{prediction_export_uid}.csv"
-    unseen_prediction_csv_path = os.path.join(config.exp_dir, unseen_prediction_csv_name)
-    prediction_context = {
-        "prediction_export_uid": prediction_export_uid,
-        "train_seen_games": _compact_json(train_seen_games),
-        "train_unseen_games": _compact_json(train_unseen_games),
-        "train_games": _compact_json(train_games_sorted),
-        "train_game_counts": _compact_json(train_game_counts),
-        "n_train_seen_games": len(train_seen_games),
-        "n_train_unseen_games": len(train_unseen_games),
-        "n_train_games": len(train_games_sorted),
-        "eval_unseen_games": _compact_json(sorted(unseen_game_names)),
-        "seen_ratio": float(getattr(config, "seen_ratio", 1.0)),
-        "unseen_ratio": float(ratio),
-        "eval_unseen_ratio": float(getattr(config, "eval_unseen_ratio", 1.0)),
-        "split_seed": int(getattr(config, "split_seed", 0)),
-        "seed": int(getattr(config, "seed", 0)),
-    }
-    logger.info(
-        "Decoder prediction CSV export uid=%s file=%s",
-        prediction_export_uid,
-        unseen_prediction_csv_name,
-    )
+    export_unseen_predictions = bool(getattr(config, "export_unseen_predictions_csv", True))
+    prediction_export_uid: Optional[str] = None
+    unseen_prediction_csv_name: Optional[str] = None
+    unseen_prediction_csv_path: Optional[str] = None
+    prediction_context: Dict[str, object] = {}
+    if export_unseen_predictions:
+        prediction_export_uid = uuid.uuid4().hex[:8]
+        unseen_prediction_csv_name = f"unseen_regression_predictions_{prediction_export_uid}.csv"
+        unseen_prediction_csv_path = os.path.join(config.exp_dir, unseen_prediction_csv_name)
+        prediction_context = {
+            "prediction_export_uid": prediction_export_uid,
+            "train_seen_games": _compact_json(train_seen_games),
+            "train_unseen_games": _compact_json(train_unseen_games),
+            "train_games": _compact_json(train_games_sorted),
+            "train_game_counts": _compact_json(train_game_counts),
+            "n_train_seen_games": len(train_seen_games),
+            "n_train_unseen_games": len(train_unseen_games),
+            "n_train_games": len(train_games_sorted),
+            "eval_unseen_games": _compact_json(sorted(unseen_game_names)),
+            "seen_ratio": float(getattr(config, "seen_ratio", 1.0)),
+            "unseen_ratio": float(ratio),
+            "eval_unseen_ratio": float(getattr(config, "eval_unseen_ratio", 1.0)),
+            "split_seed": int(getattr(config, "split_seed", 0)),
+            "seed": int(getattr(config, "seed", 0)),
+        }
+        logger.info(
+            "Decoder prediction CSV export uid=%s file=%s",
+            prediction_export_uid,
+            unseen_prediction_csv_name,
+        )
 
     epoch_scatter_data: Dict[int, Dict[str, np.ndarray]] = {}
     epoch_per_game_acc: Dict[str, float] = {}
@@ -1349,7 +1391,8 @@ def train_and_evaluate_ratio(
                         "unseen/regression/overall": _unseen_overall_reg,
                     })
 
-            if _do_unseen_eval and getattr(config, "export_unseen_predictions_csv", True):
+            if _do_unseen_eval and export_unseen_predictions:
+                assert unseen_prediction_csv_path is not None
                 _unseen_prediction_rows = _add_prediction_context(
                     _unseen_prediction_rows,
                     prediction_context,
@@ -1381,7 +1424,9 @@ def train_and_evaluate_ratio(
             if (epoch + 1) % config.ckpt_freq == 0:
                 save_encoder_checkpoint(config, train_state, step=epoch + 1)
 
-    if getattr(config, "export_unseen_predictions_csv", True):
+    if export_unseen_predictions:
+        assert unseen_prediction_csv_name is not None
+        assert unseen_prediction_csv_path is not None
         if os.path.exists(unseen_prediction_csv_path):
             _log_prediction_csv_artifact(
                 {

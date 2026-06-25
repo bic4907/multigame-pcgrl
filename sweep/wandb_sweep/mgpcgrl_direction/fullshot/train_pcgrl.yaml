@@ -10,9 +10,7 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0, 1, 2]
-  n_envs:
-    value: 600
+    values: [0, 1, 2, 3, 4]
   overwrite:
     value: true
   encoder.ckpt_dir:
@@ -22,7 +20,9 @@ parameters:
       "clipdec-game-all_exp-def_0",
       "clipdec-game-all_exp-def_dw-0p05_0",
       "clipdec-game-all_exp-def_dw-0p03_0",
-      "clipdec-game-all_exp-def_dw-0p1_0"
+      "clipdec-game-all_exp-def_dw-0p1_0",
+      "clipdec-game-all_exp-def_dw-0p25_0",
+      "clipdec-game-all_exp-def_dw-0p5_0"
     ]
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_direction0623'

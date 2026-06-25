@@ -936,6 +936,7 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     delta_weight: float = 0.0
     delta_min_group_samples: int = 2   # (game, task) 그룹 최소 sample 수
     delta_var_eps: float = 1e-4        # condition variance 하한 (작으면 그룹 invalid)
+    compute_delta_when_zero: bool = False  # delta_weight=0.0이어도 alignment metric 계산
 
     # ── regression loss 종류 ──
     # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error

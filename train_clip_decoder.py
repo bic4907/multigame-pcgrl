@@ -186,7 +186,7 @@ def build_train_indices_for_ratio(
 #  Train Step (JIT) — reward_pred 추가
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15))
+@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16))
 def train_step(
     train_state: TrainState,
     batch: CLIPDecoderBatch,
@@ -204,6 +204,7 @@ def train_step(
     num_games: int = 1,
     delta_min_count: int = 2,
     delta_var_eps: float = 1e-4,
+    compute_delta_when_zero: bool = True,
 ):
     rng_key, dropout_rng = jax.random.split(rng_key)
 
@@ -306,7 +307,7 @@ def train_step(
         pair_loss = jnp.where(pair_valid, 1.0 - cos_mat, 0.0)
         total_pairs = pair_valid.astype(jnp.float32).sum()
         delta_loss = pair_loss.sum() / jnp.maximum(total_pairs, 1.0)
-        return delta_loss, total_pairs, slope_den
+        return delta_loss, total_pairs
 
     def loss_fn(params):
         outputs = train_state.apply_fn(
@@ -387,13 +388,15 @@ def train_step(
             per_enum_count = per_enum_count.at[eidx].set(jnp.sum(mask))
 
         # ── Continuous Task-wise Cross-game Direction Alignment ──
-        # delta_weight=0 이어도 alignment 상태를 모니터링할 수 있도록 항상 계산한다.
-        # (NaN-safe 구현이므로 weight=0 일 때도 안전하게 metric만 띄울 수 있음)
-        delta_loss, delta_valid_pairs, delta_slope_den = continuous_direction_alignment(
-            text_embed, batch.game_id, reward_target, condition_target
-        )
-        delta_max_slope_den = jnp.max(delta_slope_den)
-        delta_min_slope_den = jnp.min(delta_slope_den)
+        # 기본값은 delta_weight=0.0이어도 alignment metric을 모니터링한다.
+        # compute_delta_when_zero=False일 때만 baseline/eval의 불필요한 계산을 건너뛴다.
+        if delta_weight != 0.0 or compute_delta_when_zero:
+            delta_loss, delta_valid_pairs = continuous_direction_alignment(
+                text_embed, batch.game_id, reward_target, condition_target
+            )
+        else:
+            delta_loss = jnp.array(0.0, dtype=text_embed.dtype)
+            delta_valid_pairs = jnp.array(0.0, dtype=text_embed.dtype)
 
         # ── Total Loss ──
         total_loss = (
@@ -432,12 +435,7 @@ def train_step(
             # ── Continuous direction alignment ──
             "continuous_delta_loss": delta_loss,                          # raw alignment loss (weight 미적용, 항상 모니터링)
             "continuous_delta_loss_weighted": delta_weight * delta_loss,  # objective에 실제 반영된 값
-            "valid_direction_pair_count": delta_valid_pairs,
-            # ── NaN 디버깅용 ──
-            "delta_is_nan": jnp.isnan(delta_loss).astype(jnp.float32),
-            "total_loss_is_nan": jnp.isnan(total_loss).astype(jnp.float32),
-            "delta_max_slope_den": delta_max_slope_den,
-            "delta_min_slope_den": delta_min_slope_den,
+            "valid_direction_pair_count": delta_valid_pairs
         }
         return total_loss, metrics
 
@@ -701,6 +699,7 @@ def evaluate_per_game(
             num_games=int(num_games),
             delta_min_count=int(getattr(config, "delta_min_group_samples", 2)),
             delta_var_eps=float(getattr(config, "delta_var_eps", 1e-4)),
+            compute_delta_when_zero=bool(getattr(config, "compute_delta_when_zero", True)),
         )
 
         preds = np.array(jax.device_get(metrics["reward_pred"]))
@@ -1118,6 +1117,7 @@ def train_and_evaluate_ratio(
                     num_games=int(num_games),
                     delta_min_count=int(getattr(config, "delta_min_group_samples", 2)),
                     delta_var_eps=float(getattr(config, "delta_var_eps", 1e-4)),
+                    compute_delta_when_zero=bool(getattr(config, "compute_delta_when_zero", False)),
                 )
                 epoch_loss += float(loss)
                 epoch_acc += float(metrics["reward_accuracy"])
@@ -1734,6 +1734,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             "delta_weight": config.delta_weight,
             "delta_min_group_samples": config.delta_min_group_samples,
             "delta_var_eps": config.delta_var_eps,
+            "compute_delta_when_zero": config.compute_delta_when_zero,
             "batch_size": config.batch_size,
             "lr": config.lr,
             "weight_decay": config.weight_decay,

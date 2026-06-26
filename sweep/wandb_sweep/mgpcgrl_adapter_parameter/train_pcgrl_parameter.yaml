@@ -40,9 +40,6 @@ parameters:
       "clipdec-game-all_unseen-pkzddm_ur-0.03_exp-def_0",
       "clipdec-game-all_unseen-dgzddm_ur-0.03_exp-def_0",
       "clipdec-game-all_unseen-zddmsk_ur-0.03_exp-def_0",
-      "clipdec-game-all_unseen-pkdgzddm_ur-0.03_exp-def_0",
-      "clipdec-game-all_unseen-pkzddmsk_ur-0.03_exp-def_0",
-      "clipdec-game-all_unseen-dgzddmsk_ur-0.03_exp-def_0",
     ]
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_parameter'

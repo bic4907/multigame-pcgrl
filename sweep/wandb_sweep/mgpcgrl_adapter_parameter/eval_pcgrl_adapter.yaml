@@ -22,7 +22,7 @@ parameters:
     values: [1, 2]
   # ── train_pcgrl_adapter.yaml 과 동일한 값 지정 (exp_dir 매칭용) ──────────────
   decoder.adapter_type:
-    values: [null, 'film']
+    values: ['film']
   embed_proj_type:
     value: null
   encoder.ckpt_dir:
@@ -38,9 +38,6 @@ parameters:
       "clipdec-game-all_unseen-pkzddm_ur-0.03_exp-def_0",
       "clipdec-game-all_unseen-dgzddm_ur-0.03_exp-def_0",
       "clipdec-game-all_unseen-zddmsk_ur-0.03_exp-def_0",
-      "clipdec-game-all_unseen-pkdgzddm_ur-0.03_exp-def_0",
-      "clipdec-game-all_unseen-pkzddmsk_ur-0.03_exp-def_0",
-      "clipdec-game-all_unseen-dgzddmsk_ur-0.03_exp-def_0",
     ]
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_parameter'

@@ -23,7 +23,7 @@ parameters:
   # ── adapter 조건: null(baseline) / film(few-shot adapter) ──────────────────
   # embed_proj_type=null 고정 (parameter expansion 조건과 분리)
   decoder.adapter_type:
-    values: [null, 'film']
+    values: ['film']
   embed_proj_type:
     value: null
   encoder.ckpt_dir:
@@ -39,9 +39,6 @@ parameters:
       "clipdec-game-all_unseen-pkzddm_ur-0.03_exp-def_0",
       "clipdec-game-all_unseen-dgzddm_ur-0.03_exp-def_0",
       "clipdec-game-all_unseen-zddmsk_ur-0.03_exp-def_0",
-      "clipdec-game-all_unseen-pkdgzddm_ur-0.03_exp-def_0",
-      "clipdec-game-all_unseen-pkzddmsk_ur-0.03_exp-def_0",
-      "clipdec-game-all_unseen-dgzddmsk_ur-0.03_exp-def_0",
     ]
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_parameter'

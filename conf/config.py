@@ -138,6 +138,10 @@ class Config:
     text_ratio: float = 1.0
     state_ratio: float = 1.0
 
+    # ── Action masking ────────────────────────────────────────────────────
+    action_mask: bool = False
+    re01_action_mask: bool = True
+
     exp_group: Optional[str] = None
 
     _vid_dir: Optional[str] = None

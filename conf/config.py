@@ -138,6 +138,10 @@ class Config:
     text_ratio: float = 1.0
     state_ratio: float = 1.0
 
+    # ── Action masking ────────────────────────────────────────────────────
+    action_mask: bool = False
+    re01_action_mask: bool = True
+
     exp_group: Optional[str] = None
 
     _vid_dir: Optional[str] = None
@@ -892,7 +896,7 @@ class FinetunedCLIPEncoderTrainConfig(CLIPTrainConfig):
     lr: float = 5.0e-6
     weight_decay: float = 0.1
     n_epochs: int = 100
-    batch_size: int = 256
+    batch_size: int = 128
     ckpt_freq: int = 50
 
     embed_type: str = "finetuned_clip"

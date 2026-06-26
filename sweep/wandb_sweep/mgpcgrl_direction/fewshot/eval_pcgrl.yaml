@@ -18,7 +18,7 @@ parameters:
   train_seen_ratio:
     value: 1.0
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_direction0625'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_direction0626'
   encoder.ckpt_name:
     values:
       # ── unseen_ratio: 0.03 ─────────────────────────────────────────────────
@@ -35,7 +35,7 @@ parameters:
       - "clipdec-game-all_unseen-pkzddmsk_ur-0.03_exp-def_dw-0p1_0"
       - "clipdec-game-all_unseen-dgzddmsk_ur-0.03_exp-def_dw-0p1_0"
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_direction0625'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_direction0626'
 command:
   - ${interpreter}
   - ${program}

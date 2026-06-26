@@ -214,6 +214,15 @@ class DecoderConfig:
     # True이면 pixel_values에 (B, H, W, num_reward_classes) one-hot을 concat
     cnn_reward_enum_onehot: bool = False
 
+    # ── Few-shot adapter (text embedding → RewardDecoder 입력 공간) ──────────
+    # adapter_type: None(비활성) | "film" | "lora" | "moe"
+    adapter_type: Optional[str] = None
+    adapter_rank: int = 4
+    adapter_num_experts: int = 4
+    adapter_hidden_dim: int = 64
+    adapter_lr: float = 1e-2
+    adapter_steps: int = 500
+
 
 @dataclass
 class TrainConfig(Config):
@@ -349,6 +358,9 @@ class VIPCGRLConfig(CPCGRLConfig):
     # train_setting.json에 seen/unseen split이 기록되어 WandB 로깅에 사용된다.
     reward_seen_games: List[str] = field(default_factory=list)
 
+    # None: 비활성 / "affine": γ·x+β (RL end-to-end 학습, FiLM adapter 와 동일 구조)
+    embed_proj_type: Optional[str] = None
+
 
 
 @dataclass
@@ -381,13 +393,17 @@ class MGPCGRLConfig(VIPCGRLConfig):
 
     # ── reward_unseen_ratio: unseen 게임 내 metadata/decoder 경계 ─────────────
     # dataset_setting.json 의 unseen_ratio 에서 자동 주입됨.
-    # 각 unseen 게임의 샘플을 순서 기준으로 분할:
-    #   앞쪽 (reward_unseen_ratio 비율) → metadata (GT condition, encoder 학습 데이터)
-    #   나머지 (1 - reward_unseen_ratio) → reward decoder 로 condition 예측
+    # support (encoder 학습분) → metadata (GT condition)
+    # 나머지 → reward decoder 로 condition 예측
     # 0.0 (기본값) = 모든 unseen 샘플에 decoder 적용 (zero-shot 동작)
     reward_unseen_ratio: float = 0.0
 
-
+    # ── adapter sweep 편의 파라미터 (train_adapter.py 전용) ──────────────────
+    # ur: 인코더 학습 시 unseen_ratio, adp_ur: adapter 학습 시 unseen_ratio
+    # 세 필드가 모두 설정되면 encoder.ckpt_name 과 reward_unseen_ratio 자동 구성
+    ur: Optional[float] = None
+    adp_ur: Optional[float] = None
+    unseen_game: Optional[str] = None
 
 
 @dataclass
@@ -634,6 +650,8 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
 
     ignore_checkpoint: bool = False
+
+    embed_proj_type: Optional[str] = None
 
     # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
     # 분석/로깅용으로만 사용하며, eval 데이터셋 필터링에는 적용되지 않음.

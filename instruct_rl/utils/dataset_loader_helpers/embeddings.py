@@ -132,6 +132,14 @@ def _build_instruct(sample_list, config):
         shared_module=shared_module,
         shared_variables=shared_variables,
     )
+
+    # ── Few-shot adapter: encoder 출력 직후, RL/decoder 입력 전에 적용 ─────────
+    embedding = _apply_few_shot_adapter(
+        sample_list, config, embedding,
+        shared_module=shared_module,
+        shared_variables=shared_variables,
+    )
+
     reward_i, condition = _build_reward_and_condition(
         sample_list,
         config,
@@ -197,6 +205,140 @@ def _build_instruct_embedding(sample_list, config, *, shared_module=None, shared
     return jnp.zeros(fallback_shape, dtype=jnp.float32)
 
 
+def _apply_few_shot_adapter(
+    sample_list,
+    config,
+    embedding,
+    *,
+    shared_module=None,
+    shared_variables=None,
+):
+    """unseen query 샘플의 embedding을 few-shot adapter로 변환한다."""
+    _adapter_type = getattr(getattr(config, "decoder", None), "adapter_type", None)
+    if not _adapter_type or str(_adapter_type).lower() == "none":
+        return embedding
+
+    reward_seen_games = set(getattr(config, "reward_seen_games", None) or [])
+    if "doom" in reward_seen_games or "doom2" in reward_seen_games:
+        reward_seen_games.update({"doom", "doom2"})
+
+    reward_unseen_ratio = float(getattr(config, "reward_unseen_ratio", 0.0))
+
+    _ckpt_dir  = getattr(getattr(config, "encoder", None), "ckpt_dir",  None) or ""
+    _ckpt_name = getattr(getattr(config, "encoder", None), "ckpt_name", None) or ""
+    _adapter_dir = os.path.join(_ckpt_dir, f"{_ckpt_name}_adp-{_adapter_type}")
+    _state_path  = os.path.join(_adapter_dir, "adapter_state.pkl")
+    _inline_state = os.path.join(_ckpt_dir, _ckpt_name, "adapter_state.pkl")
+    if not os.path.exists(_state_path) and os.path.exists(_inline_state):
+        _adapter_dir = os.path.join(_ckpt_dir, _ckpt_name)
+        _state_path  = _inline_state
+
+    _pretrained_exists = os.path.exists(_state_path)
+    if reward_unseen_ratio <= 0.0 and not _pretrained_exists:
+        logger.info("Few-shot adapter skipped: reward_unseen_ratio=0 and no pre-trained state")
+        return embedding
+
+    if shared_module is None:
+        logger.warning("Few-shot adapter skipped: shared_module is None")
+        return embedding
+
+    from collections import defaultdict
+    unseen_game_indices: dict = defaultdict(list)
+    for i, s in enumerate(sample_list):
+        if s.game not in reward_seen_games:
+            unseen_game_indices[s.game].append(i)
+
+    _ds_path = os.path.join(_ckpt_dir, _ckpt_name, "dataset_setting.json")
+    _unseen_support_ids: dict = {}
+    if os.path.exists(_ds_path):
+        with open(_ds_path) as _f:
+            _unseen_support_ids = json.load(_f).get("unseen_support_source_ids", {})
+
+    support_indices, query_indices = [], []
+    if _unseen_support_ids:
+        support_id_set = {
+            (game, sid)
+            for game, ids in _unseen_support_ids.items()
+            for sid in ids
+        }
+        for game, indices in unseen_game_indices.items():
+            for i in indices:
+                if (game, sample_list[i].source_id) in support_id_set:
+                    support_indices.append(i)
+                else:
+                    query_indices.append(i)
+        logger.info(
+            "Few-shot adapter: source_id exact match — support=%d  query=%d",
+            len(support_indices), len(query_indices),
+        )
+    else:
+        logger.warning(
+            "Few-shot adapter: unseen_support_source_ids not found — "
+            "falling back to sequential split (reward_unseen_ratio=%.4f)", reward_unseen_ratio
+        )
+        for indices in unseen_game_indices.values():
+            n_meta = int(len(indices) * reward_unseen_ratio)
+            support_indices.extend(indices[:n_meta])
+            query_indices.extend(indices[n_meta:])
+
+    if not query_indices and not support_indices:
+        return embedding
+
+    if not support_indices and _pretrained_exists:
+        query_indices = [i for indices in unseen_game_indices.values() for i in indices]
+        logger.info(
+            "Few-shot adapter (pre-trained, no support): applying to all %d unseen samples",
+            len(query_indices),
+        )
+
+    if not query_indices:
+        logger.info("Few-shot adapter skipped: no query samples")
+        return embedding
+
+    num_classes = getattr(getattr(config, "decoder", None), "num_reward_classes", 5)
+    sup_reward_i = np.array(
+        [sample_list[i].meta["reward_enum"] for i in support_indices], dtype=np.int32
+    )
+    sup_condition = np.full((len(support_indices), num_classes), -1.0, dtype=np.float32)
+    for local_i, orig_i in enumerate(support_indices):
+        conds = sample_list[orig_i].meta.get("conditions", {})
+        for j in range(num_classes):
+            sup_condition[local_i, j] = float(conds.get(j, conds.get(str(j), -1)))
+
+    emb_np = np.asarray(embedding, dtype=np.float32)
+    from encoder.few_shot_adapter import adapt_embeddings as _adapt
+    _dec_cfg = getattr(config, "decoder", None)
+    adapted_query = np.asarray(
+        _adapt(
+            query=jnp.array(emb_np[query_indices]),
+            support=jnp.array(emb_np[support_indices]),
+            support_reward_i=jnp.array(sup_reward_i),
+            support_condition=jnp.array(sup_condition),
+            apply_fn=shared_module.apply,
+            variables=shared_variables,
+            adapter_type=_adapter_type,
+            rank=getattr(_dec_cfg, "adapter_rank", 4),
+            num_experts=getattr(_dec_cfg, "adapter_num_experts", 4),
+            hidden_dim=getattr(_dec_cfg, "adapter_hidden_dim", 64),
+            lr=getattr(_dec_cfg, "adapter_lr", 1e-2),
+            steps=getattr(_dec_cfg, "adapter_steps", 500),
+            save_path=_state_path,
+            load_path=_state_path,
+        ),
+        dtype=np.float32,
+    )
+
+    emb_np = emb_np.copy()
+    for local_i, orig_i in enumerate(query_indices):
+        emb_np[orig_i] = adapted_query[local_i]
+
+    logger.info(
+        "Few-shot adapter applied: type=%s  support=%d  query=%d",
+        _adapter_type, len(support_indices), len(query_indices),
+    )
+    return jnp.array(emb_np)
+
+
 def _build_reward_and_condition(
     sample_list,
     config,
@@ -251,21 +393,39 @@ def _build_reward_and_condition(
             reward_unseen_ratio = float(getattr(config, "reward_unseen_ratio", 0.0))
 
             if reward_unseen_ratio > 0.0:
-                # ── few-shot 분할: 각 unseen 게임 내에서 샘플을 순서 기준으로 분할 ──
-                # 앞쪽 (reward_unseen_ratio 비율) → metadata 유지 (encoder 학습분)
-                # 나머지 (1 - reward_unseen_ratio) → decoder 적용
+                # ── few-shot 분할: encoder 학습과 동일한 샘플을 support(metadata)로 ──
+                # dataset_setting.json 의 unseen_support_source_ids 로 정확 매칭,
+                # 없으면 순서 기반 fallback.
                 from collections import defaultdict
-                unseen_game_indices: dict = defaultdict(list)
+                unseen_game_indices_rc: dict = defaultdict(list)
                 for i, s in enumerate(sample_list):
                     if s.game not in reward_seen_games:
-                        unseen_game_indices[s.game].append(i)
+                        unseen_game_indices_rc[s.game].append(i)
+
+                _ckpt_dir_rc  = getattr(getattr(config, "encoder", None), "ckpt_dir",  None) or ""
+                _ckpt_name_rc = getattr(getattr(config, "encoder", None), "ckpt_name", None) or ""
+                _ds_path_rc   = os.path.join(_ckpt_dir_rc, _ckpt_name_rc, "dataset_setting.json")
+                _support_ids_rc: dict = {}
+                if os.path.exists(_ds_path_rc):
+                    with open(_ds_path_rc) as _f2:
+                        _support_ids_rc = json.load(_f2).get("unseen_support_source_ids", {})
 
                 decoder_set: set = set()
-                for game, indices in unseen_game_indices.items():
-                    n_meta = int(len(indices) * reward_unseen_ratio)
-                    # 앞쪽 n_meta 개 → metadata, 나머지 → decoder
-                    for idx in indices[n_meta:]:
-                        decoder_set.add(idx)
+                if _support_ids_rc:
+                    support_id_set_rc = {
+                        (game, sid)
+                        for game, ids in _support_ids_rc.items()
+                        for sid in ids
+                    }
+                    for game, indices in unseen_game_indices_rc.items():
+                        for idx in indices:
+                            if (game, sample_list[idx].source_id) not in support_id_set_rc:
+                                decoder_set.add(idx)
+                else:
+                    for indices in unseen_game_indices_rc.values():
+                        n_meta = int(len(indices) * reward_unseen_ratio)
+                        for idx in indices[n_meta:]:
+                            decoder_set.add(idx)
 
                 target_indices = sorted(decoder_set)
                 n_meta_total = n - len(target_indices)

@@ -42,6 +42,18 @@
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
     },
+    "directional_fewshot": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_fewshot",
+        "eval_mgpcgrl_fewshot_direction0625"
+      ],
+      "project_display_names": {
+        "aaai27_eval_mgpcgrl_fewshot": "MGPCGRL",
+        "eval_mgpcgrl_fewshot_direction0625": "MGPCGRL Direction"
+      },
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
+    },
     "domain_condition": {
       "target_projects": [
         "aaai27_eval_mgpcgrl_prefix_none",
@@ -90,6 +102,7 @@
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
     "aaai27_eval_vipcgrl_fewshot":            "VIPCGRL (fewshot)",
     "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (fewshot)",
+    "eval_mgpcgrl_fewshot_direction0625":     "MGPCGRL Direction (fewshot)",
     "aaai27_eval_mgpcgrl_prefix_none":        "MGPCGRL (prefix=none)",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "MGPCGRL (prefix=desc)",
     "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)",
@@ -114,6 +127,7 @@
     "aaai27_eval_ipcgrl_fewshot":             "#1a9641",
     "aaai27_eval_vipcgrl_fewshot":            "#7b3294",
     "aaai27_eval_mgpcgrl_fewshot":            "#2166ac",
+    "eval_mgpcgrl_fewshot_direction0625":     "#4393c3",
     "aaai27_eval_mgpcgrl_prefix_none":        "#b2182b",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "#4393c3",
     "aaai27_eval_mgpcgrl_fewshot_mix":        "#92c5de",

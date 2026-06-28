@@ -127,6 +127,7 @@ STEPS: list[dict] = [
 _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
     "zeroshot":        {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
     "fewshot":         {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
+    "fewshot_delta_alignment": {3, 9, 10, 12}, # fewshot 비교 — step 11(progress)만 사용
     "directional_fewshot": {3, 9, 10, 12}, # fewshot 비교 — step 11(progress)만 사용
     "domain_condition":{3, 9, 10},        # fewshot과 동일 — step 11(progress) 사용
     "instruction_type":{3, 9, 10},        # fewshot과 동일 — step 11(progress) 사용

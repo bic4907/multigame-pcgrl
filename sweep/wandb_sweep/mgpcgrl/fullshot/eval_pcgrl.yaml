@@ -10,17 +10,17 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0, 1, 2]
+    values: [0, 1, 2, 3, 4]
   reevaluate:
     value: true
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_encoder'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fullshot'
   encoder.ckpt_name:
     values: [
       "clipdec-game-all_exp-def_0",
     ]
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fullshot'
 command:
   - ${interpreter}
   - ${program}

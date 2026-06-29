@@ -92,6 +92,28 @@ def parse_unseen_game_names(unseen_str: Optional[str]) -> Set[str]:
     return names
 
 
+def _canonical_game_name(game_name: object) -> str:
+    """Return the reporting name for a game, merging doom2 into doom."""
+    game = str(game_name)
+    return "doom" if game == "doom2" else game
+
+
+def _canonical_game_names(game_names: np.ndarray) -> np.ndarray:
+    return np.asarray([_canonical_game_name(g) for g in game_names], dtype=object)
+
+
+def _canonical_game_name_list(game_names) -> List[str]:
+    return sorted({_canonical_game_name(g) for g in game_names})
+
+
+def _canonical_game_counts(game_counts: Dict[str, int]) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for game, count in game_counts.items():
+        canonical_game = _canonical_game_name(game)
+        counts[canonical_game] = counts.get(canonical_game, 0) + int(count)
+    return dict(sorted(counts.items()))
+
+
 def subset_clip_dataset(dataset: CLIPDataset, indices: np.ndarray) -> CLIPDataset:
     """CLIPDataset에서 주어진 인덱스의 서브셋을 추출한다."""
     idx = np.asarray(indices, dtype=int)
@@ -694,13 +716,15 @@ def evaluate_per_game(
     all_abs_diff_raw_arr = np.array(all_abs_diffs_raw[:n_test])
     all_reward_enum_arr = np.array(all_reward_enums[:n_test])
     correct = all_preds_arr == all_targets_arr
+    canonical_test_game_names = _canonical_game_names(np.asarray(test_game_names, dtype=object))
+    canonical_unseen_game_names = set(_canonical_game_name_list(unseen_game_names))
 
     per_game_acc: Dict[str, float] = {}
     per_game_reg: Dict[str, float] = {}
     per_game_enum_diff: Dict[str, Dict[int, float]] = {}
-    unique_test_games = sorted(set(test_game_names))
+    unique_test_games = sorted(set(canonical_test_game_names))
     for game in unique_test_games:
-        mask = test_game_names == game
+        mask = canonical_test_game_names == game
         if mask.sum() > 0:
             per_game_acc[game] = float(correct[mask].mean())
             per_game_reg[game] = float(all_reg_arr[mask].mean())
@@ -716,7 +740,7 @@ def evaluate_per_game(
     per_game_reg["overall"] = float(all_reg_arr.mean())
 
     # seen / unseen overall
-    seen_mask = np.array([g not in unseen_game_names for g in test_game_names])
+    seen_mask = np.array([g not in canonical_unseen_game_names for g in canonical_test_game_names])
     unseen_mask = ~seen_mask
     if seen_mask.sum() > 0:
         per_game_acc["seen_overall"] = float(correct[seen_mask].mean())
@@ -745,14 +769,14 @@ def evaluate_per_game(
             "target_norm": all_target_norm_arr[emask],
             "pred_raw": all_pred_raw_arr[emask],
             "target_raw": all_target_raw_arr[emask],
-            "game_names": np.asarray(test_game_names, dtype=object)[emask],
+            "game_names": canonical_test_game_names[emask],
         }
 
     prediction_rows: List[Dict[str, object]] = []
     if include_prediction_rows:
         for i in range(n_test):
             rc = test_ds.reward_cond[i]
-            game_name = str(test_game_names[i])
+            game_name = _canonical_game_name(test_game_names[i])
             prediction_rows.append(
                 {
                     "sample_id": all_sample_ids[i],
@@ -760,7 +784,7 @@ def evaluate_per_game(
                     "epoch_num": "" if epoch_num is None else int(epoch_num),
                     "class_id": int(all_class_ids_arr[i]),
                     "game": game_name,
-                    "is_unseen_game": bool(game_name in unseen_game_names),
+                    "is_unseen_game": bool(game_name in canonical_unseen_game_names),
                     "reward_enum_target": int(all_targets_arr[i]),
                     "reward_enum_pred": int(all_preds_arr[i]),
                     "state2text_rank": int(all_state2text_rank_arr[i]),
@@ -1128,14 +1152,14 @@ def train_and_evaluate_ratio(
         unseen_prediction_csv_path = os.path.join(config.exp_dir, unseen_prediction_csv_name)
         prediction_context = {
             "prediction_export_uid": prediction_export_uid,
-            "train_seen_games": _compact_json(train_seen_games),
-            "train_unseen_games": _compact_json(train_unseen_games),
-            "train_games": _compact_json(train_games_sorted),
-            "train_game_counts": _compact_json(train_game_counts),
-            "n_train_seen_games": len(train_seen_games),
-            "n_train_unseen_games": len(train_unseen_games),
-            "n_train_games": len(train_games_sorted),
-            "eval_unseen_games": _compact_json(sorted(unseen_game_names)),
+            "train_seen_games": _compact_json(_canonical_game_name_list(train_seen_games)),
+            "train_unseen_games": _compact_json(_canonical_game_name_list(train_unseen_games)),
+            "train_games": _compact_json(_canonical_game_name_list(train_games_sorted)),
+            "train_game_counts": _compact_json(_canonical_game_counts(train_game_counts)),
+            "n_train_seen_games": len(_canonical_game_name_list(train_seen_games)),
+            "n_train_unseen_games": len(_canonical_game_name_list(train_unseen_games)),
+            "n_train_games": len(_canonical_game_name_list(train_games_sorted)),
+            "eval_unseen_games": _compact_json(_canonical_game_name_list(unseen_game_names)),
             "seen_ratio": float(getattr(config, "seen_ratio", 1.0)),
             "unseen_ratio": float(ratio),
             "eval_unseen_ratio": float(getattr(config, "eval_unseen_ratio", 1.0)),

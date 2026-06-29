@@ -8,13 +8,13 @@ parameters:
   game:
     values: ['all']
   delta_weight:
-    values: [0,0, 0.03, 0.05, 0.1]
+    values: [0.1]
   seed:
     values: [0]
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_direction0623'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fullshot_direction0626'
 command:
   - ${interpreter}
   - ${program}

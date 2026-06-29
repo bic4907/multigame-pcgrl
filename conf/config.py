@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Iterable, List, Optional, Tuple, Union
 from hydra.core.config_store import ConfigStore
 from dataclasses import dataclass, field
 
@@ -137,6 +137,10 @@ class Config:
     #Ablation study options. default is 1.0
     text_ratio: float = 1.0
     state_ratio: float = 1.0
+
+    # ── Action masking ────────────────────────────────────────────────────
+    action_mask: bool = False
+    re01_action_mask: bool = True
 
     exp_group: Optional[str] = None
 
@@ -382,6 +386,10 @@ class MGPCGRLConfig(VIPCGRLConfig):
     #   나머지 (1 - reward_unseen_ratio) → reward decoder 로 condition 예측
     # 0.0 (기본값) = 모든 unseen 샘플에 decoder 적용 (zero-shot 동작)
     reward_unseen_ratio: float = 0.0
+
+    # ── encoder 학습 시 사용한 delta_weight (wandb 로깅/분석용) ──
+    # encoder_config.json에서 자동 주입됨. 0.0 = baseline (direction alignment 미사용).
+    encoder_delta_weight: float = 0.0
 
 
 
@@ -655,6 +663,9 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
     train_unseen_ratio: Optional[float] = None
     train_seen_ratio: Optional[float] = None
 
+    # ── encoder 학습 시 사용한 delta_weight (wandb 로깅/분석용) ──
+    encoder_delta_weight: float = 0.0
+
 
 @dataclass
 class IPCGRLEvalConfig(CPCGRLEvalConfig):
@@ -922,6 +933,14 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     contrastive_weight: float = 1.0    # contrastive loss 가중치
     cls_weight: float = 1.0            # reward_enum 분류 loss 가중치
     reg_weight: float = 1.0            # condition 회귀 loss 가중치
+
+    # ── Continuous Task-wise Cross-game Direction Alignment Loss ──
+    # 같은 task 안에서 condition이 증가할 때 text embedding이 움직이는 방향을
+    # 게임 간에 정렬시키는 regularizer. 0.0 → 비활성(baseline 재현).
+    delta_weight: float = 0.0
+    delta_min_group_samples: int = 2   # (game, task) 그룹 최소 sample 수
+    delta_var_eps: float = 1e-4        # condition variance 하한 (작으면 그룹 invalid)
+    compute_delta_when_zero: bool = False  # delta_weight=0.0이어도 alignment metric 계산
 
     # ── regression loss 종류 ──
     # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error

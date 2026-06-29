@@ -127,6 +127,7 @@ def subset_clip_dataset(dataset: CLIPDataset, indices: np.ndarray) -> CLIPDatase
         reward_enum_targets=dataset.reward_enum_targets[idx],
         condition_targets=dataset.condition_targets[idx],
         quantized_condition_targets=dataset.quantized_condition_targets[idx],
+        game_ids=dataset.game_ids[idx] if dataset.game_ids is not None else None,
     )
 
 
@@ -209,7 +210,7 @@ def build_train_indices_for_ratio(
 #  Train Step (JIT) — reward_pred 추가
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 10))
+@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16))
 def train_step(
     train_state: TrainState,
     batch: CLIPDecoderBatch,
@@ -224,6 +225,11 @@ def train_step(
     include_retrieval_ranks: bool = False,
     norm_min_arr: jnp.ndarray = None,
     norm_max_arr: jnp.ndarray = None,
+    delta_weight: float = 0.0,
+    num_games: int = 1,
+    delta_min_count: int = 2,
+    delta_var_eps: float = 1e-4,
+    compute_delta_when_zero: bool = True,
 ):
     rng_key, dropout_rng = jax.random.split(rng_key)
 
@@ -271,6 +277,80 @@ def train_step(
             a2b_rank,
             b2a_rank,
         )
+
+    def safe_l2_normalize(x, axis=-1, eps=1e-6):
+        """0-vector 근처에서도 gradient가 NaN으로 터지지 않는 L2 normalize.
+
+        jnp.linalg.norm()은 zero-vector에서 gradient가 NaN이 되므로,
+        sum-of-squares + jax.lax.rsqrt(maximum(...)) 형태로 우회한다.
+        """
+        sq_norm = jnp.sum(x * x, axis=axis, keepdims=True)
+        inv_norm = jax.lax.rsqrt(jnp.maximum(sq_norm, eps * eps))
+        return x * inv_norm
+
+    def continuous_direction_alignment(text_embed, game_id, reward_target, condition_target):
+        """Continuous Task-wise Cross-game Direction Alignment Loss.
+
+        각 (game, task) 그룹에서 condition 값과 (L2-normalized) text embedding 사이의
+        slope vector를 OLS-style centered regression 으로 추정한 후, 같은 task 안의
+        서로 다른 game 간 방향 벡터를 cosine distance 로 정렬한다.
+
+        주의: invalid (game, task) 그룹은 normalize **이전에** slope를 0으로 차단해야
+        한다. slope=0 인 그룹에 normalize gradient가 흐르면 NaN이 발생하고, 이후
+        mask를 곱해도 (NaN * 0 = NaN) 으로 parameter 전체가 오염된다.
+
+        Returns: (loss, valid_pair_count)
+        """
+        z = safe_l2_normalize(text_embed, axis=-1, eps=1e-6)
+        c = condition_target.astype(jnp.float32)
+        G = num_games
+        T = num_reward_classes
+
+        game_mask = (game_id[None, :] == jnp.arange(G)[:, None])           # (G, B)
+        task_mask = (reward_target[None, :] == jnp.arange(T)[:, None])     # (T, B)
+        m = (game_mask[:, None, :] & task_mask[None, :, :]).astype(jnp.float32)  # (G, T, B)
+
+        n_gt = m.sum(axis=-1)                                              # (G, T)
+        safe_n = jnp.maximum(n_gt, 1.0)
+
+        c_b = c[None, None, :]                                             # (1, 1, B)
+        z_b = z[None, None, :, :]                                          # (1, 1, B, D)
+
+        c_mean = (m * c_b).sum(-1) / safe_n                                # (G, T)
+        z_mean = (m[..., None] * z_b).sum(-2) / safe_n[..., None]          # (G, T, D)
+
+        dc = c_b - c_mean[..., None]                                       # (G, T, B)
+        dz = z_b - z_mean[:, :, None, :]                                   # (G, T, B, D)
+
+        m_dc = m * dc                                                      # (G, T, B)
+        slope_num = (m_dc[..., None] * dz).sum(-2)                         # (G, T, D)
+        slope_den = (m_dc * dc).sum(-1)                                    # (G, T) = sum m*dc^2
+
+        # ── valid group 판정 (slope 계산 전) ──
+        c_var = slope_den / safe_n                                         # (G, T)
+        valid = (n_gt >= float(delta_min_count)) & (c_var > delta_var_eps) # (G, T)
+
+        # ── slope_den이 매우 작은 invalid group에서 slope 폭주 방지 ──
+        safe_slope_den = jnp.where(valid, slope_den, 1.0)                  # (G, T)
+        slope = slope_num / safe_slope_den[..., None]                      # (G, T, D)
+        # invalid group은 normalize 이전에 완전히 0으로 차단
+        slope = jnp.where(valid[..., None], slope, 0.0)                    # (G, T, D)
+
+        # ── NaN-safe normalize + invalid 방향 재차단 ──
+        d_dir = safe_l2_normalize(slope, axis=-1, eps=1e-6)               # (G, T, D)
+        d_dir = jnp.where(valid[..., None], d_dir, 0.0)                    # (G, T, D)
+
+        # task별 cross-game cosine: (G, G, T)
+        cos_mat = jnp.einsum('gtd,htd->ght', d_dir, d_dir)
+        pair_valid = valid[:, None, :] & valid[None, :, :]                 # (G, G, T)
+        tri = jnp.triu(jnp.ones((G, G), dtype=bool), k=1)                  # (G, G)
+        pair_valid = pair_valid & tri[:, :, None]
+
+        # NaN * 0 방지: multiply mask 대신 where 사용
+        pair_loss = jnp.where(pair_valid, 1.0 - cos_mat, 0.0)
+        total_pairs = pair_valid.astype(jnp.float32).sum()
+        delta_loss = pair_loss.sum() / jnp.maximum(total_pairs, 1.0)
+        return delta_loss, total_pairs
 
     def loss_fn(params):
         outputs = train_state.apply_fn(
@@ -359,11 +439,23 @@ def train_step(
             per_enum_mae_raw = per_enum_mae_raw.at[eidx].set(jnp.sum(abs_diff_raw * mask) / count)
             per_enum_count = per_enum_count.at[eidx].set(jnp.sum(mask))
 
+        # ── Continuous Task-wise Cross-game Direction Alignment ──
+        # 기본값은 delta_weight=0.0이어도 alignment metric을 모니터링한다.
+        # compute_delta_when_zero=False일 때만 baseline/eval의 불필요한 계산을 건너뛴다.
+        if delta_weight != 0.0 or compute_delta_when_zero:
+            delta_loss, delta_valid_pairs = continuous_direction_alignment(
+                text_embed, batch.game_id, reward_target, condition_target
+            )
+        else:
+            delta_loss = jnp.array(0.0, dtype=text_embed.dtype)
+            delta_valid_pairs = jnp.array(0.0, dtype=text_embed.dtype)
+
         # ── Total Loss ──
         total_loss = (
             contrastive_weight * contrastive_loss
             + cls_weight * cls_loss
             + reg_weight * reg_loss
+            + delta_weight * delta_loss
         )
 
         metrics = {
@@ -392,6 +484,10 @@ def train_step(
             "per_sample_cond_target_norm": condition_target,   # (B,) normalized [0,1] target
             "per_sample_cond_raw": per_sample_cond_raw,        # (B,) linear-scale pred
             "per_sample_cond_target_raw": target_raw,      # (B,) linear-scale target
+            # ── Continuous direction alignment ──
+            "continuous_delta_loss": delta_loss,                          # raw alignment loss (weight 미적용, 항상 모니터링)
+            "continuous_delta_loss_weighted": delta_weight * delta_loss,  # objective에 실제 반영된 값
+            "valid_direction_pair_count": delta_valid_pairs
         }
         if include_retrieval_ranks:
             metrics.update({
@@ -582,6 +678,7 @@ def evaluate_per_game(
     mode: str,
     norm_min_arr: jnp.ndarray = None,
     norm_max_arr: jnp.ndarray = None,
+    num_games: int = 1,
     sample_ids: Optional[np.ndarray] = None,
     epoch: Optional[int] = None,
     epoch_num: Optional[int] = None,
@@ -650,6 +747,11 @@ def evaluate_per_game(
         duplicate_matrix = np.equal.outer(class_ids, class_ids).astype(np.float32)
         reward_enum_target = test_ds.reward_enum_targets[indices]
         condition_target = test_ds.condition_targets[indices]
+        game_id = (
+            test_ds.game_ids[indices]
+            if test_ds.game_ids is not None
+            else np.zeros(len(indices), dtype=np.int32)
+        )
 
         batch = CLIPDecoderBatch(
             class_ids=class_ids,
@@ -659,6 +761,7 @@ def evaluate_per_game(
             duplicate_matrix=duplicate_matrix,
             reward_enum_target=reward_enum_target,
             condition_target=condition_target,
+            game_id=game_id,
         )
         batch = jax.device_put(batch)
 
@@ -676,6 +779,11 @@ def evaluate_per_game(
             include_retrieval_ranks=include_prediction_rows,
             norm_min_arr=norm_min_arr,
             norm_max_arr=norm_max_arr,
+            delta_weight=float(getattr(config, "delta_weight", 0.0)),
+            num_games=int(num_games),
+            delta_min_count=int(getattr(config, "delta_min_group_samples", 2)),
+            delta_var_eps=float(getattr(config, "delta_var_eps", 1e-4)),
+            compute_delta_when_zero=bool(getattr(config, "compute_delta_when_zero", True)),
         )
 
         preds = np.array(jax.device_get(metrics["reward_pred"]))
@@ -1059,6 +1167,7 @@ def train_and_evaluate_ratio(
     unseen_eval_ds: Optional[CLIPDataset] = None,
     unseen_eval_game_names: Optional[np.ndarray] = None,
     unseen_eval_sample_ids: Optional[np.ndarray] = None,
+    num_games: int = 1,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, Dict[str, np.ndarray]], Dict[int, float]]:
     """하나의 few-shot ratio에 대해 모델을 처음부터 학습하고 평가한다.
 
@@ -1199,6 +1308,9 @@ def train_and_evaluate_ratio(
         epoch_per_enum_reg_raw: np.ndarray = np.zeros(num_cls)
         epoch_per_enum_huber_raw: np.ndarray = np.zeros(num_cls)
         epoch_per_enum_cnt: np.ndarray = np.zeros(num_cls)
+        epoch_delta_loss = 0.0
+        epoch_delta_pair_count = 0.0
+        epoch_delta_loss_weighted = 0.0
         n_batches = 0
         epoch_reward_targets: List[int] = []
         epoch_reward_preds: List[int] = []
@@ -1231,6 +1343,11 @@ def train_and_evaluate_ratio(
                     regression_loss=config.regression_loss,
                     norm_min_arr=norm_min_arr,
                     norm_max_arr=norm_max_arr,
+                    delta_weight=float(getattr(config, "delta_weight", 0.0)),
+                    num_games=int(num_games),
+                    delta_min_count=int(getattr(config, "delta_min_group_samples", 2)),
+                    delta_var_eps=float(getattr(config, "delta_var_eps", 1e-4)),
+                    compute_delta_when_zero=bool(getattr(config, "compute_delta_when_zero", False)),
                 )
                 epoch_loss += float(loss)
                 epoch_acc += float(metrics["reward_accuracy"])
@@ -1249,6 +1366,9 @@ def train_and_evaluate_ratio(
                 epoch_per_enum_huber_raw += batch_per_enum_raw * batch_per_enum_cnt
                 epoch_per_enum_reg_raw += batch_per_enum_raw_mae * batch_per_enum_cnt
                 epoch_per_enum_cnt += batch_per_enum_cnt
+                epoch_delta_loss += float(metrics["continuous_delta_loss"])
+                epoch_delta_pair_count += float(metrics["valid_direction_pair_count"])
+                epoch_delta_loss_weighted += float(metrics["continuous_delta_loss_weighted"])
 
                 # ── Scatter / per-sample 집계 (실제 train 샘플만) ──
                 actual_size = min(config.batch_size, max(0, n_train - batch_idx * config.batch_size))
@@ -1297,6 +1417,9 @@ def train_and_evaluate_ratio(
             epoch_s2t_correct_pr /= n_batches
             epoch_t2s_correct_pr /= n_batches
             epoch_temperature /= n_batches
+            epoch_delta_loss /= n_batches
+            epoch_delta_pair_count /= n_batches
+            epoch_delta_loss_weighted /= n_batches
 
         # ── 에폭 단위 scatter + epoch 기반 train-set 지표 ──
         epoch_scatter_data = _build_scatter_data_from_arrays(
@@ -1365,6 +1488,9 @@ def train_and_evaluate_ratio(
                     "train(decoder)/cls_loss": epoch_cls_loss,
                     "train(decoder)/reg_loss": epoch_reg_loss_raw,
                     "train(decoder)/reg_loss_normalized": epoch_reg_loss,
+                    "train(direction)/continuous_delta_loss": epoch_delta_loss,
+                    "train(direction)/continuous_delta_loss_weighted": epoch_delta_loss_weighted,
+                    "train(direction)/valid_direction_pair_count": epoch_delta_pair_count,
                     **{
                         f"seen/regression/enum_{e}": selected_reg_per_enum[e]
                         for e in selected_reg_per_enum
@@ -1421,6 +1547,7 @@ def train_and_evaluate_ratio(
                 epoch=epoch,
                 epoch_num=epoch + 1,
                 include_prediction_rows=_do_unseen_prediction_export,
+                num_games=num_games,
             )
 
             if _do_unseen_eval and _unseen_per_enum_reg:
@@ -1877,6 +2004,27 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             json.dump(dataset_setting, f, indent=2, ensure_ascii=False)
         logger.info("Dataset setting saved: %s", dataset_setting_path)
 
+        # ── Encoder 학습 설정 JSON 저장 (pcgrl train/eval에서 참조용) ──
+        encoder_config = {
+            "delta_weight": config.delta_weight,
+            "delta_min_group_samples": config.delta_min_group_samples,
+            "delta_var_eps": config.delta_var_eps,
+            "compute_delta_when_zero": config.compute_delta_when_zero,
+            "batch_size": config.batch_size,
+            "lr": config.lr,
+            "weight_decay": config.weight_decay,
+            "n_epochs": config.n_epochs,
+            "train_ratio": config.train_ratio,
+            "unseen_ratio": config.unseen_ratio,
+            "seen_ratio": config.seen_ratio,
+            "exp_name": config.exp_name,
+            "seed": config.seed,
+        }
+        encoder_config_path = os.path.join(config.exp_dir, "encoder_config.json")
+        with open(encoder_config_path, "w") as f:
+            json.dump(encoder_config, f, indent=2, ensure_ascii=False)
+        logger.info("Encoder config saved: %s", encoder_config_path)
+
         if not unseen_games:
             logger.warning("No unseen games found in dataset — treating all games as seen.")
             unseen_game_set = set()
@@ -1969,6 +2117,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             ratio=ratio,
             unseen_eval_ds=unseen_eval_ds,
             unseen_eval_game_names=unseen_eval_game_names_arr,
+            num_games=len(unique_games),
             unseen_eval_sample_ids=_unseen_eval_indices,
         )
 

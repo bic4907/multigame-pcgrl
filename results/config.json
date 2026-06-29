@@ -19,6 +19,17 @@
       "re_baseline_label":          "CPCGRL",
       "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
     },
+    "cpcgrl_quantbin0623": {
+      "target_projects": [
+        "aaai27_eval_cpcgrl",
+        "eval_cpcgrl_quantbin0623"
+      ],
+      "re_oracle_project":          "aaai27_eval_cpcgrl",
+      "re_oracle_label":            "CPCGRL (Oracle)",
+      "re_baseline_project":        "aaai27_eval_cpcgrl",
+      "re_baseline_label":          "CPCGRL",
+      "re_exclude_from_compare":    ["aaai27_eval_cpcgrl"]
+    },
     "fewshot": {
       "target_projects": [
         "aaai27_eval_pretrained_clip",
@@ -28,6 +39,32 @@
         "aaai27_eval_mgpcgrl_unseen",
         "aaai27_eval_mgpcgrl_fewshot"
       ],
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "fewshot_delta_alignment": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_fewshot",
+        "eval_mgpcgrl_fewshot_direction0626",
+        "eval_mgpcgrl_fewshot__deltaalignment_fs0627"
+      ],
+      "project_display_names": {
+        "aaai27_eval_mgpcgrl_fewshot": "MGPCGRL",
+        "eval_mgpcgrl_fewshot_direction0626": "MGPCGRL (0626)",
+        "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "MGPCGRL (0627)"
+      },
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "directional_fewshot": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_fewshot",
+        "eval_mgpcgrl_fewshot_direction0625"
+      ],
+      "project_display_names": {
+        "aaai27_eval_mgpcgrl_fewshot": "MGPCGRL",
+        "eval_mgpcgrl_fewshot_direction0625": "MGPCGRL Direction"
+      },
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
     },
@@ -47,11 +84,23 @@
       "progress_baseline_project": "none",
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "encoder_delta_weight_progress": {
+      "target_projects": [
+        "eval_mgpcgrl_direction0623",
+        "aaai27_eval_cpcgrl"
+      ],
+      "project_display_names": {
+        "eval_mgpcgrl_direction0623": "MGPCGRL Direction"
+      },
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
     }
   },
   "project_display_names": {
     "aaai27_eval_finetuned_clip_unseen": "CLIP (unseen)",
     "aaai27_eval_cpcgrl":        "CPCGRL",
+    "eval_cpcgrl_quantbin0623":  "CPCGRL (QuantBin)",
     "aaai27_eval_vipcgrl_nosim": "VIPCGRL (nosim)",
     "aaai27_eval_mgpcgrl":       "MGPCGRL",
     "aaai27_eval_ipcgrl":        "IPCGRL",
@@ -67,13 +116,18 @@
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
     "aaai27_eval_vipcgrl_fewshot":            "VIPCGRL (fewshot)",
     "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (fewshot)",
+    "eval_mgpcgrl_fewshot_direction0625":     "MGPCGRL Direction (fewshot)",
+    "eval_mgpcgrl_fewshot_direction0626":     "MGPCGRL Direction (fewshot)",
+    "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "MGPCGRL Delta Alignment (fewshot)",
     "aaai27_eval_mgpcgrl_prefix_none":        "MGPCGRL (prefix=none)",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "MGPCGRL (prefix=desc)",
-    "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)"
+    "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)",
+    "eval_mgpcgrl_direction0623":             "MGPCGRL Direction"
   },
   "project_colors": {
     "aaai27_eval_random":         "#aaaaaa",
     "aaai27_eval_cpcgrl":         "#e66101",
+    "eval_cpcgrl_quantbin0623":   "#fdb863",
     "aaai27_eval_ipcgrl":         "#1a9641",
     "aaai27_eval_vipcgrl":        "#7b3294",
     "aaai27_eval_vipcgrl_nosim":  "#c2a5cf",
@@ -89,9 +143,13 @@
     "aaai27_eval_ipcgrl_fewshot":             "#1a9641",
     "aaai27_eval_vipcgrl_fewshot":            "#7b3294",
     "aaai27_eval_mgpcgrl_fewshot":            "#2166ac",
+    "eval_mgpcgrl_fewshot_direction0625":     "#4393c3",
+    "eval_mgpcgrl_fewshot_direction0626":     "#4393c3",
+    "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "#92c5de",
     "aaai27_eval_mgpcgrl_prefix_none":        "#b2182b",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "#4393c3",
-    "aaai27_eval_mgpcgrl_fewshot_mix":        "#92c5de"
+    "aaai27_eval_mgpcgrl_fewshot_mix":        "#92c5de",
+    "eval_mgpcgrl_direction0623":             "#2166ac"
   },
   "games": {
     "colors": {

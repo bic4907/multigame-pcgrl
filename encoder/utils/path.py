@@ -63,6 +63,13 @@ def get_exp_group(config):
         config_dict.update({
             'exp': config.exp_name,
         })
+        
+        # delta_weight suffix (if non-zero)
+        delta_w = getattr(config, 'delta_weight', 0.0)
+        if delta_w != 0.0:
+            dw_str = f"{delta_w:g}".replace('.', 'p')
+            config_dict['dw'] = dw_str
+            
     elif config.encoder.model == 'mlp':
         config_dict = {
             'game': getattr(config, 'game', 'dg'),

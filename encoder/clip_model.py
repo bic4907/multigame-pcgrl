@@ -287,7 +287,7 @@ class ContrastiveDecoderModule(nn.Module):
     """ContrastiveModule + RewardDecoder.
 
     기존 contrastive 학습에 디코더 브랜치를 추가하여
-    embedding 으로부터 reward_enum과 condition을 예측한다.
+    text embedding 으로부터 reward_enum과 condition을 예측한다.
 
     reward_enum_onehot_dim > 0 이면, pixel_values에 reward_enum의
     one-hot 인코딩을 공간 차원으로 broadcast하여 채널 concat한다.
@@ -360,10 +360,10 @@ class ContrastiveDecoderModule(nn.Module):
 
         output_dict['text_state_temperature'] = self.text_state_temperature
 
-        # ── 디코더: state embedding 으로부터 reward_enum & condition 예측 ──
-        if "state" in modes:
+        # ── 디코더: text embedding 으로부터 reward_enum & condition 예측 ──
+        if "text" in modes:
             reward_logits, condition_pred, condition_pred_raw = self.decoder(
-                output_dict["state_embed"], training=training
+                output_dict["text_embed"], training=training
             )
             output_dict["reward_logits"] = reward_logits
             output_dict["condition_pred"] = condition_pred              # [0,1] 정규화 (loss용)

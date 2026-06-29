@@ -210,7 +210,7 @@ def build_train_indices_for_ratio(
 #  Train Step (JIT) — reward_pred 추가
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16))
+@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17))
 def train_step(
     train_state: TrainState,
     batch: CLIPDecoderBatch,
@@ -1272,6 +1272,7 @@ def train_and_evaluate_ratio(
             "seen_ratio": float(getattr(config, "seen_ratio", 1.0)),
             "unseen_ratio": float(ratio),
             "eval_unseen_ratio": float(getattr(config, "eval_unseen_ratio", 1.0)),
+            "delta_weight": float(getattr(config, "delta_weight", 0.0)),
             "split_seed": int(getattr(config, "split_seed", 0)),
             "seed": int(getattr(config, "seed", 0)),
         }

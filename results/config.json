@@ -17,7 +17,8 @@
       "re_oracle_label":            "CPCGRL (Oracle)",
       "re_baseline_project":        "aaai27_eval_cpcgrl",
       "re_baseline_label":          "CPCGRL",
-      "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
+      "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"],
+      "benchmark_metrics":          ["progress"]
     },
     "cpcgrl_quantbin0623": {
       "target_projects": [
@@ -51,10 +52,28 @@
       "project_display_names": {
         "aaai27_eval_mgpcgrl_fewshot": "MGPCGRL",
         "eval_mgpcgrl_fewshot_direction0626": "MGPCGRL (0626)",
-        "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "MGPCGRL (0627)"
+        "eval_mgpcgrl_fewshot_direction0627": "MGPCGRL (0627)"
       },
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "fullshot_delta_alignment": {
+      "target_projects": [
+        "aaai27_eval_cpcgrl",
+        "aaai27_eval_mgpcgrl_fullshot",
+        "eval_mgpcgrl_fullshot_direction0626",
+        "eval_mgpcgrl_fullshot_direction0627"
+      ],
+      "project_display_names": {
+        "aaai27_eval_mgpcgrl_fullshot": "MGPCGRL",
+        "eval_mgpcgrl_fullshot_direction0626": "MGPCGRL (0626)",
+        "eval_mgpcgrl_fullshot_direction0627": "MGPCGRL (0627)"
+      },
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)",
+      "re_baseline_project": "aaai27_eval_cpcgrl",
+      "re_baseline_label": "CPCGRL",
+      "benchmark_metrics": ["progress"]
     },
     "directional_fewshot": {
       "target_projects": [
@@ -115,10 +134,14 @@
     "aaai27_eval_mgpcgrl_unseen_ratios_2_GT": "MGPCGRL (GT)",
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
     "aaai27_eval_vipcgrl_fewshot":            "VIPCGRL (fewshot)",
-    "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (fewshot)",
-    "eval_mgpcgrl_fewshot_direction0625":     "MGPCGRL Direction (fewshot)",
-    "eval_mgpcgrl_fewshot_direction0626":     "MGPCGRL Direction (fewshot)",
+    "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL",
+    "eval_mgpcgrl_fewshot_direction0625":     "MGPCGRL (0625)",
+    "eval_mgpcgrl_fewshot_direction0626":     "MGPCGRL (0626)",
+    "eval_mgpcgrl_fewshot_direction0627":     "MGPCGRL (0627)",
     "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "MGPCGRL Delta Alignment (fewshot)",
+    "aaai27_eval_mgpcgrl_fullshot":           "MGPCGRL",
+    "eval_mgpcgrl_fullshot_direction0626":    "MGPCGRL (0626)",
+    "eval_mgpcgrl_fullshot_direction0627":    "MGPCGRL (0627)",
     "aaai27_eval_mgpcgrl_prefix_none":        "MGPCGRL (prefix=none)",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "MGPCGRL (prefix=desc)",
     "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)",
@@ -145,7 +168,11 @@
     "aaai27_eval_mgpcgrl_fewshot":            "#2166ac",
     "eval_mgpcgrl_fewshot_direction0625":     "#4393c3",
     "eval_mgpcgrl_fewshot_direction0626":     "#4393c3",
+    "eval_mgpcgrl_fewshot_direction0627":     "#92c5de",
     "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "#92c5de",
+    "aaai27_eval_mgpcgrl_fullshot":           "#2166ac",
+    "eval_mgpcgrl_fullshot_direction0626":    "#4393c3",
+    "eval_mgpcgrl_fullshot_direction0627":    "#92c5de",
     "aaai27_eval_mgpcgrl_prefix_none":        "#b2182b",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "#4393c3",
     "aaai27_eval_mgpcgrl_fewshot_mix":        "#92c5de",

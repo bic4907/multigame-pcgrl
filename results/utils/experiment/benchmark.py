@@ -528,7 +528,7 @@ def write_overall_simple_plot(output_path: Path, plot_rows: list[dict],
     n_metrics = len(metric_order)
     if not n_metrics:
         return
-    fig, axes = plt.subplots(1, n_metrics, figsize=(3.8 * n_metrics, 3.0), squeeze=False)
+    fig, axes = plt.subplots(1, n_metrics, figsize=(4.1 * n_metrics, 3.0), squeeze=False)
     x_center  = list(range(len(rewards)))
 
     for ci, metric in enumerate(metric_order):
@@ -633,7 +633,7 @@ def write_re_overall_plot(
         return
 
     fig, axes = plt.subplots(
-        1, n_metrics, figsize=(1.6 * n_metrics + 0.4, 2.2), squeeze=False
+        1, n_metrics, figsize=(1.9 * n_metrics + 0.5, 2.2), squeeze=False
     )
 
     bar_total_span = 0.7
@@ -877,7 +877,9 @@ def main() -> None:
         log.error(msg)
         raise SystemExit(msg)
 
-    metric_order = resolve_metric_order(args.metrics, discovered_metrics)
+    exp_cfg = _CFG.get("experiments", {}).get(args.experiment or "", {})
+    selected_metrics = args.metrics or exp_cfg.get("benchmark_metrics")
+    metric_order = resolve_metric_order(selected_metrics, discovered_metrics)
     grouped_rows = aggregate(rows=rows, metric_order=metric_order)
 
     write_markdown_table(output_md,  grouped_rows, metric_order, args.group_by, args.decimals)
@@ -913,16 +915,15 @@ def main() -> None:
         if not args.no_plot:
             try:
                 # re.png: experiment의 re_baseline_project 를 기준선으로
-                exp_cfg       = _CFG.get("experiments", {}).get(args.experiment or "", {})
                 re_baseline   = exp_cfg.get("re_baseline_project")
                 re_bl_label   = exp_cfg.get("re_baseline_label")
                 write_overall_simple_plot(
-                    run_dir / "re.png", norm_rows, DEFAULT_METRIC_ORDER.copy(),
+                    run_dir / "re.png", norm_rows, metric_order,
                     baseline_project=re_baseline,
                     baseline_label=re_bl_label,
                 )
                 write_re_overall_plot(
-                    run_dir / "re_overall.png", norm_rows, DEFAULT_METRIC_ORDER.copy(),
+                    run_dir / "re_overall.png", norm_rows, metric_order,
                     baseline_project=re_baseline,
                     baseline_label=re_bl_label,
                 )

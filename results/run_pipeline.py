@@ -151,6 +151,7 @@ def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
 examples:
   python results/run_pipeline.py                       # run all steps (1-6)
   python results/run_pipeline.py --experiment fullshot
+  python results/run_pipeline.py --experiment fullshot fullshot_delta_alignment
   python results/run_pipeline.py --experiment zeroshot
   python results/run_pipeline.py --experiment fewshot
   python results/run_pipeline.py --exclude-experiments fewshot seen_ratio_progress
@@ -172,8 +173,9 @@ available experiments: {_exp_hint}
     )
     parser.add_argument(
         "--experiment",
+        nargs="+",
         choices=_exp_names if _exp_names else None,
-        default=default_experiment,
+        default=[default_experiment] if default_experiment else None,
         metavar="EXPERIMENT",
         help=(
             f"Experiment group to run (choices: {_exp_hint}). "
@@ -383,10 +385,10 @@ def main(default_experiment: str | None = None) -> None:
     base_extra = [a for a in (args.extra_args or []) if a != "--"]
 
     # 실행할 experiment 목록 결정
-    # --experiment 지정 시 해당 하나만, 미지정 시 config의 모든 experiment 순서대로
+    # --experiment 지정 시 지정된 목록만, 미지정 시 config의 모든 experiment 순서대로
     all_exp_names = _get_experiment_names()
     if args.experiment:
-        experiments_to_run = [args.experiment]
+        experiments_to_run = list(args.experiment)
     elif all_exp_names:
         exclude_set = set(args.exclude_experiments or [])
         experiments_to_run = [e for e in all_exp_names if e not in exclude_set]

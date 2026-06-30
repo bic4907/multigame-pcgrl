@@ -1293,6 +1293,89 @@ def train_and_evaluate_ratio(
         for cid, rc in zip(train_class_ids, train_ds.reward_cond)
     }
 
+    def _run_unseen_eval(
+        *,
+        epoch_value: int,
+        do_eval: bool,
+        do_scatter: bool,
+        do_prediction_export: bool,
+    ) -> None:
+        nonlocal rng_key
+
+        need_unseen_eval = (
+            (wandb.run is not None and do_eval)
+            or (wandb.run is not None and do_scatter)
+            or do_prediction_export
+        )
+        if unseen_test_ds is None or not need_unseen_eval:
+            return
+
+        rng_key, eval_key = jax.random.split(rng_key)
+        _, _, _, unseen_scatter_data, unseen_per_enum_reg, unseen_prediction_rows = evaluate_per_game(
+            train_state,
+            unseen_test_ds,
+            unseen_test_game_names_arr,
+            unseen_game_names,
+            config,
+            eval_key,
+            num_cls,
+            mode,
+            norm_min_arr,
+            norm_max_arr,
+            sample_ids=unseen_test_sample_ids,
+            epoch=epoch_value,
+            epoch_num=epoch_value,
+            include_prediction_rows=do_prediction_export,
+            num_games=num_games,
+        )
+
+        if do_eval and unseen_per_enum_reg:
+            unseen_overall_reg = float(np.mean(list(unseen_per_enum_reg.values())))
+            if wandb.run is not None:
+                wandb.log({
+                    **{f"unseen/regression/enum_{e}": v for e, v in unseen_per_enum_reg.items()},
+                    "unseen/regression/overall": unseen_overall_reg,
+                    "total/epoch": epoch_value,
+                })
+
+        if do_prediction_export:
+            assert unseen_prediction_csv_path is not None
+            unseen_prediction_rows = _add_prediction_context(
+                unseen_prediction_rows,
+                prediction_context,
+            )
+            _write_prediction_rows_csv(
+                unseen_prediction_rows,
+                unseen_prediction_csv_path,
+                append=True,
+            )
+
+        if wandb.run is not None and do_scatter and unseen_scatter_data:
+            unseen_scatter_paths = create_regression_scatter_plots_per_enum(
+                unseen_scatter_data,
+                out_dir=getattr(config, "exp_dir", "."),
+                max_points=max_pts,
+                seed=getattr(config, "seed", 0),
+                space="raw",
+            )
+            unseen_imgs: Dict[str, object] = {}
+            for e, path in unseen_scatter_paths.items():
+                unseen_imgs[f"unseen/regression_scatter/enum_{int(e)}"] = wandb.Image(path)
+            if unseen_imgs:
+                unseen_imgs["total/epoch"] = epoch_value
+                wandb.log(unseen_imgs)
+                logger.info("  Unseen scatter plot uploaded to wandb (epoch %d)", epoch_value)
+
+    # ── W&B Unseen baseline 평가 (학습 전, epoch 0) ──
+    _unseen_eval_freq: int = int(getattr(config, "unseen_eval_freq", 100))
+    _unseen_scatter_freq: int = int(getattr(config, "unseen_scatter_freq", 500))
+    _run_unseen_eval(
+        epoch_value=0,
+        do_eval=_unseen_eval_freq > 0,
+        do_scatter=_unseen_scatter_freq > 0,
+        do_prediction_export=export_unseen_predictions and _unseen_eval_freq > 0,
+    )
+
     for epoch in range(config.n_epochs):
         rng_key, subkey = jax.random.split(rng_key)
         epoch_loss = 0.0
@@ -1525,67 +1608,12 @@ def train_and_evaluate_ratio(
         _do_unseen_eval = _unseen_eval_freq > 0 and (epoch + 1) % _unseen_eval_freq == 0
         _do_unseen_scatter = _unseen_scatter_freq > 0 and (epoch + 1) % _unseen_scatter_freq == 0
         _do_unseen_prediction_export = export_unseen_predictions and _do_unseen_eval
-
-        _need_unseen_eval = (
-            (wandb.run is not None and _do_unseen_eval)
-            or (wandb.run is not None and _do_unseen_scatter)
-            or _do_unseen_prediction_export
+        _run_unseen_eval(
+            epoch_value=epoch + 1,
+            do_eval=_do_unseen_eval,
+            do_scatter=_do_unseen_scatter,
+            do_prediction_export=_do_unseen_prediction_export,
         )
-        if unseen_test_ds is not None and _need_unseen_eval:
-            rng_key, _eval_key = jax.random.split(rng_key)
-            _, _, _, _unseen_scatter_data, _unseen_per_enum_reg, _unseen_prediction_rows = evaluate_per_game(
-                train_state,
-                unseen_test_ds,
-                unseen_test_game_names_arr,
-                unseen_game_names,
-                config,
-                _eval_key,
-                num_cls,
-                mode,
-                norm_min_arr,
-                norm_max_arr,
-                sample_ids=unseen_test_sample_ids,
-                epoch=epoch,
-                epoch_num=epoch + 1,
-                include_prediction_rows=_do_unseen_prediction_export,
-                num_games=num_games,
-            )
-
-            if _do_unseen_eval and _unseen_per_enum_reg:
-                _unseen_overall_reg = float(np.mean(list(_unseen_per_enum_reg.values())))
-                if wandb.run is not None:
-                    wandb.log({
-                        **{f"unseen/regression/enum_{_e}": _v for _e, _v in _unseen_per_enum_reg.items()},
-                        "unseen/regression/overall": _unseen_overall_reg,
-                    })
-
-            if _do_unseen_prediction_export:
-                assert unseen_prediction_csv_path is not None
-                _unseen_prediction_rows = _add_prediction_context(
-                    _unseen_prediction_rows,
-                    prediction_context,
-                )
-                _write_prediction_rows_csv(
-                    _unseen_prediction_rows,
-                    unseen_prediction_csv_path,
-                    append=True,
-                )
-
-            if wandb.run is not None and _do_unseen_scatter and _unseen_scatter_data:
-                _unseen_scatter_paths = create_regression_scatter_plots_per_enum(
-                    _unseen_scatter_data,
-                    out_dir=getattr(config, "exp_dir", "."),
-                    max_points=max_pts,
-                    seed=getattr(config, "seed", 0),
-                    space="raw",
-                )
-                _unseen_imgs: Dict[str, object] = {}
-                for _e, _path in _unseen_scatter_paths.items():
-                    _unseen_imgs[f"unseen/regression_scatter/enum_{int(_e)}"] = wandb.Image(_path)
-                if _unseen_imgs:
-                    _unseen_imgs["total/epoch"] = epoch
-                    wandb.log(_unseen_imgs)
-                    logger.info("  Unseen scatter plot uploaded to wandb (epoch %d)", epoch + 1)
 
         # ── Checkpoint 저장 ──
         if hasattr(config, 'ckpt_freq') and config.ckpt_freq > 0:

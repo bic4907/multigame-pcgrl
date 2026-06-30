@@ -36,6 +36,8 @@ Step numbers:
     12 encoder_delta_weight_progress
                                 encoder_delta_weight 변화에 따른 progress ablation plot
                                 (encoder_delta_weight_progress 전용; 다른 실험에서는 생략)
+    13 decoder_performance      decoder_prediction_csv artifact + delta loss history 기반
+                                decoder 성능 plot
 
 NOTE: step 5 (seen_unseen_report), 7 (unseen_count_progress), 8 (game_impact_analysis)
       스크립트 파일은 results/utils/experiment/ 아래에 보존되어 있으나
@@ -121,6 +123,12 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/encoder_delta_weight_progress.py",
         "description": "encoder_delta_weight 변화에 따른 progress ablation plot (전용)",
     },
+    {
+        "id": 13,
+        "name": "decoder_performance",
+        "script": _HERE / "utils/experiment/decoder_performance.py",
+        "description": "decoder_prediction_csv artifact + delta loss history 기반 decoder performance plot (전용)",
+    },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
@@ -135,10 +143,11 @@ _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
     "condition_shift_analysis":  {3, 4, 6, 9, 11},  # condition_shift_analysis 전용 — step 10만 실행
     "unseen_ratio_ngames":       {3, 9, 10},         # benchmark / seen_ratio_progress / condition_shift 생략
     "encoder_delta_weight_progress": {2, 3, 9, 10, 11},  # downloader + step 12만 실행
-    None:                        {9, 10, 11, 12},    # experiment 미지정 시 생략
+    "decoder_performance":       {1, 2, 3, 9, 10, 11, 12},  # step 13만 실행
+    None:                        {9, 10, 11, 12, 13},    # experiment 미지정 시 생략
 }
 # fullshot 등 전용 실험이 아닌 일반 실험: 9, 10, 11, 12 생략
-_DEFAULT_SKIP: set[int] = {9, 10, 11, 12}
+_DEFAULT_SKIP: set[int] = {9, 10, 11, 12, 13}
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:

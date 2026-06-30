@@ -95,6 +95,14 @@
       },
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "decoder_performance": {
+      "target_projects": [
+        "aaai27_encoder_mgpcgrl__decoderperformance"
+      ],
+      "project_display_names": {
+        "aaai27_encoder_mgpcgrl__decoderperformance": "MGPCGRL Decoder Performance"
+      }
     }
   },
   "project_display_names": {
@@ -122,7 +130,8 @@
     "aaai27_eval_mgpcgrl_prefix_none":        "MGPCGRL (prefix=none)",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "MGPCGRL (prefix=desc)",
     "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)",
-    "eval_mgpcgrl_direction0623":             "MGPCGRL Direction"
+    "eval_mgpcgrl_direction0623":             "MGPCGRL Direction",
+    "aaai27_encoder_mgpcgrl__decoderperformance": "MGPCGRL Decoder Performance"
   },
   "project_colors": {
     "aaai27_eval_random":         "#aaaaaa",
@@ -149,7 +158,8 @@
     "aaai27_eval_mgpcgrl_prefix_none":        "#b2182b",
     "aaai27_eval_mgpcgrl_fewshot_desc":       "#4393c3",
     "aaai27_eval_mgpcgrl_fewshot_mix":        "#92c5de",
-    "eval_mgpcgrl_direction0623":             "#2166ac"
+    "eval_mgpcgrl_direction0623":             "#2166ac",
+    "aaai27_encoder_mgpcgrl__decoderperformance": "#2166ac"
   },
   "games": {
     "colors": {

@@ -1,0 +1,36 @@
+# conf/train_mipcgrl_encoder_mg.yaml
+# MIPCGRL MLP 인코더 멀티게임 사전학습 설정
+#
+# IPCGRL 와의 차이: encoder latent z 로부터 task(reward_enum) 분류 head 를 추가 학습.
+#   Loss = MSE(condition) + classifier_weight * CrossEntropy(reward_enum)
+#
+# Usage:
+#   python train_mipcgrl_encoder_mg.py game=all
+#   python train_mipcgrl_encoder_mg.py game=all unseen_games=zd
+#   python train_mipcgrl_encoder_mg.py game=all classifier_weight=0.5 n_epochs=200
+
+defaults:
+  - train_mipcgrl_encoder_mg_schema
+  - _self_
+
+
+# ── MLP 인코더 설정 ──
+encoder:
+  model: mlp
+  num_layers: 2
+  hidden_dim: 256
+  output_dim: 64
+  dropout_rate: 0.0
+  token_max_len: 77
+
+# ── MLP 디코더 (condition value 회귀) ──
+decoder:
+  hidden_dim: 128
+  num_layers: 2
+  output_dim: 1
+
+# ── Classifier (task = reward_enum) ──
+classifier_weight: 1.0
+classifier_num_layers: 2
+classifier_hidden_dim: 128
+classifier_dropout_rate: 0.0

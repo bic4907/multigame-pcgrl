@@ -292,6 +292,12 @@ class IPCGRLConfig(CPCGRLConfig):
     model: str = "nlpconv"
     nlp_input_dim: int = 768
 
+    # ── Task variant marker ──
+    # IPCGRL/MIPCGRL 모두 use_nlp=True, encoder=mlp 라 RL 측 path_utils 에서
+    # 동일 분기를 타게 된다. 두 baseline 의 exp_dir / wandb name 을 분리하기 위해
+    # 이 플래그를 사용한다. (MIPCGRLConfig 에서 True 로 override)
+    is_mipcgrl: bool = False
+
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
     wandb_project: Optional[str] = f'{PREFIX}train_ipcgrl'
@@ -691,6 +697,16 @@ class IPCGRLEvalConfig(CPCGRLEvalConfig):
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
+    # ── MIPCGRL variant 구분자 (IPCGRLConfig 와 동일 시맨틱) ──
+    is_mipcgrl: bool = False
+
+
+@dataclass
+class MIPCGRLEvalConfig(IPCGRLEvalConfig):
+    """MIPCGRL 평가용 Config — IPCGRLEvalConfig 와 동일 구조, is_mipcgrl=True."""
+    wandb_project: Optional[str] = f"{PREFIX}eval_mipcgrl"
+    is_mipcgrl: bool = True
+
 
 @dataclass
 class CollectBufferConfig(CPCGRLConfig):
@@ -1056,11 +1072,44 @@ class IPCGRLEncoderMGConfig(RewardConfig):
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
 
+@dataclass
+class MIPCGRLConfig(IPCGRLConfig):
+    wandb_project: Optional[str] = f"{PREFIX}train_mipcgrl"
+    is_mipcgrl: bool = True
+
+
+@dataclass
+class MIPCGRLEncoderMGConfig(IPCGRLEncoderMGConfig):
+    """MIPCGRL MLP 인코더 멀티게임 사전학습 Config.
+
+    IPCGRL 인코더(condition value 회귀만 수행)에 더해, 동일 latent z 로부터
+    task(reward_enum) 분류 head 를 추가로 학습한다.
+        Loss = MSE(condition) + classifier_weight * CrossEntropy(reward_enum)
+
+    Usage:
+        python train_mipcgrl_encoder_mg.py game=all
+        python train_mipcgrl_encoder_mg.py game=all unseen_games=zd classifier_weight=0.5
+    """
+    wandb_project: Optional[str] = f"{PREFIX}train_mipcgrl_encoder"
+    dir_prefix: str = "mipcgrl-enc-mg-"
+
+    # ── Classifier 설정 ──
+    # task(reward_enum) 분류 head 의 손실 가중치. 0 이면 IPCGRL 과 동일.
+    classifier_weight: float = 1.0
+    # classifier MLP hidden / layer 수 (output_size 는 num_classes 로 자동 결정)
+    classifier_num_layers: int = 2
+    classifier_hidden_dim: int = 128
+    classifier_dropout_rate: float = 0.0
+    # 분류 클래스 수. None 이면 데이터셋의 고유 reward_enum 개수로 자동 설정.
+    num_classes: Optional[int] = None
+
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="ipcgrl", node=IPCGRLConfig)
+cs.store(name="mipcgrl", node=MIPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
 cs.store(name="mgpcgrl", node=MGPCGRLConfig)
 cs.store(name="pretrained_clip_pcgrl", node=PretrainedCLIPPCGRLConfig)
@@ -1069,6 +1118,7 @@ cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="eval_random_schema", node=RandomEvalConfig)
 cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
 cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
+cs.store(name="eval_mipcgrl_schema", node=MIPCGRLEvalConfig)
 cs.store(name="eval_vipcgrl_schema", node=VIPCGRLEvalConfig)
 cs.store(name="eval_mgpcgrl_schema", node=MGPCGRLEvalConfig)
 cs.store(name="eval_pretrained_clip_schema", node=PretrainedCLIPEvalConfig)
@@ -1088,3 +1138,4 @@ cs.store(name="eval_bert", node=BertEvalConfig)
 
 cs.store(name="train_reward", node=RewardTrainConfig)
 cs.store(name="train_ipcgrl_encoder_mg_schema", node=IPCGRLEncoderMGConfig)
+cs.store(name="train_mipcgrl_encoder_mg_schema", node=MIPCGRLEncoderMGConfig)

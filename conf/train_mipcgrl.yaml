@@ -1,0 +1,11 @@
+defaults:
+  - mipcgrl
+  - _self_
+
+render_freq: -1
+saves_dir: saves
+init_ckpt_path: null
+
+hydra:
+  sweeper:
+    params: {}

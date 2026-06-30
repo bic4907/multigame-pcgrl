@@ -37,6 +37,11 @@
       ],
       "pipeline_skip_steps": [3, 9, 10, 11, 12]
     },
+    "ur": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_ur"
+      ]
+    },
     "domain_condition": {
       "target_projects": [
         "aaai27_eval_mgpcgrl_prefix_none",

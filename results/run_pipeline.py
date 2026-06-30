@@ -112,6 +112,12 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/seen_count_progress.py",
         "description": "unseen 게임 개수별 progress bar chart — all.png / unseen.png / seen.png 출력 (zeroshot 전용)",
     },
+    {
+        "id": 13,
+        "name": "unseen_ratio_ngames_progress",
+        "script": _HERE / "utils/experiment/unseen_ratio_ngames_progress.py",
+        "description": "unseen_ratio × n_unseen 교차 꺾은선 그래프 (ur 실험 전용)",
+    },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
@@ -123,10 +129,11 @@ _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
     "seen_ratio_progress":       {3, 4, 10, 11},    # seen_ratio_progress 전용 — step 9만 실행
     "condition_shift_analysis":  {3, 4, 6, 9, 11},  # condition_shift_analysis 전용 — step 10만 실행
     "unseen_ratio_ngames":       {3, 9, 10},         # benchmark / seen_ratio_progress / condition_shift 생략
-    None:                        {9, 10, 11},        # experiment 미지정 시 생략
+    "ur":                        {3, 9, 10, 11, 12}, # step 1(다운로드) + 2(집계) + 13(ur 꺾은선)만 실행
+    None:                        {9, 10, 11, 13},    # experiment 미지정 시 생략
 }
-# fullshot 등 zeroshot / fewshot / seen_ratio_progress / condition_shift_analysis 아닌 실험: 9, 10, 11 생략
-_DEFAULT_SKIP: set[int] = {9, 10, 11}
+# fullshot 등 일반 실험: 9, 10, 11, 13 생략
+_DEFAULT_SKIP: set[int] = {9, 10, 11, 13}
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:

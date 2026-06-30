@@ -390,8 +390,9 @@ class CLIPDatasetBuilder:
                 "reward_enum": rc[1],
                 "condition_value": rc[2],
                 "quantized_bin": q_bin,
+                "source_id": s.source_id,
             }
-            for rc, q_bin in zip(reward_cond_list, quantized_cond_list)
+            for rc, q_bin, s in zip(reward_cond_list, quantized_cond_list, samples)
         ], dtype=object)
 
         # Language instruction tokenization

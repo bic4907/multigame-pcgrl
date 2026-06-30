@@ -248,7 +248,9 @@ def _apply_few_shot_adapter(
         if s.game not in reward_seen_games:
             unseen_game_indices[s.game].append(i)
 
-    _ds_path = os.path.join(_ckpt_dir, _ckpt_name, "dataset_setting.json")
+    _adapter_ds = os.path.join(_adapter_dir, "dataset_setting.json")
+    _base_ds    = os.path.join(_ckpt_dir, _ckpt_name, "dataset_setting.json")
+    _ds_path = _adapter_ds if os.path.exists(_adapter_ds) else _base_ds
     _unseen_support_ids: dict = {}
     if os.path.exists(_ds_path):
         with open(_ds_path) as _f:
@@ -404,7 +406,12 @@ def _build_reward_and_condition(
 
                 _ckpt_dir_rc  = getattr(getattr(config, "encoder", None), "ckpt_dir",  None) or ""
                 _ckpt_name_rc = getattr(getattr(config, "encoder", None), "ckpt_name", None) or ""
-                _ds_path_rc   = os.path.join(_ckpt_dir_rc, _ckpt_name_rc, "dataset_setting.json")
+                _at_rc = getattr(getattr(config, "decoder", None), "adapter_type", None)
+                if _at_rc and str(_at_rc).lower() not in ("none", "null"):
+                    _adp_ds_rc = os.path.join(_ckpt_dir_rc, f"{_ckpt_name_rc}_adp-{_at_rc}", "dataset_setting.json")
+                    _ds_path_rc = _adp_ds_rc if os.path.exists(_adp_ds_rc) else os.path.join(_ckpt_dir_rc, _ckpt_name_rc, "dataset_setting.json")
+                else:
+                    _ds_path_rc = os.path.join(_ckpt_dir_rc, _ckpt_name_rc, "dataset_setting.json")
                 _support_ids_rc: dict = {}
                 if os.path.exists(_ds_path_rc):
                     with open(_ds_path_rc) as _f2:

@@ -46,7 +46,7 @@
       "target_projects": [
         "aaai27_eval_mgpcgrl_fewshot",
         "eval_mgpcgrl_fewshot_direction0626",
-        "eval_mgpcgrl_fewshot__deltaalignment_fs0627"
+        "eval_mgpcgrl_fewshot_direction0627"
       ],
       "project_display_names": {
         "aaai27_eval_mgpcgrl_fewshot": "MGPCGRL",

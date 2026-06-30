@@ -1344,8 +1344,161 @@ def train_and_evaluate_ratio(
     scatter_data = epoch_scatter_data
     per_enum_reg_loss = epoch_per_enum_reg_loss
 
-    return per_game_acc, per_game_reg, per_game_enum_diff, scatter_data, per_enum_reg_loss
+    return per_game_acc, per_game_reg, per_game_enum_diff, scatter_data, per_enum_reg_loss, train_state
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Post-encoder Adapter Training
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _post_train_adapter(config, train_state, full_dataset, unseen_game_set, train_indices):
+    """encoder 학습 완료 후 decoder.adapter_type이 설정된 경우 adapter를 연속 학습한다.
+
+    support = encoder가 실제 학습한 unseen 샘플 (train_indices 내 unseen 게임 샘플)
+    query   = full_dataset의 나머지 모든 unseen 샘플
+
+    adapter 저장 위치: {exp_dir}_adp-{type}/
+      - adapter_state.pkl      : adapter 파라미터
+      - dataset_setting.json   : unseen_support_source_ids 포함
+      - norm_stats.json        : base encoder에서 복사
+      - ckpts/                 : base encoder ckpts 심볼릭 링크
+    """
+    import shutil
+    from collections import defaultdict
+    from encoder.few_shot_adapter import adapt_embeddings
+
+    _at = getattr(config.decoder, "adapter_type", None)
+    if not _at or str(_at).lower() in ("none", "null"):
+        return
+
+    adp_ur = float(config.unseen_ratio)
+    if adp_ur <= 0.0:
+        logger.warning("Post-encoder adapter skipped: unseen_ratio=0.0 (adp_ur must be > 0)")
+        return
+
+    adapter_dir = f"{config.exp_dir}_adp-{_at}"
+    adapter_state_path = os.path.join(adapter_dir, "adapter_state.pkl")
+
+    if os.path.exists(adapter_state_path) and not getattr(config, "overwrite", False):
+        logger.info("Adapter already exists, skipping: %s", adapter_state_path)
+        return
+
+    os.makedirs(adapter_dir, exist_ok=True)
+    logger.info(
+        "=== Post-encoder adapter training: type=%s  adp_ur=%.4f ===", _at, adp_ur
+    )
+
+    # ── 1. 전체 샘플 text embedding 추출 (batch inference) ──────────────────
+    n = len(full_dataset.input_ids)
+    batch_size = config.batch_size
+    all_embeddings = []
+    for start in range(0, n, batch_size):
+        end = min(start + batch_size, n)
+        out = train_state.apply_fn(
+            train_state.params,
+            full_dataset.input_ids[start:end],
+            full_dataset.attention_masks[start:end],
+            full_dataset.pixel_values[start:end],
+            reward_enum=None,
+            mode="text",
+            training=False,
+        )
+        all_embeddings.append(np.asarray(out["text_embed"]))
+    all_embeddings = np.concatenate(all_embeddings, axis=0)  # (N, D)
+    logger.info("Extracted embeddings: shape=%s", all_embeddings.shape)
+
+    # ── 2. encoder가 학습한 unseen 샘플 = support, 나머지 unseen = query ────
+    all_game_names = np.array([rc["game_name"] for rc in full_dataset.reward_cond])
+    train_set = set(train_indices)
+
+    unseen_support_source_ids: dict = defaultdict(list)
+    support_indices, query_indices = [], []
+
+    for i, gname in enumerate(all_game_names):
+        if gname not in unseen_game_set:
+            continue
+        if i in train_set:
+            support_indices.append(i)
+            unseen_support_source_ids[gname].append(full_dataset.reward_cond[i]["source_id"])
+        else:
+            query_indices.append(i)
+
+    unseen_support_source_ids = dict(unseen_support_source_ids)
+
+    for game in sorted(unseen_support_source_ids.keys()):
+        n_sup = len(unseen_support_source_ids[game])
+        n_qry = sum(1 for i in query_indices if all_game_names[i] == game)
+        logger.info(
+            "  game=%-12s  support=%d  query=%d",
+            game, n_sup, n_qry,
+        )
+
+    if not support_indices:
+        logger.error("No support samples — check unseen_game_set and unseen_ratio")
+        return
+
+    # ── 3. support GT 레이블 ────────────────────────────────────────────────
+    num_classes = config.decoder.num_reward_classes
+    sup_reward_i = np.array(
+        [full_dataset.reward_cond[i]["reward_enum"] for i in support_indices], dtype=np.int32
+    )
+    sup_condition = np.full((len(support_indices), num_classes), -1.0, dtype=np.float32)
+    for local_i, orig_i in enumerate(support_indices):
+        rc = full_dataset.reward_cond[orig_i]
+        enum_i = int(rc["reward_enum"])
+        cval = rc.get("condition_value")
+        if cval is not None:
+            sup_condition[local_i, enum_i] = float(cval)
+
+    query_arr = (
+        jnp.array(all_embeddings[query_indices])
+        if query_indices
+        else jnp.array(all_embeddings[support_indices[:1]])
+    )
+
+    # ── 4. adapter 학습 ─────────────────────────────────────────────────────
+    adapt_embeddings(
+        query=query_arr,
+        support=jnp.array(all_embeddings[support_indices]),
+        support_reward_i=jnp.array(sup_reward_i),
+        support_condition=jnp.array(sup_condition),
+        apply_fn=train_state.apply_fn,
+        variables=train_state.params,
+        adapter_type=_at,
+        rank=config.decoder.adapter_rank,
+        num_experts=config.decoder.adapter_num_experts,
+        lr=config.decoder.adapter_lr,
+        steps=config.decoder.adapter_steps,
+        save_path=adapter_state_path,
+        load_path=None,
+    )
+
+    # ── 5. adapter encoder 형식 저장 ────────────────────────────────────────
+    ckpts_link = os.path.join(adapter_dir, "ckpts")
+    if not os.path.lexists(ckpts_link):
+        base_ckpts = os.path.abspath(os.path.join(config.exp_dir, "ckpts"))
+        if os.path.exists(base_ckpts):
+            os.symlink(base_ckpts, ckpts_link)
+
+    norm_src = os.path.join(config.exp_dir, "norm_stats.json")
+    norm_dst = os.path.join(adapter_dir, "norm_stats.json")
+    if os.path.exists(norm_src) and not os.path.exists(norm_dst):
+        shutil.copy(norm_src, norm_dst)
+
+    base_setting_path = os.path.join(config.exp_dir, "dataset_setting.json")
+    adapter_setting: dict = {}
+    if os.path.exists(base_setting_path):
+        with open(base_setting_path) as _f:
+            adapter_setting = json.load(_f)
+    adapter_setting["unseen_ratio"] = adp_ur
+    adapter_setting["unseen_support_source_ids"] = unseen_support_source_ids
+    adapter_setting["adapter_type"] = _at
+    adapter_setting["base_encoder_ckpt_name"] = os.path.basename(config.exp_dir)
+    with open(os.path.join(adapter_dir, "dataset_setting.json"), "w") as _f:
+        json.dump(adapter_setting, _f, indent=2, ensure_ascii=False)
+
+    logger.info("=== Adapter encoder saved to %s ===", adapter_dir)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1829,7 +1982,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         logger.info("  Train set = %d samples %s", len(train_indices), _game_counts)
 
         rng_key, ratio_key = jax.random.split(rng_key)
-        per_game_acc, per_game_reg, per_game_enum_diff, scatter_data, per_enum_reg_loss = train_and_evaluate_ratio(
+        per_game_acc, per_game_reg, per_game_enum_diff, scatter_data, per_enum_reg_loss, train_state = train_and_evaluate_ratio(
             config=config,
             rng_key=ratio_key,
             train_ds=train_ds,
@@ -1843,6 +1996,8 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             unseen_eval_game_names=unseen_eval_game_names_arr,
             num_games=len(unique_games),
         )
+
+        _post_train_adapter(config, train_state, full_dataset, unseen_game_set, train_indices)
 
         # W&B 로깅 (unseen 로그 제거)
 

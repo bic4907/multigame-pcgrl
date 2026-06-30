@@ -1,0 +1,49 @@
+program: eval_mgpcgrl.py
+project: aaai27_eval_mgpcgrl_adapter_parameter
+entity: st4889ha-gwangju-institute-of-science-and-technology
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  wandb_project:
+    value: 'aaai27_eval_mgpcgrl_adapter_parameter'
+  game:
+    values: ['all']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  reevaluate:
+    value: true
+  overwrite:
+    value: true
+  train_seen_ratio:
+    value: 1.0
+  seed:
+    values: [1, 2]
+  # ── train_pcgrl_parameter.yaml 과 동일한 값 지정 (exp_dir 매칭용) ─────────────
+  decoder.adapter_type:
+    value: null
+  embed_proj_type:
+    values: ['affine']
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_parameter_encoder'
+  encoder.ckpt_name:
+    values: [
+      "clipdec-game-all_unseen-zd_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-sk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-zddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-zdsk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dmsk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-pkzddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dgzddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-zddmsk_ur-0.03_exp-def_0",
+    ]
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_parameter'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# 전제: train_pcgrl_parameter.yaml sweep 완료 후 실행
+# 총 runs: 1 embed_proj_type × 12 encoder_ckpts × 5 enums = 60 runs

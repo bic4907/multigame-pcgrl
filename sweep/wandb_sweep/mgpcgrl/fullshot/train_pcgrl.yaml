@@ -10,7 +10,7 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0, 1, 2]
+    values: [0, 1, 2, 4, 5]
   n_envs:
     value: 600
   overwrite:
@@ -22,7 +22,7 @@ parameters:
       "clipdec-game-all_exp-def_0",
     ]
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fullshot'
 command:
   - ${interpreter}
   - ${program}

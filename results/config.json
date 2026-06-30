@@ -43,49 +43,16 @@
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
     },
-    "fewshot_delta_alignment": {
+    "adapter_parameter": {
       "target_projects": [
-        "aaai27_eval_mgpcgrl_fewshot",
-        "eval_mgpcgrl_fewshot_direction0626",
-        "eval_mgpcgrl_fewshot_direction0627"
+        "aaai27_eval_mgpcgrl_adapter_parameter"
       ],
-      "project_display_names": {
-        "aaai27_eval_mgpcgrl_fewshot": "MGPCGRL",
-        "eval_mgpcgrl_fewshot_direction0626": "MGPCGRL (0626)",
-        "eval_mgpcgrl_fewshot_direction0627": "MGPCGRL (0627)"
-      },
-      "re_oracle_project": "aaai27_eval_cpcgrl",
-      "re_oracle_label":   "CPCGRL (Oracle)"
+      "pipeline_skip_steps": [3, 9, 10, 11, 12]
     },
-    "fullshot_delta_alignment": {
+    "ur": {
       "target_projects": [
-        "aaai27_eval_cpcgrl",
-        "aaai27_eval_mgpcgrl_fullshot",
-        "eval_mgpcgrl_fullshot_direction0626",
-        "eval_mgpcgrl_fullshot_direction0627"
-      ],
-      "project_display_names": {
-        "aaai27_eval_mgpcgrl_fullshot": "MGPCGRL",
-        "eval_mgpcgrl_fullshot_direction0626": "MGPCGRL (0626)",
-        "eval_mgpcgrl_fullshot_direction0627": "MGPCGRL (0627)"
-      },
-      "re_oracle_project": "aaai27_eval_cpcgrl",
-      "re_oracle_label":   "CPCGRL (Oracle)",
-      "re_baseline_project": "aaai27_eval_cpcgrl",
-      "re_baseline_label": "CPCGRL",
-      "benchmark_metrics": ["progress"]
-    },
-    "directional_fewshot": {
-      "target_projects": [
-        "aaai27_eval_mgpcgrl_fewshot",
-        "eval_mgpcgrl_fewshot_direction0625"
-      ],
-      "project_display_names": {
-        "aaai27_eval_mgpcgrl_fewshot": "MGPCGRL",
-        "eval_mgpcgrl_fewshot_direction0625": "MGPCGRL Direction"
-      },
-      "re_oracle_project": "aaai27_eval_cpcgrl",
-      "re_oracle_label":   "CPCGRL (Oracle)"
+        "aaai27_eval_mgpcgrl_ur"
+      ]
     },
     "domain_condition": {
       "target_projects": [

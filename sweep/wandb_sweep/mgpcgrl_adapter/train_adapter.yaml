@@ -1,0 +1,37 @@
+program: train_adapter.py
+project: aaai27_mgpcgrl_adapter_adapt
+method: grid
+metric:
+  goal: minimize
+  name: adapter/film/final_loss
+parameters:
+  wandb_project:
+    value: 'aaai27_mgpcgrl_adapter'
+  overwrite:
+    value: true
+  decoder.adapter_type:
+    values: ['film', 'lora', 'moe']
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_adapter_encoder'
+  encoder.ckpt_name:
+    values: [
+      "clipdec-game-all_unseen-zd_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-sk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-zddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-zdsk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dmsk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-pkzddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dgzddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-zddmsk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-pkdgzddm_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-pkzddmsk_ur-0.03_exp-def_0",
+      "clipdec-game-all_unseen-dgzddmsk_ur-0.03_exp-def_0",
+    ]
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# 전제: mgpcgrl_crossmatch_encoder → mgpcgrl_adapter_encoder 복사 완료
+# adapter 저장: encoder.ckpt_dir/{ckpt_name}_adp-{type}/adapter_state.pkl
+# 총 runs: 3 adapter_types × 12 encoder_ckpts = 36 runs

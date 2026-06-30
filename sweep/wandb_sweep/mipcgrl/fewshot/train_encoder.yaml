@@ -1,0 +1,51 @@
+program: train_mipcgrl_encoder_mg.py
+project: aaai27_encoder_mipcgrl_fewshot
+method: grid
+metric:
+  goal: minimize
+  name: val/mse_unseen_overall
+parameters:
+  game:
+    value: 'all'
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mipcgrl_encoder_fewshot'
+  # ── MIPCGRL 전용: task classifier 가중치 ──
+  classifier_weight:
+    value: 1.0
+  unseen_ratio:
+    value: 0.03
+  seen_ratio:
+    value: 1.0
+  seed:
+    value: 0
+  n_epochs:
+    value: 100
+  batch_size:
+    value: 512
+  lr:
+    value: 0.001
+  unseen_games:
+    values:
+      # 1 unseen game
+      - 'zd'        # unseen: zelda
+      - 'dm'        # unseen: doom
+      - 'sk'        # unseen: sokoban
+      # 2 unseen games
+      - 'zddm'      # unseen: zelda, doom
+      - 'zdsk'      # unseen: zelda, sokoban
+      - 'dmsk'      # unseen: doom, sokoban
+      # 3 unseen games
+      - 'pkzddm'    # unseen: pokemon, zelda, doom
+      - 'dgzddm'    # unseen: dungeon, zelda, doom
+      - 'zddmsk'    # unseen: zelda, doom, sokoban
+      # 4 unseen games
+      - 'pkdgzddm'  # unseen: pokemon, dungeon, zelda, doom
+      - 'pkzddmsk'  # unseen: pokemon, zelda, doom, sokoban
+      - 'dgzddmsk'  # unseen: dungeon, zelda, doom, sokoban
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# 총 runs: 1 ur × 12 unseen_games = 12 runs

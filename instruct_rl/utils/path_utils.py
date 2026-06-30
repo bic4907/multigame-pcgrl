@@ -150,12 +150,15 @@ def get_exp_group(config) -> str:
     if getattr(config, 'vec_cont', False):
         return f'cpcgrl_game-{game}{re_s}{exp_s}'
 
-    # IPCGRL: BERT embedding
+    # IPCGRL / MIPCGRL: BERT embedding
     # encoder ckpt 이름에서 unseen 정보 파싱해 suffix 추가 (VIPCGRL / MGPCGRL 와 동일 규칙).
     # unseen 정보가 없으면 suffix 생략.
+    # MIPCGRL 은 동일한 use_nlp=True 분기를 타지만 ``is_mipcgrl`` 플래그로 prefix 를
+    # 구분해 IPCGRL 체크포인트와 디스크/wandb 충돌을 방지한다.
     if getattr(config, 'use_nlp', False):
         enc = _unseen_suffix(config)
-        return f'ipcgrl_game-{game}{re_s}{exp_s}{enc}'
+        kind = 'mipcgrl' if getattr(config, 'is_mipcgrl', False) else 'ipcgrl'
+        return f'{kind}_game-{game}{re_s}{exp_s}{enc}'
 
     # PretrainedCLIP: model=pretrained_clip, enc suffix 없음
     if getattr(config, 'model', None) == 'pretrained_clip':

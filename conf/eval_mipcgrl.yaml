@@ -1,0 +1,12 @@
+defaults:
+  - eval_mipcgrl_schema
+  - _self_
+
+hydra:
+  sweeper:
+    params: {}
+
+n_envs: 500
+
+encoder:
+  model: mlp

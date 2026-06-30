@@ -113,7 +113,7 @@ def get_train_state(config: MIPCGRLEncoderMGConfig, num_classes: int, rng: jax.r
 def make_train_step(num_classes: int, cls_weight: float):
     cls_w = jnp.float32(cls_weight)
 
-    @partial(jit, static_argnums=(4,))
+    @partial(jit, static_argnums=(5,))
     def train_step(
         state: TrainState,
         bert_embeds: jnp.ndarray,    # (B, nlp_input_dim)

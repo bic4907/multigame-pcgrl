@@ -382,6 +382,15 @@ def _plot_performance(
             return str(int(round(value)))
         return f"{value:g}"
 
+    def _marker_indices(n_points: int) -> list[int]:
+        if n_points <= 0:
+            return []
+        step = max(1, n_points // 12)
+        indices = list(range(0, n_points, step))
+        if indices[-1] != n_points - 1:
+            indices.append(n_points - 1)
+        return indices
+
     for source, value_col, ylabel, out_path in specs:
         plot_df = _aggregate_for_plot(source, value_col, epoch_bin_size)
         fig, ax = plt.subplots(figsize=(3.6, 2.7))
@@ -397,18 +406,28 @@ def _plot_performance(
                 x = wdf["epoch"].astype(float).to_numpy()
                 y = wdf[value_col].astype(float).to_numpy()
                 sem = wdf["sem"].fillna(0.0).astype(float).to_numpy()
+                marker_idx = _marker_indices(len(x))
+                x_marked = x[marker_idx]
+                y_marked = y[marker_idx]
+                sem_marked = sem[marker_idx]
                 ax.plot(
-                    x,
-                    y,
+                    x_marked,
+                    y_marked,
                     color=color,
                     linewidth=1.9,
                     linestyle="-",
                     marker=markers[idx % len(markers)],
                     markersize=4.4,
-                    markevery=max(1, len(x) // 12),
                     label=f"{weight:g}",
                 )
-                ax.fill_between(x, y - sem, y + sem, color=color, alpha=0.16, linewidth=0)
+                ax.fill_between(
+                    x_marked,
+                    y_marked - sem_marked,
+                    y_marked + sem_marked,
+                    color=color,
+                    alpha=0.16,
+                    linewidth=0,
+                )
             ax.set_ylabel(ylabel)
             ax.xaxis.set_major_locator(MultipleLocator(1000))
             ax.xaxis.set_major_formatter(FuncFormatter(_epoch_formatter))

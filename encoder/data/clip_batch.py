@@ -48,6 +48,7 @@ class CLIPDataset:
     reward_enum_targets: np.ndarray = None   # (N,) 0-indexed reward_enum
     condition_targets: np.ndarray = None     # (N,) condition float value
     quantized_condition_targets: np.ndarray = None  # (N,) quantized bin index (0~7, CUSTOM_THRESHOLDS 기준 — 8 bins)
+    game_ids: np.ndarray = None              # (N,) global game index (self.game2idx 기준)
 
 @dataclass
 class CLIPEmbedData:
@@ -74,6 +75,7 @@ class CLIPDecoderBatch:
     duplicate_matrix: np.ndarray     # (B, B)
     reward_enum_target: np.ndarray   # (B,)  — 0-indexed reward_enum 클래스
     condition_target: np.ndarray     # (B,)  — condition 값 (regression target)
+    game_id: np.ndarray              # (B,)  — global game index
 
 
 
@@ -276,6 +278,7 @@ class CLIPDatasetBuilder:
                 reward_enum_targets=np.array(self.preprocessed_dataset_dict["reward_enum_targets"]),
                 condition_targets=np.array(self.preprocessed_dataset_dict["condition_targets"]),
                 quantized_condition_targets=np.array(self.preprocessed_dataset_dict["quantized_condition_targets"]),
+                game_ids=np.array(self.preprocessed_dataset_dict["game_ids"]),
             )
 
     def preprocess_paired_data(self):
@@ -455,6 +458,11 @@ class CLIPDatasetBuilder:
 
         quantized_condition_targets = np.array(quantized_cond_list, dtype=np.int32)
 
+        # ── 글로벌 game_ids (self.game2idx 기준, 전역 일관성) ──
+        global_game_ids = np.array(
+            [self.game2idx.get(g, -1) for g in games_type], dtype=np.int32
+        )
+
         return {
             "game_type":            games_type,
             "class_ids":            class_ids,
@@ -467,6 +475,7 @@ class CLIPDatasetBuilder:
             "reward_enum_targets":  reward_enum_targets,
             "condition_targets":    condition_targets,
             "quantized_condition_targets": quantized_condition_targets,
+            "game_ids":             global_game_ids,
         }
 
     
@@ -489,6 +498,7 @@ class CLIPDatasetBuilder:
             reward_enum_targets=self.dataset.reward_enum_targets[train_mask],
             condition_targets=self.dataset.condition_targets[train_mask],
             quantized_condition_targets=self.dataset.quantized_condition_targets[train_mask],
+            game_ids=self.dataset.game_ids[train_mask],
         )
         test_dataset = CLIPDataset(
             class_ids=self.dataset.class_ids[test_mask],
@@ -500,6 +510,7 @@ class CLIPDatasetBuilder:
             reward_enum_targets=self.dataset.reward_enum_targets[test_mask],
             condition_targets=self.dataset.condition_targets[test_mask],
             quantized_condition_targets=self.dataset.quantized_condition_targets[test_mask],
+            game_ids=self.dataset.game_ids[test_mask],
         )
 
         return train_dataset, test_dataset
@@ -585,6 +596,7 @@ def create_clip_decoder_batch(dataset: CLIPDataset, batch_size: int, rng_key: ja
         duplicate_matrix = np.equal.outer(class_ids, class_ids).astype(np.float32)
         reward_enum_target = dataset.reward_enum_targets[batch_indices]
         condition_target = dataset.condition_targets[batch_indices]
+        game_id = dataset.game_ids[batch_indices]
 
         yield CLIPDecoderBatch(
             class_ids=class_ids,
@@ -594,6 +606,7 @@ def create_clip_decoder_batch(dataset: CLIPDataset, batch_size: int, rng_key: ja
             duplicate_matrix=duplicate_matrix,
             reward_enum_target=reward_enum_target,
             condition_target=condition_target,
+            game_id=game_id,
         )
 
 if __name__ == "__main__":

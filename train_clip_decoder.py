@@ -16,11 +16,13 @@ Usage
 """
 
 import datetime
+import csv
 import json
 import math
 import os
 import shutil
 import logging
+import uuid
 from collections import deque
 from functools import partial
 from os.path import basename
@@ -90,6 +92,28 @@ def parse_unseen_game_names(unseen_str: Optional[str]) -> Set[str]:
     return names
 
 
+def _canonical_game_name(game_name: object) -> str:
+    """Return the reporting name for a game, merging doom2 into doom."""
+    game = str(game_name)
+    return "doom" if game == "doom2" else game
+
+
+def _canonical_game_names(game_names: np.ndarray) -> np.ndarray:
+    return np.asarray([_canonical_game_name(g) for g in game_names], dtype=object)
+
+
+def _canonical_game_name_list(game_names) -> List[str]:
+    return sorted({_canonical_game_name(g) for g in game_names})
+
+
+def _canonical_game_counts(game_counts: Dict[str, int]) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for game, count in game_counts.items():
+        canonical_game = _canonical_game_name(game)
+        counts[canonical_game] = counts.get(canonical_game, 0) + int(count)
+    return dict(sorted(counts.items()))
+
+
 def subset_clip_dataset(dataset: CLIPDataset, indices: np.ndarray) -> CLIPDataset:
     """CLIPDataset에서 주어진 인덱스의 서브셋을 추출한다."""
     idx = np.asarray(indices, dtype=int)
@@ -103,6 +127,7 @@ def subset_clip_dataset(dataset: CLIPDataset, indices: np.ndarray) -> CLIPDatase
         reward_enum_targets=dataset.reward_enum_targets[idx],
         condition_targets=dataset.condition_targets[idx],
         quantized_condition_targets=dataset.quantized_condition_targets[idx],
+        game_ids=dataset.game_ids[idx] if dataset.game_ids is not None else None,
     )
 
 
@@ -185,7 +210,7 @@ def build_train_indices_for_ratio(
 #  Train Step (JIT) — reward_pred 추가
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9))
+@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17))
 def train_step(
     train_state: TrainState,
     batch: CLIPDecoderBatch,
@@ -197,8 +222,14 @@ def train_step(
     reg_weight: float = 0.1,
     num_reward_classes: int = 5,
     regression_loss: str = "mae",
+    include_retrieval_ranks: bool = False,
     norm_min_arr: jnp.ndarray = None,
     norm_max_arr: jnp.ndarray = None,
+    delta_weight: float = 0.0,
+    num_games: int = 1,
+    delta_min_count: int = 2,
+    delta_var_eps: float = 1e-4,
+    compute_delta_when_zero: bool = True,
 ):
     rng_key, dropout_rng = jax.random.split(rng_key)
 
@@ -209,6 +240,15 @@ def train_step(
 
         a2b_pos_logps = a2b_logps - 1e9 * (1 - batch.duplicate_matrix)
         b2a_pos_logps = b2a_logps - 1e9 * (1 - batch.duplicate_matrix)
+        if include_retrieval_ranks:
+            pos_mask = batch.duplicate_matrix > 0
+            best_pos_logits_a2b = jnp.max(jnp.where(pos_mask, logits, -jnp.inf), axis=1)
+            best_pos_logits_b2a = jnp.max(jnp.where(pos_mask, logits, -jnp.inf), axis=0)
+            a2b_rank = 1 + jnp.sum(logits > best_pos_logits_a2b[:, None], axis=1)
+            b2a_rank = 1 + jnp.sum(logits > best_pos_logits_b2a[None, :], axis=0)
+        else:
+            a2b_rank = jnp.zeros((logits.shape[0],), dtype=jnp.int32)
+            b2a_rank = jnp.zeros((logits.shape[1],), dtype=jnp.int32)
 
         a2b_loss = -jnp.mean(jax.scipy.special.logsumexp(a2b_pos_logps, axis=1))
         b2a_loss = -jnp.mean(jax.scipy.special.logsumexp(b2a_pos_logps, axis=0))
@@ -227,7 +267,90 @@ def train_step(
             jnp.max(b2a_logps, axis=0) == jnp.max(b2a_pos_logps, axis=0)
         )
 
-        return a2b_loss, b2a_loss, a2b_correct_pr, b2a_correct_pr, a2b_top1_accuracy, b2a_top1_accuracy
+        return (
+            a2b_loss,
+            b2a_loss,
+            a2b_correct_pr,
+            b2a_correct_pr,
+            a2b_top1_accuracy,
+            b2a_top1_accuracy,
+            a2b_rank,
+            b2a_rank,
+        )
+
+    def safe_l2_normalize(x, axis=-1, eps=1e-6):
+        """0-vector 근처에서도 gradient가 NaN으로 터지지 않는 L2 normalize.
+
+        jnp.linalg.norm()은 zero-vector에서 gradient가 NaN이 되므로,
+        sum-of-squares + jax.lax.rsqrt(maximum(...)) 형태로 우회한다.
+        """
+        sq_norm = jnp.sum(x * x, axis=axis, keepdims=True)
+        inv_norm = jax.lax.rsqrt(jnp.maximum(sq_norm, eps * eps))
+        return x * inv_norm
+
+    def continuous_direction_alignment(text_embed, game_id, reward_target, condition_target):
+        """Continuous Task-wise Cross-game Direction Alignment Loss.
+
+        각 (game, task) 그룹에서 condition 값과 (L2-normalized) text embedding 사이의
+        slope vector를 OLS-style centered regression 으로 추정한 후, 같은 task 안의
+        서로 다른 game 간 방향 벡터를 cosine distance 로 정렬한다.
+
+        주의: invalid (game, task) 그룹은 normalize **이전에** slope를 0으로 차단해야
+        한다. slope=0 인 그룹에 normalize gradient가 흐르면 NaN이 발생하고, 이후
+        mask를 곱해도 (NaN * 0 = NaN) 으로 parameter 전체가 오염된다.
+
+        Returns: (loss, valid_pair_count)
+        """
+        z = safe_l2_normalize(text_embed, axis=-1, eps=1e-6)
+        c = condition_target.astype(jnp.float32)
+        G = num_games
+        T = num_reward_classes
+
+        game_mask = (game_id[None, :] == jnp.arange(G)[:, None])           # (G, B)
+        task_mask = (reward_target[None, :] == jnp.arange(T)[:, None])     # (T, B)
+        m = (game_mask[:, None, :] & task_mask[None, :, :]).astype(jnp.float32)  # (G, T, B)
+
+        n_gt = m.sum(axis=-1)                                              # (G, T)
+        safe_n = jnp.maximum(n_gt, 1.0)
+
+        c_b = c[None, None, :]                                             # (1, 1, B)
+        z_b = z[None, None, :, :]                                          # (1, 1, B, D)
+
+        c_mean = (m * c_b).sum(-1) / safe_n                                # (G, T)
+        z_mean = (m[..., None] * z_b).sum(-2) / safe_n[..., None]          # (G, T, D)
+
+        dc = c_b - c_mean[..., None]                                       # (G, T, B)
+        dz = z_b - z_mean[:, :, None, :]                                   # (G, T, B, D)
+
+        m_dc = m * dc                                                      # (G, T, B)
+        slope_num = (m_dc[..., None] * dz).sum(-2)                         # (G, T, D)
+        slope_den = (m_dc * dc).sum(-1)                                    # (G, T) = sum m*dc^2
+
+        # ── valid group 판정 (slope 계산 전) ──
+        c_var = slope_den / safe_n                                         # (G, T)
+        valid = (n_gt >= float(delta_min_count)) & (c_var > delta_var_eps) # (G, T)
+
+        # ── slope_den이 매우 작은 invalid group에서 slope 폭주 방지 ──
+        safe_slope_den = jnp.where(valid, slope_den, 1.0)                  # (G, T)
+        slope = slope_num / safe_slope_den[..., None]                      # (G, T, D)
+        # invalid group은 normalize 이전에 완전히 0으로 차단
+        slope = jnp.where(valid[..., None], slope, 0.0)                    # (G, T, D)
+
+        # ── NaN-safe normalize + invalid 방향 재차단 ──
+        d_dir = safe_l2_normalize(slope, axis=-1, eps=1e-6)               # (G, T, D)
+        d_dir = jnp.where(valid[..., None], d_dir, 0.0)                    # (G, T, D)
+
+        # task별 cross-game cosine: (G, G, T)
+        cos_mat = jnp.einsum('gtd,htd->ght', d_dir, d_dir)
+        pair_valid = valid[:, None, :] & valid[None, :, :]                 # (G, G, T)
+        tri = jnp.triu(jnp.ones((G, G), dtype=bool), k=1)                  # (G, G)
+        pair_valid = pair_valid & tri[:, :, None]
+
+        # NaN * 0 방지: multiply mask 대신 where 사용
+        pair_loss = jnp.where(pair_valid, 1.0 - cos_mat, 0.0)
+        total_pairs = pair_valid.astype(jnp.float32).sum()
+        delta_loss = pair_loss.sum() / jnp.maximum(total_pairs, 1.0)
+        return delta_loss, total_pairs
 
     def loss_fn(params):
         outputs = train_state.apply_fn(
@@ -248,7 +371,16 @@ def train_step(
 
         # ── Contrastive Loss ──
         temperature = jnp.clip(text_state_temperature, jnp.log(0.01), jnp.log(100))
-        s2t_loss, t2s_loss, s2t_correct_pr, t2s_correct_pr, s2t_top1, t2s_top1 = pairwise_contrastive_loss_accuracy(
+        (
+            s2t_loss,
+            t2s_loss,
+            s2t_correct_pr,
+            t2s_correct_pr,
+            s2t_top1,
+            t2s_top1,
+            s2t_rank,
+            t2s_rank,
+        ) = pairwise_contrastive_loss_accuracy(
             state_embed, text_embed, temperature
         )
         contrastive_loss = state_mask * (s2t_loss + t2s_loss) / 2.0
@@ -307,11 +439,23 @@ def train_step(
             per_enum_mae_raw = per_enum_mae_raw.at[eidx].set(jnp.sum(abs_diff_raw * mask) / count)
             per_enum_count = per_enum_count.at[eidx].set(jnp.sum(mask))
 
+        # ── Continuous Task-wise Cross-game Direction Alignment ──
+        # 기본값은 delta_weight=0.0이어도 alignment metric을 모니터링한다.
+        # compute_delta_when_zero=False일 때만 baseline/eval의 불필요한 계산을 건너뛴다.
+        if delta_weight != 0.0 or compute_delta_when_zero:
+            delta_loss, delta_valid_pairs = continuous_direction_alignment(
+                text_embed, batch.game_id, reward_target, condition_target
+            )
+        else:
+            delta_loss = jnp.array(0.0, dtype=text_embed.dtype)
+            delta_valid_pairs = jnp.array(0.0, dtype=text_embed.dtype)
+
         # ── Total Loss ──
         total_loss = (
             contrastive_weight * contrastive_loss
             + cls_weight * cls_loss
             + reg_weight * reg_loss
+            + delta_weight * delta_loss
         )
 
         metrics = {
@@ -340,7 +484,16 @@ def train_step(
             "per_sample_cond_target_norm": condition_target,   # (B,) normalized [0,1] target
             "per_sample_cond_raw": per_sample_cond_raw,        # (B,) linear-scale pred
             "per_sample_cond_target_raw": target_raw,      # (B,) linear-scale target
+            # ── Continuous direction alignment ──
+            "continuous_delta_loss": delta_loss,                          # raw alignment loss (weight 미적용, 항상 모니터링)
+            "continuous_delta_loss_weighted": delta_weight * delta_loss,  # objective에 실제 반영된 값
+            "valid_direction_pair_count": delta_valid_pairs
         }
+        if include_retrieval_ranks:
+            metrics.update({
+                "state2text_rank": s2t_rank,
+                "text2state_rank": t2s_rank,
+            })
         return total_loss, metrics
 
     (loss, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(
@@ -525,7 +678,19 @@ def evaluate_per_game(
     mode: str,
     norm_min_arr: jnp.ndarray = None,
     norm_max_arr: jnp.ndarray = None,
-) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, Dict[str, np.ndarray]], Dict[int, float]]:
+    num_games: int = 1,
+    sample_ids: Optional[np.ndarray] = None,
+    epoch: Optional[int] = None,
+    epoch_num: Optional[int] = None,
+    include_prediction_rows: bool = False,
+) -> Tuple[
+    Dict[str, float],
+    Dict[str, float],
+    Dict[str, Dict[int, float]],
+    Dict[int, Dict[str, np.ndarray]],
+    Dict[int, float],
+    List[Dict[str, object]],
+]:
     """고정된 테스트셋에서 **게임별** reward accuracy 와 reg_loss를 계산한다.
 
     Returns
@@ -535,10 +700,23 @@ def evaluate_per_game(
     per_game_enum_diff : {game: {reward_enum: mean_abs_diff}}
     scatter_data       : {reward_enum: {"pred_norm","target_norm","pred_raw","target_raw"}}
     per_enum_reg_loss  : {reward_enum: mean_abs_diff (raw space)}
+    prediction_rows    : per-sample rows for CSV export
     """
     n_test = len(test_ds.input_ids)
+    if n_test == 0:
+        return {}, {}, {}, {}, {}, []
+
+    if sample_ids is None:
+        sample_ids_arr = np.arange(n_test)
+    else:
+        sample_ids_arr = np.asarray(sample_ids)
+        if len(sample_ids_arr) != n_test:
+            raise ValueError("sample_ids length must match test dataset length.")
+
     batch_size = config.batch_size
 
+    all_sample_ids: List[object] = []
+    all_class_ids: List[int] = []
     all_preds: List[int] = []
     all_targets: List[int] = []
     all_reg_losses: List[float] = []  # per-sample reg loss
@@ -549,6 +727,8 @@ def evaluate_per_game(
     all_target_norm: List[float] = []
     all_pred_raw: List[float] = []
     all_target_raw: List[float] = []
+    all_state2text_rank: List[int] = []
+    all_text2state_rank: List[int] = []
 
     for start_idx in range(0, n_test, batch_size):
         end_idx = min(start_idx + batch_size, n_test)
@@ -567,6 +747,11 @@ def evaluate_per_game(
         duplicate_matrix = np.equal.outer(class_ids, class_ids).astype(np.float32)
         reward_enum_target = test_ds.reward_enum_targets[indices]
         condition_target = test_ds.condition_targets[indices]
+        game_id = (
+            test_ds.game_ids[indices]
+            if test_ds.game_ids is not None
+            else np.zeros(len(indices), dtype=np.int32)
+        )
 
         batch = CLIPDecoderBatch(
             class_ids=class_ids,
@@ -576,6 +761,7 @@ def evaluate_per_game(
             duplicate_matrix=duplicate_matrix,
             reward_enum_target=reward_enum_target,
             condition_target=condition_target,
+            game_id=game_id,
         )
         batch = jax.device_put(batch)
 
@@ -590,8 +776,14 @@ def evaluate_per_game(
             reg_weight=config.reg_weight,
             num_reward_classes=num_cls,
             regression_loss=config.regression_loss,
+            include_retrieval_ranks=include_prediction_rows,
             norm_min_arr=norm_min_arr,
             norm_max_arr=norm_max_arr,
+            delta_weight=float(getattr(config, "delta_weight", 0.0)),
+            num_games=int(num_games),
+            delta_min_count=int(getattr(config, "delta_min_group_samples", 2)),
+            delta_var_eps=float(getattr(config, "delta_var_eps", 1e-4)),
+            compute_delta_when_zero=bool(getattr(config, "compute_delta_when_zero", True)),
         )
 
         preds = np.array(jax.device_get(metrics["reward_pred"]))
@@ -603,6 +795,9 @@ def evaluate_per_game(
         batch_target_norm = np.array(jax.device_get(metrics["per_sample_cond_target_norm"]))
         batch_pred_raw = np.array(jax.device_get(metrics["per_sample_cond_raw"]))
         batch_target_raw = np.array(jax.device_get(metrics["per_sample_cond_target_raw"]))
+        if include_prediction_rows:
+            all_sample_ids.extend(sample_ids_arr[indices[:actual_size]].tolist())
+            all_class_ids.extend(np.asarray(class_ids).reshape(-1)[:actual_size].astype(int).tolist())
         all_preds.extend(preds[:actual_size].tolist())
         all_targets.extend(targets[:actual_size].tolist())
         # batch-level reg_loss를 actual_size만큼 복제 (batch 평균이므로)
@@ -614,22 +809,30 @@ def evaluate_per_game(
         all_target_norm.extend(batch_target_norm[:actual_size].tolist())
         all_pred_raw.extend(batch_pred_raw[:actual_size].tolist())
         all_target_raw.extend(batch_target_raw[:actual_size].tolist())
+        if include_prediction_rows:
+            batch_state2text_rank = np.array(jax.device_get(metrics["state2text_rank"]))
+            batch_text2state_rank = np.array(jax.device_get(metrics["text2state_rank"]))
+            all_state2text_rank.extend(batch_state2text_rank[:actual_size].astype(int).tolist())
+            all_text2state_rank.extend(batch_text2state_rank[:actual_size].astype(int).tolist())
 
     # ── Per-game accuracy 집계 ──
     all_preds_arr = np.array(all_preds[:n_test])
     all_targets_arr = np.array(all_targets[:n_test])
+    all_class_ids_arr = np.array(all_class_ids[:n_test]) if include_prediction_rows else np.array([])
     all_reg_arr = np.array(all_reg_losses[:n_test])
     all_abs_diff_arr = np.array(all_abs_diffs[:n_test])
     all_abs_diff_raw_arr = np.array(all_abs_diffs_raw[:n_test])
     all_reward_enum_arr = np.array(all_reward_enums[:n_test])
     correct = all_preds_arr == all_targets_arr
+    canonical_test_game_names = _canonical_game_names(np.asarray(test_game_names, dtype=object))
+    canonical_unseen_game_names = set(_canonical_game_name_list(unseen_game_names))
 
     per_game_acc: Dict[str, float] = {}
     per_game_reg: Dict[str, float] = {}
     per_game_enum_diff: Dict[str, Dict[int, float]] = {}
-    unique_test_games = sorted(set(test_game_names))
+    unique_test_games = sorted(set(canonical_test_game_names))
     for game in unique_test_games:
-        mask = test_game_names == game
+        mask = canonical_test_game_names == game
         if mask.sum() > 0:
             per_game_acc[game] = float(correct[mask].mean())
             per_game_reg[game] = float(all_reg_arr[mask].mean())
@@ -645,7 +848,7 @@ def evaluate_per_game(
     per_game_reg["overall"] = float(all_reg_arr.mean())
 
     # seen / unseen overall
-    seen_mask = np.array([g not in unseen_game_names for g in test_game_names])
+    seen_mask = np.array([g not in canonical_unseen_game_names for g in canonical_test_game_names])
     unseen_mask = ~seen_mask
     if seen_mask.sum() > 0:
         per_game_acc["seen_overall"] = float(correct[seen_mask].mean())
@@ -659,6 +862,8 @@ def evaluate_per_game(
     all_target_norm_arr = np.array(all_target_norm[:n_test])
     all_pred_raw_arr = np.array(all_pred_raw[:n_test])
     all_target_raw_arr = np.array(all_target_raw[:n_test])
+    all_state2text_rank_arr = np.array(all_state2text_rank[:n_test]) if include_prediction_rows else np.array([])
+    all_text2state_rank_arr = np.array(all_text2state_rank[:n_test]) if include_prediction_rows else np.array([])
 
     per_enum_reg_loss: Dict[int, float] = {}
     scatter_data: Dict[int, Dict[str, np.ndarray]] = {}
@@ -672,9 +877,98 @@ def evaluate_per_game(
             "target_norm": all_target_norm_arr[emask],
             "pred_raw": all_pred_raw_arr[emask],
             "target_raw": all_target_raw_arr[emask],
+            "game_names": canonical_test_game_names[emask],
         }
 
-    return per_game_acc, per_game_reg, per_game_enum_diff, scatter_data, per_enum_reg_loss
+    prediction_rows: List[Dict[str, object]] = []
+    if include_prediction_rows:
+        for i in range(n_test):
+            rc = test_ds.reward_cond[i]
+            game_name = _canonical_game_name(test_game_names[i])
+            prediction_rows.append(
+                {
+                    "sample_id": all_sample_ids[i],
+                    "epoch": "" if epoch is None else int(epoch),
+                    "epoch_num": "" if epoch_num is None else int(epoch_num),
+                    "class_id": int(all_class_ids_arr[i]),
+                    "game": game_name,
+                    "is_unseen_game": bool(game_name in canonical_unseen_game_names),
+                    "reward_enum_target": int(all_targets_arr[i]),
+                    "reward_enum_pred": int(all_preds_arr[i]),
+                    "state2text_rank": int(all_state2text_rank_arr[i]),
+                    "text2state_rank": int(all_text2state_rank_arr[i]),
+                    "condition_target_norm": float(all_target_norm_arr[i]),
+                    "condition_pred_norm": float(all_pred_norm_arr[i]),
+                    "condition_target_raw": float(all_target_raw_arr[i]),
+                    "condition_pred_raw": float(all_pred_raw_arr[i]),
+                    "game_idx": int(rc.get("game_idx", -1)) if isinstance(rc, dict) else "",
+                    "condition_value": rc.get("condition_value", "") if isinstance(rc, dict) else "",
+                    "quantized_bin": rc.get("quantized_bin", "") if isinstance(rc, dict) else "",
+                }
+            )
+
+    return per_game_acc, per_game_reg, per_game_enum_diff, scatter_data, per_enum_reg_loss, prediction_rows
+
+
+def _write_prediction_rows_csv(
+    rows: List[Dict[str, object]],
+    csv_path: str,
+    append: bool = False,
+) -> Optional[str]:
+    """Write decoder per-sample prediction rows to CSV."""
+    if not rows:
+        logger.warning("Skipping decoder prediction CSV export: no prediction rows.")
+        return None
+
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    fieldnames = list(rows[0].keys())
+    write_header = not append or not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0
+    mode = "a" if append else "w"
+    with open(csv_path, mode, newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if write_header:
+            writer.writeheader()
+        writer.writerows(rows)
+    action = "Appended" if append else "Saved"
+    log_fn = logger.debug if append else logger.info
+    log_fn("%s decoder prediction CSV: %s (%d rows)", action, csv_path, len(rows))
+    return csv_path
+
+
+def _compact_json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _add_prediction_context(
+    rows: List[Dict[str, object]],
+    context: Dict[str, object],
+) -> List[Dict[str, object]]:
+    """Attach run/train metadata columns used for grouping plots."""
+    if not rows:
+        return rows
+    return [{**row, **context} for row in rows]
+
+
+def _log_prediction_csv_artifact(csv_paths: Dict[str, Optional[str]]) -> None:
+    """Upload decoder prediction CSV files as a W&B artifact."""
+    if wandb.run is None:
+        logger.info("Skipping decoder prediction CSV artifact upload: wandb run is not initialized.")
+        return
+
+    valid_paths = {name: path for name, path in csv_paths.items() if path and os.path.exists(path)}
+    if not valid_paths:
+        logger.warning("Skipping decoder prediction CSV artifact upload: no CSV files found.")
+        return
+
+    artifact = wandb.Artifact(name="decoder_prediction_csv", type="dataset")
+    for artifact_name, local_path in valid_paths.items():
+        artifact.add_file(local_path, name=artifact_name)
+    logged_artifact = wandb.log_artifact(artifact)
+    if hasattr(logged_artifact, "wait"):
+        logged_artifact.wait()
+    wandb.run.summary["decoder_prediction_csv_uploaded"] = True
+    wandb.run.summary["decoder_prediction_csv_files"] = sorted(valid_paths.keys())
+    logger.info("Uploaded decoder prediction CSV files → wandb artifact (decoder_prediction_csv)")
 
 
 def _build_scatter_data_from_arrays(
@@ -872,6 +1166,8 @@ def train_and_evaluate_ratio(
     ratio: float,
     unseen_eval_ds: Optional[CLIPDataset] = None,
     unseen_eval_game_names: Optional[np.ndarray] = None,
+    unseen_eval_sample_ids: Optional[np.ndarray] = None,
+    num_games: int = 1,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, Dict[str, np.ndarray]], Dict[int, float]]:
     """하나의 few-shot ratio에 대해 모델을 처음부터 학습하고 평가한다.
 
@@ -912,6 +1208,13 @@ def train_and_evaluate_ratio(
     train_game_names = np.array(
         [rc["game_name"] for rc in train_ds.reward_cond]
     )
+    train_games_sorted = sorted(set(train_game_names.tolist()))
+    train_seen_games = [g for g in train_games_sorted if g not in unseen_game_names]
+    train_unseen_games = [g for g in train_games_sorted if g in unseen_game_names]
+    train_game_counts = {
+        g: int(np.sum(train_game_names == g))
+        for g in train_games_sorted
+    }
 
     if n_train == 0:
         logger.warning("  ⚠ No training data for ratio=%.2f — skipping training", ratio)
@@ -928,20 +1231,57 @@ def train_and_evaluate_ratio(
     if unseen_eval_ds is not None and unseen_eval_game_names is not None and len(unseen_eval_ds.class_ids) > 0:
         unseen_test_ds = unseen_eval_ds
         unseen_test_game_names_arr = unseen_eval_game_names
-        logger.info("  Unseen eval pool: %d samples (injected, eval_unseen_ratio applied)", len(unseen_test_ds.class_ids))
+        unseen_test_sample_ids = unseen_eval_sample_ids
+        logger.info("  Unseen eval pool: %d samples (injected)", len(unseen_test_ds.class_ids))
     elif unseen_game_names:
         _unseen_test_mask = np.array([g in unseen_game_names for g in test_game_names], dtype=bool)
         _unseen_test_indices = np.where(_unseen_test_mask)[0]
         if len(_unseen_test_indices) > 0:
             unseen_test_ds = subset_clip_dataset(test_ds, _unseen_test_indices)
             unseen_test_game_names_arr = test_game_names[_unseen_test_indices]
+            unseen_test_sample_ids = _unseen_test_indices
             logger.info("  Unseen eval pool: %d samples (test set fallback)", len(_unseen_test_indices))
         else:
             unseen_test_ds = None
             unseen_test_game_names_arr = np.array([])
+            unseen_test_sample_ids = None
     else:
         unseen_test_ds = None
         unseen_test_game_names_arr = np.array([])
+        unseen_test_sample_ids = None
+
+    export_unseen_predictions = bool(getattr(config, "export_unseen_predictions_csv", True))
+    prediction_export_uid: Optional[str] = None
+    unseen_prediction_csv_name: Optional[str] = None
+    unseen_prediction_csv_path: Optional[str] = None
+    prediction_context: Dict[str, object] = {}
+    if export_unseen_predictions:
+        prediction_export_uid = uuid.uuid4().hex[:8]
+        unseen_prediction_csv_name = f"unseen_regression_predictions_{prediction_export_uid}.csv"
+        unseen_prediction_csv_path = os.path.join(config.exp_dir, unseen_prediction_csv_name)
+        prediction_context = {
+            "prediction_export_uid": prediction_export_uid,
+            "train_seen_games": _compact_json(_canonical_game_name_list(train_seen_games)),
+            "train_unseen_games": _compact_json(_canonical_game_name_list(train_unseen_games)),
+            "train_games": _compact_json(_canonical_game_name_list(train_games_sorted)),
+            "train_game_counts": _compact_json(_canonical_game_counts(train_game_counts)),
+            "n_train_seen_games": len(_canonical_game_name_list(train_seen_games)),
+            "n_train_unseen_games": len(_canonical_game_name_list(train_unseen_games)),
+            "n_train_games": len(_canonical_game_name_list(train_games_sorted)),
+            "eval_unseen_games": _compact_json(_canonical_game_name_list(unseen_game_names)),
+            "seen_ratio": float(getattr(config, "seen_ratio", 1.0)),
+            "unseen_ratio": float(ratio),
+            "eval_unseen_ratio": float(getattr(config, "eval_unseen_ratio", 1.0)),
+            "delta_weight": float(getattr(config, "delta_weight", 0.0)),
+            "split_seed": int(getattr(config, "split_seed", 0)),
+            "seed": int(getattr(config, "seed", 0)),
+        }
+        logger.info(
+            "Decoder prediction CSV export uid=%s file=%s",
+            prediction_export_uid,
+            unseen_prediction_csv_name,
+        )
+
     epoch_scatter_data: Dict[int, Dict[str, np.ndarray]] = {}
     epoch_per_game_acc: Dict[str, float] = {}
     epoch_per_game_reg: Dict[str, float] = {}
@@ -952,6 +1292,89 @@ def train_and_evaluate_ratio(
         int(cid): rc.get("game_name", "unknown")
         for cid, rc in zip(train_class_ids, train_ds.reward_cond)
     }
+
+    def _run_unseen_eval(
+        *,
+        epoch_value: int,
+        do_eval: bool,
+        do_scatter: bool,
+        do_prediction_export: bool,
+    ) -> None:
+        nonlocal rng_key
+
+        need_unseen_eval = (
+            (wandb.run is not None and do_eval)
+            or (wandb.run is not None and do_scatter)
+            or do_prediction_export
+        )
+        if unseen_test_ds is None or not need_unseen_eval:
+            return
+
+        rng_key, eval_key = jax.random.split(rng_key)
+        _, _, _, unseen_scatter_data, unseen_per_enum_reg, unseen_prediction_rows = evaluate_per_game(
+            train_state,
+            unseen_test_ds,
+            unseen_test_game_names_arr,
+            unseen_game_names,
+            config,
+            eval_key,
+            num_cls,
+            mode,
+            norm_min_arr,
+            norm_max_arr,
+            sample_ids=unseen_test_sample_ids,
+            epoch=epoch_value,
+            epoch_num=epoch_value,
+            include_prediction_rows=do_prediction_export,
+            num_games=num_games,
+        )
+
+        if do_eval and unseen_per_enum_reg:
+            unseen_overall_reg = float(np.mean(list(unseen_per_enum_reg.values())))
+            if wandb.run is not None:
+                wandb.log({
+                    **{f"unseen/regression/enum_{e}": v for e, v in unseen_per_enum_reg.items()},
+                    "unseen/regression/overall": unseen_overall_reg,
+                    "total/epoch": epoch_value,
+                })
+
+        if do_prediction_export:
+            assert unseen_prediction_csv_path is not None
+            unseen_prediction_rows = _add_prediction_context(
+                unseen_prediction_rows,
+                prediction_context,
+            )
+            _write_prediction_rows_csv(
+                unseen_prediction_rows,
+                unseen_prediction_csv_path,
+                append=True,
+            )
+
+        if wandb.run is not None and do_scatter and unseen_scatter_data:
+            unseen_scatter_paths = create_regression_scatter_plots_per_enum(
+                unseen_scatter_data,
+                out_dir=getattr(config, "exp_dir", "."),
+                max_points=max_pts,
+                seed=getattr(config, "seed", 0),
+                space="raw",
+            )
+            unseen_imgs: Dict[str, object] = {}
+            for e, path in unseen_scatter_paths.items():
+                unseen_imgs[f"unseen/regression_scatter/enum_{int(e)}"] = wandb.Image(path)
+            if unseen_imgs:
+                unseen_imgs["total/epoch"] = epoch_value
+                wandb.log(unseen_imgs)
+                logger.info("  Unseen scatter plot uploaded to wandb (epoch %d)", epoch_value)
+
+    # ── W&B Unseen baseline 평가 (학습 전, epoch 0) ──
+    _unseen_eval_freq: int = int(getattr(config, "unseen_eval_freq", 100))
+    _unseen_scatter_freq: int = int(getattr(config, "unseen_scatter_freq", 500))
+    _run_unseen_eval(
+        epoch_value=0,
+        do_eval=_unseen_eval_freq > 0,
+        do_scatter=_unseen_scatter_freq > 0,
+        do_prediction_export=export_unseen_predictions and _unseen_eval_freq > 0,
+    )
 
     for epoch in range(config.n_epochs):
         rng_key, subkey = jax.random.split(rng_key)
@@ -969,6 +1392,9 @@ def train_and_evaluate_ratio(
         epoch_per_enum_reg_raw: np.ndarray = np.zeros(num_cls)
         epoch_per_enum_huber_raw: np.ndarray = np.zeros(num_cls)
         epoch_per_enum_cnt: np.ndarray = np.zeros(num_cls)
+        epoch_delta_loss = 0.0
+        epoch_delta_pair_count = 0.0
+        epoch_delta_loss_weighted = 0.0
         n_batches = 0
         epoch_reward_targets: List[int] = []
         epoch_reward_preds: List[int] = []
@@ -1001,6 +1427,11 @@ def train_and_evaluate_ratio(
                     regression_loss=config.regression_loss,
                     norm_min_arr=norm_min_arr,
                     norm_max_arr=norm_max_arr,
+                    delta_weight=float(getattr(config, "delta_weight", 0.0)),
+                    num_games=int(num_games),
+                    delta_min_count=int(getattr(config, "delta_min_group_samples", 2)),
+                    delta_var_eps=float(getattr(config, "delta_var_eps", 1e-4)),
+                    compute_delta_when_zero=bool(getattr(config, "compute_delta_when_zero", False)),
                 )
                 epoch_loss += float(loss)
                 epoch_acc += float(metrics["reward_accuracy"])
@@ -1019,6 +1450,9 @@ def train_and_evaluate_ratio(
                 epoch_per_enum_huber_raw += batch_per_enum_raw * batch_per_enum_cnt
                 epoch_per_enum_reg_raw += batch_per_enum_raw_mae * batch_per_enum_cnt
                 epoch_per_enum_cnt += batch_per_enum_cnt
+                epoch_delta_loss += float(metrics["continuous_delta_loss"])
+                epoch_delta_pair_count += float(metrics["valid_direction_pair_count"])
+                epoch_delta_loss_weighted += float(metrics["continuous_delta_loss_weighted"])
 
                 # ── Scatter / per-sample 집계 (실제 train 샘플만) ──
                 actual_size = min(config.batch_size, max(0, n_train - batch_idx * config.batch_size))
@@ -1067,6 +1501,9 @@ def train_and_evaluate_ratio(
             epoch_s2t_correct_pr /= n_batches
             epoch_t2s_correct_pr /= n_batches
             epoch_temperature /= n_batches
+            epoch_delta_loss /= n_batches
+            epoch_delta_pair_count /= n_batches
+            epoch_delta_loss_weighted /= n_batches
 
         # ── 에폭 단위 scatter + epoch 기반 train-set 지표 ──
         epoch_scatter_data = _build_scatter_data_from_arrays(
@@ -1135,6 +1572,9 @@ def train_and_evaluate_ratio(
                     "train(decoder)/cls_loss": epoch_cls_loss,
                     "train(decoder)/reg_loss": epoch_reg_loss_raw,
                     "train(decoder)/reg_loss_normalized": epoch_reg_loss,
+                    "train(direction)/continuous_delta_loss": epoch_delta_loss,
+                    "train(direction)/continuous_delta_loss_weighted": epoch_delta_loss_weighted,
+                    "train(direction)/valid_direction_pair_count": epoch_delta_pair_count,
                     **{
                         f"seen/regression/enum_{e}": selected_reg_per_enum[e]
                         for e in selected_reg_per_enum
@@ -1167,49 +1607,38 @@ def train_and_evaluate_ratio(
         _unseen_scatter_freq: int = int(getattr(config, "unseen_scatter_freq", 500))
         _do_unseen_eval = _unseen_eval_freq > 0 and (epoch + 1) % _unseen_eval_freq == 0
         _do_unseen_scatter = _unseen_scatter_freq > 0 and (epoch + 1) % _unseen_scatter_freq == 0
-
-        if wandb.run is not None and unseen_test_ds is not None and (_do_unseen_eval or _do_unseen_scatter):
-            rng_key, _eval_key = jax.random.split(rng_key)
-            _, _, _, _unseen_scatter_data, _unseen_per_enum_reg = evaluate_per_game(
-                train_state,
-                unseen_test_ds,
-                unseen_test_game_names_arr,
-                unseen_game_names,
-                config,
-                _eval_key,
-                num_cls,
-                mode,
-                norm_min_arr,
-                norm_max_arr,
-            )
-
-            if _do_unseen_eval and _unseen_per_enum_reg:
-                _unseen_overall_reg = float(np.mean(list(_unseen_per_enum_reg.values())))
-                wandb.log({
-                    **{f"unseen/regression/enum_{_e}": _v for _e, _v in _unseen_per_enum_reg.items()},
-                    "unseen/regression/overall": _unseen_overall_reg,
-                })
-
-            if _do_unseen_scatter and _unseen_scatter_data:
-                _unseen_scatter_paths = create_regression_scatter_plots_per_enum(
-                    _unseen_scatter_data,
-                    out_dir=getattr(config, "exp_dir", "."),
-                    max_points=max_pts,
-                    seed=getattr(config, "seed", 0),
-                    space="raw",
-                )
-                _unseen_imgs: Dict[str, object] = {}
-                for _e, _path in _unseen_scatter_paths.items():
-                    _unseen_imgs[f"unseen/regression_scatter/enum_{int(_e)}"] = wandb.Image(_path)
-                if _unseen_imgs:
-                    _unseen_imgs["total/epoch"] = epoch
-                    wandb.log(_unseen_imgs)
-                    logger.info("  Unseen scatter plot uploaded to wandb (epoch %d)", epoch + 1)
+        _do_unseen_prediction_export = export_unseen_predictions and _do_unseen_eval
+        _run_unseen_eval(
+            epoch_value=epoch + 1,
+            do_eval=_do_unseen_eval,
+            do_scatter=_do_unseen_scatter,
+            do_prediction_export=_do_unseen_prediction_export,
+        )
 
         # ── Checkpoint 저장 ──
         if hasattr(config, 'ckpt_freq') and config.ckpt_freq > 0:
             if (epoch + 1) % config.ckpt_freq == 0:
                 save_encoder_checkpoint(config, train_state, step=epoch + 1)
+
+    if export_unseen_predictions:
+        assert unseen_prediction_csv_name is not None
+        assert unseen_prediction_csv_path is not None
+        if os.path.exists(unseen_prediction_csv_path):
+            _log_prediction_csv_artifact(
+                {
+                    unseen_prediction_csv_name: unseen_prediction_csv_path,
+                }
+            )
+        elif unseen_test_ds is None:
+            logger.warning(
+                "Skipping decoder prediction CSV artifact upload: unseen eval dataset is empty. "
+                "Check unseen_games and eval_unseen_ratio."
+            )
+        else:
+            logger.warning(
+                "Skipping decoder prediction CSV artifact upload: no CSV was written. "
+                "Check unseen_eval_freq and n_epochs."
+            )
 
     per_game_acc = epoch_per_game_acc
     per_game_reg = epoch_per_game_reg
@@ -1596,11 +2025,34 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             "unseen_games": unseen_games,
             "unseen_ratio": config.unseen_ratio,
             "seen_ratio": config.seen_ratio,
+            "eval_unseen_ratio": float(getattr(config, "eval_unseen_ratio", 1.0)),
+            "export_unseen_predictions_csv": bool(getattr(config, "export_unseen_predictions_csv", True)),
         }
         dataset_setting_path = os.path.join(config.exp_dir, "dataset_setting.json")
         with open(dataset_setting_path, "w") as f:
             json.dump(dataset_setting, f, indent=2, ensure_ascii=False)
         logger.info("Dataset setting saved: %s", dataset_setting_path)
+
+        # ── Encoder 학습 설정 JSON 저장 (pcgrl train/eval에서 참조용) ──
+        encoder_config = {
+            "delta_weight": config.delta_weight,
+            "delta_min_group_samples": config.delta_min_group_samples,
+            "delta_var_eps": config.delta_var_eps,
+            "compute_delta_when_zero": config.compute_delta_when_zero,
+            "batch_size": config.batch_size,
+            "lr": config.lr,
+            "weight_decay": config.weight_decay,
+            "n_epochs": config.n_epochs,
+            "train_ratio": config.train_ratio,
+            "unseen_ratio": config.unseen_ratio,
+            "seen_ratio": config.seen_ratio,
+            "exp_name": config.exp_name,
+            "seed": config.seed,
+        }
+        encoder_config_path = os.path.join(config.exp_dir, "encoder_config.json")
+        with open(encoder_config_path, "w") as f:
+            json.dump(encoder_config, f, indent=2, ensure_ascii=False)
+        logger.info("Encoder config saved: %s", encoder_config_path)
 
         if not unseen_games:
             logger.warning("No unseen games found in dataset — treating all games as seen.")
@@ -1656,6 +2108,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         else:
             unseen_eval_ds = None
             unseen_eval_game_names_arr = np.array([])
+            _unseen_eval_indices = None
 
         # ── 4. 단일 unseen_ratio 학습 ──
         ratio = config.unseen_ratio
@@ -1693,6 +2146,8 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             ratio=ratio,
             unseen_eval_ds=unseen_eval_ds,
             unseen_eval_game_names=unseen_eval_game_names_arr,
+            num_games=len(unique_games),
+            unseen_eval_sample_ids=_unseen_eval_indices,
         )
 
         # W&B 로깅 (unseen 로그 제거)

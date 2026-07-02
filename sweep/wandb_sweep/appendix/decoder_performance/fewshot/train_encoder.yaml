@@ -1,0 +1,35 @@
+program: train_clip_decoder.py
+project: aaai27_encoder_mgpcgrl_fewshot
+method: grid
+metric:
+  goal: minimize
+  name: val/loss
+parameters:
+  game:
+    value: 'all'
+  seed:
+    values: [0, 1, 2]
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot__decoderperformance'
+  unseen_ratio:
+    value: 0.03
+  unseen_games:
+    values:
+      - 'dm'        # unseen: doom
+  eval_unseen_ratio:
+    value: 1.0
+  delta_weight:
+    values: [0.0, 0.1, 0.5, 1.0]
+  unseen_eval_freq:
+    value: 300
+  export_unseen_predictions_csv:
+    value: true
+  compute_delta_when_zero:
+    value: true
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+

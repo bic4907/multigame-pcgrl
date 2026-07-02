@@ -8,8 +8,8 @@ Usage:
     python results/run_pipeline.py                         # full pipeline (steps 1-6)
     python results/run_pipeline.py --experiment fullshot    # fullshot experiment
     python results/run_pipeline.py --experiment zeroshot
-    python results/run_pipeline.py --experiment fewshot
-    python results/run_pipeline.py --exclude-experiments fewshot seen_ratio_progress  # 특정 experiment 제외
+    python results/run_pipeline.py --experiment fewshot_seenrate
+    python results/run_pipeline.py --exclude-experiments fewshot_seenrate seen_ratio_progress  # 특정 experiment 제외
     python results/run_pipeline.py --steps 3               # single step
     python results/run_pipeline.py --steps 3 4 5 6         # multiple steps
     python results/run_pipeline.py --steps 6               # 분석 리포트만 생성
@@ -134,9 +134,9 @@ STEPS: list[dict] = [
 # 특정 experiment 에서 실행하지 않을 step id
 _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
     "zeroshot":        {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
-    "fewshot":         {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
-    "fewshot_delta_alignment": {3, 9, 10, 12}, # fewshot 비교 — step 11(progress)만 사용
-    "directional_fewshot": {3, 9, 10, 12}, # fewshot 비교 — step 11(progress)만 사용
+    "fewshot_seenrate":         {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
+    "fewshot_delta_alignment": {3, 9, 10, 12}, # fewshot_seenrate 비교 — step 11(progress)만 사용
+    "directional_fewshot": {3, 9, 10, 12}, # fewshot_seenrate 비교 — step 11(progress)만 사용
     "domain_condition":{3, 9, 10},        # fewshot과 동일 — step 11(progress) 사용
     "instruction_type":{3, 9, 10},        # fewshot과 동일 — step 11(progress) 사용
     "seen_ratio_progress":       {3, 4, 10, 11},    # seen_ratio_progress 전용 — step 9만 실행
@@ -161,8 +161,8 @@ examples:
   python results/run_pipeline.py                       # run all steps (1-6)
   python results/run_pipeline.py --experiment fullshot
   python results/run_pipeline.py --experiment zeroshot
-  python results/run_pipeline.py --experiment fewshot
-  python results/run_pipeline.py --exclude-experiments fewshot seen_ratio_progress
+  python results/run_pipeline.py --experiment fewshot_seenrate
+  python results/run_pipeline.py --exclude-experiments fewshot_seenrate seen_ratio_progress
   python results/run_pipeline.py --steps 3             # table generation only
   python results/run_pipeline.py --steps 4 5           # condition report + seen/unseen report
   python results/run_pipeline.py --steps 6             # 한글 분석 리포트만 생성
@@ -171,8 +171,8 @@ examples:
   python results/run_pipeline.py --list                # list step descriptions
 
 note:
-  step 3 (benchmark)             — fullshot 등 일반 실험에서만 실행; zeroshot / fewshot 에서는 자동 생략
-  step 6 (analysis_report)       — fullshot / zeroshot / fewshot 모두 실행; 한글 Markdown 리포트 생성
+  step 3 (benchmark)             — fullshot 등 일반 실험에서만 실행; zeroshot / fewshot_seenrate 에서는 자동 생략
+  step 6 (analysis_report)       — fullshot / zeroshot / fewshot_seenrate 모두 실행; 한글 Markdown 리포트 생성
   step 9 (seen_ratio_progress)   — seen_ratio_progress 실험에서만 실행; train_seen_ratio vs progress 꺾은선 그래프
   step 11 (seen_count_progress)  — zeroshot 에서만 실행; unseen 개수별 subplot
 

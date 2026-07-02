@@ -938,7 +938,7 @@ def write_fewshot_table_latex(
     experiment: str | None,
     decimals: int = 4,
     caption: str = "Few-shot generalization results.",
-    label: str = "tab:fewshot",
+    label: str = "tab:fewshot_seenrate",
 ) -> None:
     metric = metric_order[0]
     metric_label = METRIC_DISPLAY_NAMES.get(metric, metric)

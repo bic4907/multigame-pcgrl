@@ -14,13 +14,13 @@ parameters:
   reevaluate:
     value: true
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/mipcgrl_encoder'
+    value: '/mnt/nas/mgpcgrl/mipcgrl_fullshot'
   encoder.ckpt_name:
     values: [
       "mipcgrl-enc-mg-game-all_enc-mlp_exp-def_0",
     ]
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mipcgrl'
+    value: '/mnt/nas/mgpcgrl/mipcgrl_fullshot'
 command:
   - ${interpreter}
   - ${program}

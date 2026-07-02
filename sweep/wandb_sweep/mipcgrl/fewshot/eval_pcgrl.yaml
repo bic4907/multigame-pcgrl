@@ -10,32 +10,25 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0, 1, 2]
+    values: [0, 1, 2, 3, 4]
   reevaluate:
     value: true
   overwrite:
     value: true
+  upload_h5:
+    value: true
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/mipcgrl_encoder_fewshot'
+    value: '/mnt/nas/mgpcgrl/mipcgrl_fewshot'
   encoder.ckpt_name:
     values:
-      # ── unseen_ratio: 0.03 ─────────────────────────────────────────────────
+      - "mipcgrl-enc-mg-game-all_unseen-pk_ur-0.03_enc-mlp_exp-def_0"
+      - "mipcgrl-enc-mg-game-all_unseen-dg_ur-0.03_enc-mlp_exp-def_0"
       - "mipcgrl-enc-mg-game-all_unseen-zd_ur-0.03_enc-mlp_exp-def_0"
       - "mipcgrl-enc-mg-game-all_unseen-dm_ur-0.03_enc-mlp_exp-def_0"
       - "mipcgrl-enc-mg-game-all_unseen-sk_ur-0.03_enc-mlp_exp-def_0"
-      - "mipcgrl-enc-mg-game-all_unseen-zddm_ur-0.03_enc-mlp_exp-def_0"
-      - "mipcgrl-enc-mg-game-all_unseen-zdsk_ur-0.03_enc-mlp_exp-def_0"
-      - "mipcgrl-enc-mg-game-all_unseen-dmsk_ur-0.03_enc-mlp_exp-def_0"
-      - "mipcgrl-enc-mg-game-all_unseen-pkzddm_ur-0.03_enc-mlp_exp-def_0"
-      - "mipcgrl-enc-mg-game-all_unseen-dgzddm_ur-0.03_enc-mlp_exp-def_0"
-      - "mipcgrl-enc-mg-game-all_unseen-zddmsk_ur-0.03_enc-mlp_exp-def_0"
-      - "mipcgrl-enc-mg-game-all_unseen-pkdgzddm_ur-0.03_enc-mlp_exp-def_0"
-      - "mipcgrl-enc-mg-game-all_unseen-pkzddmsk_ur-0.03_enc-mlp_exp-def_0"
-      - "mipcgrl-enc-mg-game-all_unseen-dgzddmsk_ur-0.03_enc-mlp_exp-def_0"
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mipcgrl_fewshot'
 command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-# 총 runs: 12 encoder × 5 enum × 3 seeds = 180 runs

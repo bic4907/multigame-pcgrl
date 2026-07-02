@@ -10,7 +10,7 @@ parameters:
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mipcgrl_encoder'
+    value: '/mnt/nas/mgpcgrl/mipcgrl_fullshot'
   # ── MIPCGRL 전용: task classifier 가중치 ──
   classifier_weight:
     value: 1.0

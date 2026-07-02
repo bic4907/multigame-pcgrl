@@ -10,7 +10,7 @@ parameters:
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/ipcgrl_encoder_fewshot'
+    value: '/mnt/nas/mgpcgrl/ipcgrl_fewshot'
   unseen_ratio:
     value: 0.03
   seen_ratio:
@@ -25,26 +25,12 @@ parameters:
     value: 0.001
   unseen_games:
     values:
-      # 1 unseen game
-      - 'zd'        # unseen: zelda
-      - 'dm'        # unseen: doom
-      - 'sk'        # unseen: sokoban
-      # 2 unseen games
-      - 'zddm'      # unseen: zelda, doom
-      - 'zdsk'      # unseen: zelda, sokoban
-      - 'dmsk'      # unseen: doom, sokoban
-      # 3 unseen games
-      - 'pkzddm'    # unseen: pokemon, zelda, doom
-      - 'dgzddm'    # unseen: dungeon, zelda, doom
-      - 'zddmsk'    # unseen: zelda, doom, sokoban
-      # 4 unseen games
-      - 'pkdgzddm'  # unseen: pokemon, dungeon, zelda, doom
-      - 'pkzddmsk'  # unseen: pokemon, zelda, doom, sokoban
-      - 'dgzddmsk'  # unseen: dungeon, zelda, doom, sokoban
+      - 'pk'
+      - 'dg'
+      - 'zd'
+      - 'dm'
+      - 'sk'
 command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-# 총 runs: 1 ur × 12 unseen_games = 12 runs
-
-

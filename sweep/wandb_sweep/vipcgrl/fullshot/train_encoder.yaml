@@ -10,7 +10,7 @@ parameters:
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/vipcgrl_encoder'
+    value: '/mnt/nas/mgpcgrl/vipcgrl_fullshot'
 command:
   - ${interpreter}
   - ${program}

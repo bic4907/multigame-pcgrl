@@ -10,17 +10,17 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0]
+    values: [0, 1, 2]
   reevaluate:
     value: true
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/vipcgrl_encoder'
+    value: '/mnt/nas/mgpcgrl/vipcgrl_fullshot'
   encoder.ckpt_name:
     values: [
       "clip-game-all_exp-def_0",
     ]
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/vipcgrl'
+    value: '/mnt/nas/mgpcgrl/vipcgrl_fullshot'
 command:
   - ${interpreter}
   - ${program}

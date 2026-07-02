@@ -9,7 +9,7 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0, 1, 2]
+    values: [0, 1, 2, 3, 4]
   n_envs:
     value: 600
   overwrite:
@@ -18,22 +18,12 @@ parameters:
     value: '/mnt/nas/mgpcgrl/vipcgrl_fewshot'
   encoder.ckpt_name:
     values: [
-      # 1 unseen game
+
+      "clip-game-all_unseen-pk_ur-0.03_exp-def_0",
+      "clip-game-all_unseen-dg_ur-0.03_exp-def_0",
       "clip-game-all_unseen-zd_ur-0.03_exp-def_0",
       "clip-game-all_unseen-dm_ur-0.03_exp-def_0",
       "clip-game-all_unseen-sk_ur-0.03_exp-def_0",
-      # 2 unseen games
-      "clip-game-all_unseen-zddm_ur-0.03_exp-def_0",
-      "clip-game-all_unseen-zdsk_ur-0.03_exp-def_0",
-      "clip-game-all_unseen-dmsk_ur-0.03_exp-def_0",
-      # 3 unseen games
-      "clip-game-all_unseen-pkzddm_ur-0.03_exp-def_0",
-      "clip-game-all_unseen-dgzddm_ur-0.03_exp-def_0",
-      "clip-game-all_unseen-zddmsk_ur-0.03_exp-def_0",
-      # 4 unseen games
-      "clip-game-all_unseen-pkdgzddm_ur-0.03_exp-def_0",
-      "clip-game-all_unseen-pkzddmsk_ur-0.03_exp-def_0",
-      "clip-game-all_unseen-dgzddmsk_ur-0.03_exp-def_0",
     ]
   saves_dir:
     value: '/mnt/nas/mgpcgrl/vipcgrl_fewshot'
@@ -41,5 +31,4 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-
 

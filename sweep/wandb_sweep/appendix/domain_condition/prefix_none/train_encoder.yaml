@@ -17,14 +17,11 @@ parameters:
     value: 0.1
   unseen_games:
     values:
-      # 2 unseen games
-      - 'zddm'
-      - 'zdsk'
-      - 'dmsk'
-      # 3 unseen games
-      - 'pkzddm'
-      - 'dgzddm'
-      - 'zddmsk'
+      - 'pk'
+      - 'dg'
+      - 'zd'
+      - 'dm'
+      - 'sk'
 command:
   - ${interpreter}
   - ${program}

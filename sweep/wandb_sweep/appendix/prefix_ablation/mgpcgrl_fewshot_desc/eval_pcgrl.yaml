@@ -15,8 +15,6 @@ parameters:
     value: true
   overwrite:
     value: true
-  upload_h5:
-    value: true
   instruction_prefix:
     value: 'desc'
   train_seen_ratio:
@@ -36,4 +34,3 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-

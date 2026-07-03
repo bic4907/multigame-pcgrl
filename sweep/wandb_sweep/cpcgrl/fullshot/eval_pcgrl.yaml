@@ -1,4 +1,5 @@
 program: eval_cpcgrl.py
+project: aaai27_eval_cpcgrl_fullshot
 method: grid
 metric:
   goal: minimize
@@ -9,11 +10,11 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0]
+    values: [0, 1, 2]
   reevaluate:
     value: true
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/cpcgrl'
+    value: '/mnt/nas/mgpcgrl/cpcgrl_fullshot'
 command:
   - ${interpreter}
   - ${program}

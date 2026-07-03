@@ -1,3 +1,18 @@
+### CPCGRL (Fullshot)
+
+---
+
+**Train PCGRL**
+```bash
+wandb sweep --project aaai27_train_cpcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/cpcgrl/fullshot/train_pcgrl.yaml
+```
+
+**Eval PCGRL**
+```bash
+wandb sweep --project aaai27_eval_cpcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/cpcgrl/fullshot/eval_pcgrl.yaml
+```
+
+
 ### IPCGRL (Fullshot)
 
 ---

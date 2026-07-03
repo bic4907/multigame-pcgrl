@@ -1,5 +1,5 @@
 program: train_mipcgrl_encoder_mg.py
-project: aaai27_encoder_mipcgrl_unseen
+project: aaai27_encoder_mipcgrl_zeroshot
 method: grid
 metric:
   goal: minimize

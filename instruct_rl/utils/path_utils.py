@@ -93,7 +93,9 @@ def _unseen_suffix(config) -> str:
     # ── 1. 명시 파라미터 (MGPCGRL config 에만 존재) ──────────────────────────
     un_abbr = getattr(config, 'train_unseen_abbr', None)   # e.g. "zd"
     ur      = getattr(config, 'train_unseen_ratio', None)  # e.g. 0.05
-    sr      = getattr(config, 'train_seen_ratio', None)    # e.g. 1.0
+    # train_seen_ratio는 RL 학습 파라미터이므로 sr 경로명에는 사용하지 않음
+    # encoder ckpt_name에서 파싱한 sr을 우선 사용
+    sr      = None
 
     # ── 2. encoder.ckpt_name 에서 파싱 ──────────────────────────────────────
     if un_abbr is None or ur is None or sr is None:
@@ -104,6 +106,12 @@ def _unseen_suffix(config) -> str:
         if un_abbr is None: un_abbr = c_un
         if ur is None:      ur      = c_ur
         if sr is None:      sr      = c_sr
+
+    # ── train_seen_ratio fallback (encoder sr 없을 때만, 1.0 제외) ───────────
+    if sr is None:
+        train_sr = getattr(config, 'train_seen_ratio', None)
+        if train_sr is not None and train_sr != 1.0:
+            sr = train_sr
 
     # ── 3. reward_seen_games 에서 자동 계산 (un_abbr only, MGPCGRL fallback) ─
     if un_abbr is None:

@@ -1376,6 +1376,10 @@ def train_and_evaluate_ratio(
         do_prediction_export=export_unseen_predictions and _unseen_eval_freq > 0,
     )
 
+    # ── 초기 Checkpoint 저장 (학습 전, epoch 0) ──
+    if hasattr(config, 'ckpt_freq') and config.ckpt_freq > 0:
+        save_encoder_checkpoint(config, train_state, step=0)
+
     for epoch in range(config.n_epochs):
         rng_key, subkey = jax.random.split(rng_key)
         epoch_loss = 0.0

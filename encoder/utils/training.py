@@ -70,8 +70,9 @@ def save_encoder_checkpoint(config: Config, state, step: int) -> None:
     """flax checkpoints 를 사용해 인코더 체크포인트를 저장한다."""
     ckpt_dir = get_ckpt_dir(config)
     ckpt_dir = os.path.abspath(ckpt_dir)
+    ckpt_keep = int(getattr(config, "ckpt_keep", 2))
     checkpoints.save_checkpoint(
-        ckpt_dir, target=state, prefix="", step=step, overwrite=True, keep=3,
+        ckpt_dir, target=state, prefix="", step=step, overwrite=True, keep=ckpt_keep,
     )
     logger.info(f"Checkpoint saved at step {step}")
 
@@ -137,4 +138,3 @@ def setup_wandb(config: Config) -> None:
         save_code=True,
     )
     wandb.config.update(dict(config), allow_val_change=True)
-

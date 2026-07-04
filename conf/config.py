@@ -845,6 +845,7 @@ class CLIPTrainConfig(Config):
     
     overwrite: bool = False
     ckpt_freq: int = int(50)
+    ckpt_keep: int = 2
 
     # Goal img path
     img_data_path: str = "./human_dataset"

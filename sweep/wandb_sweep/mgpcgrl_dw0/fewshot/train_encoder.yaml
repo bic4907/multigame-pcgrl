@@ -10,7 +10,7 @@ parameters:
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_dw0'
   unseen_ratio:
     value: 0.03
   delta_weight:

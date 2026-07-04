@@ -12,24 +12,31 @@ parameters:
   overwrite:
     value: false
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot__decoderperformance'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_dwctrl'
   unseen_ratio:
     value: 0.03
   unseen_games:
     values:
-      - 'dm'        # unseen: doom
+      - 'pk'
+      - 'dg'
+      - 'zd'
+      - 'dm'
+      - 'sk'
   eval_unseen_ratio:
     value: 1.0
   delta_weight:
-    values: [0.0, 0.1, 0.5, 1.0]
+    values: [0.0, 0.03, 0.1]
   unseen_eval_freq:
-    value: 300
+    value: 100
   export_unseen_predictions_csv:
     value: true
   compute_delta_when_zero:
     value: true
+  ckpt_freq:
+    value: 500
+  ckpt_keep:
+    value: 1000000
 command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-

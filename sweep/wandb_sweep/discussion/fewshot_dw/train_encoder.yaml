@@ -1,5 +1,5 @@
 program: train_clip_decoder.py
-project: aaai27_encoder_mgpcgrl_fewshot_seenrate
+project: aaai27_encoder_mgpcgrl_fewshot_dw
 method: grid
 metric:
   goal: minimize
@@ -10,11 +10,13 @@ parameters:
   overwrite:
     value: true
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_seenrate'
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_dw'
   unseen_ratio:
-    values: [0.01, 0.03]
+    value: 0.03
   seen_ratio:
     values: [0.0, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3]
+  delta_weight:
+    values: [0.0, 0.1, 0.3]
   unseen_games:
     value: 'zd'
 command:

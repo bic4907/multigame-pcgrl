@@ -1,0 +1,34 @@
+program: train_mgpcgrl.py
+project: aaai27_train_mgpcgrl_fewshot_unseenrate
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    value: 'all'
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0, 1, 2]
+  n_envs:
+    value: 600
+  overwrite:
+    value: true
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_unseenrate'
+  encoder.ckpt_name:
+    values:
+      - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.0_exp-def_dw-0p1_0"
+      - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.001_exp-def_dw-0p1_0"
+      - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.003_exp-def_dw-0p1_0"
+      - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.01_exp-def_dw-0p1_0"
+      - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.03_exp-def_dw-0p1_0"
+      - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.1_exp-def_dw-0p1_0"
+      - "clipdec-game-all_sr-0.1_unseen-zd_ur-1.0_exp-def_dw-0p1_0"
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_unseenrate'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

@@ -10,7 +10,7 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0, 1, 2]
+    values: [0, 1, 2, 3, 4]
   n_envs:
     value: 600
   overwrite:
@@ -25,7 +25,7 @@ parameters:
       - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.01_exp-def_dw-0p1_0"
       - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.03_exp-def_dw-0p1_0"
       - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.1_exp-def_dw-0p1_0"
-      - "clipdec-game-all_sr-0.1_unseen-zd_ur-1.0_exp-def_dw-0p1_0"
+      - "clipdec-game-all_sr-0.1_unseen-zd_ur-0.3_exp-def_dw-0p1_0"
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_unseenrate'
 command:

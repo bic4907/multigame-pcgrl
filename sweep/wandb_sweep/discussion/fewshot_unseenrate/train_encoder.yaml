@@ -14,7 +14,7 @@ parameters:
   seen_ratio:
     value: 0.1
   unseen_ratio:
-    values: [0.0, 0.001, 0.003, 0.01, 0.03, 0.1, 1.0]
+    values: [0.0, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3]
   unseen_games:
     value: 'zd'
 command:

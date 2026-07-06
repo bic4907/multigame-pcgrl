@@ -342,6 +342,7 @@ class ContrastiveDecoderModule(nn.Module):
             reward_enum: jnp.ndarray = None,
             mode: str = "text_state",
             training: bool = False,
+            decoder_nograd: bool = False,
     ):
         output_dict = dict()
         modes = mode.split("_")
@@ -362,8 +363,14 @@ class ContrastiveDecoderModule(nn.Module):
 
         # ── 디코더: text embedding 으로부터 reward_enum & condition 예측 ──
         if "text" in modes:
+            # decoder_nograd=True 이면 decoder loss가 encoder(latent space)까지 역전파되지 않음
+            decoder_input = (
+                jax.lax.stop_gradient(output_dict["text_embed"])
+                if decoder_nograd
+                else output_dict["text_embed"]
+            )
             reward_logits, condition_pred, condition_pred_raw = self.decoder(
-                output_dict["text_embed"], training=training
+                decoder_input, training=training
             )
             output_dict["reward_logits"] = reward_logits
             output_dict["condition_pred"] = condition_pred              # [0,1] 정규화 (loss용)

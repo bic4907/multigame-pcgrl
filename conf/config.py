@@ -994,6 +994,11 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     eval_unseen_ratio: float = 1.0
     export_unseen_predictions_csv: bool = True
 
+    # ── Gradient 흐름 제어 ──
+    # True: decoder loss (cls + reg)의 gradient가 encoder(latent space)까지 전파되지 않음
+    # False (기본값): decoder loss가 encoder까지 역전파됨
+    decoder_nograd: bool = False
+
 
 @dataclass
 class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):

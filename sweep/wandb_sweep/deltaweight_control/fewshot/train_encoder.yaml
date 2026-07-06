@@ -27,7 +27,7 @@ parameters:
   delta_weight:
     values: [0.0]
   decoder_nograd:
-    values: [true]
+    values: [false] # false
   unseen_eval_freq:
     value: 100
   export_unseen_predictions_csv:

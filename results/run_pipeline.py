@@ -145,6 +145,7 @@ _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
     "unseen_ratio_ngames":       {3, 9, 10},         # benchmark / seen_ratio_progress / condition_shift 생략
     "encoder_delta_weight_progress": {2, 3, 9, 10, 11},  # downloader + step 12만 실행
     "decoder_performance":       {1, 2, 3, 9, 10, 11, 12},  # step 13만 실행
+    "dwctrl":                    {1, 2, 3, 9, 10, 11, 12},  # step 13만 실행
     None:                        {9, 10, 11, 12, 13},    # experiment 미지정 시 생략
 }
 # fullshot 등 전용 실험이 아닌 일반 실험: 9, 10, 11, 12 생략

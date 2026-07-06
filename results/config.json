@@ -28,6 +28,27 @@
       ],
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "dwctrl": {
+      "target_projects": [
+        "aaai27_encoder_mgpcgrl_dwctrl"
+      ],
+      "project_display_names": {
+        "aaai27_encoder_mgpcgrl_dwctrl": "MGPCGRL DW Control"
+      },
+      "history_loss_key": "train(decoder)/reg_loss",
+      "history_loss_label": "Decoder Regression Loss",
+      "history_loss_output_name": "decoder_reg_loss",
+      "history_epoch_offset": 0,
+      "download_history_loss": false,
+      "download_prediction_artifacts": true,
+      "save_prediction_rows": false,
+      "prediction_metric": "regression_mae_norm",
+      "prediction_metric_label": "Normalized MAE",
+      "prediction_metric_output_name": "prediction_loss",
+      "prediction_norm_group_cols": ["unseen_game", "reward_enum"],
+      "exclude_delta_weights": [0.1],
+      "ylim_exclude_epoch_max": 0
     }
   },
   "project_display_names": {
@@ -56,7 +77,8 @@
     "aaai27_eval_mgpcgrl_fewshot_desc":       "MGPCGRL (prefix=desc)",
     "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)",
     "eval_mgpcgrl_direction0623":             "MGPCGRL Direction",
-    "aaai27_encoder_mgpcgrl__decoderperformance": "MGPCGRL Decoder Performance"
+    "aaai27_encoder_mgpcgrl__decoderperformance": "MGPCGRL Decoder Performance",
+    "aaai27_encoder_mgpcgrl_dwctrl":              "MGPCGRL DW Control"
   },
   "project_colors": {
     "aaai27_eval_random":         "#aaaaaa",
@@ -84,7 +106,8 @@
     "aaai27_eval_mgpcgrl_fewshot_desc":       "#4393c3",
     "aaai27_eval_mgpcgrl_fewshot_mix":        "#92c5de",
     "eval_mgpcgrl_direction0623":             "#2166ac",
-    "aaai27_encoder_mgpcgrl__decoderperformance": "#2166ac"
+    "aaai27_encoder_mgpcgrl__decoderperformance": "#2166ac",
+    "aaai27_encoder_mgpcgrl_dwctrl":              "#2166ac"
   },
   "games": {
     "colors": {

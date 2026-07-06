@@ -12,9 +12,11 @@ parameters:
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_fewshot_seenrate'
   unseen_ratio:
-    values: [0.01, 0.03]
+    value: 0.03
   seen_ratio:
     values: [0.0, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3]
+  delta_weight:
+    value: 0.03
   unseen_games:
     value: 'zd'
 command:

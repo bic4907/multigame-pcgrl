@@ -140,6 +140,7 @@ def collect_rows_with_seen_count(
             continue
         n_seen   = len(seen_games_list)
         n_unseen = len(unseen_games_list) if unseen_games_list is not None else 0
+        unseen_game = "+".join(sorted(unseen_games_list or [])) or "unknown"
 
         with results_path.open(newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -164,6 +165,7 @@ def collect_rows_with_seen_count(
                     "game_split":  game_split,
                     "n_seen":      n_seen,
                     "n_unseen":    n_unseen,
+                    "unseen_game":  unseen_game,
                     "seed":        seed,
                     "metrics":     metric_values,
                 })
@@ -308,6 +310,40 @@ def aggregate_by_n_seen_method(
                 stats[metric] = stat
         result[key] = stats
     return result
+
+
+def aggregate_by_unseen_game_method(
+    rows: list[dict],
+    metric_order: list[str],
+    game_split: str | None = "unseen",
+    reward_enum: str | None = None,
+) -> dict[tuple, dict]:
+    """(project, unseen_game) -> {metric: {mean, std, n}} 집계."""
+    filtered = [
+        r for r in rows
+        if (game_split is None or r.get("game_split") == game_split)
+        and (reward_enum is None or r["reward_enum"] == reward_enum)
+    ]
+
+    grouped: dict[tuple, list[dict]] = defaultdict(list)
+    for r in filtered:
+        grouped[(r.get("project", "unknown"), r.get("unseen_game", "unknown"))].append(r)
+
+    result: dict[tuple, dict] = {}
+    for key, group_rows in grouped.items():
+        stats: dict = {}
+        for metric in metric_order:
+            stat = _seed_agg(group_rows, metric)
+            if stat:
+                stats[metric] = stat
+        result[key] = stats
+    return result
+
+
+def _ordered_unseen_games(games: set[str]) -> list[str]:
+    cfg_order = list(_CFG.get("games", {}).get("colors", {}).keys())
+    ordered = [g for g in cfg_order if g in games]
+    return ordered + sorted(games - set(ordered))
 
 
 # ---------------------------------------------------------------------------
@@ -802,6 +838,172 @@ def write_all_subplot_grid(
     plt.close(fig)
 
 
+def write_unseen_game_grid(
+    output_path: Path,
+    rows: list[dict],
+    metric_order: list[str],
+    game_split: str | None,
+    reward_enum: str | None = None,
+    ylabel: str = "Progress",
+    ymin_progress: float | None = _YMIN_DEFAULT,
+    hlines: dict[str, dict[str, float]] | None = None,
+) -> None:
+    """unseen 게임 이름별 grouped bar chart.
+
+    x = unseen_game, y = metric, bar color = method.
+    game_split 이 None 이면 seen + unseen 전체 결과를 집계한다.
+    """
+    plt = _bar_plot_setup()
+    metric = metric_order[0]
+
+    plot_rows = [
+        r for r in rows
+        if (game_split is None or r.get("game_split") == game_split)
+        and (reward_enum is None or r["reward_enum"] == reward_enum)
+    ]
+    unseen_games = _ordered_unseen_games({
+        r.get("unseen_game", "unknown") for r in plot_rows
+        if r.get("unseen_game", "unknown") != "unknown"
+    })
+
+    _PREFERRED_ORDER = [
+        "aaai27_eval_ipcgrl_fewshot",
+        "aaai27_eval_mipcgrl_fewshot",
+        "aaai27_eval_vipcgrl_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot_dw0",
+        "aaai27_eval_mgpcgrl_fewshot",
+        "aaai27_eval_vipcgrl_unseen",
+        "aaai27_eval_mgpcgrl_unseen",
+        "aaai27_eval_mgpcgrl_all",
+        "aaai27_eval_mgpcgrl_oracle",
+    ]
+    all_projects = {r["project"] for r in plot_rows}
+    projects = [p for p in _PREFERRED_ORDER if p in all_projects] + \
+               sorted(all_projects - set(_PREFERRED_ORDER))
+    if not unseen_games or not projects:
+        return
+
+    colors = _project_colors(projects)
+    agg = aggregate_by_unseen_game_method(
+        rows,
+        metric_order,
+        game_split=game_split,
+        reward_enum=reward_enum,
+    )
+
+    all_lo, all_hi = [], []
+    for game in unseen_games:
+        for proj in projects:
+            stat = agg.get((proj, game), {}).get(metric)
+            if stat is None:
+                continue
+            m, s = stat["mean"], stat["std"]
+            all_lo.append(m - s)
+            all_hi.append(m + s)
+
+    if all_lo and all_hi:
+        data_min, data_max = min(all_lo), max(all_hi)
+        span = max(data_max - data_min, 1e-6)
+        pad = span * 0.15
+        auto_bottom = max(data_min - pad, 0.0)
+        auto_top = data_max + pad
+    else:
+        auto_bottom, auto_top = 0.0, 1.0
+
+    _hline_vals = []
+    if hlines:
+        for _hv in hlines.values():
+            v = _hv.get(metric)
+            if v is not None:
+                _hline_vals.append(v)
+    if _hline_vals:
+        auto_bottom = min(auto_bottom, min(_hline_vals) * 0.97)
+        auto_top = max(auto_top, max(_hline_vals) * 1.03)
+
+    if ymin_progress is not None and metric == "progress":
+        auto_bottom = ymin_progress
+
+    n_groups = len(unseen_games)
+    n_methods = len(projects)
+    group_width = 0.68
+    bar_width = group_width / n_methods
+
+    fig, ax = plt.subplots(figsize=(0.75 * max(1.25 * n_groups + 2.0, 5.0), 2.7))
+    x_center = list(range(n_groups))
+
+    for j, proj in enumerate(projects):
+        means, stds, xs = [], [], []
+        for k, game in enumerate(unseen_games):
+            stat = agg.get((proj, game), {}).get(metric)
+            if stat is None:
+                continue
+            offset = -group_width / 2 + (j + 0.5) * bar_width
+            xs.append(x_center[k] + offset)
+            means.append(stat["mean"])
+            stds.append(stat["std"])
+
+        if means:
+            bars = ax.bar(
+                xs, means, width=bar_width, yerr=stds, capsize=2.5,
+                color=colors[j % len(colors)],
+                edgecolor="none", alpha=0.9,
+                label=_project_display_name(proj),
+            )
+            for bar, m in zip(bars, means):
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + (auto_top - auto_bottom) * 0.015,
+                    f"{m:.2f}",
+                    ha="center", va="bottom",
+                    fontsize=6.5, color="black",
+                )
+
+    ax.set_xticks(x_center)
+    ax.set_xticklabels(unseen_games)
+    ax.set_xlabel("Unseen game", labelpad=6)
+    ax.set_xlim(-0.5, n_groups - 0.5)
+    ax.set_ylabel(ylabel, rotation=90, labelpad=8)
+    ax.set_ylim(auto_bottom, auto_top)
+    ax.grid(axis="y", alpha=0.3)
+    ax.tick_params(axis="x", length=0)
+
+    _hline_styles = ["--", "-.", ":"]
+    _hline_colors = ["#e41a1c", "#ff7f00", "#4daf4a"]
+    if hlines:
+        for hi, (hlabel, hvals) in enumerate(hlines.items()):
+            v = hvals.get(metric)
+            if v is None:
+                continue
+            _hc = _hline_colors[hi % len(_hline_colors)]
+            ax.axhline(
+                v,
+                linestyle=_hline_styles[hi % len(_hline_styles)],
+                color=_hc,
+                linewidth=1.4,
+                alpha=0.85,
+                zorder=5,
+            )
+            ax.text(
+                n_groups - 0.5 - 0.02,
+                v,
+                f"{hlabel}",
+                ha="right", va="bottom",
+                fontsize=7.5, color=_hc,
+                fontweight="bold",
+                zorder=6,
+            )
+
+    fig.legend(
+        loc="upper center", ncol=min(n_methods, 5), fontsize=9,
+        bbox_to_anchor=(0.5, 1.02), frameon=False,
+    )
+    fig.subplots_adjust(top=0.82)
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
+
+    _save_figure_png_pdf(fig, output_path)
+    plt.close(fig)
+
+
 # ---------------------------------------------------------------------------
 # 테이블 출력
 # ---------------------------------------------------------------------------
@@ -904,31 +1106,73 @@ def write_fewshot_table_csv(
     decimals: int = 4,
 ) -> None:
     metric = metric_order[0]
-    unseen_agg = aggregate_by_n_seen_method(rows, [metric], game_split="unseen")
-    all_agg = aggregate_by_n_seen_method(rows, [metric], game_split=None)
+    unseen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="unseen")
+    seen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="seen")
+    all_agg = aggregate_by_unseen_game_method(rows, [metric], game_split=None)
     unseen_rows = [r for r in rows if r.get("game_split") == "unseen"]
-    n_seen_vals = sorted({r["n_seen"] for r in unseen_rows})
+    unseen_games = _ordered_unseen_games({r.get("unseen_game", "unknown") for r in unseen_rows})
     projects = _ordered_projects({r["project"] for r in unseen_rows}, experiment)
 
     headers = ["method"]
-    for n in n_seen_vals:
-        headers += [f"{n}_seen_unseen", f"{n}_seen_all"]
+    for game in unseen_games:
+        headers += [f"{game}_unseen", f"{game}_seen", f"{game}_all"]
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=headers)
         writer.writeheader()
         for proj in projects:
             rec = {"method": _project_display_name(proj)}
-            for n in n_seen_vals:
-                rec[f"{n}_seen_unseen"] = _format_mean_std(
-                    unseen_agg.get((proj, n), {}).get(metric),
+            for game in unseen_games:
+                rec[f"{game}_unseen"] = _format_mean_std(
+                    unseen_agg.get((proj, game), {}).get(metric),
                     decimals,
                 )
-                rec[f"{n}_seen_all"] = _format_mean_std(
-                    all_agg.get((proj, n), {}).get(metric),
+                rec[f"{game}_seen"] = _format_mean_std(
+                    seen_agg.get((proj, game), {}).get(metric),
+                    decimals,
+                )
+                rec[f"{game}_all"] = _format_mean_std(
+                    all_agg.get((proj, game), {}).get(metric),
                     decimals,
                 )
             writer.writerow(rec)
+
+
+def write_fewshot_table_markdown(
+    output_path: Path,
+    rows: list[dict],
+    metric_order: list[str],
+    experiment: str | None,
+    decimals: int = 4,
+) -> None:
+    metric = metric_order[0]
+    unseen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="unseen")
+    seen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="seen")
+    all_agg = aggregate_by_unseen_game_method(rows, [metric], game_split=None)
+    unseen_rows = [r for r in rows if r.get("game_split") == "unseen"]
+    unseen_games = _ordered_unseen_games({r.get("unseen_game", "unknown") for r in unseen_rows})
+    projects = _ordered_projects({r["project"] for r in unseen_rows}, experiment)
+
+    header_cols = ["method"]
+    for game in unseen_games:
+        header_cols += [f"{game} / unseen", f"{game} / seen", f"{game} / all"]
+
+    lines = [
+        "| " + " | ".join(header_cols) + " |",
+        "| " + " | ".join(["---"] * len(header_cols)) + " |",
+    ]
+    for proj in projects:
+        cells = [_project_display_name(proj)]
+        for game in unseen_games:
+            for agg in (unseen_agg, seen_agg, all_agg):
+                cells.append(_format_mean_std(
+                    agg.get((proj, game), {}).get(metric),
+                    decimals,
+                ) or "-")
+        lines.append("| " + " | ".join(cells) + " |")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def write_fewshot_table_latex(
@@ -938,32 +1182,33 @@ def write_fewshot_table_latex(
     experiment: str | None,
     decimals: int = 4,
     caption: str = "Few-shot generalization results.",
-    label: str = "tab:fewshot_seenrate",
+    label: str = "tab:fewshot",
 ) -> None:
     metric = metric_order[0]
     metric_label = METRIC_DISPLAY_NAMES.get(metric, metric)
-    unseen_agg = aggregate_by_n_seen_method(rows, [metric], game_split="unseen")
-    all_agg = aggregate_by_n_seen_method(rows, [metric], game_split=None)
+    unseen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="unseen")
+    seen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="seen")
+    all_agg = aggregate_by_unseen_game_method(rows, [metric], game_split=None)
     unseen_rows = [r for r in rows if r.get("game_split") == "unseen"]
-    n_seen_vals = sorted({r["n_seen"] for r in unseen_rows})
+    unseen_games = _ordered_unseen_games({r.get("unseen_game", "unknown") for r in unseen_rows})
     projects = _ordered_projects({r["project"] for r in unseen_rows}, experiment)
 
-    colspec = "l" + "cc" * len(n_seen_vals)
+    colspec = "l" + "ccc" * len(unseen_games)
     group_header = "Method"
-    if n_seen_vals:
+    if unseen_games:
         group_header += " & " + " & ".join(
-            rf"\multicolumn{{2}}{{c}}{{{n} Seen}}" for n in n_seen_vals
+            rf"\multicolumn{{3}}{{c}}{{{_latex_escape(game)}}}" for game in unseen_games
         )
     group_header += r" \\"
     sub_header = ""
-    if n_seen_vals:
-        sub_header = " & " + " & ".join(["Unseen & All"] * len(n_seen_vals))
+    if unseen_games:
+        sub_header = " & " + " & ".join(["Unseen & Seen & All"] * len(unseen_games))
     sub_header += r" \\"
     cmidrule = ""
-    if n_seen_vals:
+    if unseen_games:
         cmidrule = " ".join(
-            rf"\cmidrule(lr){{{2 + 2 * i}-{3 + 2 * i}}}"
-            for i in range(len(n_seen_vals))
+            rf"\cmidrule(lr){{{2 + 3 * i}-{4 + 3 * i}}}"
+            for i in range(len(unseen_games))
         )
 
     lines = [
@@ -980,9 +1225,9 @@ def write_fewshot_table_latex(
     ]
     for proj in projects:
         cells = [_latex_escape(_project_display_name(proj))]
-        for n in n_seen_vals:
-            for agg in (unseen_agg, all_agg):
-                stat = agg.get((proj, n), {}).get(metric)
+        for game in unseen_games:
+            for agg in (unseen_agg, seen_agg, all_agg):
+                stat = agg.get((proj, game), {}).get(metric)
                 if stat:
                     cells.append(
                         rf"{stat['mean']:.{decimals}f}\std{{{stat['std']:.{decimals}f}}}"
@@ -1148,6 +1393,13 @@ def main() -> None:
         experiment=experiment,
         decimals=args.decimals,
     )
+    write_fewshot_table_markdown(
+        run_dir / f"{table_prefix}.md",
+        norm_rows,
+        metric_order,
+        experiment=experiment,
+        decimals=args.decimals,
+    )
     write_fewshot_table_latex(
         run_dir / f"{table_prefix}.tex",
         norm_rows,
@@ -1157,19 +1409,32 @@ def main() -> None:
     )
     log.info("table     : %s", run_dir / "progress_table.md")
     log.info("table     : %s", run_dir / f"{table_prefix}.csv")
+    log.info("table     : %s", run_dir / f"{table_prefix}.md")
     log.info("table     : %s", run_dir / f"{table_prefix}.tex")
 
     # ── 플롯 ──────────────────────────────────────────────────────────────
     _hl = hlines or None
     if not args.no_plot:
+        by_unseen_game = all(r.get("n_unseen") == 1 for r in norm_rows)
         try:
-            write_subplot_grid(
-                run_dir / "unseen.png",
-                norm_rows, metric_order,
-                ymin_progress=args.ymin,
-                hlines=_hl,
-            )
-            log.info("plot (unseen): %s", run_dir / "unseen.png")
+            if by_unseen_game:
+                write_unseen_game_grid(
+                    run_dir / "unseen_by_game.png",
+                    norm_rows, metric_order,
+                    game_split="unseen",
+                    ylabel="Progress (Unseen game)",
+                    ymin_progress=args.ymin,
+                    hlines=_hl,
+                )
+                log.info("plot (unseen by game): %s", run_dir / "unseen_by_game.png")
+            else:
+                write_subplot_grid(
+                    run_dir / "unseen.png",
+                    norm_rows, metric_order,
+                    ymin_progress=args.ymin,
+                    hlines=_hl,
+                )
+                log.info("plot (unseen): %s", run_dir / "unseen.png")
         except RuntimeError as e:
             log.error("Plot generation failed: %s", e)
             raise SystemExit(str(e)) from e
@@ -1178,13 +1443,24 @@ def main() -> None:
         has_seen = any(r.get("game_split") == "seen" for r in norm_rows)
         if has_seen:
             try:
-                write_seen_subplot_grid(
-                    run_dir / "seen.png",
-                    norm_rows, metric_order,
-                    ymin_progress=args.ymin,
-                    hlines=_hl,
-                )
-                log.info("plot (seen): %s", run_dir / "seen.png")
+                if by_unseen_game:
+                    write_unseen_game_grid(
+                        run_dir / "seen_by_game.png",
+                        norm_rows, metric_order,
+                        game_split="seen",
+                        ylabel="Progress (Seen games)",
+                        ymin_progress=args.ymin,
+                        hlines=_hl,
+                    )
+                    log.info("plot (seen by game): %s", run_dir / "seen_by_game.png")
+                else:
+                    write_seen_subplot_grid(
+                        run_dir / "seen.png",
+                        norm_rows, metric_order,
+                        ymin_progress=args.ymin,
+                        hlines=_hl,
+                    )
+                    log.info("plot (seen): %s", run_dir / "seen.png")
             except RuntimeError as e:
                 log.error("Plot (seen) generation failed: %s", e)
         else:
@@ -1192,13 +1468,24 @@ def main() -> None:
 
         # ── 전체 게임 progress (seen + unseen 합산) ───────────────────────
         try:
-            write_all_subplot_grid(
-                run_dir / "all.png",
-                norm_rows, metric_order,
-                ymin_progress=args.ymin,
-                hlines=_hl,
-            )
-            log.info("plot (all): %s", run_dir / "all.png")
+            if by_unseen_game:
+                write_unseen_game_grid(
+                    run_dir / "all_by_game.png",
+                    norm_rows, metric_order,
+                    game_split=None,
+                    ylabel="Progress (All games)",
+                    ymin_progress=args.ymin,
+                    hlines=_hl,
+                )
+                log.info("plot (all by game): %s", run_dir / "all_by_game.png")
+            else:
+                write_all_subplot_grid(
+                    run_dir / "all.png",
+                    norm_rows, metric_order,
+                    ymin_progress=args.ymin,
+                    hlines=_hl,
+                )
+                log.info("plot (all): %s", run_dir / "all.png")
         except RuntimeError as e:
             log.error("Plot (all) generation failed: %s", e)
 

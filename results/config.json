@@ -6,12 +6,11 @@
   "experiments": {
     "fullshot": {
       "target_projects": [
-        "aaai27_eval_pretrained_clip",
         "aaai27_eval_random",
-        "aaai27_eval_cpcgrl",
-        "aaai27_eval_ipcgrl",
-        "aaai27_eval_vipcgrl",
-        "aaai27_eval_mgpcgrl"
+        "aaai27_eval_ipcgrl_fullshot",
+        "aaai27_eval_mipcgrl_fullshot",
+        "aaai27_eval_vipcgrl_fullshot",
+        "aaai27_eval_mgpcgrl_fullshot"
       ],
       "re_oracle_project":          "aaai27_eval_cpcgrl",
       "re_oracle_label":            "CPCGRL (Oracle)",
@@ -19,90 +18,16 @@
       "re_baseline_label":          "CPCGRL",
       "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
     },
-    "cpcgrl_quantbin0623": {
-      "target_projects": [
-        "aaai27_eval_cpcgrl",
-        "eval_cpcgrl_quantbin0623"
-      ],
-      "re_oracle_project":          "aaai27_eval_cpcgrl",
-      "re_oracle_label":            "CPCGRL (Oracle)",
-      "re_baseline_project":        "aaai27_eval_cpcgrl",
-      "re_baseline_label":          "CPCGRL",
-      "re_exclude_from_compare":    ["aaai27_eval_cpcgrl"]
-    },
     "fewshot": {
       "target_projects": [
-        "aaai27_eval_pretrained_clip",
-        "aaai27_eval_finetuned_clip_unseen",
-        "aaai27_eval_vipcgrl_unseen",
+        "aaai27_eval_ipcgrl_fewshot",
+        "aaai27_eval_mipcgrl_fewshot",
         "aaai27_eval_vipcgrl_fewshot",
-        "aaai27_eval_mgpcgrl_unseen",
+        "aaai27_eval_mgpcgrl_fewshot_dw0",
         "aaai27_eval_mgpcgrl_fewshot"
       ],
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
-    },
-    "fewshot_delta_alignment": {
-      "target_projects": [
-        "aaai27_eval_mgpcgrl_fewshot",
-        "eval_mgpcgrl_fewshot_direction0626",
-        "eval_mgpcgrl_fewshot__deltaalignment_fs0627"
-      ],
-      "project_display_names": {
-        "aaai27_eval_mgpcgrl_fewshot": "MGPCGRL",
-        "eval_mgpcgrl_fewshot_direction0626": "MGPCGRL (0626)",
-        "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "MGPCGRL (0627)"
-      },
-      "re_oracle_project": "aaai27_eval_cpcgrl",
-      "re_oracle_label":   "CPCGRL (Oracle)"
-    },
-    "directional_fewshot": {
-      "target_projects": [
-        "aaai27_eval_mgpcgrl_fewshot",
-        "eval_mgpcgrl_fewshot_direction0625"
-      ],
-      "project_display_names": {
-        "aaai27_eval_mgpcgrl_fewshot": "MGPCGRL",
-        "eval_mgpcgrl_fewshot_direction0625": "MGPCGRL Direction"
-      },
-      "re_oracle_project": "aaai27_eval_cpcgrl",
-      "re_oracle_label":   "CPCGRL (Oracle)"
-    },
-    "domain_condition": {
-      "target_projects": [
-        "aaai27_eval_mgpcgrl_prefix_none",
-        "aaai27_eval_mgpcgrl_fewshot",
-        "aaai27_eval_mgpcgrl_fewshot_desc",
-        "aaai27_eval_mgpcgrl_fewshot_mix"
-      ],
-      "project_display_names": {
-        "aaai27_eval_mgpcgrl_prefix_none": "None",
-        "aaai27_eval_mgpcgrl_fewshot":      "Name",
-        "aaai27_eval_mgpcgrl_fewshot_desc": "Description",
-        "aaai27_eval_mgpcgrl_fewshot_mix":  "Name+Desc"
-      },
-      "progress_baseline_project": "none",
-      "re_oracle_project": "aaai27_eval_cpcgrl",
-      "re_oracle_label":   "CPCGRL (Oracle)"
-    },
-    "encoder_delta_weight_progress": {
-      "target_projects": [
-        "eval_mgpcgrl_direction0623",
-        "aaai27_eval_cpcgrl"
-      ],
-      "project_display_names": {
-        "eval_mgpcgrl_direction0623": "MGPCGRL Direction"
-      },
-      "re_oracle_project": "aaai27_eval_cpcgrl",
-      "re_oracle_label":   "CPCGRL (Oracle)"
-    },
-    "decoder_performance": {
-      "target_projects": [
-        "aaai27_encoder_mgpcgrl__decoderperformance"
-      ],
-      "project_display_names": {
-        "aaai27_encoder_mgpcgrl__decoderperformance": "MGPCGRL Decoder Performance"
-      }
     }
   },
   "project_display_names": {

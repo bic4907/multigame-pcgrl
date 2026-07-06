@@ -954,7 +954,7 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     # ── Continuous Task-wise Cross-game Direction Alignment Loss ──
     # 같은 task 안에서 condition이 증가할 때 text embedding이 움직이는 방향을
     # 게임 간에 정렬시키는 regularizer. 0.0 → 비활성(baseline 재현).
-    delta_weight: float = 0.1
+    delta_weight: float = 0.03
     delta_min_group_samples: int = 2   # (game, task) 그룹 최소 sample 수
     delta_var_eps: float = 1e-4        # condition variance 하한 (작으면 그룹 invalid)
     compute_delta_when_zero: bool = True  # delta_weight=0.0이어도 alignment metric 계산

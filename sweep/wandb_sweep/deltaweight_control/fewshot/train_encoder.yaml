@@ -25,7 +25,9 @@ parameters:
   eval_unseen_ratio:
     value: 1.0
   delta_weight:
-    values: [0.0, 0.03, 0.1]
+    values: [0.0, 0.03]
+  decoder_nograd:
+    values: [true, false]
   unseen_eval_freq:
     value: 100
   export_unseen_predictions_csv:

@@ -8,7 +8,7 @@ parameters:
   game:
     value: 'all'
   dataset_reward_enum:
-    values: [0, 1, 2, 3, 4]
+    values: [0]
   seed:
     values: [0]
   reevaluate:

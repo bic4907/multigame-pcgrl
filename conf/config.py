@@ -397,7 +397,9 @@ class MGPCGRLConfig(VIPCGRLConfig):
     # encoder_config.json에서 자동 주입됨. 0.0 = baseline (direction alignment 미사용).
     encoder_delta_weight: float = 0.0
 
-
+    # MGPCGRL: unseen 게임 데이터 로드 비율 (기본값 1.0 = 전체 로드).
+    # CLI에서 변경 가능하며, 1.0이 아닌 경우 exp_dir 이름에 '_uro-XX' suffix가 붙는다.
+    dataset_unseen_ratio: float = 1.0
 
 
 @dataclass
@@ -671,6 +673,9 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
 
     # ── encoder 학습 시 사용한 delta_weight (wandb 로깅/분석용) ──
     encoder_delta_weight: float = 0.0
+
+    # train과 동일한 값을 지정해야 exp_dir가 일치함. 1.0이 아닌 경우 '_uro-XX' suffix.
+    dataset_unseen_ratio: float = 1.0
 
 
 @dataclass

@@ -82,6 +82,21 @@ _CFG = load_cfg()
 # progress 에만 ymin 고정 (나머지는 matplotlib 자동)
 _YMIN_DEFAULT: float = 0.6
 _FIXED_YMIN_METRICS: set[str] = {"progress"}
+_DEFAULT_PROGRESS_PROJECT_ORDER: list[str] = [
+    "aaai27_eval_ipcgrl_zeroshot",
+    "aaai27_eval_mipcgrl_zeroshot",
+    "aaai27_eval_vipcgrl_zeroshot",
+    "aaai27_eval_mgpcgrl_zeroshot",
+    "aaai27_eval_ipcgrl_fewshot",
+    "aaai27_eval_mipcgrl_fewshot",
+    "aaai27_eval_vipcgrl_fewshot",
+    "aaai27_eval_mgpcgrl_fewshot_dw0",
+    "aaai27_eval_mgpcgrl_fewshot",
+    "aaai27_eval_vipcgrl_unseen",
+    "aaai27_eval_mgpcgrl_unseen",
+    "aaai27_eval_mgpcgrl_all",
+    "aaai27_eval_mgpcgrl_oracle",
+]
 
 
 def _save_figure_png_pdf(fig, output_path: Path, dpi: int = 200) -> Path:
@@ -344,6 +359,20 @@ def _ordered_unseen_games(games: set[str]) -> list[str]:
     cfg_order = list(_CFG.get("games", {}).get("colors", {}).keys())
     ordered = [g for g in cfg_order if g in games]
     return ordered + sorted(games - set(ordered))
+
+
+def _ordered_progress_projects(
+    projects: set[str],
+    experiment: str | None = None,
+) -> list[str]:
+    ordered: list[str] = []
+    for candidate in _get_experiment_folder_order(experiment):
+        if candidate in projects and candidate not in ordered:
+            ordered.append(candidate)
+    for candidate in _DEFAULT_PROGRESS_PROJECT_ORDER:
+        if candidate in projects and candidate not in ordered:
+            ordered.append(candidate)
+    return ordered + sorted(projects - set(ordered))
 
 
 # ---------------------------------------------------------------------------
@@ -847,6 +876,7 @@ def write_unseen_game_grid(
     ylabel: str = "Progress",
     ymin_progress: float | None = _YMIN_DEFAULT,
     hlines: dict[str, dict[str, float]] | None = None,
+    experiment: str | None = None,
 ) -> None:
     """unseen 게임 이름별 grouped bar chart.
 
@@ -866,20 +896,8 @@ def write_unseen_game_grid(
         if r.get("unseen_game", "unknown") != "unknown"
     })
 
-    _PREFERRED_ORDER = [
-        "aaai27_eval_ipcgrl_fewshot",
-        "aaai27_eval_mipcgrl_fewshot",
-        "aaai27_eval_vipcgrl_fewshot",
-        "aaai27_eval_mgpcgrl_fewshot_dw0",
-        "aaai27_eval_mgpcgrl_fewshot",
-        "aaai27_eval_vipcgrl_unseen",
-        "aaai27_eval_mgpcgrl_unseen",
-        "aaai27_eval_mgpcgrl_all",
-        "aaai27_eval_mgpcgrl_oracle",
-    ]
     all_projects = {r["project"] for r in plot_rows}
-    projects = [p for p in _PREFERRED_ORDER if p in all_projects] + \
-               sorted(all_projects - set(_PREFERRED_ORDER))
+    projects = _ordered_progress_projects(all_projects, experiment)
     if not unseen_games or not projects:
         return
 
@@ -1186,6 +1204,8 @@ def write_fewshot_table_latex(
 ) -> None:
     metric = metric_order[0]
     metric_label = METRIC_DISPLAY_NAMES.get(metric, metric)
+    if caption == "Few-shot generalization results." and experiment == "zeroshot":
+        caption = "Zero-shot generalization results."
     unseen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="unseen")
     seen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="seen")
     all_agg = aggregate_by_unseen_game_method(rows, [metric], game_split=None)
@@ -1425,6 +1445,7 @@ def main() -> None:
                     ylabel="Progress (Unseen game)",
                     ymin_progress=args.ymin,
                     hlines=_hl,
+                    experiment=experiment,
                 )
                 log.info("plot (unseen by game): %s", run_dir / "unseen_by_game.png")
             else:
@@ -1451,6 +1472,7 @@ def main() -> None:
                         ylabel="Progress (Seen games)",
                         ymin_progress=args.ymin,
                         hlines=_hl,
+                        experiment=experiment,
                     )
                     log.info("plot (seen by game): %s", run_dir / "seen_by_game.png")
                 else:
@@ -1476,6 +1498,7 @@ def main() -> None:
                     ylabel="Progress (All games)",
                     ymin_progress=args.ymin,
                     hlines=_hl,
+                    experiment=experiment,
                 )
                 log.info("plot (all by game): %s", run_dir / "all_by_game.png")
             else:

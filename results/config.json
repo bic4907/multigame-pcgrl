@@ -18,6 +18,16 @@
       "re_baseline_label":          "CPCGRL",
       "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
     },
+    "zeroshot": {
+      "target_projects": [
+        "aaai27_eval_ipcgrl_zeroshot",
+        "aaai27_eval_mipcgrl_zeroshot",
+        "aaai27_eval_vipcgrl_zeroshot",
+        "aaai27_eval_mgpcgrl_zeroshot_dw10"
+      ],
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
+    },
     "fewshot": {
       "target_projects": [
         "aaai27_eval_ipcgrl_fewshot",
@@ -67,9 +77,15 @@
     "aaai27_eval_ipcgrl_unseen": "IPCGRL",
     "aaai27_eval_vipcgrl_unseen":"VIPCGRL",
     "aaai27_eval_mgpcgrl_unseen_ratios_2_GT": "MGPCGRL (GT)",
+    "aaai27_eval_ipcgrl_zeroshot":             "IPCGRL (zeroshot)",
+    "aaai27_eval_mipcgrl_zeroshot":            "MIPCGRL (zeroshot)",
+    "aaai27_eval_vipcgrl_zeroshot":            "VIPCGRL (zeroshot)",
+    "aaai27_eval_mgpcgrl_zeroshot":            "MGPCGRL (zeroshot)",
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
+    "aaai27_eval_mipcgrl_fewshot":            "MIPCGRL (fewshot)",
     "aaai27_eval_vipcgrl_fewshot":            "VIPCGRL (fewshot)",
     "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (fewshot)",
+    "aaai27_eval_mgpcgrl_fewshot_dw0":         "MGPCGRL (fewshot, dw=0)",
     "eval_mgpcgrl_fewshot_direction0625":     "MGPCGRL Direction (fewshot)",
     "eval_mgpcgrl_fewshot_direction0626":     "MGPCGRL Direction (fewshot)",
     "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "MGPCGRL Delta Alignment (fewshot)",
@@ -96,9 +112,15 @@
     "aaai27_eval_mgpcgrl_oracle": "#92c5de",
     "aaai27_eval_vipcgrl_fewshot_deprecated": "#762a83",
     "aaai27_eval_mgpcgrl_fewshot_deprecated": "#4393c3",
+    "aaai27_eval_ipcgrl_zeroshot":            "#1a9641",
+    "aaai27_eval_mipcgrl_zeroshot":           "#66a61e",
+    "aaai27_eval_vipcgrl_zeroshot":           "#7b3294",
+    "aaai27_eval_mgpcgrl_zeroshot":           "#2166ac",
     "aaai27_eval_ipcgrl_fewshot":             "#1a9641",
+    "aaai27_eval_mipcgrl_fewshot":            "#66a61e",
     "aaai27_eval_vipcgrl_fewshot":            "#7b3294",
     "aaai27_eval_mgpcgrl_fewshot":            "#2166ac",
+    "aaai27_eval_mgpcgrl_fewshot_dw0":         "#4393c3",
     "eval_mgpcgrl_fewshot_direction0625":     "#4393c3",
     "eval_mgpcgrl_fewshot_direction0626":     "#4393c3",
     "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "#92c5de",

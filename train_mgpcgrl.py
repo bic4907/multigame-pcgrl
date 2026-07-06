@@ -74,18 +74,10 @@ def main(config: MGPCGRLConfig):
             config.dataset_seen_ratio = seen_ratio
 
         # ── unseen_ratio 주입 ──────────────────────────────────────────────────
-        # MGPCGRL: unseen 게임 데이터는 항상 전체(1.0)를 로드한다.
-        #   - reward decoder가 있으므로 encoder가 보지 못한 샘플도 condition 예측 가능.
-        #   - dataset_unseen_ratio=1.0 으로 고정하여 load_dataset_instruct 의
-        #     per-game ratio 필터링이 unseen 게임을 100% 포함하도록 한다.
+        # dataset_unseen_ratio 기본값은 1.0 (MGPCGRLConfig에서 고정).
+        # CLI로 다른 값을 지정한 경우 그대로 사용한다.
+        # reward_unseen_ratio는 encoder 학습 때의 unseen_ratio에서 별도 주입.
         unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
-        if config.dataset_unseen_ratio != 1.0:
-            logger.info(
-                "MGPCGRL: fixing dataset_unseen_ratio=1.0 (full load; "
-                "encoder unseen_ratio=%.4f is used for reward_unseen_ratio only)",
-                unseen_ratio,
-            )
-            config.dataset_unseen_ratio = 1.0
 
         # ── reward_unseen_ratio: unseen 샘플 내 metadata/decoder 경계 ──────────
         # 각 unseen 게임의 샘플을 순서 기준으로 분할:

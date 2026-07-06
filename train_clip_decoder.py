@@ -210,7 +210,7 @@ def build_train_indices_for_ratio(
 #  Train Step (JIT) — reward_pred 추가
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17))
+@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17, 18))
 def train_step(
     train_state: TrainState,
     batch: CLIPDecoderBatch,
@@ -230,6 +230,7 @@ def train_step(
     delta_min_count: int = 2,
     delta_var_eps: float = 1e-4,
     compute_delta_when_zero: bool = True,
+    decoder_nograd: bool = False,
 ):
     rng_key, dropout_rng = jax.random.split(rng_key)
 
@@ -361,6 +362,7 @@ def train_step(
             reward_enum=batch.reward_enum_target,
             mode=mode,
             training=is_train,
+            decoder_nograd=decoder_nograd,
             rngs={"dropout": dropout_rng},
         )
 
@@ -784,6 +786,7 @@ def evaluate_per_game(
             delta_min_count=int(getattr(config, "delta_min_group_samples", 2)),
             delta_var_eps=float(getattr(config, "delta_var_eps", 1e-4)),
             compute_delta_when_zero=bool(getattr(config, "compute_delta_when_zero", True)),
+            decoder_nograd=bool(getattr(config, "decoder_nograd", False)),
         )
 
         preds = np.array(jax.device_get(metrics["reward_pred"]))
@@ -1436,6 +1439,7 @@ def train_and_evaluate_ratio(
                     delta_min_count=int(getattr(config, "delta_min_group_samples", 2)),
                     delta_var_eps=float(getattr(config, "delta_var_eps", 1e-4)),
                     compute_delta_when_zero=bool(getattr(config, "compute_delta_when_zero", False)),
+                    decoder_nograd=bool(getattr(config, "decoder_nograd", False)),
                 )
                 epoch_loss += float(loss)
                 epoch_acc += float(metrics["reward_accuracy"])
@@ -2211,6 +2215,10 @@ def main(config: CLIPDecoderTrainConfig):
         logger.warning("encoder.model is None, using default value: cnnclip")
 
     config = init_config(config)
+
+    # decoder_nograd 실험은 exp 이름에 _nograd 표기
+    if getattr(config, "decoder_nograd", False):
+        config.exp_dir = config.exp_dir + "_nograd"
 
     rng_key = jax.random.PRNGKey(config.seed)
     np.random.seed(config.seed)

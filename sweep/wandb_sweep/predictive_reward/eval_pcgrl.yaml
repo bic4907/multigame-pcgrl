@@ -8,7 +8,7 @@ parameters:
   game:
     value: 'all'
   dataset_reward_enum:
-    values: [0]
+    values: [0, 1, 2, 3, 4]
   seed:
     values: [0]
   reevaluate:
@@ -16,7 +16,7 @@ parameters:
   overwrite:
     value: false
   upload_h5:
-    value: true
+    value: false
   train_seen_ratio:
     value: 1.0
   dataset_unseen_ratio:

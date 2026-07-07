@@ -60,6 +60,38 @@ def _as_float(value: object) -> float | None:
         return None
 
 
+def _as_bool(value: object) -> bool | None:
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"true", "1", "yes", "y", "on"}:
+        return True
+    if text in {"false", "0", "no", "n", "off"}:
+        return False
+    return None
+
+
+def _run_config_value(config: dict, *keys: str) -> object | None:
+    for key in keys:
+        if key in config:
+            return config.get(key)
+        current: object = config
+        found = True
+        for part in key.split("."):
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                found = False
+                break
+        if found:
+            return current
+    return None
+
+
 def _safe_pearson(a: pd.Series, b: pd.Series) -> float:
     aa = pd.to_numeric(a, errors="coerce")
     bb = pd.to_numeric(b, errors="coerce")
@@ -201,6 +233,7 @@ def _read_prediction_csvs(
     project: str,
     run,
     delta_weight: float | None,
+    decoder_nograd: bool | None,
 ) -> pd.DataFrame:
     frames = []
     for path in csv_paths:
@@ -216,6 +249,7 @@ def _read_prediction_csvs(
         df["source_csv"] = path.name
         if "delta_weight" not in df.columns or df["delta_weight"].isna().all():
             df["delta_weight"] = delta_weight
+        df["decoder_nograd"] = decoder_nograd
         frames.append(df)
     if not frames:
         return pd.DataFrame()
@@ -312,6 +346,7 @@ def _prediction_epoch_metrics_from_csvs(
     project: str,
     run,
     delta_weight: float | None,
+    decoder_nograd: bool | None,
     norm_group_cols: list[str] | None = None,
     norm_scales: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, int]:
@@ -450,6 +485,7 @@ def _prediction_epoch_metrics_from_csvs(
         grouped["run_id"] = run.id
         grouped["run_name"] = run.name
         grouped["delta_weight"] = delta_weight
+        grouped["decoder_nograd"] = decoder_nograd
         frames.append(grouped)
 
     if not frames:
@@ -460,6 +496,7 @@ def _prediction_epoch_metrics_from_csvs(
         "run_id",
         "run_name",
         "delta_weight",
+        "decoder_nograd",
         "unseen_game",
         "reward_enum",
         "epoch",
@@ -478,6 +515,7 @@ def _history_rows(
     project: str,
     run,
     delta_weight: float | None,
+    decoder_nograd: bool | None,
     loss_key: str,
     epoch_offset: float,
     cache_dir: Path,
@@ -493,6 +531,7 @@ def _history_rows(
         except Exception:
             cached = pd.DataFrame()
         if not cached.empty:
+            cached["decoder_nograd"] = decoder_nograd
             return cached
 
     try:
@@ -519,9 +558,10 @@ def _history_rows(
     hist["run_id"] = run.id
     hist["run_name"] = run.name
     hist["delta_weight"] = delta_weight
+    hist["decoder_nograd"] = decoder_nograd
     hist = hist.rename(columns={loss_key: "history_loss"})
     hist = hist[
-        ["project", "run_id", "run_name", "delta_weight", "epoch", "history_loss"]
+        ["project", "run_id", "run_name", "delta_weight", "decoder_nograd", "epoch", "history_loss"]
     ].dropna(subset=["epoch"])
     if _is_finished_run(run) and not hist.empty:
         history_cache.parent.mkdir(parents=True, exist_ok=True)
@@ -592,6 +632,8 @@ def _prediction_epoch_metrics(pred_rows: pd.DataFrame) -> pd.DataFrame:
         df["regression_sq_error_norm"] = float("nan")
 
     group_cols = ["project", "run_id", "run_name", "delta_weight", "epoch"]
+    if "decoder_nograd" in df.columns:
+        group_cols.insert(4, "decoder_nograd")
     grouped = df.groupby(group_cols, dropna=False).agg(
         regression_mae_raw=("regression_abs_error_raw", "mean"),
         regression_mae_norm=("regression_abs_error_norm", "mean"),
@@ -626,24 +668,24 @@ def _auto_bin_size(epoch_metrics: pd.DataFrame, loss_history: pd.DataFrame, max_
 def _aggregate_for_plot(df: pd.DataFrame, value_col: str, epoch_bin_size: int) -> pd.DataFrame:
     if df.empty or value_col not in df.columns:
         return pd.DataFrame()
-    work = df.copy()
-    work["delta_weight"] = pd.to_numeric(work["delta_weight"], errors="coerce")
+    work = _with_method_columns(df)
     work["epoch_bin"] = _epoch_bin(work["epoch"], epoch_bin_size)
     work[value_col] = pd.to_numeric(work[value_col], errors="coerce")
-    work = work.dropna(subset=["delta_weight", "epoch_bin", value_col])
+    work = work.dropna(subset=["method_key", "epoch_bin", value_col])
     if work.empty:
         return pd.DataFrame()
+    method_cols = ["method_key", "method_label", "method_order"]
     if "run_id" in work.columns:
         work = (
-            work.groupby(["delta_weight", "epoch_bin", "run_id"], dropna=False)[value_col]
+            work.groupby(method_cols + ["epoch_bin", "run_id"], dropna=False)[value_col]
             .mean()
             .reset_index()
         )
     grouped = (
-        work.groupby(["delta_weight", "epoch_bin"], dropna=False)[value_col]
+        work.groupby(method_cols + ["epoch_bin"], dropna=False)[value_col]
         .agg(["mean", "std", "count"])
         .reset_index()
-        .sort_values(["delta_weight", "epoch_bin"])
+        .sort_values(["method_order", "epoch_bin"])
     )
     grouped["sem"] = grouped["std"].fillna(0.0) / grouped["count"].pow(0.5)
     grouped = grouped.rename(columns={"epoch_bin": "epoch", "mean": value_col})
@@ -657,28 +699,28 @@ def _aggregate_by_game_for_plot(
 ) -> pd.DataFrame:
     if df.empty or value_col not in df.columns or "unseen_game" not in df.columns:
         return pd.DataFrame()
-    work = df.copy()
-    work["delta_weight"] = pd.to_numeric(work["delta_weight"], errors="coerce")
+    work = _with_method_columns(df)
     work["epoch_bin"] = _epoch_bin(work["epoch"], epoch_bin_size)
     work[value_col] = pd.to_numeric(work[value_col], errors="coerce")
-    work = work.dropna(subset=["delta_weight", "epoch_bin", "unseen_game", value_col])
+    work = work.dropna(subset=["method_key", "epoch_bin", "unseen_game", value_col])
     work = work[work["unseen_game"].astype(str) != "unknown"]
     if work.empty:
         return pd.DataFrame()
+    method_cols = ["method_key", "method_label", "method_order"]
     if "run_id" in work.columns:
         work = (
             work.groupby(
-                ["unseen_game", "delta_weight", "epoch_bin", "run_id"],
+                ["unseen_game"] + method_cols + ["epoch_bin", "run_id"],
                 dropna=False,
             )[value_col]
             .mean()
             .reset_index()
         )
     grouped = (
-        work.groupby(["unseen_game", "delta_weight", "epoch_bin"], dropna=False)[value_col]
+        work.groupby(["unseen_game"] + method_cols + ["epoch_bin"], dropna=False)[value_col]
         .agg(["mean", "std", "count"])
         .reset_index()
-        .sort_values(["unseen_game", "delta_weight", "epoch_bin"])
+        .sort_values(["unseen_game", "method_order", "epoch_bin"])
         .rename(columns={"epoch_bin": "epoch"})
     )
     grouped["sem"] = grouped["std"].fillna(0.0) / grouped["count"].pow(0.5)
@@ -700,24 +742,95 @@ def _filter_excluded_delta_weights(
     return work[keep].reset_index(drop=True)
 
 
+def _method_key(delta_weight: object, decoder_nograd: object = None) -> str:
+    weight = _as_float(delta_weight)
+    nograd = _as_bool(decoder_nograd)
+    if nograd is True:
+        return "detach"
+    if weight is not None and math.isclose(weight, 0.0, abs_tol=1e-9):
+        return "mgpcgrl"
+    if weight is not None and math.isclose(weight, 0.03, abs_tol=1e-9):
+        return "mgpcgrl_da"
+    return f"delta_{weight:g}" if weight is not None else "unknown"
+
+
+def _method_label(method_key: str) -> str:
+    labels = {
+        "mgpcgrl": "MGPCGRL",
+        "mgpcgrl_da": "MGPCGRL-DA",
+        "detach": "Detach",
+        "unknown": "Unknown",
+    }
+    if method_key.startswith("delta_"):
+        return method_key.removeprefix("delta_")
+    return labels.get(method_key, method_key)
+
+
+def _method_sort_order(method_key: str) -> int:
+    order = {
+        "mgpcgrl": 0,
+        "mgpcgrl_da": 1,
+        "detach": 2,
+        "unknown": 99,
+    }
+    return order.get(method_key, 50)
+
+
+def _with_method_columns(df: pd.DataFrame) -> pd.DataFrame:
+    work = df.copy()
+    if "delta_weight" not in work.columns:
+        work["delta_weight"] = float("nan")
+    if "decoder_nograd" not in work.columns:
+        work["decoder_nograd"] = None
+    work["delta_weight"] = pd.to_numeric(work["delta_weight"], errors="coerce")
+    work["method_key"] = [
+        _method_key(delta_weight, decoder_nograd)
+        for delta_weight, decoder_nograd in zip(
+            work["delta_weight"],
+            work["decoder_nograd"],
+            strict=False,
+        )
+    ]
+    work["method_label"] = work["method_key"].map(_method_label)
+    work["method_order"] = work["method_key"].map(_method_sort_order)
+    return work
+
+
 def _display_game_name(game: str) -> str:
     return str(game).replace("_", " ").title()
 
 
-def _display_lambda_label(weight: float) -> str:
-    if math.isclose(weight, 0.0, abs_tol=1e-9):
-        return "MGPCGRL"
-    if math.isclose(weight, 0.03, abs_tol=1e-9):
-        return "MGPCGRL-DA"
-    return f"{weight:g}"
+def _method_color(method_key: str) -> str:
+    colors = {
+        "mgpcgrl": "#4d4d4d",
+        "mgpcgrl_da": "#2166ac",
+        "detach": "#b2182b",
+    }
+    return colors.get(method_key, "#777777")
 
 
-def _method_marker(weight: float) -> str:
-    if math.isclose(weight, 0.0, abs_tol=1e-9):
-        return "o"
-    if math.isclose(weight, 0.03, abs_tol=1e-9):
-        return "*"
-    return "s"
+def _method_marker(method_key: str) -> str:
+    markers = {
+        "mgpcgrl": "o",
+        "mgpcgrl_da": "*",
+        "detach": "s",
+    }
+    return markers.get(method_key, "D")
+
+
+def _method_line_style(method_key: str) -> str:
+    styles = {
+        "mgpcgrl": "-",
+        "mgpcgrl_da": "--",
+        "detach": "-.",
+    }
+    return styles.get(method_key, ":")
+
+
+def _method_marker_size(method_key: str) -> float:
+    if method_key == "mgpcgrl_da":
+        return 6.8
+    return 4.5
 
 
 def _plot_by_unseen_game(
@@ -754,13 +867,6 @@ def _plot_by_unseen_game(
             return str(int(round(value)))
         return f"{value:g}"
 
-    def _line_style(weight: float) -> str:
-        if math.isclose(weight, 0.0, abs_tol=1e-9):
-            return "-"
-        if math.isclose(weight, 0.03, abs_tol=1e-9):
-            return "--"
-        return ":"
-
     def _marker_indices(n_points: int) -> list[int]:
         if n_points <= 0:
             return []
@@ -777,17 +883,23 @@ def _plot_by_unseen_game(
         game_colors = _CFG.get("games", {}).get("colors", {})
         fallback_colors = mpl.colormaps.get_cmap("tab10")
         games = sorted(str(g) for g in plot_df["unseen_game"].dropna().unique())
-        weights = sorted(float(w) for w in plot_df["delta_weight"].dropna().unique())
+        methods = (
+            plot_df[["method_key", "method_label", "method_order"]]
+            .drop_duplicates()
+            .sort_values("method_order")
+            .to_dict("records")
+        )
         game_color_map = {
             game: game_colors.get(game, fallback_colors(idx % 10))
             for idx, game in enumerate(games)
         }
 
         for game in games:
-            for weight in weights:
+            for method in methods:
+                method_key = str(method["method_key"])
                 line_df = plot_df[
                     (plot_df["unseen_game"].astype(str) == game)
-                    & (plot_df["delta_weight"].astype(float) == weight)
+                    & (plot_df["method_key"].astype(str) == method_key)
                 ].sort_values("epoch")
                 if line_df.empty:
                     continue
@@ -800,10 +912,10 @@ def _plot_by_unseen_game(
                     y,
                     color=game_color_map[game],
                     linewidth=1.8,
-                    linestyle=_line_style(weight),
-                    marker=_method_marker(weight),
+                    linestyle=_method_line_style(method_key),
+                    marker=_method_marker(method_key),
                     markevery=marker_idx,
-                    markersize=4.8 if math.isclose(weight, 0.03, abs_tol=1e-9) else 3.2,
+                    markersize=_method_marker_size(method_key),
                     alpha=0.95,
                 )
                 ax.fill_between(
@@ -829,18 +941,18 @@ def _plot_by_unseen_game(
             )
             for game in games
         ]
-        lambda_handles = [
+        method_handles = [
             Line2D(
                 [0],
                 [0],
                 color="#333333",
                 linewidth=2.0,
-                linestyle=_line_style(weight),
-                marker=_method_marker(weight),
-                markersize=7.0 if math.isclose(weight, 0.03, abs_tol=1e-9) else 4.5,
-                label=_display_lambda_label(weight),
+                linestyle=_method_line_style(str(method["method_key"])),
+                marker=_method_marker(str(method["method_key"])),
+                markersize=_method_marker_size(str(method["method_key"])),
+                label=str(method["method_label"]),
             )
-            for weight in weights
+            for method in methods
         ]
         first_legend = ax.legend(
             handles=game_handles,
@@ -853,8 +965,8 @@ def _plot_by_unseen_game(
         )
         ax.add_artist(first_legend)
         ax.legend(
-            handles=lambda_handles,
-            title=r"$\lambda_{dir}$",
+            handles=method_handles,
+            title="Method",
             loc="upper left",
             bbox_to_anchor=(0.0, 1.24),
             frameon=True,
@@ -889,16 +1001,16 @@ def _last_epoch_bar_data(epoch_metrics: pd.DataFrame, value_col: str) -> pd.Data
         or "unseen_game" not in epoch_metrics.columns
     ):
         return pd.DataFrame()
-    work = epoch_metrics.copy()
-    work["delta_weight"] = pd.to_numeric(work["delta_weight"], errors="coerce")
+    work = _with_method_columns(epoch_metrics)
     work["epoch"] = pd.to_numeric(work["epoch"], errors="coerce")
     work[value_col] = pd.to_numeric(work[value_col], errors="coerce")
-    work = work.dropna(subset=["delta_weight", "epoch", "unseen_game", value_col])
+    work = work.dropna(subset=["method_key", "epoch", "unseen_game", value_col])
     work = work[work["unseen_game"].astype(str) != "unknown"]
     if work.empty:
         return pd.DataFrame()
 
-    seed_cols = ["unseen_game", "delta_weight"]
+    method_cols = ["method_key", "method_label", "method_order"]
+    seed_cols = ["unseen_game"] + method_cols
     if "run_id" in work.columns:
         seed_cols.append("run_id")
     max_epoch = work.groupby(seed_cols, dropna=False)["epoch"].transform("max")
@@ -908,18 +1020,18 @@ def _last_epoch_bar_data(epoch_metrics: pd.DataFrame, value_col: str) -> pd.Data
 
     if "run_id" in work.columns:
         seed_values = (
-            work.groupby(["unseen_game", "delta_weight", "run_id"], dropna=False)[value_col]
+            work.groupby(["unseen_game"] + method_cols + ["run_id"], dropna=False)[value_col]
             .mean()
             .reset_index()
         )
     else:
-        seed_values = work[["unseen_game", "delta_weight", value_col]].copy()
+        seed_values = work[["unseen_game"] + method_cols + [value_col]].copy()
 
     grouped = (
-        seed_values.groupby(["unseen_game", "delta_weight"], dropna=False)[value_col]
+        seed_values.groupby(["unseen_game"] + method_cols, dropna=False)[value_col]
         .agg(["mean", "std", "count"])
         .reset_index()
-        .sort_values(["unseen_game", "delta_weight"])
+        .sort_values(["unseen_game", "method_order"])
     )
     grouped["sem"] = grouped["std"].fillna(0.0) / grouped["count"].pow(0.5)
     return grouped.rename(columns={"mean": value_col})
@@ -950,23 +1062,25 @@ def _plot_last_epoch_bar(
         present_games = [str(g) for g in bar_df["unseen_game"].dropna().unique()]
         games = [g for g in configured_games if g in present_games]
         games.extend(sorted(g for g in present_games if g not in games))
-        weights = sorted(float(w) for w in bar_df["delta_weight"].dropna().unique())
-        method_colors = {
-            0.0: "#4d4d4d",
-            0.03: "#2166ac",
-        }
+        methods = (
+            bar_df[["method_key", "method_label", "method_order"]]
+            .drop_duplicates()
+            .sort_values("method_order")
+            .to_dict("records")
+        )
         x = np.arange(len(games), dtype=float)
         total_width = 0.74
-        bar_width = total_width / max(1, len(weights))
-        offsets = (np.arange(len(weights)) - (len(weights) - 1) / 2.0) * bar_width
+        bar_width = total_width / max(1, len(methods))
+        offsets = (np.arange(len(methods)) - (len(methods) - 1) / 2.0) * bar_width
 
-        for idx, weight in enumerate(weights):
+        for idx, method in enumerate(methods):
+            method_key = str(method["method_key"])
             values = []
             errors = []
             for game in games:
                 row = bar_df[
                     (bar_df["unseen_game"].astype(str) == game)
-                    & (bar_df["delta_weight"].astype(float) == weight)
+                    & (bar_df["method_key"].astype(str) == method_key)
                 ]
                 if row.empty:
                     values.append(float("nan"))
@@ -974,7 +1088,7 @@ def _plot_last_epoch_bar(
                 else:
                     values.append(float(row.iloc[0][prediction_metric]))
                     errors.append(float(row.iloc[0]["sem"]))
-            color = method_colors.get(round(weight, 6), "#777777")
+            color = _method_color(method_key)
             centers = x + offsets[idx]
             bars = ax.bar(
                 centers,
@@ -982,11 +1096,11 @@ def _plot_last_epoch_bar(
                 width=bar_width * 0.88,
                 color=color,
                 alpha=0.82,
-                label=_display_lambda_label(weight),
+                label=str(method["method_label"]),
                 yerr=errors,
                 error_kw={"elinewidth": 1.0, "capsize": 2.5, "capthick": 1.0},
                 edgecolor="white",
-                hatch="////" if math.isclose(weight, 0.03, abs_tol=1e-9) else None,
+                hatch="////" if method_key == "mgpcgrl_da" else ("...." if method_key == "detach" else None),
                 linewidth=0.6,
             )
             for bar, value, error in zip(bars, values, errors, strict=False):
@@ -1014,7 +1128,7 @@ def _plot_last_epoch_bar(
         ax.legend(
             loc="upper center",
             bbox_to_anchor=(0.5, 1.2),
-            ncol=max(1, len(weights)),
+            ncol=max(1, len(methods)),
             frameon=False,
             fontsize=8,
             handlelength=1.4,
@@ -1079,20 +1193,17 @@ def _plot_performance(
             )
         )
 
-    weights: set[float] = set()
+    methods_by_key: dict[str, dict] = {}
     for source, value_col, _, _ in specs:
         plot_df = _aggregate_for_plot(source, value_col, epoch_bin_size)
         if not plot_df.empty:
-            weights.update(float(w) for w in plot_df["delta_weight"].dropna().unique())
-    sorted_weights = sorted(weights)
-    if sorted_weights:
-        norm = mpl.colors.Normalize(vmin=min(sorted_weights), vmax=max(sorted_weights))
-        cmap = mpl.colormaps.get_cmap("Blues")
-    else:
-        norm = mpl.colors.Normalize(vmin=0.0, vmax=1.0)
-        cmap = mpl.colormaps.get_cmap("Blues")
-
-    markers = ["o", "s", "^", "D", "v", "P", "X"]
+            for method in (
+                plot_df[["method_key", "method_label", "method_order"]]
+                .drop_duplicates()
+                .to_dict("records")
+            ):
+                methods_by_key[str(method["method_key"])] = method
+    methods = sorted(methods_by_key.values(), key=lambda item: int(item["method_order"]))
 
     def _epoch_formatter(value: float, _pos: int) -> str:
         if abs(value) >= 1000:
@@ -1113,27 +1224,6 @@ def _plot_performance(
             indices.append(n_points - 1)
         return indices
 
-    def _line_style(weight: float) -> str:
-        if math.isclose(weight, 0.0, abs_tol=1e-9):
-            return "-"
-        if math.isclose(weight, 0.03, abs_tol=1e-9):
-            return "--"
-        return ":"
-
-    def _display_lambda_label(weight: float) -> str:
-        if math.isclose(weight, 0.0, abs_tol=1e-9):
-            return "MGPCGRL"
-        if math.isclose(weight, 0.03, abs_tol=1e-9):
-            return "MGPCGRL-DA"
-        return f"{weight:g}"
-
-    def _method_marker(weight: float) -> str:
-        if math.isclose(weight, 0.0, abs_tol=1e-9):
-            return "o"
-        if math.isclose(weight, 0.03, abs_tol=1e-9):
-            return "*"
-        return "s"
-
     for source, value_col, ylabel, out_path in specs:
         plot_df = _aggregate_for_plot(source, value_col, epoch_bin_size)
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1142,11 +1232,12 @@ def _plot_performance(
             ax.text(0.5, 0.5, f"No data: {value_col}", ha="center", va="center")
             ax.set_axis_off()
         else:
-            for idx, weight in enumerate(sorted_weights):
-                wdf = plot_df[plot_df["delta_weight"] == weight].sort_values("epoch")
+            for method in methods:
+                method_key = str(method["method_key"])
+                wdf = plot_df[plot_df["method_key"].astype(str) == method_key].sort_values("epoch")
                 if wdf.empty:
                     continue
-                color = cmap(0.28 + 0.72 * norm(weight))
+                color = _method_color(method_key)
                 x = wdf["epoch"].astype(float).to_numpy()
                 y = wdf[value_col].astype(float).to_numpy()
                 sem = wdf["sem"].fillna(0.0).astype(float).to_numpy()
@@ -1159,10 +1250,10 @@ def _plot_performance(
                     y_marked,
                     color=color,
                     linewidth=1.9,
-                    linestyle=_line_style(weight),
-                    marker=_method_marker(weight),
-                    markersize=6.2 if math.isclose(weight, 0.03, abs_tol=1e-9) else 4.4,
-                    label=_display_lambda_label(weight),
+                    linestyle=_method_line_style(method_key),
+                    marker=_method_marker(method_key),
+                    markersize=_method_marker_size(method_key),
+                    label=str(method["method_label"]),
                 )
                 ax.fill_between(
                     x_marked,
@@ -1176,7 +1267,7 @@ def _plot_performance(
             ax.xaxis.set_major_locator(MultipleLocator(1000))
             ax.xaxis.set_major_formatter(FuncFormatter(_epoch_formatter))
             ax.legend(
-                title=r"$\lambda_{dir}$",
+                title="Method",
                 loc="upper right",
                 bbox_to_anchor=(1.0, 1.22),
                 frameon=True,
@@ -1199,6 +1290,69 @@ def _plot_performance(
         fig.savefig(out_path.with_suffix(".png"), dpi=240)
         fig.savefig(out_path.with_suffix(".pdf"))
         plt.close(fig)
+
+
+def _plot_decoder_outputs(
+    *,
+    epoch_metrics: pd.DataFrame,
+    loss_history: pd.DataFrame,
+    run_dir: Path,
+    loss_plot_specs: list[tuple[str, str, str]],
+    args: argparse.Namespace,
+    history_loss_label: str,
+    history_loss_output_name: str,
+    prediction_metric: str,
+    prediction_metric_label: str,
+    prediction_metric_output_name: str,
+    ylim_exclude_epoch_max: float | None,
+) -> None:
+    if not loss_history.empty:
+        _plot_performance(
+            epoch_metrics=pd.DataFrame(),
+            loss_history=loss_history,
+            output_base=run_dir / "decoder_performance_by_delta_weight",
+            epoch_bin_size=args.epoch_bin_size,
+            max_points_per_line=args.max_points_per_line,
+            history_loss_label=history_loss_label,
+            history_loss_output_name=history_loss_output_name,
+            prediction_metric=prediction_metric,
+            prediction_metric_label=prediction_metric_label,
+            prediction_metric_output_name=prediction_metric_output_name,
+            ylim_exclude_epoch_max=ylim_exclude_epoch_max,
+        )
+    if not epoch_metrics.empty and "unseen_game" in epoch_metrics.columns:
+        for metric_name, metric_label, output_name in loss_plot_specs:
+            _plot_by_unseen_game(
+                epoch_metrics=epoch_metrics,
+                output_path=run_dir / output_name,
+                epoch_bin_size=args.epoch_bin_size,
+                max_points_per_line=args.max_points_per_line,
+                prediction_metric=metric_name,
+                prediction_metric_label=metric_label,
+                ylim_exclude_epoch_max=ylim_exclude_epoch_max,
+            )
+            _plot_last_epoch_bar(
+                epoch_metrics=epoch_metrics,
+                output_path=run_dir / f"{output_name}_last_epoch_bar",
+                prediction_metric=metric_name,
+                prediction_metric_label=metric_label,
+                ylim_exclude_epoch_max=ylim_exclude_epoch_max,
+            )
+    else:
+        for metric_name, metric_label, output_name in loss_plot_specs:
+            _plot_performance(
+                epoch_metrics=epoch_metrics,
+                loss_history=pd.DataFrame(),
+                output_base=run_dir / "decoder_performance_by_delta_weight",
+                epoch_bin_size=args.epoch_bin_size,
+                max_points_per_line=args.max_points_per_line,
+                history_loss_label=history_loss_label,
+                history_loss_output_name=history_loss_output_name,
+                prediction_metric=metric_name,
+                prediction_metric_label=metric_label,
+                prediction_metric_output_name=output_name,
+                ylim_exclude_epoch_max=ylim_exclude_epoch_max,
+            )
 
 
 def parse_args() -> argparse.Namespace:
@@ -1346,6 +1500,7 @@ def main() -> None:
         for w in exp_cfg.get("exclude_delta_weights", [])
         if _as_float(w) is not None
     ]
+    default_decoder_nograd = _as_bool(exp_cfg.get("default_decoder_nograd"))
     cache_dir = Path(args.cache_dir)
     if not cache_dir.is_absolute():
         cache_dir = (_ROOT / cache_dir).resolve()
@@ -1377,7 +1532,18 @@ def main() -> None:
         runs = list(api.runs(f"{args.entity}/{project}", filters=filters, per_page=200))
         for run in tqdm(runs, desc=project, unit="run"):
             scanned_runs += 1
-            delta_weight = _as_float(run.config.get("delta_weight"))
+            delta_weight = _as_float(_run_config_value(run.config, "delta_weight"))
+            decoder_nograd = _as_bool(
+                _run_config_value(
+                    run.config,
+                    "decoder_nograd",
+                    "decoder.nograd",
+                    "decoder.nograd_decoder",
+                    "decoder.decoder_nograd",
+                )
+            )
+            if decoder_nograd is None:
+                decoder_nograd = default_decoder_nograd
             if download_prediction_artifacts:
                 csv_paths = _download_prediction_artifact(run, project, cache_dir, force=args.force)
                 if csv_paths:
@@ -1386,6 +1552,7 @@ def main() -> None:
                         "project": project,
                         "run": run,
                         "delta_weight": delta_weight,
+                        "decoder_nograd": decoder_nograd,
                         "csv_paths": csv_paths,
                     })
 
@@ -1394,6 +1561,7 @@ def main() -> None:
                     project,
                     run,
                     delta_weight,
+                    decoder_nograd,
                     loss_key=history_loss_key,
                     epoch_offset=history_epoch_offset,
                     cache_dir=cache_dir,
@@ -1420,6 +1588,7 @@ def main() -> None:
             project=record["project"],
             run=run,
             delta_weight=record["delta_weight"],
+            decoder_nograd=record["decoder_nograd"],
             norm_group_cols=prediction_norm_group_cols,
             norm_scales=norm_scales,
         )
@@ -1432,6 +1601,7 @@ def main() -> None:
                 project=record["project"],
                 run=run,
                 delta_weight=record["delta_weight"],
+                decoder_nograd=record["decoder_nograd"],
             )
             if not rows.empty:
                 prediction_frames.append(rows)
@@ -1460,6 +1630,19 @@ def main() -> None:
         missing_delta = loss_history["delta_weight"].isna()
         loss_history.loc[missing_delta, "delta_weight"] = (
             loss_history.loc[missing_delta, "run_id"].map(run_delta)
+        )
+    if not prediction_rows.empty and not loss_history.empty and "decoder_nograd" in prediction_rows.columns:
+        if "decoder_nograd" not in loss_history.columns:
+            loss_history["decoder_nograd"] = None
+        run_decoder_nograd = (
+            prediction_rows[["run_id", "decoder_nograd"]]
+            .dropna()
+            .drop_duplicates("run_id")
+            .set_index("run_id")["decoder_nograd"]
+        )
+        missing_decoder_nograd = loss_history["decoder_nograd"].isna()
+        loss_history.loc[missing_decoder_nograd, "decoder_nograd"] = (
+            loss_history.loc[missing_decoder_nograd, "run_id"].map(run_decoder_nograd)
         )
 
     prediction_rows = _filter_excluded_delta_weights(prediction_rows, excluded_delta_weights)
@@ -1494,53 +1677,33 @@ def main() -> None:
     ]
 
     if not args.no_plot:
-        if not loss_history.empty:
-            _plot_performance(
-                epoch_metrics=pd.DataFrame(),
-                loss_history=loss_history,
-                output_base=run_dir / "decoder_performance_by_delta_weight",
-                epoch_bin_size=args.epoch_bin_size,
-                max_points_per_line=args.max_points_per_line,
-                history_loss_label=history_loss_label,
-                history_loss_output_name=history_loss_output_name,
-                prediction_metric=prediction_metric,
-                prediction_metric_label=prediction_metric_label,
-                prediction_metric_output_name=prediction_metric_output_name,
-                ylim_exclude_epoch_max=ylim_exclude_epoch_max,
-            )
-        if not epoch_metrics.empty and "unseen_game" in epoch_metrics.columns:
-            for metric_name, metric_label, output_name in loss_plot_specs:
-                _plot_by_unseen_game(
-                    epoch_metrics=epoch_metrics,
-                    output_path=run_dir / output_name,
-                    epoch_bin_size=args.epoch_bin_size,
-                    max_points_per_line=args.max_points_per_line,
-                    prediction_metric=metric_name,
-                    prediction_metric_label=metric_label,
-                    ylim_exclude_epoch_max=ylim_exclude_epoch_max,
-                )
-                _plot_last_epoch_bar(
-                    epoch_metrics=epoch_metrics,
-                    output_path=run_dir / f"{output_name}_last_epoch_bar",
-                    prediction_metric=metric_name,
-                    prediction_metric_label=metric_label,
-                    ylim_exclude_epoch_max=ylim_exclude_epoch_max,
-                )
-        else:
-            for metric_name, metric_label, output_name in loss_plot_specs:
-                _plot_performance(
-                    epoch_metrics=epoch_metrics,
-                    loss_history=pd.DataFrame(),
-                    output_base=run_dir / "decoder_performance_by_delta_weight",
-                    epoch_bin_size=args.epoch_bin_size,
-                    max_points_per_line=args.max_points_per_line,
-                    history_loss_label=history_loss_label,
-                    history_loss_output_name=history_loss_output_name,
-                    prediction_metric=metric_name,
-                    prediction_metric_label=metric_label,
-                    prediction_metric_output_name=output_name,
-                    ylim_exclude_epoch_max=ylim_exclude_epoch_max,
-                )
+        method_labels = []
+        if not epoch_metrics.empty and {"delta_weight", "decoder_nograd"}.issubset(epoch_metrics.columns):
+            method_keys = {
+                _method_key(row.delta_weight, row.decoder_nograd)
+                for row in epoch_metrics[["delta_weight", "decoder_nograd"]]
+                .drop_duplicates()
+                .itertuples(index=False)
+            }
+            method_labels = [
+                _method_label(method_key)
+                for method_key in sorted(method_keys, key=_method_sort_order)
+            ]
+        if method_labels:
+            log.info("methods    : %s", ", ".join(method_labels))
+        _plot_decoder_outputs(
+            epoch_metrics=epoch_metrics,
+            loss_history=loss_history,
+            run_dir=run_dir,
+            loss_plot_specs=loss_plot_specs,
+            args=args,
+            history_loss_label=history_loss_label,
+            history_loss_output_name=history_loss_output_name,
+            prediction_metric=prediction_metric,
+            prediction_metric_label=prediction_metric_label,
+            prediction_metric_output_name=prediction_metric_output_name,
+            ylim_exclude_epoch_max=ylim_exclude_epoch_max,
+        )
         # Pearson plots are disabled for the current figure set.
         # if not epoch_metrics.empty and "regression_pearson_norm" in epoch_metrics.columns:
         #     if "unseen_game" in epoch_metrics.columns:

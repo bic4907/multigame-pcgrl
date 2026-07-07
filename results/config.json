@@ -53,6 +53,7 @@
       "download_history_loss": false,
       "download_prediction_artifacts": true,
       "save_prediction_rows": false,
+      "default_decoder_nograd": false,
       "prediction_metric": "regression_mae_norm",
       "prediction_metric_label": "Normalized MAE",
       "prediction_metric_output_name": "prediction_loss",

@@ -6,7 +6,6 @@
   "experiments": {
     "fullshot": {
       "target_projects": [
-        "aaai27_eval_random",
         "aaai27_eval_ipcgrl_fullshot",
         "aaai27_eval_mipcgrl_fullshot",
         "aaai27_eval_vipcgrl_fullshot",

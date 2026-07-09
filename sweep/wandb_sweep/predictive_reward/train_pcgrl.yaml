@@ -18,7 +18,7 @@ parameters:
   train_seen_ratio:
     value: 1.0
   dataset_unseen_ratio:
-    values: [0.1, 0,2, 0,4, 0,6, 0,8]
+    values: [0.1, 0.2, 0.4, 0.6, 0.8]
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/predictive_reward'
   encoder.ckpt_name:

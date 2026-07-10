@@ -68,8 +68,8 @@ _GROUP_ORDER: dict[str, int] = {
 }
 _GOOGLE_GROUP_COLORS: dict[str, str] = {
     "VIPCGRL": "#DB4437",      # Google red
-    "MGPCGRL": "#4285F4",      # Google blue
-    "MGPCGRL-DA": "#0F9D58",   # Google green
+    "MGPCGRL": "#0F9D58",      # Google green
+    "MGPCGRL-DA": "#4285F4",   # Google blue
 }
 _GOOGLE_FALLBACK_COLORS: list[str] = ["#F4B400", "#AB47BC", "#00ACC1", "#FF7043"]
 _PROJECT_RATIO_OVERRIDES: dict[str, float] = {
@@ -468,7 +468,7 @@ def write_line_plot(output_path: Path, rows: list[dict]) -> None:
     ax.grid(axis="both", alpha=0.3)
 
     baseline_stat = agg.get(("VIPCGRL", split_ratio))
-    target_stat = agg.get(("MGPCGRL-DA", 1.0))
+    target_stat = agg.get(("MGPCGRL", 1.0))
     if baseline_stat and target_stat:
         baseline_y = baseline_stat["mean"]
         target_y = target_stat["mean"]
@@ -500,7 +500,8 @@ def write_line_plot(output_path: Path, rows: list[dict]) -> None:
             },
             zorder=5,
         )
-        improvement_label = f"{diff:+.2f}" if pct is None else f"{diff:+.2f} ({pct:+.1f}%)"
+        improvement_value = f"{diff:+.3f}" if pct is None else f"{diff:+.3f} ({pct:+.1f}%)"
+        improvement_label = f"Reward prediction\n{improvement_value}"
         ax.text(
             compare_x - 0.02,
             baseline_y + (target_y - baseline_y) * 0.52,
@@ -542,10 +543,11 @@ def write_line_plot(output_path: Path, rows: list[dict]) -> None:
             },
             zorder=5,
         )
-        improvement_label = f"{diff:+.2f}" if pct is None else f"{diff:+.2f} ({pct:+.1f}%)"
+        improvement_value = f"{diff:+.3f}" if pct is None else f"{diff:+.3f} ({pct:+.1f}%)"
+        improvement_label = f"Domain alignment\n{improvement_value}"
         y0, y1 = ax.get_ylim()
         ax.text(
-            compare_x,
+            x_pos(0.3),
             min(baseline_y, target_y) - (y1 - y0) * 0.06,
             improvement_label,
             ha="center",
@@ -620,10 +622,10 @@ def write_line_plot(output_path: Path, rows: list[dict]) -> None:
             framealpha=0.85,
         )
 
-    fig.tight_layout(pad=0.25)
+    fig.tight_layout(pad=0.0)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=200, bbox_inches="tight")
-    fig.savefig(output_path.with_suffix(".pdf"), bbox_inches="tight")
+    fig.savefig(output_path, dpi=200, bbox_inches="tight", pad_inches=0)
+    fig.savefig(output_path.with_suffix(".pdf"), bbox_inches="tight", pad_inches=0)
     plt.close(fig)
 
 

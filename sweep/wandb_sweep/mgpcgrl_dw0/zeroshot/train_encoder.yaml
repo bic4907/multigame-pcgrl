@@ -15,7 +15,11 @@ parameters:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_zeroshot_dw0'
   unseen_games:
     values:
+      - 'pk'
+      - 'dg'
+      - 'zd'
       - 'dm'
+      - 'sk'
 command:
   - ${interpreter}
   - ${program}

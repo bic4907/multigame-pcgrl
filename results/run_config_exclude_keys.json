@@ -116,7 +116,6 @@
     "encoder.buffer_ratio",
     "encoder.ckpt_dir",
     "encoder.ckpt",
-    "encoder.ckpt_name",
     "encoder.ckpt_path",
     "encoder.trainable",
     "encoder.tile_offset",

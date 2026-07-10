@@ -38,6 +38,9 @@ Step numbers:
                                 (encoder_delta_weight_progress 전용; 다른 실험에서는 생략)
     13 decoder_performance      decoder_prediction_csv artifact + delta loss history 기반
                                 decoder 성능 plot
+    14 dataset_unseen_ratio_progress
+                                dataset_unseen_ratio 변화에 따른 unseen 게임 progress plot
+                                (predictive_reward 전용; 다른 실험에서는 생략)
 
 NOTE: step 5 (seen_unseen_report), 7 (unseen_count_progress), 8 (game_impact_analysis)
       스크립트 파일은 results/utils/experiment/ 아래에 보존되어 있으나
@@ -129,6 +132,12 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/decoder_performance.py",
         "description": "decoder_prediction_csv artifact + delta loss history 기반 decoder performance plot (전용)",
     },
+    {
+        "id": 14,
+        "name": "dataset_unseen_ratio_progress",
+        "script": _HERE / "utils/experiment/dataset_unseen_ratio_progress.py",
+        "description": "dataset_unseen_ratio 변화에 따른 unseen 게임 progress 꺾은선 그래프 (predictive_reward 전용)",
+    },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
@@ -146,10 +155,11 @@ _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
     "encoder_delta_weight_progress": {2, 3, 9, 10, 11},  # downloader + step 12만 실행
     "decoder_performance":       {1, 2, 3, 9, 10, 11, 12},  # step 13만 실행
     "dwctrl":                    {1, 2, 3, 9, 10, 11, 12},  # step 13만 실행
-    None:                        {9, 10, 11, 12, 13},    # experiment 미지정 시 생략
+    "predictive_reward":         {3, 9, 10, 11, 12, 13},  # downloader + summary + step 14만 실행
+    None:                        {9, 10, 11, 12, 13, 14},    # experiment 미지정 시 생략
 }
 # fullshot 등 전용 실험이 아닌 일반 실험: 9, 10, 11, 12 생략
-_DEFAULT_SKIP: set[int] = {9, 10, 11, 12, 13}
+_DEFAULT_SKIP: set[int] = {9, 10, 11, 12, 13, 14}
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
@@ -177,6 +187,7 @@ note:
   step 6 (analysis_report)       — fullshot / zeroshot / fewshot 모두 실행; 한글 Markdown 리포트 생성
   step 9 (seen_ratio_progress)   — seen_ratio_progress 실험에서만 실행; train_seen_ratio vs progress 꺾은선 그래프
   step 11 (seen_count_progress)  — zeroshot/fewshot 계열에서 실행; unseen 개수별 subplot 및 seen/unseen 표
+  step 14 (dataset_unseen_ratio_progress) — predictive_reward 실험에서만 실행; dataset_unseen_ratio vs unseen progress
 
 available experiments: {_exp_hint}
         """,

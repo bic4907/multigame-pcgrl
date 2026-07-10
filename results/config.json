@@ -59,6 +59,16 @@
       "prediction_norm_group_cols": ["unseen_game", "reward_enum"],
       "exclude_delta_weights": [0.1],
       "ylim_exclude_epoch_max": 0
+    },
+    "predictive_reward": {
+      "target_projects": [
+        "aaai27_eval_vipcgrl_zeroshot",
+        "aaai27_eval_mgpcgrl_zeroshot",
+        "aaai27_eval_vipcgrl_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot_dw0",
+        "aaai27_eval_mgpcgrl_fewshot",
+        "aaai27_eval_predictive_reward"
+      ]
     }
   },
   "project_display_names": {
@@ -81,6 +91,7 @@
     "aaai27_eval_mipcgrl_zeroshot":            "MIPCGRL (zeroshot)",
     "aaai27_eval_vipcgrl_zeroshot":            "VIPCGRL (zeroshot)",
     "aaai27_eval_mgpcgrl_zeroshot":            "MGPCGRL (zeroshot)",
+    "aaai27_eval_mgpcgrl_zeroshot_dw10":       "MGPCGRL (zeroshot, dw=0.1)",
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
     "aaai27_eval_mipcgrl_fewshot":            "MIPCGRL (fewshot)",
     "aaai27_eval_vipcgrl_fewshot":            "VIPCGRL (fewshot)",
@@ -94,7 +105,8 @@
     "aaai27_eval_mgpcgrl_fewshot_mix":        "MGPCGRL (prefix=name|desc)",
     "eval_mgpcgrl_direction0623":             "MGPCGRL Direction",
     "aaai27_encoder_mgpcgrl__decoderperformance": "MGPCGRL Decoder Performance",
-    "aaai27_encoder_mgpcgrl_dwctrl":              "MGPCGRL DW Control"
+    "aaai27_encoder_mgpcgrl_dwctrl":              "MGPCGRL DW Control",
+    "aaai27_eval_predictive_reward":              "MGPCGRL Predictive Reward"
   },
   "project_colors": {
     "aaai27_eval_random":         "#aaaaaa",
@@ -116,6 +128,7 @@
     "aaai27_eval_mipcgrl_zeroshot":           "#66a61e",
     "aaai27_eval_vipcgrl_zeroshot":           "#7b3294",
     "aaai27_eval_mgpcgrl_zeroshot":           "#2166ac",
+    "aaai27_eval_mgpcgrl_zeroshot_dw10":      "#4393c3",
     "aaai27_eval_ipcgrl_fewshot":             "#1a9641",
     "aaai27_eval_mipcgrl_fewshot":            "#66a61e",
     "aaai27_eval_vipcgrl_fewshot":            "#7b3294",
@@ -129,7 +142,8 @@
     "aaai27_eval_mgpcgrl_fewshot_mix":        "#92c5de",
     "eval_mgpcgrl_direction0623":             "#2166ac",
     "aaai27_encoder_mgpcgrl__decoderperformance": "#2166ac",
-    "aaai27_encoder_mgpcgrl_dwctrl":              "#2166ac"
+    "aaai27_encoder_mgpcgrl_dwctrl":              "#2166ac",
+    "aaai27_eval_predictive_reward":              "#2166ac"
   },
   "games": {
     "colors": {

@@ -1,0 +1,21 @@
+program: train_mipcgrl_encoder_mg.py
+project: aaai27_encoder_mipcgrl_fullshot_2
+method: grid
+metric:
+  goal: minimize
+  name: val/mse_unseen_overall
+parameters:
+  game:
+    values: ['dgpk', 'skzd', 'pkdm']
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mipcgrl_fullshot_2'
+  # ── MIPCGRL 전용: task classifier 가중치 ──
+  classifier_weight:
+    value: 1.0
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# total runs: 10

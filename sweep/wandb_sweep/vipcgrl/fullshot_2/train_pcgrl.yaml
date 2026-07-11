@@ -1,0 +1,32 @@
+program: train_vipcgrl.py
+project: aaai27_train_vipcgrl_fullshot_2
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0, 1, 2]
+  n_envs:
+    value: 600
+  overwrite:
+    value: false
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/vipcgrl_fullshot_2'
+  encoder.ckpt_name:
+    values: [
+      "clip-game-dgpk_exp-def_0",
+      "clip-game-skzd_exp-def_0",
+      "clip-game-pkdm_exp-def_0",
+    ]
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/vipcgrl_fullshot_2'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# total runs: 3 combos x 5 dataset_reward_enum x 3 seeds = 45

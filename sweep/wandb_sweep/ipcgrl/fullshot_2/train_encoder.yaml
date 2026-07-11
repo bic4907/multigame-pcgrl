@@ -1,0 +1,18 @@
+program: train_ipcgrl_encoder_mg.py
+project: aaai27_encoder_ipcgrl_fullshot_2
+method: grid
+metric:
+  goal: minimize
+  name: val/mse_unseen_overall
+parameters:
+  game:
+    values: ['dgpk', 'skzd', 'pkdm']
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/ipcgrl_fullshot_2'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+# total runs: 10

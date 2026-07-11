@@ -1,0 +1,29 @@
+program: eval_mipcgrl.py
+project: aaai27_eval_mipcgrl_fullshot_2
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0, 1, 2]
+  reevaluate:
+    value: false
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/mipcgrl_fullshot_2'
+  encoder.ckpt_name:
+    values: [
+      "mipcgrl-enc-mg-game-dgpk_enc-mlp_exp-def_0",
+      "mipcgrl-enc-mg-game-skzd_enc-mlp_exp-def_0",
+      "mipcgrl-enc-mg-game-pkdm_enc-mlp_exp-def_0",
+    ]
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mipcgrl_fullshot_2'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

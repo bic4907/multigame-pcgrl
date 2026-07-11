@@ -64,6 +64,7 @@
       "target_projects": [
         "aaai27_eval_vipcgrl_zeroshot",
         "aaai27_eval_mgpcgrl_zeroshot",
+        "aaai27_eval_mgpcgrl_zeroshot_dw0",
         "aaai27_eval_vipcgrl_fewshot",
         "aaai27_eval_mgpcgrl_fewshot_dw0",
         "aaai27_eval_mgpcgrl_fewshot",
@@ -91,6 +92,7 @@
     "aaai27_eval_mipcgrl_zeroshot":            "MIPCGRL (zeroshot)",
     "aaai27_eval_vipcgrl_zeroshot":            "VIPCGRL (zeroshot)",
     "aaai27_eval_mgpcgrl_zeroshot":            "MGPCGRL (zeroshot)",
+    "aaai27_eval_mgpcgrl_zeroshot_dw0":        "MGPCGRL (zeroshot)",
     "aaai27_eval_mgpcgrl_zeroshot_dw10":       "MGPCGRL (zeroshot, dw=0.1)",
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
     "aaai27_eval_mipcgrl_fewshot":            "MIPCGRL (fewshot)",
@@ -128,6 +130,7 @@
     "aaai27_eval_mipcgrl_zeroshot":           "#66a61e",
     "aaai27_eval_vipcgrl_zeroshot":           "#7b3294",
     "aaai27_eval_mgpcgrl_zeroshot":           "#2166ac",
+    "aaai27_eval_mgpcgrl_zeroshot_dw0":       "#2166ac",
     "aaai27_eval_mgpcgrl_zeroshot_dw10":      "#4393c3",
     "aaai27_eval_ipcgrl_fewshot":             "#1a9641",
     "aaai27_eval_mipcgrl_fewshot":            "#66a61e",

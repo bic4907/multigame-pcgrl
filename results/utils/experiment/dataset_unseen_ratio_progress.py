@@ -73,6 +73,7 @@ _GOOGLE_GROUP_COLORS: dict[str, str] = {
 }
 _GOOGLE_FALLBACK_COLORS: list[str] = ["#F4B400", "#AB47BC", "#00ACC1", "#FF7043"]
 _PROJECT_RATIO_OVERRIDES: dict[str, float] = {
+    "aaai27_eval_mgpcgrl_zeroshot_dw0": 0.0,
     "aaai27_eval_mgpcgrl_fewshot_dw0": 1.0,
     "aaai27_eval_mgpcgrl_fewshot": 1.0,
 }
@@ -208,6 +209,8 @@ def _extract_dw_label(text: str) -> str | None:
 def _group_label(project: str, run_cfg: dict, run_name: str, group_by: str) -> str:
     if "vipcgrl" in project or "vipcgrl" in run_name:
         return "VIPCGRL"
+    if project == "aaai27_eval_mgpcgrl_zeroshot_dw0":
+        return "MGPCGRL"
     if project == "aaai27_eval_mgpcgrl_fewshot_dw0":
         return "MGPCGRL"
 
@@ -687,8 +690,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--exclude-ratios",
-        default="",
-        help="제외할 dataset_unseen_ratio 목록. 기본값: 없음",
+        default="0.2",
+        help="제외할 dataset_unseen_ratio 목록. 기본값: 0.2",
     )
     parser.add_argument(
         "--group-by",

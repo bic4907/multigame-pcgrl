@@ -57,19 +57,16 @@ wandb agent st4889ha-gwangju-institute-of-science-and-technology/aaai27_eval_mip
 **Train Encoder**
 ```bash
 wandb sweep --project aaai27_encoder_vipcgrl_fullshot_2 --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/vipcgrl/fullshot_2/train_encoder.yaml
-wandb agent st4889ha-gwangju-institute-of-science-and-technology/aaai27_encoder_vipcgrl_fullshot_2/jncpqyg1
 ```
 
 **Train PCGRL**
 ```bash
 wandb sweep --project aaai27_train_vipcgrl_fullshot_2 --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/vipcgrl/fullshot_2/train_pcgrl.yaml
-wandb agent st4889ha-gwangju-institute-of-science-and-technology/aaai27_train_vipcgrl_fullshot_2/mhdf238x
 ```
 
 **Eval PCGRL**
 ```bash
 wandb sweep --project aaai27_eval_vipcgrl_fullshot_2 --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/vipcgrl/fullshot_2/eval_pcgrl.yaml
-wandb agent st4889ha-gwangju-institute-of-science-and-technology/aaai27_eval_vipcgrl_fullshot_2/coev8o0o
 ```
 
 

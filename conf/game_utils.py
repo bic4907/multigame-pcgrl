@@ -16,6 +16,8 @@ conf/game_utils.py
 
 from __future__ import annotations
 
+import re
+
 from typing import Dict, List
 
 # ── 게임 2글자 약어 ↔ include 플래그 매핑 ──────────────────────────────────────
@@ -105,6 +107,50 @@ def parse_unseen_game_names(unseen_str: str) -> set:
         abbr = unseen_str[i:i + 2]
         names.update(GAME_ABBR.get(abbr, []))
     return names
+
+
+def parse_game_names(game_str: str, *, canonical: bool = False) -> List[str]:
+    """2글자 약어 문자열 또는 ``all``을 full game name 리스트로 변환한다.
+
+    ``canonical=True``이면 ``doom2``를 제외하고 ``doom`` 게임군으로만 반환한다.
+    """
+    if not game_str:
+        return []
+
+    if game_str.lower() == "all":
+        return list(CANONICAL_GAMES if canonical else ALL_GAMES)
+
+    names: List[str] = []
+    for i in range(0, len(game_str), 2):
+        abbr = game_str[i:i + 2]
+        if abbr not in GAME_ABBR:
+            return []
+        for full_name in GAME_ABBR[abbr]:
+            name = "doom" if canonical and full_name == "doom2" else full_name
+            if name not in names:
+                names.append(name)
+    return names
+
+
+def infer_seen_games_from_ckpt_name(ckpt_name: str) -> List[str]:
+    """Encoder checkpoint folder name에서 canonical seen game 리스트를 추론한다.
+
+    Newer zero/few-shot ckpts may carry ``_unseen-XX`` directly. Older
+    full-shot subset ckpts only look like ``clip-game-dgpk_exp-def_0``; for
+    those, the ``game-`` token is the seen-game subset.
+    """
+    if not ckpt_name:
+        return []
+
+    unseen_match = re.search(r"(?:^|_)unseen-([^_]+)", ckpt_name)
+    if unseen_match:
+        unseen = set(parse_game_names(unseen_match.group(1), canonical=True))
+        return [g for g in CANONICAL_GAMES if g not in unseen]
+
+    game_match = re.search(r"(?:^|[_-])game-([^_]+)", ckpt_name)
+    if not game_match:
+        return []
+    return parse_game_names(game_match.group(1), canonical=True)
 
 
 def build_game_str(

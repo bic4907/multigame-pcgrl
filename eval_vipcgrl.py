@@ -14,7 +14,12 @@ import os
 import hydra
 
 from conf.config import VIPCGRLEvalConfig
-from conf.game_utils import GAME_ABBR, GAME_ABBR_INV, compute_seen_unseen_split
+from conf.game_utils import (
+    GAME_ABBR,
+    GAME_ABBR_INV,
+    compute_seen_unseen_split,
+    infer_seen_games_from_ckpt_name,
+)
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.eval_utils import main_eval_entry
 from train_vipcgrl import inject_vipcgrl_obs
@@ -22,6 +27,42 @@ from train_vipcgrl import inject_vipcgrl_obs
 logger = logging.getLogger(__name__)
 
 suppress_jax_debug_logs()
+
+
+def _apply_seen_games_to_config(config: VIPCGRLEvalConfig, seen_games, unseen_ratio: float) -> bool:
+    """Inject encoder seen-game metadata into a VIPCGRL eval config."""
+    if not seen_games:
+        return False
+
+    if config.game_setting_mode == "encoder_seen":
+        seen_abbrs = dict.fromkeys(
+            GAME_ABBR_INV[g] for g in seen_games if g in GAME_ABBR_INV
+        )
+        game_str = "all" if seen_abbrs.keys() == GAME_ABBR.keys() else "".join(seen_abbrs)
+
+        if unseen_ratio > 0.0:
+            logger.info(
+                "game_setting_mode=encoder_seen + unseen_ratio=%.4f > 0 "
+                "→ expanding game to 'all' for exp_dir matching",
+                unseen_ratio,
+            )
+            config.game = "all"
+        elif game_str != config.game:
+            logger.info(
+                "game_setting_mode=encoder_seen → overriding config.game "
+                "'%s' → '%s' (seen_games=%s) for exp_dir matching",
+                config.game, game_str, seen_games,
+            )
+            config.game = game_str
+
+    _seen, _unseen = compute_seen_unseen_split(seen_games)
+    config.seen_games = list(_seen)
+    config.unseen_games = list(_unseen)
+    logger.info(
+        "Auto-setting seen_games=%s, unseen_games=%s from encoder metadata",
+        _seen, _unseen,
+    )
+    return True
 
 
 
@@ -51,54 +92,23 @@ def main(config: VIPCGRLEvalConfig):
         # ── unseen_ratio: train_vipcgrl.py 와 동일한 game 확장 기준에 사용 ──
         unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
 
-        # ── game_setting_mode=encoder_seen: train 과 동일하게 config.game 을
-        #    encoder seen 게임 약어 subset 또는 all 로 덮어써서 exp_dir 매칭을 맞춘다.
-        #    (train_vipcgrl.py 의 로직과 1:1 대응)
-        if config.game_setting_mode == "encoder_seen":
-            seen_games_raw = dataset_setting.get("seen_games", [])
-            if seen_games_raw:
-                seen_abbrs = dict.fromkeys(
-                    GAME_ABBR_INV[g] for g in seen_games_raw if g in GAME_ABBR_INV
-                )
-                if seen_abbrs.keys() == GAME_ABBR.keys():
-                    game_str = "all"
-                else:
-                    game_str = "".join(seen_abbrs)
-
-                if unseen_ratio > 0.0:
-                    # encoder 가 unseen 게임도 일부 학습 → train_vipcgrl 과 동일하게 all 로 확장.
-                    logger.info(
-                        "game_setting_mode=encoder_seen + unseen_ratio=%.4f > 0 "
-                        "→ expanding game to 'all' for exp_dir matching",
-                        unseen_ratio,
-                    )
-                    config.game = "all"
-                elif game_str != config.game:
-                    logger.info(
-                        "game_setting_mode=encoder_seen → overriding config.game "
-                        "'%s' → '%s' (seen_games=%s) for exp_dir matching",
-                        config.game, game_str, seen_games_raw,
-                    )
-                    config.game = game_str
-            else:
-                logger.warning(
-                    "game_setting_mode=encoder_seen but dataset_setting.json has empty "
-                    "seen_games — keeping config.game='%s'", config.game,
-                )
-
         # ── seen/unseen games (canonical 5-game split) → injected into config
         #    so they appear in WandB regardless of train_setting.json state. ──
         seen_raw = dataset_setting.get("seen_games", [])
-        if seen_raw:
-            _seen, _unseen = compute_seen_unseen_split(seen_raw)
-            config.seen_games = list(_seen)
-            config.unseen_games = list(_unseen)
-            logger.info(
-                "Auto-setting seen_games=%s, unseen_games=%s from encoder dataset_setting.json",
-                _seen, _unseen,
+        if not _apply_seen_games_to_config(config, seen_raw, unseen_ratio):
+            logger.warning(
+                "dataset_setting.json has empty seen_games — keeping config.game='%s'",
+                config.game,
             )
     else:
         logger.warning("dataset_setting.json not found at %s", dataset_setting_path)
+        inferred_seen_games = infer_seen_games_from_ckpt_name(config.encoder.ckpt_name)
+        if inferred_seen_games:
+            logger.info(
+                "Inferred seen_games=%s from encoder.ckpt_name='%s'",
+                inferred_seen_games, config.encoder.ckpt_name,
+            )
+            _apply_seen_games_to_config(config, inferred_seen_games, 0.0)
 
     main_eval_entry(config, inject_obs_fn=inject_vipcgrl_obs)
 

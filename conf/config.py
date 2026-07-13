@@ -702,6 +702,10 @@ class IPCGRLEvalConfig(CPCGRLEvalConfig):
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
+    # Train-side name used by path_utils/dataset helpers. Eval fills this with
+    # the same encoder seen-game metadata so exp_dir matches the trained run.
+    reward_seen_games: List[str] = field(default_factory=list)
+
     # ── MIPCGRL variant 구분자 (IPCGRLConfig 와 동일 시맨틱) ──
     is_mipcgrl: bool = False
 

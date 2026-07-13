@@ -85,7 +85,7 @@ def _unseen_suffix(config) -> str:
     우선순위:
       1. config.train_unseen_abbr / config.train_unseen_ratio / config.train_seen_ratio (명시 파라미터, MGPCGRL only)
       2. config.encoder.ckpt_name 에서 파싱 (VIPCGRL / MGPCGRL 공통)
-      3. config.reward_seen_games 에서 자동 계산 (un_abbr only, MGPCGRL only)
+      3. config.reward_seen_games/seen_games 에서 자동 계산 (un_abbr only)
 
     unseen 정보가 전혀 없으면 빈 문자열을 반환한다 (suffix 생략).
     형식: '_un-XX_ur-YY_sr-ZZ'
@@ -113,14 +113,22 @@ def _unseen_suffix(config) -> str:
         if train_sr is not None and train_sr != 1.0:
             sr = train_sr
 
-    # ── 3. reward_seen_games 에서 자동 계산 (un_abbr only, MGPCGRL fallback) ─
+    # ── 3. seen-game metadata 에서 자동 계산 (un_abbr only) ───────────────
+    # Train configs populate reward_seen_games from encoder dataset_setting.json.
+    # Eval configs populate seen_games from the same source. Treat both as the
+    # same path identity signal so eval looks under the trained exp_dir.
     if un_abbr is None:
-        seen_games = getattr(config, 'reward_seen_games', []) or []
+        seen_games = (
+            getattr(config, 'reward_seen_games', None)
+            or getattr(config, 'seen_games', None)
+            or []
+        )
         if seen_games:
             from conf.game_utils import GAME_ABBR_INV, GAME_ABBR
+            seen_game_set = {("doom" if g == "doom2" else g) for g in seen_games}
             all_games = [g for games in GAME_ABBR.values() for g in games
                          if g not in ('doom2',)]   # doom2 → doom 계열로 묶음
-            unseen = [g for g in all_games if g not in seen_games and g != 'doom2']
+            unseen = [g for g in all_games if g not in seen_game_set and g != 'doom2']
             if unseen:
                 abbr_parts, seen_abbrs = [], set()
                 for g in unseen:

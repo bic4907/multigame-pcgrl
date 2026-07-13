@@ -44,6 +44,8 @@ def main(config: MIPCGRLEvalConfig):
                 _seen, _unseen = compute_seen_unseen_split(seen_raw)
                 if hasattr(config, "seen_games"):
                     config.seen_games = list(_seen)
+                if hasattr(config, "reward_seen_games"):
+                    config.reward_seen_games = list(_seen)
                 if hasattr(config, "unseen_games"):
                     config.unseen_games = list(_unseen)
                 logger.info(

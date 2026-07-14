@@ -10,7 +10,7 @@ from os.path import abspath, join
 from encoder.model import apply_encoder_model
 from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder, get_cnnclip_decoder_encoder
 from conf.config import Config, TrainConfig, EncoderConfig
-from conf.game_utils import parse_game_str, GAME_ABBR
+from conf.game_utils import parse_game_str, GAME_ABBR, infer_seen_games_from_ckpt_name
 from encoder.pretrained_clip_model import get_pretrained_clip_encoder
 from encoder.finetuned_clip_model import get_finetuned_clip_encoder
 from envs.candy import Candy, CandyParams
@@ -78,6 +78,30 @@ def _parse_unseen_from_ckpt(ckpt_name: str):
     )
 
 
+def _unseen_abbr_from_seen_games(seen_games):
+    """seen game list에서 canonical unseen game 약어 문자열을 만든다."""
+    if not seen_games:
+        return None
+
+    from conf.game_utils import GAME_ABBR_INV, GAME_ABBR
+    seen_game_set = {("doom" if g == "doom2" else g) for g in seen_games}
+    all_games = [
+        g for games in GAME_ABBR.values() for g in games
+        if g not in ("doom2",)
+    ]
+    unseen = [g for g in all_games if g not in seen_game_set and g != "doom2"]
+    if not unseen:
+        return None
+
+    abbr_parts, seen_abbrs = [], set()
+    for g in unseen:
+        abbr = GAME_ABBR_INV.get(g, g[:2])
+        if abbr not in seen_abbrs:
+            abbr_parts.append(abbr)
+            seen_abbrs.add(abbr)
+    return ''.join(abbr_parts)
+
+
 
 def _unseen_suffix(config) -> str:
     """공통 unseen suffix 빌더 (VIPCGRL / MGPCGRL 공용).
@@ -107,6 +131,15 @@ def _unseen_suffix(config) -> str:
         if ur is None:      ur      = c_ur
         if sr is None:      sr      = c_sr
 
+        # Older full-shot subset encoder names do not include ``_unseen-XX``.
+        # Example: ``clip-game-dgpk_exp-def_0`` means seen={dg,pk}, so the
+        # downstream VIPCGRL/IPCGRL/MGPCGRL run still needs an unseen suffix to
+        # avoid folder collisions across encoder choices.
+        if un_abbr is None:
+            un_abbr = _unseen_abbr_from_seen_games(
+                infer_seen_games_from_ckpt_name(ckpt_name)
+            )
+
     # ── train_seen_ratio fallback (encoder sr 없을 때만, 1.0 제외) ───────────
     if sr is None:
         train_sr = getattr(config, 'train_seen_ratio', None)
@@ -123,20 +156,7 @@ def _unseen_suffix(config) -> str:
             or getattr(config, 'seen_games', None)
             or []
         )
-        if seen_games:
-            from conf.game_utils import GAME_ABBR_INV, GAME_ABBR
-            seen_game_set = {("doom" if g == "doom2" else g) for g in seen_games}
-            all_games = [g for games in GAME_ABBR.values() for g in games
-                         if g not in ('doom2',)]   # doom2 → doom 계열로 묶음
-            unseen = [g for g in all_games if g not in seen_game_set and g != 'doom2']
-            if unseen:
-                abbr_parts, seen_abbrs = [], set()
-                for g in unseen:
-                    abbr = GAME_ABBR_INV.get(g, g[:2])
-                    if abbr not in seen_abbrs:
-                        abbr_parts.append(abbr)
-                        seen_abbrs.add(abbr)
-                un_abbr = ''.join(abbr_parts)
+        un_abbr = _unseen_abbr_from_seen_games(seen_games)
 
     # unseen 정보가 전혀 없으면 suffix 생략
     return _build_unseen_suffix(un_abbr, ur, sr)

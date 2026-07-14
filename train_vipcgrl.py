@@ -17,7 +17,7 @@ import os
 import hydra
 
 from conf.config import VIPCGRLConfig
-from conf.game_utils import GAME_ABBR, GAME_ABBR_INV
+from conf.game_utils import GAME_ABBR, GAME_ABBR_INV, infer_seen_games_from_ckpt_name
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.train_utils import main_entry
 
@@ -31,6 +31,37 @@ suppress_jax_debug_logs()
 def inject_vipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
     """pretrained CLIP 인코더로 계산된 임베딩을 nlp_obs 에 주입."""
     return last_obs.replace(nlp_obs=instruct_sample.embedding)
+
+
+def _apply_seen_games_to_config(config: VIPCGRLConfig, seen_games, unseen_ratio: float) -> bool:
+    """Inject encoder seen-game metadata into a VIPCGRL train config."""
+    if not seen_games:
+        return False
+
+    if config.game_setting_mode == "encoder_seen":
+        seen_abbrs = dict.fromkeys(GAME_ABBR_INV[g] for g in seen_games if g in GAME_ABBR_INV)
+        game_str = "all" if seen_abbrs.keys() == GAME_ABBR.keys() else "".join(seen_abbrs)
+
+        if unseen_ratio > 0.0:
+            logger.info(
+                "game_setting_mode=encoder_seen + unseen_ratio=%.4f > 0 "
+                "→ expanding game to 'all' (dataset_unseen_ratio=%.4f)",
+                unseen_ratio, unseen_ratio,
+            )
+            config.game = "all"
+        else:
+            logger.info(
+                "game_setting_mode=encoder_seen → setting game='%s' (seen_games=%s)",
+                game_str, seen_games,
+            )
+            config.game = game_str
+
+    config.reward_seen_games = list(seen_games)
+    logger.info(
+        "Auto-setting reward_seen_games=%s from encoder metadata",
+        seen_games,
+    )
+    return True
 
 
 # ── Hydra entrypoint ──────────────────────────────────────────────────────────
@@ -66,57 +97,24 @@ def main(config: VIPCGRLConfig):
             )
             config.dataset_unseen_ratio = unseen_ratio
 
-        # ── game 범위 결정 ──────────────────────────────────────────────────────
-        # game_setting_mode=encoder_seen: seen 게임만 학습 대상이 원칙이나,
-        # unseen_ratio > 0 인 경우 encoder 가 실제로 unseen 게임도 일부 봤으므로
-        # 해당 비율만큼 unseen 게임도 RL 학습에 포함한다 → game="all" 로 확장.
-        if config.game_setting_mode == "encoder_seen":
-            seen_games = dataset_setting.get("seen_games", [])
-            if seen_games:
-                seen_abbrs = dict.fromkeys(GAME_ABBR_INV[g] for g in seen_games if g in GAME_ABBR_INV)
-                if seen_abbrs.keys() == GAME_ABBR.keys():
-                    game_str = "all"
-                else:
-                    game_str = "".join(seen_abbrs)
-
-                if unseen_ratio > 0.0:
-                    # encoder 가 unseen 게임도 일부 학습 → RL 에도 포함 (unseen_ratio 비율)
-                    logger.info(
-                        "game_setting_mode=encoder_seen + unseen_ratio=%.4f > 0 "
-                        "→ expanding game to 'all' (dataset_unseen_ratio=%.4f)",
-                        unseen_ratio, unseen_ratio,
-                    )
-                    config.game = "all"
-                else:
-                    # unseen_ratio=0: unseen 게임은 완전히 미학습 → seen 게임만 유지
-                    logger.info(
-                        "game_setting_mode=encoder_seen → setting game='%s' (seen_games=%s)",
-                        game_str, seen_games,
-                    )
-                    config.game = game_str
-            else:
-                logger.warning(
-                    "game_setting_mode=encoder_seen but dataset_setting.json has empty seen_games "
-                    "— keeping config.game='%s'", config.game,
-                )
-
-        # ── Always inject reward_seen_games from encoder's dataset_setting.json ──
+        # ── game 범위 결정 + reward_seen_games 주입 ─────────────────────────────
         # The seen/unseen split reflects the encoder training distribution and is
         # used to write train_setting.json for downstream WandB analysis.
         seen_games = dataset_setting.get("seen_games", [])
-        if seen_games:
-            config.reward_seen_games = list(seen_games)
-            logger.info(
-                "Auto-setting reward_seen_games=%s from encoder dataset_setting.json",
-                seen_games,
-            )
-        else:
+        if not _apply_seen_games_to_config(config, seen_games, unseen_ratio):
             logger.warning(
                 "dataset_setting.json has empty seen_games — "
                 "train_setting.json seen/unseen will also be empty"
             )
     else:
         logger.warning("dataset_setting.json not found at %s", dataset_setting_path)
+        inferred_seen_games = infer_seen_games_from_ckpt_name(config.encoder.ckpt_name)
+        if inferred_seen_games:
+            logger.info(
+                "Inferred seen_games=%s from encoder.ckpt_name='%s'",
+                inferred_seen_games, config.encoder.ckpt_name,
+            )
+            _apply_seen_games_to_config(config, inferred_seen_games, 0.0)
 
     main_entry(config, inject_obs_fn=inject_vipcgrl_obs)
 
@@ -124,4 +122,3 @@ def main(config: VIPCGRLConfig):
 
 if __name__ == "__main__":
     main()
-

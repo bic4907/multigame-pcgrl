@@ -10,7 +10,7 @@ parameters:
   dataset_reward_enum:
     values: [0, 1, 2, 3, 4]
   seed:
-    values: [0, 1, 2]
+    values: [0, 1, 2, 3, 4]
   n_envs:
     value: 600
   overwrite:
@@ -29,4 +29,3 @@ command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-# total runs: 3 combos x 5 dataset_reward_enum x 3 seeds = 45

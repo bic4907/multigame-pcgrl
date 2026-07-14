@@ -37,6 +37,7 @@ def build_dataset(
         use_tile_mapping=True,
         max_samples_per_game=max_samples_per_game,
         max_samples_seed=getattr(config, "max_samples_seed", 42),
+        instruction_field=getattr(config, "instruction_field", "raw"),
     )
     dataset._game_str = ",".join(games)
 

@@ -1,0 +1,7 @@
+{
+  "pokemon_bin0": "Tiny paths cross the map.",
+  "zelda_bin2": "The map has a limited path length.",
+  "sokoban_bin4": "Traversable space is moderate.",
+  "doom_bin6": "A large path spans the map.",
+  "dungeon_bin7": "Extensive winding paths span the map."
+}

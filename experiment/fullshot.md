@@ -91,3 +91,23 @@ wandb sweep --project aaai27_train_mgpcgrl_fullshot --entity st4889ha-gwangju-in
 ```bash
 wandb sweep --project aaai27_eval_mgpcgrl_fullshot --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/mgpcgrl/fullshot/eval_pcgrl.yaml
 ```
+
+
+### MGPCGRL-DW0 (Fullshot)
+
+---
+
+**Train Encoder**
+```bash
+wandb sweep --project aaai27_encoder_mgpcgrl_fullshot_dw0 --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/mgpcgrl_dw0/fullshot/train_encoder.yaml
+```
+
+**Train PCGRL**
+```bash
+wandb sweep --project aaai27_train_mgpcgrl_fullshot_dw0 --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/mgpcgrl_dw0/fullshot/train_pcgrl.yaml
+```
+
+**Eval PCGRL**
+```bash
+wandb sweep --project aaai27_eval_mgpcgrl_fullshot_dw0 --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/mgpcgrl_dw0/fullshot/eval_pcgrl.yaml
+```

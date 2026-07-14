@@ -72,24 +72,19 @@ wandb sweep --project aaai27_eval_vipcgrl_fullshot_2 --entity st4889ha-gwangju-i
 
 ### MGPCGRL (Fullshot 2)
 
-게임 2개 조합 3가지: dgpk (dungeon+pokemon), skzd (sokoban+zelda), pkdm (pokemon+doom)
-
 ---
 
 **Train Encoder**
 ```bash
 wandb sweep --project aaai27_encoder_mgpcgrl_fullshot_2 --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/mgpcgrl/fullshot_2/train_encoder.yaml
-wandb agent st4889ha-gwangju-institute-of-science-and-technology/aaai27_encoder_mgpcgrl_fullshot_2/2w2xf69p
 ```
 
 **Train PCGRL**
 ```bash
 wandb sweep --project aaai27_train_mgpcgrl_fullshot_2 --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/mgpcgrl/fullshot_2/train_pcgrl.yaml
-wandb agent st4889ha-gwangju-institute-of-science-and-technology/aaai27_train_mgpcgrl_fullshot_2/djkmmnsy
 ```
 
 **Eval PCGRL**
 ```bash
 wandb sweep --project aaai27_eval_mgpcgrl_fullshot_2 --entity st4889ha-gwangju-institute-of-science-and-technology ../sweep/wandb_sweep/mgpcgrl/fullshot_2/eval_pcgrl.yaml
-wandb agent st4889ha-gwangju-institute-of-science-and-technology/aaai27_eval_mgpcgrl_fullshot_2/z0wzt4bl
 ```

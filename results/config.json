@@ -17,6 +17,67 @@
       "re_baseline_label":          "CPCGRL",
       "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl", "aaai27_eval_vipcgrl"]
     },
+    "fullshot_gamenum": {
+      "target_projects": [
+        "aaai27_eval_ipcgrl_fullshot_2",
+        "aaai27_eval_mipcgrl_fullshot_2",
+        "aaai27_eval_vipcgrl_fullshot_2",
+        "aaai27_eval_mgpcgrl_fullshot_2",
+        "aaai27_eval_ipcgrl_fullshot_3",
+        "aaai27_eval_mipcgrl_fullshot_3",
+        "aaai27_eval_vipcgrl_fullshot_3",
+        "aaai27_eval_mgpcgrl_fullshot_3",
+        "aaai27_eval_ipcgrl_fullshot",
+        "aaai27_eval_mipcgrl_fullshot",
+        "aaai27_eval_vipcgrl_fullshot",
+        "aaai27_eval_mgpcgrl_fullshot"
+      ],
+      "re_oracle_project":          "aaai27_eval_cpcgrl",
+      "re_oracle_label":            "CPCGRL (Oracle)",
+      "re_baseline_project":        "aaai27_eval_cpcgrl",
+      "re_baseline_label":          "CPCGRL",
+      "re_exclude_from_compare":    ["aaai27_eval_random", "aaai27_eval_cpcgrl"],
+      "gamenum_table": {
+        "metric": "progress",
+        "domain_counts": [2, 3, 5],
+        "methods": [
+          {
+            "label": "IPCGRL",
+            "projects": {
+              "2": "aaai27_eval_ipcgrl_fullshot_2",
+              "3": "aaai27_eval_ipcgrl_fullshot_3",
+              "5": "aaai27_eval_ipcgrl_fullshot"
+            }
+          },
+          {
+            "label": "MIPCGRL",
+            "projects": {
+              "2": "aaai27_eval_mipcgrl_fullshot_2",
+              "3": "aaai27_eval_mipcgrl_fullshot_3",
+              "5": "aaai27_eval_mipcgrl_fullshot"
+            }
+          },
+          {
+            "label": "VIPCGRL",
+            "projects": {
+              "2": "aaai27_eval_vipcgrl_fullshot_2",
+              "3": "aaai27_eval_vipcgrl_fullshot_3",
+              "5": "aaai27_eval_vipcgrl_fullshot"
+            }
+          },
+          {
+            "label": "\\textbf{MGPCGRL}",
+            "projects": {
+              "2": "aaai27_eval_mgpcgrl_fullshot_2",
+              "3": "aaai27_eval_mgpcgrl_fullshot_3",
+              "5": "aaai27_eval_mgpcgrl_fullshot"
+            }
+          }
+        ],
+        "caption": "\\textbf{Full-shot evaluation with varying numbers of game domains.} We report Progress scores for models trained with different numbers of reward-labeled game domains.",
+        "label": "tab:fullshot_progress"
+      }
+    },
     "zeroshot": {
       "target_projects": [
         "aaai27_eval_ipcgrl_zeroshot",
@@ -85,12 +146,24 @@
     "aaai27_eval_vipcgrl":       "VIPCGRL",
     "aaai27_eval_random":        "Random",
     "aaai27_eval_pretrained_clip":  "CLIP",
+    "aaai27_eval_ipcgrl_fullshot":              "IPCGRL (5 games)",
+    "aaai27_eval_mipcgrl_fullshot":             "MIPCGRL (5 games)",
+    "aaai27_eval_vipcgrl_fullshot":             "VIPCGRL (5 games)",
+    "aaai27_eval_mgpcgrl_fullshot":             "MGPCGRL (5 games)",
     "aaai27_eval_mgpcgrl_unseen":"MGPCGRL",
     "aaai27_eval_mgpcgrl_all":   "MGPCGRL (all)",
     "aaai27_eval_mgpcgrl_oracle":"MGPCGRL (oracle)",
     "aaai27_eval_ipcgrl_unseen": "IPCGRL",
     "aaai27_eval_vipcgrl_unseen":"VIPCGRL",
     "aaai27_eval_mgpcgrl_unseen_ratios_2_GT": "MGPCGRL (GT)",
+    "aaai27_eval_ipcgrl_fullshot_2":          "IPCGRL (2 games)",
+    "aaai27_eval_mipcgrl_fullshot_2":         "MIPCGRL (2 games)",
+    "aaai27_eval_vipcgrl_fullshot_2":         "VIPCGRL (2 games)",
+    "aaai27_eval_mgpcgrl_fullshot_2":         "MGPCGRL (2 games)",
+    "aaai27_eval_ipcgrl_fullshot_3":          "IPCGRL (3 games)",
+    "aaai27_eval_mipcgrl_fullshot_3":         "MIPCGRL (3 games)",
+    "aaai27_eval_vipcgrl_fullshot_3":         "VIPCGRL (3 games)",
+    "aaai27_eval_mgpcgrl_fullshot_3":         "MGPCGRL (3 games)",
     "aaai27_eval_ipcgrl_zeroshot":             "IPCGRL (zeroshot)",
     "aaai27_eval_mipcgrl_zeroshot":            "MIPCGRL (zeroshot)",
     "aaai27_eval_vipcgrl_zeroshot":            "VIPCGRL (zeroshot)",
@@ -129,6 +202,18 @@
     "aaai27_eval_mgpcgrl_oracle": "#92c5de",
     "aaai27_eval_vipcgrl_fewshot_deprecated": "#762a83",
     "aaai27_eval_mgpcgrl_fewshot_deprecated": "#4393c3",
+    "aaai27_eval_ipcgrl_fullshot":             "#1a9641",
+    "aaai27_eval_mipcgrl_fullshot":            "#66a61e",
+    "aaai27_eval_vipcgrl_fullshot":            "#7b3294",
+    "aaai27_eval_mgpcgrl_fullshot":            "#2166ac",
+    "aaai27_eval_ipcgrl_fullshot_2":           "#1a9641",
+    "aaai27_eval_mipcgrl_fullshot_2":          "#66a61e",
+    "aaai27_eval_vipcgrl_fullshot_2":          "#7b3294",
+    "aaai27_eval_mgpcgrl_fullshot_2":          "#2166ac",
+    "aaai27_eval_ipcgrl_fullshot_3":           "#1a9641",
+    "aaai27_eval_mipcgrl_fullshot_3":          "#66a61e",
+    "aaai27_eval_vipcgrl_fullshot_3":          "#7b3294",
+    "aaai27_eval_mgpcgrl_fullshot_3":          "#2166ac",
     "aaai27_eval_ipcgrl_zeroshot":            "#1a9641",
     "aaai27_eval_mipcgrl_zeroshot":           "#66a61e",
     "aaai27_eval_vipcgrl_zeroshot":           "#7b3294",

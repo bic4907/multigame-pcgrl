@@ -389,6 +389,147 @@ def write_csv_table(output_path: Path, grouped_rows: list[dict],
             writer.writerow(rec)
 
 
+def _latex_escape(value: str) -> str:
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+    return "".join(replacements.get(ch, ch) for ch in value)
+
+
+def _latex_label(value: str) -> str:
+    """Allow explicit LaTeX labels from config, escape plain text labels."""
+    return value if "\\" in value else _latex_escape(value)
+
+
+def _format_gamenum_cell(stat: dict | None, mean_decimals: int, std_decimals: int) -> str:
+    if not stat:
+        return "-"
+    return f"{stat['mean']:.{mean_decimals}f} +- {stat['std']:.{std_decimals}f}"
+
+
+def _format_gamenum_latex_cell(stat: dict | None, mean_decimals: int, std_decimals: int) -> str:
+    if not stat:
+        return "-"
+    return rf"${stat['mean']:.{mean_decimals}f}\std{{{stat['std']:.{std_decimals}f}}}$"
+
+
+def _gamenum_project_stats(rows: list[dict], metric: str) -> dict[str, dict]:
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for row in rows:
+        grouped[row["project"]].append(row)
+    result: dict[str, dict] = {}
+    for project, project_rows in grouped.items():
+        stat = _seed_agg(project_rows, metric)
+        if stat:
+            result[project] = stat
+    return result
+
+
+def write_gamenum_table_outputs(
+    run_dir: Path,
+    rows: list[dict],
+    table_cfg: dict,
+    decimals: int,
+) -> None:
+    metric = table_cfg.get("metric", "progress")
+    domain_counts = [str(x) for x in table_cfg.get("domain_counts", [2, 3, 5])]
+    methods = table_cfg.get("methods", [])
+    mean_decimals = int(table_cfg.get("mean_decimals", min(decimals, 3)))
+    std_decimals = int(table_cfg.get("std_decimals", 2))
+    stats_by_project = _gamenum_project_stats(rows, metric)
+
+    csv_path = run_dir / "fullshot_gamenum_table.csv"
+    md_path = run_dir / "fullshot_gamenum_table.md"
+    tex_path = run_dir / "fullshot_gamenum_table.tex"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    headers = ["method"] + [f"{n}_domains" for n in domain_counts]
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        for method in methods:
+            rec = {"method": method.get("label", "")}
+            projects = method.get("projects", {})
+            for n in domain_counts:
+                rec[f"{n}_domains"] = _format_gamenum_cell(
+                    stats_by_project.get(str(projects.get(n, ""))),
+                    mean_decimals,
+                    std_decimals,
+                )
+            writer.writerow(rec)
+
+    md_lines = [
+        "| Method | " + " | ".join(f"{n} Domains" for n in domain_counts) + " |",
+        "| --- | " + " | ".join(["---"] * len(domain_counts)) + " |",
+    ]
+    for method in methods:
+        projects = method.get("projects", {})
+        cells = [method.get("label", "")]
+        for n in domain_counts:
+            cells.append(_format_gamenum_cell(
+                stats_by_project.get(str(projects.get(n, ""))),
+                mean_decimals,
+                std_decimals,
+            ))
+        md_lines.append("| " + " | ".join(cells) + " |")
+    md_path.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+
+    caption = table_cfg.get(
+        "caption",
+        "Full-shot evaluation with varying numbers of game domains.",
+    )
+    label = table_cfg.get("label", "tab:fullshot_progress")
+    colspec = "@{}l" + "c" * len(domain_counts) + "@{}"
+    header_line = "Method"
+    for n in domain_counts:
+        header_line += rf" & {n} Domains"
+    header_line += r" \\"
+
+    latex_lines = [
+        r"\begin{table}[!h]",
+        r"\centering",
+        r"\footnotesize",
+        r"\setlength{\tabcolsep}{4pt}",
+        r"\renewcommand{\arraystretch}{1.0}",
+        rf"\caption{{{caption}}}",
+        rf"\label{{{label}}}",
+        rf"\begin{{tabular}}{{{colspec}}}",
+        r"\toprule",
+        header_line,
+        r"\midrule",
+    ]
+
+    for i, method in enumerate(methods):
+        if i > 0:
+            latex_lines.append("")
+        projects = method.get("projects", {})
+        cells = [_latex_label(method.get("label", ""))]
+        for n in domain_counts:
+            cells.append(_format_gamenum_latex_cell(
+                stats_by_project.get(str(projects.get(n, ""))),
+                mean_decimals,
+                std_decimals,
+            ))
+        latex_lines.append(" & ".join(cells) + r" \\")
+
+    latex_lines.extend([
+        "",
+        r"\bottomrule",
+        r"\end{tabular}",
+        r"\end{table}",
+    ])
+    tex_path.write_text("\n".join(latex_lines) + "\n", encoding="utf-8")
+
+
 
 # ---------------------------------------------------------------------------
 # Plot functions
@@ -885,6 +1026,14 @@ def main() -> None:
     log.debug("table_md  : %s", output_md)
     log.debug("table_csv : %s", output_csv)
 
+    exp_cfg = _CFG.get("experiments", {}).get(args.experiment or "", {})
+    gamenum_table_cfg = exp_cfg.get("gamenum_table")
+    if isinstance(gamenum_table_cfg, dict):
+        write_gamenum_table_outputs(run_dir, rows, gamenum_table_cfg, args.decimals)
+        log.info("gamenum table csv: %s", run_dir / "fullshot_gamenum_table.csv")
+        log.info("gamenum table md : %s", run_dir / "fullshot_gamenum_table.md")
+        log.info("gamenum table tex: %s", run_dir / "fullshot_gamenum_table.tex")
+
     plot_rows = collect_plot_rows_from_results(input_root, metric_order)
     if target_projects:
         plot_rows = [r for r in plot_rows if r["project"] in target_projects]
@@ -913,7 +1062,6 @@ def main() -> None:
         if not args.no_plot:
             try:
                 # re.png: experiment의 re_baseline_project 를 기준선으로
-                exp_cfg       = _CFG.get("experiments", {}).get(args.experiment or "", {})
                 re_baseline   = exp_cfg.get("re_baseline_project")
                 re_bl_label   = exp_cfg.get("re_baseline_label")
                 write_overall_simple_plot(

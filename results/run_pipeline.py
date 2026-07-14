@@ -329,6 +329,44 @@ def _compute_global_norm_scale(
         return False
 
 
+def _has_cli_option(args: list[str], option: str) -> bool:
+    """Return True when args already contains option or option=value."""
+    return any(arg == option or arg.startswith(f"{option}=") for arg in args)
+
+
+def _step_extra_args_from_config(
+    cfg: dict,
+    experiment: str | None,
+    step: dict,
+    existing_args: list[str],
+) -> list[str]:
+    """Build per-step CLI args from results/config.json without overriding CLI."""
+    if not experiment or step.get("id") != 14:
+        return []
+
+    exp_cfg = cfg.get("experiments", {}).get(experiment, {})
+    step_cfg = exp_cfg.get("dataset_unseen_ratio_progress", {})
+    if not isinstance(step_cfg, dict):
+        return []
+
+    extra: list[str] = []
+    unseen_game = step_cfg.get("unseen_game")
+    if unseen_game and not _has_cli_option(existing_args, "--unseen-game"):
+        extra += ["--unseen-game", str(unseen_game)]
+
+    exclude_ratios = step_cfg.get("exclude_ratios")
+    if exclude_ratios and not _has_cli_option(existing_args, "--exclude-ratios"):
+        if isinstance(exclude_ratios, (list, tuple)):
+            exclude_ratios = ",".join(str(x) for x in exclude_ratios)
+        extra += ["--exclude-ratios", str(exclude_ratios)]
+
+    group_by = step_cfg.get("group_by")
+    if group_by and not _has_cli_option(existing_args, "--group-by"):
+        extra += ["--group-by", str(group_by)]
+
+    return extra
+
+
 def run_step(
     step: dict,
     extra_args: list[str],
@@ -473,7 +511,8 @@ def main(default_experiment: str | None = None) -> None:
                 )
                 continue
             # ——————————————————————————————————————————————————————————
-            ok = run_step(step, extra, dry_run=args.dry_run, log=log)
+            step_extra = extra + _step_extra_args_from_config(_cfg, experiment, step, extra)
+            ok = run_step(step, step_extra, dry_run=args.dry_run, log=log)
             exp_results.append((step, ok))
             if not ok and not args.continue_on_failure:
                 log.error("[ABORT] experiment=%s step %d (%s) 실패 — 다음 실험으로 건너뜁니다.",

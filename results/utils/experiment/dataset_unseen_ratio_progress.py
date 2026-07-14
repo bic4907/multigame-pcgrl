@@ -675,6 +675,38 @@ def write_table_markdown(output_path: Path, rows: list[dict], decimals: int = 4)
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _game_sort_key(game: str) -> tuple[int, str]:
+    try:
+        return (CANONICAL_GAMES.index(game), game)
+    except ValueError:
+        return (len(CANONICAL_GAMES), game)
+
+
+def _write_outputs(
+    output_dir: Path,
+    rows: list[dict],
+    *,
+    decimals: int,
+    no_plot: bool,
+    log,
+) -> None:
+    write_table_csv(output_dir / "dataset_unseen_ratio_table.csv", rows)
+    write_table_markdown(
+        output_dir / "dataset_unseen_ratio_table.md",
+        rows,
+        decimals=decimals,
+    )
+    log.info("table   : %s", output_dir / "dataset_unseen_ratio_table.md")
+
+    if not no_plot:
+        try:
+            write_line_plot(output_dir / "dataset_unseen_ratio_progress.png", rows)
+            log.info("plot    : %s", output_dir / "dataset_unseen_ratio_progress.png")
+        except RuntimeError as e:
+            log.error("Plot generation failed: %s", e)
+            raise SystemExit(str(e)) from e
+
+
 def parse_args() -> argparse.Namespace:
     exp_names = list(_CFG.get("experiments", {}).keys())
     parser = argparse.ArgumentParser(
@@ -753,21 +785,28 @@ def main() -> None:
         log.info("norm_scale (local) : %s", scale_path)
 
     norm_rows = apply_normalization(rows, norm_scale, ["progress"])
-    write_table_csv(run_dir / "dataset_unseen_ratio_table.csv", norm_rows)
-    write_table_markdown(
-        run_dir / "dataset_unseen_ratio_table.md",
-        norm_rows,
-        decimals=args.decimals,
-    )
-    log.info("table   : %s", run_dir / "dataset_unseen_ratio_table.md")
 
-    if not args.no_plot:
-        try:
-            write_line_plot(run_dir / "dataset_unseen_ratio_progress.png", norm_rows)
-            log.info("plot    : %s", run_dir / "dataset_unseen_ratio_progress.png")
-        except RuntimeError as e:
-            log.error("Plot generation failed: %s", e)
-            raise SystemExit(str(e)) from e
+    output_games = sorted({r["game"] for r in norm_rows if r.get("game_split") == "unseen"}, key=_game_sort_key)
+    if len(output_games) > 1:
+        for game in output_games:
+            game_rows = [r for r in norm_rows if r.get("game") == game]
+            game_dir = run_dir / game
+            log.info("game output: %s  rows=%d", game, len(game_rows))
+            _write_outputs(
+                game_dir,
+                game_rows,
+                decimals=args.decimals,
+                no_plot=args.no_plot,
+                log=log,
+            )
+    else:
+        _write_outputs(
+            run_dir,
+            norm_rows,
+            decimals=args.decimals,
+            no_plot=args.no_plot,
+            log=log,
+        )
 
     log.info(
         "rows: total=%d  unseen=%d  unseen_game_filter=%s  exclude_ratios=%s  ratios=%s  groups=%s  known_games=%s",

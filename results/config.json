@@ -69,7 +69,10 @@
         "aaai27_eval_mgpcgrl_fewshot_dw0",
         "aaai27_eval_mgpcgrl_fewshot",
         "aaai27_eval_predictive_reward"
-      ]
+      ],
+      "dataset_unseen_ratio_progress": {
+        "unseen_game": "dm,sk,pk"
+      }
     }
   },
   "project_display_names": {

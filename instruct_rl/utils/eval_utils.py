@@ -169,8 +169,8 @@ def main_eval_entry(config, *, inject_obs_fn=None):
                 config.unseen_games = sorted(set(list(config.unseen_games) + _unseen_raw))
 
             _enc_name = _rdm_data.get("encoder_ckpt_name")
-            if _enc_name and hasattr(config, "encoder_ckpt_name"):
-                config.encoder_ckpt_name = _enc_name
+            if _enc_name and hasattr(config, "encoder"):
+                config.encoder.ckpt_name = _enc_name
 
             logger.info(
                 "Loaded train_setting: mode=%s, encoder=%s, seen=%s, unseen=%s",

@@ -6,14 +6,23 @@ plot_tsne_by_level.py의 figure2-1(embedding plot)에 붙일 게임별 대표 �
 (매번 그림을 다시 그릴 때마다 무거운 데이터셋을 재구축하지 않기 위해
 샘플 선택/렌더링과 플로팅을 분리한다.)
 
-렌더링은 MultiGameDataset.render_sample() (dataset/multigame/render.py의
-GameLevelRenderer) — 게임마다 다른 raw 타일 스프라이트를 쓰는 렌더러다.
-(mgpcgrl 학습/평가 파이프라인이 쓰는 envs/probs/multigame.py:render_multigame_map()은
-unified 5-category를 게임 구분 없이 동일한 스프라이트 세트로 그려서, 게임별로
-시각적으로 구분이 안 된다 — 여기서는 그림에서 게임을 한눈에 구분할 수 있는 게
-목적이라 게임별 raw 렌더러를 쓴다.) raw tile id 배열이 필요하므로
-use_tile_mapping=False로 데이터셋을 구성한다 (CLIP 인코더 학습용 파이프라인은
-전혀 필요 없다).
+envs/probs/multigame.py:render_multigame_map()(mgpcgrl eval 파이프라인이 실제로
+쓰는 렌더러)은 unified 5-category를 게임 구분 없이 동일한 스프라이트 세트로
+그려서, 게임마다 그림이 달라 보이지 않는다 — 여기서는 게임을 한눈에 구분할 수
+있는 게 목적이라, 게임별 raw 스프라이트를 쓰는 MultiGameDataset.render_sample()
+(dataset/multigame/render.py의 GameLevelRenderer, dataset/multigame/tile_ims/)을 쓴다.
+
+렌더러뿐 아니라 데이터 로딩 방식도 results/render/table_export/render_assets.py의
+_load_dataset_samples_for_gt()와 완전히 동일하게 맞춘다:
+  MultiGameDataset(use_tile_mapping=True)  # raw id가 아니라 unified 5-category
+  -> preprocess_samples(longtail_cut=True)
+  -> apply_tile_offset(samples, 1)         # unified(0~4) -> tile_mapping.json
+                                            #   "_tile_images" 키 스킴(1~5)에 맞춤
+tile_mapping.json의 "_tile_images"는 raw per-game tile id가 아니라 "unified
+category + 1"로 인덱싱되는 딕셔너리였다 — dungeon 기준 key "3"(=unified
+interactive+1)이 dungeon_interactable.png인 것과 key "4"(=unified hazard+1)가
+bat.png인 게 정확히 맞아떨어진다. use_tile_mapping=False로 raw id를 그대로
+넣었던 이전 버전은 애초에 스킴이 다른 값을 렌더러에 넣은 것이었다.
 
 각 (game, quantized_bin) 조합에서 후보를 결정적으로 정렬(meta['key'] 기준)한 뒤
 --picks로 지정한 인덱스의 샘플을 대표로 고른다 (지정 안 하면 0번). 렌더링한
@@ -61,34 +70,6 @@ def condition_value_of(sample, reward_enum: int) -> float | None:
     return conditions.get(reward_enum, next(iter(conditions.values()), None))
 
 
-# dataset/multigame/tile_mapping.json 의 "_tile_images"(raw tile_id -> 스프라이트 파일명)가
-# "mapping"(raw_id -> unified category)과 어긋나 있는 게 여러 게임에서 확인됐다
-# (예: sokoban/doom/zelda/pokemon 모두 WALL(id 1)과 FLOOR/EMPTY(id 2) 이미지가 서로 뒤바뀜,
-# dungeon/doom은 ENEMY/SPAWN/TREASURE류 id들도 밀려있음). tile_mapping.json 자체는
-# GameLevelRenderer/뷰어 등 다른 곳에서도 공유해서 쓰므로 건드리지 않고, 이 스크립트가
-# 쓰는 렌더러 인스턴스에서만 보정한 이미지 파일명으로 덮어쓴다.
-TILE_IMAGE_FIXES: dict[str, dict[str, str]] = {
-    "sokoban": {"1": "sokoban_wall.png"},
-    "doom": {"1": "doom_wall.png", "2": "doom_empty.png", "3": "doom_hazard.png", "4": "doom_interact.png"},
-    "zelda": {"1": "wall.png", "2": "floor.png"},
-    "pokemon": {"1": "tree.png", "2": "floor_0.png"},
-    "dungeon": {"3": "bat.png", "4": "treasure.png", "5": "dungeon_interactable.png"},
-}
-
-
-def make_fixed_renderer():
-    """TILE_IMAGE_FIXES를 적용한 GameLevelRenderer를 만들어 반환한다 (원본 tile_mapping.json은 그대로 둠)."""
-    import copy
-
-    from dataset.multigame.render import GameLevelRenderer
-
-    renderer = GameLevelRenderer()
-    renderer.tile_mapping = copy.deepcopy(renderer.tile_mapping)
-    for game, overrides in TILE_IMAGE_FIXES.items():
-        renderer.tile_mapping.setdefault(game, {}).setdefault("_tile_images", {}).update(overrides)
-    return renderer
-
-
 def sorted_candidates(samples, game: str, target_bin: int, reward_enum: int):
     """(game, quantized_bin)에 맞는 후보를 결정적 순서로 정렬해서 반환한다.
 
@@ -124,13 +105,19 @@ def main() -> None:
         pick_map[game.strip()] = int(idx_str)
 
     from dataset.multigame import MultiGameDataset
+    from instruct_rl.utils.dataset_loader_helpers.preprocessing import apply_tile_offset, preprocess_samples
 
-    print("building raw MultiGameDataset (use_tile_mapping=False) ...")
-    ds = MultiGameDataset(use_tile_mapping=False)
-    samples = ds.by_reward_enum(args.reward_enum)
+    print("building MultiGameDataset (use_tile_mapping=True, matching render_assets.py) ...")
+    ds = MultiGameDataset(use_tile_mapping=True)
+    samples = list(ds)
+    samples = preprocess_samples(samples, longtail_cut=True)
+    samples = apply_tile_offset(samples, 1)
+    samples = [s for s in samples if s.meta.get("reward_enum") == args.reward_enum]
     print(f"reward_enum={args.reward_enum} samples: {len(samples)}")
 
-    renderer = make_fixed_renderer()
+    from dataset.multigame.render import GameLevelRenderer
+
+    renderer = GameLevelRenderer()
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -147,7 +134,9 @@ def main() -> None:
 
         key = f"{game}_bin{qbin}"
         out_path = out_dir / f"{key}.png"
-        renderer.render(game=sample.game, level=sample.array, tile_size=args.tile_size, save_path=out_path)
+        renderer.render(
+            game=sample.game, level=sample.array, tile_size=args.tile_size, show_tile_numbers=False,
+        ).save(str(out_path))
         captions[key] = sample.instruction or ""
         condition_value = sample.meta.get("conditions", {}).get(args.reward_enum)
         print(f"saved: {out_path}  (pick={pick}/{len(cands)}, cond={condition_value})  inst={sample.instruction!r}")

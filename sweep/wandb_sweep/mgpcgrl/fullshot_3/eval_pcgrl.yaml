@@ -12,7 +12,7 @@ parameters:
   seed:
     values: [0, 1, 2, 3, 4]
   reevaluate:
-    value: false
+    value: true
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/mgpcgrl_fullshot_3'
   encoder.ckpt_name:

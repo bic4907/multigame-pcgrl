@@ -1,0 +1,61 @@
+program: train_mgpcgrl.py
+project: aaai27_train_mgpcgrl_source_target
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  wandb_project:
+    value: aaai27_train_mgpcgrl_source_target
+  # RL 학습 자체는 전체 게임을 대상으로 진행 (encoder 쪽만 source+target으로 제한됨).
+  # source->target 개별 인과관계는 결과 분석 단계에서 ctrl_sim.csv를 게임별로 필터링해 확인한다.
+  game:
+    value: 'all'
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0, 1, 2]
+  n_envs:
+    value: 600
+  overwrite:
+    value: false
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_source_target'
+  encoder.ckpt_name:
+    values:
+      # ── target=dg (encoder/dg.yaml) ──
+      - "clipdec-game-dg_sr-0.1_unseen-dg_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-pkdg_sr-0.1_unseen-dg_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-skdg_sr-0.1_unseen-dg_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-dmdg_sr-0.1_unseen-dg_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-zddg_sr-0.1_unseen-dg_ur-0.03_exp-def_dw-0p03_0"
+      # ── target=pk (encoder/pk.yaml) ──
+      - "clipdec-game-pk_sr-0.1_unseen-pk_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-dgpk_sr-0.1_unseen-pk_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-skpk_sr-0.1_unseen-pk_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-dmpk_sr-0.1_unseen-pk_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-zdpk_sr-0.1_unseen-pk_ur-0.03_exp-def_dw-0p03_0"
+      # ── target=sk (encoder/sk.yaml) ──
+      - "clipdec-game-sk_sr-0.1_unseen-sk_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-dgsk_sr-0.1_unseen-sk_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-pksk_sr-0.1_unseen-sk_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-dmsk_sr-0.1_unseen-sk_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-zdsk_sr-0.1_unseen-sk_ur-0.03_exp-def_dw-0p03_0"
+      # ── target=dm (encoder/dm.yaml) ──
+      - "clipdec-game-dm_sr-0.1_unseen-dm_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-dgdm_sr-0.1_unseen-dm_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-pkdm_sr-0.1_unseen-dm_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-skdm_sr-0.1_unseen-dm_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-zddm_sr-0.1_unseen-dm_ur-0.03_exp-def_dw-0p03_0"
+      # ── target=zd (encoder/zd.yaml) ──
+      - "clipdec-game-zd_sr-0.1_unseen-zd_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-dgzd_sr-0.1_unseen-zd_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-pkzd_sr-0.1_unseen-zd_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-skzd_sr-0.1_unseen-zd_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-dmzd_sr-0.1_unseen-zd_ur-0.03_exp-def_dw-0p03_0"
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_source_target'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

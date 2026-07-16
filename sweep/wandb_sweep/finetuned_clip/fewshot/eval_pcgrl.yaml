@@ -1,0 +1,36 @@
+program: eval_finetuned_clip.py
+project: aaai27_eval_finetuned_clip_fewshot
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    value: 'all'
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0, 1, 2, 3, 4]
+  n_envs:
+    value: 500
+  reevaluate:
+    value: true
+  overwrite:
+    value: false
+  upload_h5:
+    value: true
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/finetuned_clip_fewshot'
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/finetuned_clip_fewshot'
+  encoder.ckpt_name:
+    values:
+      - 'finetuned-clip-game-all_unseen-pk_ur-0.03_exp-def_0'
+      - 'finetuned-clip-game-all_unseen-dg_ur-0.03_exp-def_0'
+      - 'finetuned-clip-game-all_unseen-zd_ur-0.03_exp-def_0'
+      - 'finetuned-clip-game-all_unseen-dm_ur-0.03_exp-def_0'
+      - 'finetuned-clip-game-all_unseen-sk_ur-0.03_exp-def_0'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

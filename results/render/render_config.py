@@ -24,6 +24,10 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from dataset.multigame.render import GameLevelRenderer  # noqa: E402
 from table_export.models import RenderCell  # noqa: E402
+from blender.manifest_renderer import (  # noqa: E402
+    BlenderRenderRequest,
+    render_levels,
+)
 from table_export.semantic.artifacts import (  # noqa: E402
     _build_candidates,
     _download_runs,
@@ -41,6 +45,7 @@ from table_export.semantic.constants import (  # noqa: E402
     DEFAULT_TILE_SIZE,
     ENTITY,
     METHOD_ORDER,
+    _fmt_num,
     _reward_enum_for_feature_game,
     _side_labels_for_feature,
 )
@@ -55,6 +60,7 @@ from table_export.semantic.render import (  # noqa: E402
     _draw_level_image,
     _overlay_metric,
 )
+from table_export.semantic.metrics import _path_metric_and_coords  # noqa: E402
 
 
 DEFAULT_RENDER_CONFIG = SCRIPT_DIR / "render_config.json"
@@ -80,6 +86,136 @@ def _copy_script_snapshot(output_dir: Path) -> Path:
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(Path(__file__), dst)
     return dst
+
+
+def _resolve_blender_resolution(args: argparse.Namespace) -> tuple[int, int]:
+    square_side = int(args.tile_size) * 16
+    width = int(args.blender_resolution_x or 0)
+    height = int(args.blender_resolution_y or 0)
+    if width <= 0 and height <= 0:
+        return square_side, square_side
+    if width <= 0:
+        return height, height
+    if height <= 0:
+        return width, width
+    return width, height
+
+
+def _overlay_metric_label(
+    image_path: Path,
+    metric_value: float,
+    target_value: float | None,
+    out_path: Path,
+    tile_size: int,
+) -> Path:
+    from PIL import Image, ImageDraw, ImageFont
+
+    def load_font(size: int) -> ImageFont.ImageFont:
+        candidates = [
+            str(PROJECT_ROOT / "debug" / "Pretendard-Regular.ttf"),
+            "/System/Library/Fonts/Supplemental/Pretendard-Regular.otf",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        ]
+        for path in candidates:
+            if path and Path(path).exists():
+                try:
+                    return ImageFont.truetype(path, size)
+                except Exception:
+                    pass
+        return ImageFont.load_default()
+
+    img = Image.open(image_path).convert("RGBA")
+    draw = ImageDraw.Draw(img, "RGBA")
+    label_lines = [f"Target={_fmt_num(target_value)}", f"Result={_fmt_num(metric_value)}"]
+    pad_x = max(16, int(tile_size * 0.50))
+    pad_y = max(12, int(tile_size * 0.38))
+    inset_x = max(10, int(tile_size * 0.36))
+    inset_y = max(10, int(tile_size * 0.36))
+    radius = max(8, int(tile_size * 0.35))
+    line_gap = max(4, int(tile_size * 0.16))
+    font_size = max(54, int(tile_size * 1.78))
+    font = load_font(font_size)
+
+    def line_boxes() -> list[tuple[int, int, int, int]]:
+        return [draw.textbbox((0, 0), line, font=font) for line in label_lines]
+
+    bboxes = line_boxes()
+    text_w = max(bbox[2] - bbox[0] for bbox in bboxes)
+    text_h = sum(bbox[3] - bbox[1] for bbox in bboxes) + line_gap * (len(label_lines) - 1)
+    while text_w + 2 * pad_x + inset_x > img.width and font_size > 36:
+        font_size -= 2
+        font = load_font(font_size)
+        bboxes = line_boxes()
+        text_w = max(bbox[2] - bbox[0] for bbox in bboxes)
+        text_h = sum(bbox[3] - bbox[1] for bbox in bboxes) + line_gap * (len(label_lines) - 1)
+
+    box = (
+        inset_x,
+        inset_y,
+        inset_x + text_w + 2 * pad_x,
+        inset_y + text_h + 2 * pad_y,
+    )
+    draw.rounded_rectangle(box, radius=radius, fill=(255, 255, 255, 230), outline=(20, 24, 30, 210), width=2)
+    y = inset_y + pad_y
+    for line, bbox in zip(label_lines, bboxes):
+        text_xy = (inset_x + pad_x, y - bbox[1])
+        draw.text(text_xy, line, fill=(20, 24, 30, 255), font=font)
+        draw.text((text_xy[0] + 1, text_xy[1]), line, fill=(20, 24, 30, 255), font=font)
+        y += bbox[3] - bbox[1] + line_gap
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    img.convert("RGB").save(str(out_path))
+    return out_path
+
+
+def _render_cell_images(
+    *,
+    render_mode: str,
+    game: str,
+    stem: str,
+    low_state: Any,
+    mid_state: Any,
+    high_state: Any,
+    raw_dir: Path,
+    tile_size: int,
+    renderer: GameLevelRenderer,
+    blender: str | None,
+    blender_resolution: tuple[int, int],
+    reward_enum: int,
+) -> tuple[Path, Path, Path]:
+    low_img = raw_dir / f"{stem}_low.png"
+    mid_img = raw_dir / f"{stem}_mid.png"
+    high_img = raw_dir / f"{stem}_high.png"
+    if render_mode == "blender":
+        low_path = _path_coords_for_blender(low_state, reward_enum)
+        mid_path = _path_coords_for_blender(mid_state, reward_enum)
+        high_path = _path_coords_for_blender(high_state, reward_enum)
+        render_levels(
+            [
+                BlenderRenderRequest(game, low_state, low_img, "low", path_coords=low_path),
+                BlenderRenderRequest(game, mid_state, mid_img, "mid", path_coords=mid_path),
+                BlenderRenderRequest(game, high_state, high_img, "high", path_coords=high_path),
+            ],
+            raw_dir / "_blender_manifests" / f"{stem}.json",
+            blender=blender,
+            resolution=blender_resolution,
+        )
+        return low_img, mid_img, high_img
+
+    low_img = _draw_level_image(game, low_state, low_img, tile_size, renderer)
+    mid_img = _draw_level_image(game, mid_state, mid_img, tile_size, renderer)
+    high_img = _draw_level_image(game, high_state, high_img, tile_size, renderer)
+    return low_img, mid_img, high_img
+
+
+def _path_coords_for_blender(state: Any, reward_enum: int) -> list[list[int]] | None:
+    if reward_enum != 1:
+        return None
+    _, coords = _path_metric_and_coords(state)
+    if len(coords) < 2:
+        return None
+    return [[int(row), int(col)] for row, col in coords]
 
 
 def render_table(args: argparse.Namespace) -> Path:
@@ -123,6 +259,7 @@ def render_table(args: argparse.Namespace) -> Path:
     cells: dict[tuple[str, str, str], RenderCell] = {}
     raw_dir = output_dir / "renders"
     overlay_dir = output_dir / "overlays"
+    blender_resolution = _resolve_blender_resolution(args)
 
     for feature in features:
         side_labels = _side_labels_for_feature(feature)
@@ -147,36 +284,70 @@ def render_table(args: argparse.Namespace) -> Path:
                     raise RuntimeError(f"Missing H5 state for {method}/{game}/{feature}")
 
                 stem = f"{method.lower()}_{game}_{feature}"
-                low_img = _draw_level_image(game, low_state, raw_dir / f"{stem}_low.png", args.tile_size, renderer)
-                mid_img = _draw_level_image(game, mid_state, raw_dir / f"{stem}_mid.png", args.tile_size, renderer)
-                high_img = _draw_level_image(game, high_state, raw_dir / f"{stem}_high.png", args.tile_size, renderer)
-                low_overlay = _overlay_metric(
-                    low_img,
-                    low_state,
-                    reward_enum,
-                    low.seed_metrics[low_seed],
-                    low.target,
-                    overlay_dir / f"{stem}_low_overlay.png",
-                    args.tile_size,
+                low_img, mid_img, high_img = _render_cell_images(
+                    render_mode=args.render_mode,
+                    game=game,
+                    stem=stem,
+                    low_state=low_state,
+                    mid_state=mid_state,
+                    high_state=high_state,
+                    raw_dir=raw_dir,
+                    tile_size=args.tile_size,
+                    renderer=renderer,
+                    blender=args.blender,
+                    blender_resolution=blender_resolution,
+                    reward_enum=reward_enum,
                 )
-                mid_overlay = _overlay_metric(
-                    mid_img,
-                    mid_state,
-                    reward_enum,
-                    mid.seed_metrics[mid_seed],
-                    mid.target,
-                    overlay_dir / f"{stem}_mid_overlay.png",
-                    args.tile_size,
-                )
-                high_overlay = _overlay_metric(
-                    high_img,
-                    high_state,
-                    reward_enum,
-                    high.seed_metrics[high_seed],
-                    high.target,
-                    overlay_dir / f"{stem}_high_overlay.png",
-                    args.tile_size,
-                )
+                if args.render_mode == "blender":
+                    low_overlay = _overlay_metric_label(
+                        low_img,
+                        low.seed_metrics[low_seed],
+                        low.target,
+                        overlay_dir / f"{stem}_low_overlay.png",
+                        args.tile_size,
+                    )
+                    mid_overlay = _overlay_metric_label(
+                        mid_img,
+                        mid.seed_metrics[mid_seed],
+                        mid.target,
+                        overlay_dir / f"{stem}_mid_overlay.png",
+                        args.tile_size,
+                    )
+                    high_overlay = _overlay_metric_label(
+                        high_img,
+                        high.seed_metrics[high_seed],
+                        high.target,
+                        overlay_dir / f"{stem}_high_overlay.png",
+                        args.tile_size,
+                    )
+                else:
+                    low_overlay = _overlay_metric(
+                        low_img,
+                        low_state,
+                        reward_enum,
+                        low.seed_metrics[low_seed],
+                        low.target,
+                        overlay_dir / f"{stem}_low_overlay.png",
+                        args.tile_size,
+                    )
+                    mid_overlay = _overlay_metric(
+                        mid_img,
+                        mid_state,
+                        reward_enum,
+                        mid.seed_metrics[mid_seed],
+                        mid.target,
+                        overlay_dir / f"{stem}_mid_overlay.png",
+                        args.tile_size,
+                    )
+                    high_overlay = _overlay_metric(
+                        high_img,
+                        high_state,
+                        reward_enum,
+                        high.seed_metrics[high_seed],
+                        high.target,
+                        overlay_dir / f"{stem}_high_overlay.png",
+                        args.tile_size,
+                    )
                 triplet_overlay = _combine_triplet(
                     low_overlay,
                     mid_overlay,
@@ -221,6 +392,9 @@ def render_table(args: argparse.Namespace) -> Path:
         "latex_games": latex_games,
         "features": features,
         "tile_size": args.tile_size,
+        "render_mode": args.render_mode,
+        "blender": args.blender,
+        "blender_resolution": [blender_resolution[0], blender_resolution[1]],
         "cache_only": args.cache_only,
         "overleaf_dir": overleaf_dir.relative_to(output_dir).as_posix(),
     }
@@ -240,6 +414,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--latex-games", default="", help="Optional comma-separated override. Defaults to render_config scope.")
     parser.add_argument("--features", default="", help="Optional comma-separated override. Defaults to render_config scope.")
     parser.add_argument("--tile-size", type=int, default=DEFAULT_TILE_SIZE)
+    parser.add_argument("--render-mode", choices=("2d", "blender"), default="2d")
+    parser.add_argument("--blender", default="", help="Optional path to Blender executable.")
+    parser.add_argument("--blender-resolution-x", type=int, default=0, help="0 uses tile_size * 16.")
+    parser.add_argument("--blender-resolution-y", type=int, default=0, help="0 uses the resolved width for square output.")
     parser.add_argument("--cache-only", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--output-dir", default="")
     return parser.parse_args()

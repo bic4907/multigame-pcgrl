@@ -12,10 +12,12 @@ from .metrics import _path_metric_and_coords
 
 def _load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
     candidates = [
+        str(PROJECT_ROOT / "debug" / "Pretendard-Regular.ttf"),
+        "/System/Library/Fonts/Supplemental/Pretendard-Regular.otf",
+        "/System/Library/Fonts/Supplemental/Pretendard.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
         "/System/Library/Fonts/Supplemental/Arial Bold.ttf" if bold else "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        str(PROJECT_ROOT / "debug" / "Pretendard-Regular.ttf"),
     ]
     for path in candidates:
         if path and Path(path).exists():
@@ -105,18 +107,41 @@ def _overlay_metric(
                     width=box_width,
                 )
 
-    label = f"Target={_fmt_num(target_value)} | Result={_fmt_num(metric_value)}"
-    pad = max(8, tile_size // 4)
-    font_size = max(42, int(tile_size * 1.40))
+    label_lines = [f"Target={_fmt_num(target_value)}", f"Result={_fmt_num(metric_value)}"]
+    pad_x = max(16, int(tile_size * 0.50))
+    pad_y = max(12, int(tile_size * 0.38))
+    inset_x = max(10, int(tile_size * 0.36))
+    inset_y = max(10, int(tile_size * 0.36))
+    radius = max(8, int(tile_size * 0.35))
+    line_gap = max(4, int(tile_size * 0.16))
+    font_size = max(54, int(tile_size * 1.78))
     font = _load_font(font_size, bold=True)
-    bbox = draw.textbbox((0, 0), label, font=font)
-    while bbox[2] - bbox[0] + 2 * pad > img.width and font_size > 30:
+
+    def line_boxes() -> list[tuple[int, int, int, int]]:
+        return [draw.textbbox((0, 0), line, font=font) for line in label_lines]
+
+    bboxes = line_boxes()
+    text_w = max(bbox[2] - bbox[0] for bbox in bboxes)
+    text_h = sum(bbox[3] - bbox[1] for bbox in bboxes) + line_gap * (len(label_lines) - 1)
+    while text_w + 2 * pad_x + inset_x > img.width and font_size > 36:
         font_size -= 2
         font = _load_font(font_size, bold=True)
-        bbox = draw.textbbox((0, 0), label, font=font)
-    box = (0, 0, bbox[2] - bbox[0] + 2 * pad, bbox[3] - bbox[1] + 2 * pad)
-    draw.rectangle(box, fill=(255, 255, 255, 225))
-    draw.text((pad, pad), label, fill=(20, 24, 30, 255), font=font)
+        bboxes = line_boxes()
+        text_w = max(bbox[2] - bbox[0] for bbox in bboxes)
+        text_h = sum(bbox[3] - bbox[1] for bbox in bboxes) + line_gap * (len(label_lines) - 1)
+    box = (
+        inset_x,
+        inset_y,
+        inset_x + text_w + 2 * pad_x,
+        inset_y + text_h + 2 * pad_y,
+    )
+    draw.rounded_rectangle(box, radius=radius, fill=(255, 255, 255, 230), outline=(20, 24, 30, 210), width=2)
+    y = inset_y + pad_y
+    for line, bbox in zip(label_lines, bboxes):
+        text_xy = (inset_x + pad_x, y - bbox[1])
+        draw.text(text_xy, line, fill=(20, 24, 30, 255), font=font)
+        draw.text((text_xy[0] + 1, text_xy[1]), line, fill=(20, 24, 30, 255), font=font)
+        y += bbox[3] - bbox[1] + line_gap
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").save(str(out_path))
@@ -158,4 +183,3 @@ def _combine_triplet(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(str(out_path))
     return out_path
-

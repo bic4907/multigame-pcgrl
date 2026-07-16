@@ -63,6 +63,11 @@ def _build_latex(
     lines = [
         r"\begin{table*}[t]",
         r"\centering",
+        r"\caption{\textbf{Domain-specific grounding of shared semantic transitions.} "
+        r"The same normalized semantic transition corresponds to different raw condition values across game domains. "
+        r"The rows show fixed method outputs under each game-specific condition scale. "
+        r"Each visualization is rendered from the fixed row and seed listed in the render configuration.}",
+        r"\label{tab:domain_specific_semantic_transition}",
         r"\scriptsize",
         r"\setlength{\tabcolsep}{2pt}",
         r"\renewcommand{\arraystretch}{1.14}",
@@ -88,11 +93,6 @@ def _build_latex(
         [
             r"\bottomrule",
             r"\end{tabular}",
-            r"\caption{\textbf{Domain-specific grounding of shared semantic transitions.} "
-            r"The same normalized semantic transition corresponds to different raw condition values across game domains. "
-            r"The rows show fixed method outputs under each game-specific condition scale. "
-            r"Each visualization is rendered from the fixed row and seed listed in the render configuration.}",
-            r"\label{tab:domain_specific_semantic_transition}",
             r"\end{table*}",
             "",
         ]

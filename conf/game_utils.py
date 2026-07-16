@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 
-from typing import Dict, List
+from typing import Dict, List, Optional, Set
 
 # ── 게임 2글자 약어 ↔ include 플래그 매핑 ──────────────────────────────────────
 # dm 은 doom + doom2 를 동시에 가리킨다.
@@ -151,6 +151,27 @@ def infer_seen_games_from_ckpt_name(ckpt_name: str) -> List[str]:
     if not game_match:
         return []
     return parse_game_names(game_match.group(1), canonical=True)
+
+
+def unseen_abbr_from_seen_games(seen_games) -> Optional[str]:
+    """Build canonical unseen-game abbreviation from a seen-game list.
+
+    The order follows ``GAME_ABBR`` insertion order, matching existing run-name
+    conventions such as ``dgskzd``.
+    """
+    if not seen_games:
+        return None
+
+    seen_game_set = {("doom" if g == "doom2" else g) for g in seen_games}
+    abbr_parts: List[str] = []
+    seen_abbrs: Set[str] = set()
+    for abbr, names in GAME_ABBR.items():
+        canonical_names = {("doom" if g == "doom2" else g) for g in names}
+        if canonical_names.isdisjoint(seen_game_set) and abbr not in seen_abbrs:
+            abbr_parts.append(abbr)
+            seen_abbrs.add(abbr)
+
+    return "".join(abbr_parts) or None
 
 
 def build_game_str(

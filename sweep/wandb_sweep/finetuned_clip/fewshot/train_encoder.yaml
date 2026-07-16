@@ -1,0 +1,36 @@
+program: train_finetuned_clip_encoder.py
+project: aaai27_encoder_finetuned_clip_fewshot
+method: grid
+metric:
+  goal: minimize
+  name: total/val_loss
+parameters:
+  game:
+    value: 'all'
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/finetuned_clip_fewshot'
+  unseen_ratio:
+    value: 0.03
+  seen_ratio:
+    value: 1.0
+  seed:
+    values: [0]
+  n_epochs:
+    value: 100
+  batch_size:
+    value: 256
+  lr:
+    value: 5.0e-6
+  unseen_games:
+    values:
+      - 'pk'
+      - 'dg'
+      - 'zd'
+      - 'dm'
+      - 'sk'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

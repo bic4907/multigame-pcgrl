@@ -47,6 +47,7 @@ from table_export.semantic.constants import (  # noqa: E402
     METHOD_ORDER,
     _fmt_num,
     _reward_enum_for_feature_game,
+    _safe_slug,
     _side_labels_for_feature,
 )
 from table_export.semantic.output import (  # noqa: E402
@@ -64,6 +65,30 @@ from table_export.semantic.metrics import _path_metric_and_coords  # noqa: E402
 
 
 DEFAULT_RENDER_CONFIG = SCRIPT_DIR / "render_config.json"
+
+
+def _missing_cached_projects(entity: str, projects: dict[str, str]) -> list[str]:
+    cache_root = SCRIPT_DIR / ".wandb_download" / _safe_slug(entity)
+    missing: list[str] = []
+    for project in sorted(set(projects.values())):
+        project_root = cache_root / _safe_slug(project)
+        if not project_root.is_dir() or not any(project_root.glob("*/eval.h5")):
+            missing.append(project)
+    return missing
+
+
+def _missing_run_keys(
+    runs: dict[tuple[str, int], Any],
+    projects: dict[str, str],
+    reward_enums: list[int],
+) -> list[tuple[str, int]]:
+    missing: list[tuple[str, int]] = []
+    for method in projects:
+        for reward_enum in reward_enums:
+            run = runs.get((method, reward_enum))
+            if run is None or run.h5_path is None or run.csv_dir is None:
+                missing.append((method, reward_enum))
+    return missing
 
 
 def _split_csv(value: str | None) -> list[str]:
@@ -243,13 +268,30 @@ def render_table(args: argparse.Namespace) -> Path:
         for feature in features
         for game in games
     })
+    use_cache_only = args.cache_only
     runs = _download_runs(
         entity=args.entity,
         projects=projects,
         reward_enums=reward_enums,
         output_dir=output_dir,
-        use_cache_only=args.cache_only,
+        use_cache_only=use_cache_only,
     )
+    missing_projects = _missing_cached_projects(args.entity, projects) if args.cache_only else []
+    missing_run_keys = _missing_run_keys(runs, projects, reward_enums) if args.cache_only else []
+    if missing_run_keys and args.download_missing_cache:
+        missing_text = ", ".join(f"{method}/re{reward_enum}" for method, reward_enum in missing_run_keys)
+        message = f"Missing local W&B artifacts for {missing_text}."
+        if missing_projects:
+            message += " Missing project cache(s): " + ", ".join(missing_projects) + "."
+        print(message + " Downloading required artifacts...")
+        use_cache_only = False
+        runs = _download_runs(
+            entity=args.entity,
+            projects=projects,
+            reward_enums=reward_enums,
+            output_dir=output_dir,
+            use_cache_only=use_cache_only,
+        )
     candidates_by_method_re = {
         key: _build_candidates(run, games)
         for key, run in runs.items()
@@ -396,6 +438,8 @@ def render_table(args: argparse.Namespace) -> Path:
         "blender": args.blender,
         "blender_resolution": [blender_resolution[0], blender_resolution[1]],
         "cache_only": args.cache_only,
+        "download_missing_cache": args.download_missing_cache,
+        "resolved_cache_only": use_cache_only,
         "overleaf_dir": overleaf_dir.relative_to(output_dir).as_posix(),
     }
     (output_dir / "used_render_config.json").write_text(
@@ -419,6 +463,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--blender-resolution-x", type=int, default=0, help="0 uses tile_size * 16.")
     parser.add_argument("--blender-resolution-y", type=int, default=0, help="0 uses the resolved width for square output.")
     parser.add_argument("--cache-only", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--download-missing-cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="When --cache-only is set, download from W&B if a required local project cache is missing.",
+    )
     parser.add_argument("--output-dir", default="")
     return parser.parse_args()
 

@@ -15,7 +15,7 @@ from dataset.multigame.tile_utils import to_unified
 BLENDER_DIR = Path(__file__).resolve().parent
 RENDER_ROOT = BLENDER_DIR.parent
 DEFAULT_BLENDER_SCRIPT = BLENDER_DIR / "blender_render_multigame_manifest.py"
-DEFAULT_ASSET_DIR = RENDER_ROOT / "assets" / "blender"
+DEFAULT_ASSET_DIR = RENDER_ROOT / "assets"
 DEFAULT_BLENDER_MACOS = "/Applications/Blender.app/Contents/MacOS/Blender"
 
 @dataclass(frozen=True)

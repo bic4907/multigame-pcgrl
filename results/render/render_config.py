@@ -22,7 +22,6 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from dataset.multigame.render import GameLevelRenderer  # noqa: E402
 from table_export.models import RenderCell  # noqa: E402
 from blender.manifest_renderer import (  # noqa: E402
     BlenderRenderRequest,
@@ -62,11 +61,13 @@ from table_export.semantic.render import (  # noqa: E402
     _overlay_metric,
 )
 from table_export.semantic.metrics import _path_metric_and_coords  # noqa: E402
+from table_export.semantic.tile_renderer import (  # noqa: E402
+    DEFAULT_MAPPED_TILE_DIR,
+    SemanticTileRenderer,
+)
 
 
 DEFAULT_RENDER_CONFIG = SCRIPT_DIR / "render_config.json"
-
-
 def _missing_cached_projects(entity: str, projects: dict[str, str]) -> list[str]:
     cache_root = SCRIPT_DIR / ".wandb_download" / _safe_slug(entity)
     missing: list[str] = []
@@ -204,7 +205,7 @@ def _render_cell_images(
     high_state: Any,
     raw_dir: Path,
     tile_size: int,
-    renderer: GameLevelRenderer,
+    renderer: Any,
     blender: str | None,
     blender_resolution: tuple[int, int],
     reward_enum: int,
@@ -297,7 +298,7 @@ def render_table(args: argparse.Namespace) -> Path:
         for key, run in runs.items()
     }
 
-    renderer = GameLevelRenderer()
+    renderer = SemanticTileRenderer(DEFAULT_MAPPED_TILE_DIR)
     cells: dict[tuple[str, str, str], RenderCell] = {}
     raw_dir = output_dir / "renders"
     overlay_dir = output_dir / "overlays"
@@ -435,6 +436,7 @@ def render_table(args: argparse.Namespace) -> Path:
         "features": features,
         "tile_size": args.tile_size,
         "render_mode": args.render_mode,
+        "mapped_tile_dir": str(DEFAULT_MAPPED_TILE_DIR),
         "blender": args.blender,
         "blender_resolution": [blender_resolution[0], blender_resolution[1]],
         "cache_only": args.cache_only,

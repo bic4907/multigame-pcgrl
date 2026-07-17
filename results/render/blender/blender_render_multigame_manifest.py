@@ -24,43 +24,43 @@ except ImportError:
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_ASSET_DIR = REPO_ROOT / "assets" / "blender"
+DEFAULT_ASSET_DIR = REPO_ROOT / "assets"
 
 ASSET_SETS = {
     "dungeon": {
         0: {"pack": "__procedural__", "file": "floor-stone-tiles", "scale": (1.0, 1.0, 1.0), "z": 0.0},
-        1: {"pack": "kenney_mini_dungeon", "file": "wall.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
-        2: {"pack": "kenney_mini_dungeon", "file": "gate.glb", "scale": (0.9, 0.9, 0.9), "z": 0.02},
+        1: {"pack": "mapped_blender_objects/dungeon/wall", "file": "wall.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
+        2: {"pack": "mapped_blender_objects/dungeon/interactable", "file": "interactable.glb", "scale": (0.9, 0.9, 0.9), "z": 0.02},
         3: {"pack": "__procedural__", "file": "monster-purple", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "kenney_mini_dungeon", "file": "chest.glb", "scale": (0.72, 0.72, 0.72), "z": 0.02},
+        4: {"pack": "mapped_blender_objects/dungeon/collectable", "file": "collectable.glb", "scale": (0.72, 0.72, 0.72), "z": 0.02},
     },
     "sokoban": {
-        0: {"pack": "kenney_mini_arcade", "file": "floor.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
-        1: {"pack": "kenney_mini_arcade", "file": "wall.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
+        0: {"pack": "mapped_blender_objects/sokoban/empty", "file": "empty.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
+        1: {"pack": "mapped_blender_objects/sokoban/wall", "file": "wall.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
         2: {"pack": "__procedural__", "file": "push-block", "scale": (0.78, 0.78, 0.78), "z": 0.02},
         3: {"pack": "__procedural__", "file": "monster-purple", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "kenney_mini_arcade", "file": "prizes.glb", "scale": (0.7, 0.7, 0.7), "z": 0.02},
+        4: {"pack": "mapped_blender_objects/sokoban/collectable", "file": "collectable.glb", "scale": (0.7, 0.7, 0.7), "z": 0.02},
     },
     "doom": {
-        0: {"pack": "kenney_mini_arcade", "file": "floor.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
-        1: {"pack": "kenney_mini_arcade", "file": "wall.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
+        0: {"pack": "mapped_blender_objects/doom/empty", "file": "empty.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
+        1: {"pack": "mapped_blender_objects/doom/wall", "file": "wall.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
         2: {"pack": "__procedural__", "file": "push-block", "scale": (0.78, 0.78, 0.78), "z": 0.02},
         3: {"pack": "__procedural__", "file": "monster-red", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "kenney_mini_arcade", "file": "prizes.glb", "scale": (0.7, 0.7, 0.7), "z": 0.02},
+        4: {"pack": "mapped_blender_objects/doom/collectable", "file": "collectable.glb", "scale": (0.7, 0.7, 0.7), "z": 0.02},
     },
     "pokemon": {
-        0: {"pack": "kenney_platformer", "file": "block-grass.glb", "scale": (1.0, 1.0, 0.26), "z": -0.08},
-        1: {"pack": "kenney_platformer", "file": "tree.glb", "scale": (0.62, 0.62, 0.62), "z": 0.02},
-        2: {"pack": "kenney_platformer", "file": "door-open.glb", "scale": (0.9, 0.9, 0.9), "z": 0.02},
+        0: {"pack": "mapped_blender_objects/pokemon/empty", "file": "empty.glb", "scale": (1.0, 1.0, 0.26), "z": -0.08},
+        1: {"pack": "mapped_blender_objects/pokemon/wall", "file": "wall.glb", "scale": (0.62, 0.62, 0.62), "z": 0.02},
+        2: {"pack": "mapped_blender_objects/pokemon/interactable", "file": "interactable.glb", "scale": (0.9, 0.9, 0.9), "z": 0.02},
         3: {"pack": "__procedural__", "file": "monster-blue", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "kenney_platformer", "file": "coin-gold.glb", "scale": (0.65, 0.65, 0.65), "z": 0.12},
+        4: {"pack": "mapped_blender_objects/pokemon/collectable", "file": "collectable.glb", "scale": (0.65, 0.65, 0.65), "z": 0.12},
     },
     "zelda": {
-        0: {"pack": "kenney_modular_dungeon", "file": "template-floor.glb", "scale": (0.95, 0.95, 0.22), "z": -0.04},
-        1: {"pack": "kenney_modular_dungeon", "file": "template-wall.glb", "scale": (0.42, 0.42, 0.42), "z": 0.0},
-        2: {"pack": "kenney_modular_dungeon", "file": "stairs.glb", "scale": (0.46, 0.46, 0.46), "z": 0.03},
+        0: {"pack": "mapped_blender_objects/zelda/empty", "file": "empty.glb", "scale": (0.95, 0.95, 0.22), "z": -0.04},
+        1: {"pack": "mapped_blender_objects/zelda/wall", "file": "wall.glb", "scale": (0.42, 0.42, 0.42), "z": 0.0},
+        2: {"pack": "mapped_blender_objects/zelda/interactable", "file": "interactable.glb", "scale": (0.46, 0.46, 0.46), "z": 0.03},
         3: {"pack": "__procedural__", "file": "monster-red", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "kenney_platformer", "file": "key.glb", "scale": (0.68, 0.68, 0.68), "z": 0.12},
+        4: {"pack": "mapped_blender_objects/zelda/collectable", "file": "collectable.glb", "scale": (0.68, 0.68, 0.68), "z": 0.12},
     },
 }
 

@@ -1,0 +1,400 @@
+{
+  "source_mapping": "results/render/blender/blender_render_multigame_manifest.py",
+  "source_asset_root": "results/render/assets/blender",
+  "semantic_tile_ids": {
+    "0": "empty",
+    "1": "wall",
+    "2": "interactable",
+    "3": "hazard",
+    "4": "collectable"
+  },
+  "note": "Each copied GLB is stored in its own semantic folder with any source Textures directory to preserve relative texture references.",
+  "games": {
+    "doom": {
+      "empty": {
+        "tile_id": 0,
+        "semantic": "empty",
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "z": 0.0,
+        "pack": "kenney_mini_arcade",
+        "file": "floor.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_mini_arcade/floor.glb",
+        "output": "results/render/assets/mapped_blender_objects/doom/empty/empty.glb",
+        "textures": "results/render/assets/mapped_blender_objects/doom/empty/Textures"
+      },
+      "wall": {
+        "tile_id": 1,
+        "semantic": "wall",
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "z": 0.0,
+        "pack": "kenney_mini_arcade",
+        "file": "wall.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_mini_arcade/wall.glb",
+        "output": "results/render/assets/mapped_blender_objects/doom/wall/wall.glb",
+        "textures": "results/render/assets/mapped_blender_objects/doom/wall/Textures"
+      },
+      "interactable": {
+        "tile_id": 2,
+        "semantic": "interactable",
+        "scale": [
+          0.78,
+          0.78,
+          0.78
+        ],
+        "z": 0.02,
+        "pack": "__procedural__",
+        "file": "push-block",
+        "status": "procedural_no_source_glb"
+      },
+      "hazard": {
+        "tile_id": 3,
+        "semantic": "hazard",
+        "scale": [
+          0.75,
+          0.75,
+          0.75
+        ],
+        "z": 0.08,
+        "pack": "__procedural__",
+        "file": "monster-red",
+        "status": "procedural_no_source_glb"
+      },
+      "collectable": {
+        "tile_id": 4,
+        "semantic": "collectable",
+        "scale": [
+          0.7,
+          0.7,
+          0.7
+        ],
+        "z": 0.02,
+        "pack": "kenney_mini_arcade",
+        "file": "prizes.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_mini_arcade/prizes.glb",
+        "output": "results/render/assets/mapped_blender_objects/doom/collectable/collectable.glb",
+        "textures": "results/render/assets/mapped_blender_objects/doom/collectable/Textures"
+      }
+    },
+    "dungeon": {
+      "empty": {
+        "tile_id": 0,
+        "semantic": "empty",
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "z": 0.0,
+        "pack": "__procedural__",
+        "file": "floor-stone-tiles",
+        "status": "procedural_no_source_glb"
+      },
+      "wall": {
+        "tile_id": 1,
+        "semantic": "wall",
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "z": 0.0,
+        "pack": "kenney_mini_dungeon",
+        "file": "wall.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_mini_dungeon/wall.glb",
+        "output": "results/render/assets/mapped_blender_objects/dungeon/wall/wall.glb",
+        "textures": "results/render/assets/mapped_blender_objects/dungeon/wall/Textures"
+      },
+      "interactable": {
+        "tile_id": 2,
+        "semantic": "interactable",
+        "scale": [
+          0.9,
+          0.9,
+          0.9
+        ],
+        "z": 0.02,
+        "pack": "kenney_mini_dungeon",
+        "file": "gate.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_mini_dungeon/gate.glb",
+        "output": "results/render/assets/mapped_blender_objects/dungeon/interactable/interactable.glb",
+        "textures": "results/render/assets/mapped_blender_objects/dungeon/interactable/Textures"
+      },
+      "hazard": {
+        "tile_id": 3,
+        "semantic": "hazard",
+        "scale": [
+          0.75,
+          0.75,
+          0.75
+        ],
+        "z": 0.08,
+        "pack": "__procedural__",
+        "file": "monster-purple",
+        "status": "procedural_no_source_glb"
+      },
+      "collectable": {
+        "tile_id": 4,
+        "semantic": "collectable",
+        "scale": [
+          0.72,
+          0.72,
+          0.72
+        ],
+        "z": 0.02,
+        "pack": "kenney_mini_dungeon",
+        "file": "chest.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_mini_dungeon/chest.glb",
+        "output": "results/render/assets/mapped_blender_objects/dungeon/collectable/collectable.glb",
+        "textures": "results/render/assets/mapped_blender_objects/dungeon/collectable/Textures"
+      }
+    },
+    "pokemon": {
+      "empty": {
+        "tile_id": 0,
+        "semantic": "empty",
+        "scale": [
+          1.0,
+          1.0,
+          0.26
+        ],
+        "z": -0.08,
+        "pack": "kenney_platformer",
+        "file": "block-grass.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_platformer/block-grass.glb",
+        "output": "results/render/assets/mapped_blender_objects/pokemon/empty/empty.glb",
+        "textures": "results/render/assets/mapped_blender_objects/pokemon/empty/Textures"
+      },
+      "wall": {
+        "tile_id": 1,
+        "semantic": "wall",
+        "scale": [
+          0.62,
+          0.62,
+          0.62
+        ],
+        "z": 0.02,
+        "pack": "kenney_platformer",
+        "file": "tree.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_platformer/tree.glb",
+        "output": "results/render/assets/mapped_blender_objects/pokemon/wall/wall.glb",
+        "textures": "results/render/assets/mapped_blender_objects/pokemon/wall/Textures"
+      },
+      "interactable": {
+        "tile_id": 2,
+        "semantic": "interactable",
+        "scale": [
+          0.9,
+          0.9,
+          0.9
+        ],
+        "z": 0.02,
+        "pack": "kenney_platformer",
+        "file": "door-open.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_platformer/door-open.glb",
+        "output": "results/render/assets/mapped_blender_objects/pokemon/interactable/interactable.glb",
+        "textures": "results/render/assets/mapped_blender_objects/pokemon/interactable/Textures"
+      },
+      "hazard": {
+        "tile_id": 3,
+        "semantic": "hazard",
+        "scale": [
+          0.75,
+          0.75,
+          0.75
+        ],
+        "z": 0.08,
+        "pack": "__procedural__",
+        "file": "monster-blue",
+        "status": "procedural_no_source_glb"
+      },
+      "collectable": {
+        "tile_id": 4,
+        "semantic": "collectable",
+        "scale": [
+          0.65,
+          0.65,
+          0.65
+        ],
+        "z": 0.12,
+        "pack": "kenney_platformer",
+        "file": "coin-gold.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_platformer/coin-gold.glb",
+        "output": "results/render/assets/mapped_blender_objects/pokemon/collectable/collectable.glb",
+        "textures": "results/render/assets/mapped_blender_objects/pokemon/collectable/Textures"
+      }
+    },
+    "zelda": {
+      "empty": {
+        "tile_id": 0,
+        "semantic": "empty",
+        "scale": [
+          0.95,
+          0.95,
+          0.22
+        ],
+        "z": -0.04,
+        "pack": "kenney_modular_dungeon",
+        "file": "template-floor.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_modular_dungeon/template-floor.glb",
+        "output": "results/render/assets/mapped_blender_objects/zelda/empty/empty.glb",
+        "textures": "results/render/assets/mapped_blender_objects/zelda/empty/Textures"
+      },
+      "wall": {
+        "tile_id": 1,
+        "semantic": "wall",
+        "scale": [
+          0.42,
+          0.42,
+          0.42
+        ],
+        "z": 0.0,
+        "pack": "kenney_modular_dungeon",
+        "file": "template-wall.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_modular_dungeon/template-wall.glb",
+        "output": "results/render/assets/mapped_blender_objects/zelda/wall/wall.glb",
+        "textures": "results/render/assets/mapped_blender_objects/zelda/wall/Textures"
+      },
+      "interactable": {
+        "tile_id": 2,
+        "semantic": "interactable",
+        "scale": [
+          0.46,
+          0.46,
+          0.46
+        ],
+        "z": 0.03,
+        "pack": "kenney_modular_dungeon",
+        "file": "stairs.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_modular_dungeon/stairs.glb",
+        "output": "results/render/assets/mapped_blender_objects/zelda/interactable/interactable.glb",
+        "textures": "results/render/assets/mapped_blender_objects/zelda/interactable/Textures"
+      },
+      "hazard": {
+        "tile_id": 3,
+        "semantic": "hazard",
+        "scale": [
+          0.75,
+          0.75,
+          0.75
+        ],
+        "z": 0.08,
+        "pack": "__procedural__",
+        "file": "monster-red",
+        "status": "procedural_no_source_glb"
+      },
+      "collectable": {
+        "tile_id": 4,
+        "semantic": "collectable",
+        "scale": [
+          0.68,
+          0.68,
+          0.68
+        ],
+        "z": 0.12,
+        "pack": "kenney_platformer",
+        "file": "key.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_platformer/key.glb",
+        "output": "results/render/assets/mapped_blender_objects/zelda/collectable/collectable.glb",
+        "textures": "results/render/assets/mapped_blender_objects/zelda/collectable/Textures"
+      }
+    },
+    "sokoban": {
+      "empty": {
+        "tile_id": 0,
+        "semantic": "empty",
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "z": 0.0,
+        "pack": "kenney_mini_arcade",
+        "file": "floor.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_mini_arcade/floor.glb",
+        "output": "results/render/assets/mapped_blender_objects/sokoban/empty/empty.glb",
+        "textures": "results/render/assets/mapped_blender_objects/sokoban/empty/Textures"
+      },
+      "wall": {
+        "tile_id": 1,
+        "semantic": "wall",
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "z": 0.0,
+        "pack": "kenney_mini_arcade",
+        "file": "wall.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_mini_arcade/wall.glb",
+        "output": "results/render/assets/mapped_blender_objects/sokoban/wall/wall.glb",
+        "textures": "results/render/assets/mapped_blender_objects/sokoban/wall/Textures"
+      },
+      "interactable": {
+        "tile_id": 2,
+        "semantic": "interactable",
+        "scale": [
+          0.78,
+          0.78,
+          0.78
+        ],
+        "z": 0.02,
+        "pack": "__procedural__",
+        "file": "push-block",
+        "status": "procedural_no_source_glb"
+      },
+      "hazard": {
+        "tile_id": 3,
+        "semantic": "hazard",
+        "scale": [
+          0.75,
+          0.75,
+          0.75
+        ],
+        "z": 0.08,
+        "pack": "__procedural__",
+        "file": "monster-purple",
+        "status": "procedural_no_source_glb"
+      },
+      "collectable": {
+        "tile_id": 4,
+        "semantic": "collectable",
+        "scale": [
+          0.7,
+          0.7,
+          0.7
+        ],
+        "z": 0.02,
+        "pack": "kenney_mini_arcade",
+        "file": "prizes.glb",
+        "status": "copied",
+        "source": "results/render/assets/blender/kenney_mini_arcade/prizes.glb",
+        "output": "results/render/assets/mapped_blender_objects/sokoban/collectable/collectable.glb",
+        "textures": "results/render/assets/mapped_blender_objects/sokoban/collectable/Textures"
+      }
+    }
+  }
+}

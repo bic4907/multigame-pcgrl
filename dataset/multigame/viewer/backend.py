@@ -17,7 +17,7 @@ from .. import MultiGameDataset
 _ENUM_TO_COND_COL = {0: "condition_0", 1: "condition_1", 2: "condition_2",
                      3: "condition_3", 4: "condition_4"}
 
-# ── unified 카테고리 메타 ───────────────────────────────────────────────────────
+# ── unified text meta ───────────────────────────────────────────────────────
 _UNIFIED_PALETTE: Dict[str, Any] = {
     str(k): list(v) for k, v in CATEGORY_COLORS.items()
 }
@@ -82,11 +82,11 @@ class DatasetViewerBackend:
             traceback.print_exc()
             self._dataset = None
             return
-        
+
         self._games: List[str] = self._dataset.available_games()
 
         # Pre-filter and cache raw samples per game (once at init)
-        # 뷰어에서는 맵이 한 번씩만 표시되도록 source_id 기준 중복 제거
+        # text in   map  text text tabletext also text source_id basis duplicate remove
         for game in self._games:
             all_samples = self._dataset.by_game(game)
             seen: set = set()
@@ -102,7 +102,7 @@ class DatasetViewerBackend:
             for game, samples in self._raw_samples_by_game.items()
         }
 
-        # ann.json 로드: game → {ann_key → annotation_row}
+        # ann.json load: game → {ann_key → annotation_row}
         cache_dir = self._dataset._cache_dir
         self._ann_lookup: Dict[str, Dict[str, Any]] = {}
         for game in self._games:
@@ -136,11 +136,11 @@ class DatasetViewerBackend:
     def get_sample(self, game: str, index: int) -> Dict[str, Any]:
         sample = self._load_sample(game, index)
         raw_palette = self._palette_for_game(game)
-        # raw_array: 변형되지 않은 원본 데이터
+        # raw_array: text text  text data
         raw_array = sample.array
-        # unified_array: mapping에 따라 변환된 unified category
+        # unified_array: mapping in  text converttext unified category
         unified_array = to_unified(raw_array, game, warn_unmapped=False)
-        
+
         return {
             "game": game,
             "index": index,
@@ -159,7 +159,7 @@ class DatasetViewerBackend:
         }
 
     def _get_annotations(self, game: str, sample: GameSample) -> List[Dict[str, Any]]:
-        """샘플의 모든 reward_enum annotation을 반환한다."""
+        """sample of  text reward_enum annotation  returntext."""
         lookup = self._ann_lookup.get(game, {})
         if not lookup:
             return []
@@ -190,13 +190,13 @@ class DatasetViewerBackend:
     def _load_sample(self, game: str, index: int) -> GameSample:
         if game not in self._raw_samples_by_game:
             raise KeyError(f"Game {game} not found")
-        
+
         samples = self._raw_samples_by_game[game]
         n = len(samples)
-        
+
         if index < 0 or index >= n:
             index = index % n
-        
+
         return samples[index]
 
 
@@ -214,14 +214,14 @@ class DatasetViewerBackend:
         return {}
 
     def reload(self) -> Dict[str, Any]:
-        """tile_mapping.json을 프로세스 재시작 없이 다시 로드한다."""
+        """tile_mapping.json  process textstart text  text loadtext."""
         global _TILE_MAPPING_RAW
-        
+
         try:
             _TILE_MAPPING_RAW = _load_tile_mapping()
         except Exception as exc:
-            raise RuntimeError(f"tile_mapping.json 재파싱 실패: {exc}") from exc
-        
+            raise RuntimeError(f"tile_mapping.json textparsing failure: {exc}") from exc
+
         return {
             "status": "ok",
             "games": self.games_with_counts(),
@@ -231,7 +231,7 @@ class DatasetViewerBackend:
         if game not in self._games:
             raise KeyError(f"unknown game: {game}")
 
-        # reload() 이후에도 최신 파일 내용을 반영
+        # reload()   after  in  also  latest file content  apply
         mapping_raw = _TILE_MAPPING_RAW
         entry = mapping_raw.get(game, {})
         raw_mapping = entry.get("mapping", {})

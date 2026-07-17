@@ -1,10 +1,10 @@
 """
 instruct_rl/utils/dataset_loader_helpers/preprocessing.py
 ==========================================================
-GameSample 리스트에 대한 공통 전처리 유틸리티.
+GameSample text in  text common preprocessing utility.
 
-모든 데이터 로딩 파이프라인(CPCGRL, IPCGRL, VIPCGRL, MGPCGRL,
-CLIP 인코더, MLP 인코더)에서 동일하게 적용한다.
+text data  to text pipeline(CPCGRL, IPCGRL, VIPCGRL, MGPCGRL,
+CLIP text, MLP text) in  sametext applytext.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logger = logging.getLogger(basename(__file__))
 logger.setLevel(getattr(logging, log_level, logging.INFO))
 
-# (game, reward_enum, cutoff): condition >= cutoff 인 샘플 제거
+# (game, reward_enum, cutoff): condition >= cutoff text sample remove
 LONGTAIL_CUTOFF = [
     ("dungeon", 1, 80),   # path_length >= 80
     ("pokemon", 2, 150),  # interactive_count >= 150
@@ -34,7 +34,7 @@ def _invalid_instruction(inst) -> bool:
 
 
 def apply_longtail_cut(samples: list) -> list:
-    """LONGTAIL_CUTOFF 기준으로 극단적 condition 값의 샘플을 제거한다."""
+    """LONGTAIL_CUTOFF basis as  text condition text of  sample  removetext."""
     def _is_longtail(s) -> bool:
         reward_enum = s.meta.get("reward_enum")
         condition_value = s.meta.get("conditions", {}).get(reward_enum)
@@ -48,16 +48,16 @@ def apply_longtail_cut(samples: list) -> list:
 
 
 def apply_tile_offset(samples: list, offset: int) -> list:
-    """각 샘플의 array 타일 값에 offset을 더한 새 샘플 리스트를 반환한다."""
+    """each sample of  array tile text in  offset  text text sample text  returntext."""
     if offset == 0:
         return samples
     return [dataclasses.replace(s, array=s.array + offset) for s in samples]
 
 
 def preprocess_samples(samples: list, *, longtail_cut: bool = True) -> list:
-    """공통 샘플 전처리: invalid instruction 필터 + longtail cut.
+    """common sample preprocessing: invalid instruction filter + longtail cut.
 
-    인코더 학습과 RL 학습 모두에서 동일하게 적용한다.
+    text training and  RL training text in  sametext applytext.
     """
     n_before = len(samples)
     dropped_combos = sorted(set(
@@ -86,13 +86,13 @@ def preprocess_samples(samples: list, *, longtail_cut: bool = True) -> list:
 
 
 def build_effective_instructions(samples: list, *, instruction_prefix) -> list:
-    """samples 의 instruction 에 instruction_prefix(name/desc/none) 를 적용한 리스트를 반환한다.
+    """samples  of  instruction  in  instruction_prefix(name/desc/none)   applytext text  returntext.
 
-    instruction_prefix in {"name", "desc"} 이면 CLIP 임베딩 계산(_tokenize_texts)과
-    동일한 seed(42)로 prefix 를 적용하므로, 임베딩에 실제로 입력된 텍스트와
-    일치하는 문자열을 얻을 수 있다.
+    instruction_prefix in {"name", "desc"}  text CLIP embedding compute(_tokenize_texts) and
+    sametext seed(42) to  prefix   applytext to , embedding in  text to  text text and
+    text  string  text  text text.
 
-    train / eval 양쪽에서 동일 함수를 사용하여 일관성을 유지한다.
+    train / eval text in  same function  text for text text  keeptext.
     """
     raw = [getattr(s, 'instruction', None) for s in samples]
 
@@ -106,7 +106,7 @@ def build_effective_instructions(samples: list, *, instruction_prefix) -> list:
     if mode == "none":
         return raw
 
-    # _tokenize_texts 와 동일한 고정 시드(42) → 임베딩 입력 텍스트와 일치.
+    # _tokenize_texts  and  sametext fixed seed(42) → embedding text text and  text.
     _rng = _random.Random(42)
     result = [
         apply_instruction_prefix(inst, s.game, _rng, mode)

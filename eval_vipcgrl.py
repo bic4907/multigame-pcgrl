@@ -1,10 +1,10 @@
 """
 eval_vipcgrl.py
 ===============
-VIPCGRL (Vision-Instructed PCGRL) 평가 엔트리포인트.
-pretrained CLIP 임베딩을 nlp_obs 에 주입하여 평가한다.
+VIPCGRL (Vision-Instructed PCGRL) evaluation entry point.
+pretrained CLIP embedding  nlp_obs  in  injecttext evaluationtext.
 
-실행:
+Usage:
     python -m eval_vipcgrl [overrides]
 """
 import json
@@ -89,7 +89,7 @@ def main(config: VIPCGRLEvalConfig):
             )
             config.train_seen_ratio = seen_ratio
 
-        # ── unseen_ratio: train_vipcgrl.py 와 동일한 game 확장 기준에 사용 ──
+        # ── unseen_ratio: train_vipcgrl.py  and  sametext game expand basis in  text for  ──
         unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
 
         # ── seen/unseen games (canonical 5-game split) → injected into config

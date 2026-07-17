@@ -1,16 +1,16 @@
 """
 train_mipcgrl_encoder_mg.py
 ===========================
-Annotation 형식 멀티게임 데이터 기반 MIPCGRL MLP 인코더 사전학습.
+Annotation text textgame data based MIPCGRL MLP text pretraining.
 
-train_ipcgrl_encoder_mg.py 와의 차이점:
-  - 인코더 latent z 로부터 task(reward_enum) 분류 head 를 추가 학습.
-  - 손실: Loss = MSE(condition) + classifier_weight * CrossEntropy(reward_enum)
-  - 분류 head 는 ``apply_model`` 과 sibling 모듈로 두어 RL 측 encoder loader
-    (``get_encoder_params_recursive(params, "encoder")``) 가 영향받지 않도록 한다.
+train_ipcgrl_encoder_mg.py  and  of  text text:
+  - text latent z  to text task(reward_enum) text head   text  training.
+  - text: Loss = MSE(condition) + classifier_weight * CrossEntropy(reward_enum)
+  - text head   ``apply_model``  and  sibling text to  text RL text encoder loader
+    (``get_encoder_params_recursive(params, "encoder")``)   text text also text text.
 
-데이터 파이프라인 / 체크포인트 포맷은 train_ipcgrl_encoder_mg 와 동일하므로
-train_mipcgrl.py(또는 train_ipcgrl.py) 로 그대로 RL fine-tune 할 수 있다.
+data pipeline / checkpoint text  train_ipcgrl_encoder_mg  and  sametext to
+train_mipcgrl.py(text  train_ipcgrl.py)  to  as-is RL fine-tune text text text.
 
 Usage:
     python train_mipcgrl_encoder_mg.py game=all
@@ -56,14 +56,14 @@ logging.getLogger("absl").setLevel(logging.ERROR)
 # ── Model wrapper: apply_model + task classifier head ─────────────────────────
 
 class MIPCGRLModel(nn.Module):
-    """IPCGRL apply_model 을 감싸고, latent z 로부터 task 분류 head 를 덧붙인다.
+    """IPCGRL apply_model   text, latent z  to text task text head   text.
 
-    구조:
-        - self.base       : 기존 apply_model (encoder + regression decoder)
-        - self.classifier : latent z → task class logits 의 MLP head
+    structure:
+        - self.base       : existing apply_model (encoder + regression decoder)
+        - self.classifier : latent z → task class logits  of  MLP head
 
-    RL 측 encoder loader 는 params 트리에서 "encoder" key 를 재귀적으로 찾아
-    self.base.encoder 만 추출하므로, classifier 파라미터는 자연히 무시된다.
+    RL text encoder loader   params text in  "encoder" key   text as  text
+    self.base.encoder text extracttext to , classifier parameter  text text.
     """
 
     config: MIPCGRLEncoderMGConfig
@@ -151,18 +151,18 @@ def make_train_step(num_classes: int, cls_weight: float):
     return train_step
 
 
-# ── 메인 학습 루프 ─────────────────────────────────────────────────────────────
+# ── text training text ─────────────────────────────────────────────────────────────
 
 def make_train(config: MIPCGRLEncoderMGConfig):
     def train(rng: jax.random.PRNGKey):
-        # 1. MultiGameDataset 로드
+        # 1. MultiGameDataset load
         multigame_ds = build_multigame_dataset(config)
 
-        # 2. Unseen 게임 파싱
+        # 2. Unseen game parsing
         unseen_game_set = parse_unseen_game_names(config.unseen_games) if config.unseen_games else set()
         logger.info("Unseen games (excluded from training): %s", unseen_game_set or "none")
 
-        # 3. MLPDataset 빌드
+        # 3. MLPDataset build
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         rng, ds_key = jax.random.split(rng)
         builder = MLPDatasetBuilder(
@@ -182,10 +182,10 @@ def make_train(config: MIPCGRLEncoderMGConfig):
         )
         mlp_ds = builder.get_dataset()
 
-        # ── num_classes 결정 ──
+        # ── num_classes text ──
         unique_enums = sorted(set(int(v) for v in np.asarray(mlp_ds.reward_enum_targets).tolist()))
         if config.num_classes is None:
-            # 0..max_enum 까지 모든 인덱스를 커버할 수 있도록 max+1 로 설정 (sparse 안전)
+            # 0..max_enum text text index  text text text also text max+1  to  config (sparse text before )
             num_classes = int(max(unique_enums) + 1)
         else:
             num_classes = int(config.num_classes)
@@ -194,7 +194,7 @@ def make_train(config: MIPCGRLEncoderMGConfig):
             num_classes, unique_enums, config.classifier_weight,
         )
 
-        # ── dataset_setting.json 저장 (IPCGRL/MIPCGRL RL 측 자동 주입에 사용) ──
+        # ── dataset_setting.json save (IPCGRL/MIPCGRL RL text automatic inject in  text for ) ──
         all_games = sorted(multigame_ds.count_by_game().keys())
         seen_games = [g for g in all_games if g not in unseen_game_set]
         unseen_games = [g for g in all_games if g in unseen_game_set]
@@ -232,12 +232,12 @@ def make_train(config: MIPCGRLEncoderMGConfig):
         n_val_batch = max(1, math.ceil(n_val / config.batch_size)) if n_val > 0 else 0
         config.steps_per_epoch = n_train_batch
 
-        # 4. Train state 초기화
+        # 4. Train state initialize
         rng, init_key = jax.random.split(rng)
         state, lr_fn = get_train_state(config, num_classes, init_key)
         train_step = make_train_step(num_classes, float(config.classifier_weight))
 
-        # 5. 학습 루프
+        # 5. training text
         for epoch in range(config.n_epochs):
             rng, epoch_key = jax.random.split(rng)
             train_key, val_key = jax.random.split(epoch_key)
@@ -349,7 +349,7 @@ def make_train(config: MIPCGRLEncoderMGConfig):
     return lambda rng: train(rng)
 
 
-# ── 보조 함수 ─────────────────────────────────────────────────────────────────
+# ── text function ─────────────────────────────────────────────────────────────────
 
 def _per_game_mse(preds_list, targets_list, games_list):
     if not preds_list:

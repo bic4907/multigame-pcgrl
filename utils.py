@@ -71,7 +71,7 @@ def get_exp_dir(config: Config):
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
-    # ── game 약어 → include_* 자동 동기화 ──
+    # ── game abbreviation → include_* automatic sync ──
     if hasattr(config, 'game') and config.game:
         includes = parse_game_str(config.game)
         for key, val in includes.items():
@@ -367,7 +367,7 @@ def render_callback(frames,
             logger.info(f"Saved {len(levels)} npy files to {numpy_dir}/level_{t}_*.npy")
         else:
             print(f"Saved {len(levels)} npy files to {numpy_dir}/level_{t}_*.npy")
-    
+
     if traj_dir is None:
         warnings.warn("traj_dir is not set. Skipping trajectory save.")
     else:

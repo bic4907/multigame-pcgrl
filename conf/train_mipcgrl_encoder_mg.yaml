@@ -1,7 +1,7 @@
 # conf/train_mipcgrl_encoder_mg.yaml
-# MIPCGRL MLP 인코더 멀티게임 사전학습 설정
+# MIPCGRL MLP text textgame pretraining config
 #
-# IPCGRL 와의 차이: encoder latent z 로부터 task(reward_enum) 분류 head 를 추가 학습.
+# IPCGRL  and  of  text : encoder latent z  to text task(reward_enum) text head   text  training.
 #   Loss = MSE(condition) + classifier_weight * CrossEntropy(reward_enum)
 #
 # Usage:
@@ -14,7 +14,7 @@ defaults:
   - _self_
 
 
-# ── MLP 인코더 설정 ──
+# ── MLP text config ──
 encoder:
   model: mlp
   num_layers: 2
@@ -23,7 +23,7 @@ encoder:
   dropout_rate: 0.0
   token_max_len: 77
 
-# ── MLP 디코더 (condition value 회귀) ──
+# ── MLP text (condition value text) ──
 decoder:
   hidden_dim: 128
   num_layers: 2

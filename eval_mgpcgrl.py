@@ -1,10 +1,10 @@
 """
 eval_cpcgrl.py
 ==============
-CPCGRL (Conditional PCGRL) 평가 엔트리포인트.
-raw condition 벡터를 nlp_obs 에 주입하여 평가한다.
+CPCGRL (Conditional PCGRL) evaluation entry point.
+raw condition text  nlp_obs  in  injecttext evaluationtext.
 
-실행:
+Usage:
     python -m eval_cpcgrl [overrides]
 """
 import json
@@ -39,18 +39,18 @@ def main(config: MGPCGRLEvalConfig):
     if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
         raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
-    # ── encoder_config.json에서 delta_weight 읽어서 config에 주입 (wandb 로깅용) ──
+    # ── encoder_config.json in  delta_weight text config in  inject (wandb  to text for ) ──
     encoder_config_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "encoder_config.json")
-    encoder_config_src = None  # local variable로 저장 (config에 넣지 않음)
-    
+    encoder_config_src = None  # local variable to  save (config in  text text)
+
     if os.path.exists(encoder_config_path):
         with open(encoder_config_path, "r") as f:
             encoder_training_config = json.load(f)
-        # delta_weight만 config에 저장
+        # delta_weighttext config in  save
         config.encoder_delta_weight = encoder_training_config.get('delta_weight', 0.0)
-        logger.info("Loaded encoder delta_weight=%.4f from: %s", 
+        logger.info("Loaded encoder delta_weight=%.4f from: %s",
                     config.encoder_delta_weight, encoder_config_path)
-        encoder_config_src = encoder_config_path  # 복사를 위해 경로 저장
+        encoder_config_src = encoder_config_path  # copy  abovetext path save
     else:
         logger.warning("encoder_config.json not found at %s", encoder_config_path)
         config.encoder_delta_weight = 0.0
@@ -101,9 +101,9 @@ def main(config: MGPCGRLEvalConfig):
             )
 
     main_eval_entry(config, inject_obs_fn=inject_vipcgrl_obs)
-    
-    # ── encoder_config.json을 PCGRL 평가 폴더로 복사 (참조용) ──
-    # main_eval_entry() 호출 후 exp_dir가 생성되었으므로 encoder ckpt 경로에서 복사
+
+    # ── encoder_config.json  PCGRL evaluation folder to  copy (text for ) ──
+    # main_eval_entry() call  after  exp_dir  createtext to  encoder ckpt path in  copy
     if encoder_config_src and hasattr(config, 'exp_dir') and config.exp_dir:
         dst_path = os.path.join(config.exp_dir, "encoder_config.json")
         try:

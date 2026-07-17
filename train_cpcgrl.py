@@ -1,9 +1,9 @@
 """
 train_cpcgrl.py
 ================
-CPCGRL (Conditional PCGRL) — raw condition 벡터를 입력 피처로 사용.
+CPCGRL (Conditional PCGRL) — raw condition text  text text to  text for .
 
-실행:
+Usage:
     python -m train_cpcgrl [overrides]
 """
 import jax
@@ -16,10 +16,10 @@ from instruct_rl.utils.train_utils import main_entry
 suppress_jax_debug_logs()
 
 
-# ── CPCGRL obs 주입: get_cont_obs → nlp_obs ──────────────────────────────────
+# ── CPCGRL obs inject: get_cont_obs → nlp_obs ──────────────────────────────────
 
 def inject_cpcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """env_map + condition 으로 continuous observation 을 계산하여 nlp_obs 에 주입."""
+    """env_map + condition  as  continuous observation   computetext nlp_obs  in  inject."""
     vmap_state_fn = jax.vmap(env.prob.get_cont_obs, in_axes=(0, 0, None))
     cont_obs = vmap_state_fn(
         env_state.env_state.env_map,

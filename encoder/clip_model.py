@@ -23,16 +23,16 @@ class PretrainedTextEncoder(nn.Module):
                 position_ids=position_ids
             ).pooler_output
         x = nn.Dense(
-                512, 
-                name="pretrained_text_projection", 
+                512,
+                name="pretrained_text_projection",
                 use_bias=False
                 )(x)
         if self.freeze_encoder:
             x = jax.lax.stop_gradient(x)
         if self.projection_dim is not None:
             x = nn.Dense(
-                self.projection_dim, 
-                name="final_text_projection", 
+                self.projection_dim,
+                name="final_text_projection",
                 kernel_init=jax.nn.initializers.normal(0.02),
                 use_bias=False
                 )(x)
@@ -49,16 +49,16 @@ class PretrainedImageEncoder(nn.Module):
     def __call__(self, pixel_values):
         x = self.pretrained_state_encoder(pixel_values).pooler_output
         x = nn.Dense(
-                512, 
-                name="pretrained_image_projection", 
+                512,
+                name="pretrained_image_projection",
                 use_bias=False
                 )(x)
         if self.freeze_encoder:
             x = jax.lax.stop_gradient(x)
         if self.projection_dim is not None:
             x = nn.Dense(
-                self.projection_dim, 
-                name="final_image_projection", 
+                self.projection_dim,
+                name="final_image_projection",
                 kernel_init=jax.nn.initializers.normal(0.02),
                 use_bias=False)(x)
         return x
@@ -192,32 +192,32 @@ class ContrastiveModule(nn.Module):
 
 
 class RewardDecoder(nn.Module):
-    """Embedding → (reward_enum classification, condition regression) 디코더.
+    """Embedding → (reward_enum classification, condition regression) text.
 
     Architecture
     ------------
-    Shared trunk (MLP) → 분기
-      ├─ Classification head (hidden → num_reward_classes)  : reward_enum 분류
-      └─ Regression head    (hidden → sigmoid → [0,1])      : 정규화된 condition 예측
-          → denorm 시 cond_min/cond_max 로 원래 스케일 복원
+    Shared trunk (MLP) → text
+      ├─ Classification head (hidden → num_reward_classes)  : reward_enum text
+      └─ Regression head    (hidden → sigmoid → [0,1])      : normalizetext condition text
+          → denorm text cond_min/cond_max  to  text text text
 
-    cond_norm_min / cond_norm_max 는 Flax state variable ("norm_stats" collection)
-    로 저장되어, 체크포인트에 함께 포함된다.  학습되지 않는 상수이다.
+    cond_norm_min / cond_norm_max   Flax state variable ("norm_stats" collection)
+     to  savetext, checkpoint in  text text.  trainingtext text  text text.
 
     Parameters
     ----------
     num_reward_classes : int
-        reward_enum 종류 수 (예: 6).
+        reward_enum text text (text: 6).
     hidden_dim : int
         MLP hidden dimension.
     num_layers : int
-        shared trunk hidden layer 수 (≥1).
+        shared trunk hidden layer text (≥1).
     dropout_rate : float
         Dropout rate.
     cond_norm_min_init : jnp.ndarray | None
-        (num_reward_classes,) — 초기화 시 전달하는 reward_enum별 condition min 값.
+        (num_reward_classes,) — initialize text  before text  reward_enumtext condition min text.
     cond_norm_max_init : jnp.ndarray | None
-        (num_reward_classes,) — 초기화 시 전달하는 reward_enum별 condition max 값.
+        (num_reward_classes,) — initialize text  before text  reward_enumtext condition max text.
     """
     num_reward_classes: int = 6
     hidden_dim: int = 128
@@ -230,13 +230,13 @@ class RewardDecoder(nn.Module):
     def __call__(self, embed: jnp.ndarray, training: bool = False):
         """
         Args:
-            embed: (B, D) — 인코더 임베딩 (L2-normalized).
+            embed: (B, D) — text embedding (L2-normalized).
         Returns:
-            reward_logits:      (B, num_reward_classes) — reward_enum 분류 logits
-            condition_pred:     (B, num_reward_classes) — 정규화된 [0,1] condition 예측 (loss용)
-            condition_pred_raw: (B, num_reward_classes) — 원래 스케일 condition 예측 (추론용)
+            reward_logits:      (B, num_reward_classes) — reward_enum text logits
+            condition_pred:     (B, num_reward_classes) — normalizetext [0,1] condition text (loss for )
+            condition_pred_raw: (B, num_reward_classes) — text text condition text (text for )
         """
-        # ── Norm stats를 state variable로 등록 (학습 불가, 체크포인트에 저장) ──
+        # ── Norm stats  state variable to  text (training text , checkpoint in  save) ──
         _default_min = jnp.zeros(self.num_reward_classes) if self.cond_norm_min_init is None else self.cond_norm_min_init
         _default_max = jnp.ones(self.num_reward_classes)  if self.cond_norm_max_init is None else self.cond_norm_max_init
 
@@ -249,7 +249,7 @@ class RewardDecoder(nn.Module):
             lambda: _default_max,
         ).value
 
-        # stop_gradient: 역전파에서 제외
+        # stop_gradient: text before text in  text
         cond_min = jax.lax.stop_gradient(cond_min)
         cond_max = jax.lax.stop_gradient(cond_max)
 
@@ -271,14 +271,14 @@ class RewardDecoder(nn.Module):
         reg_h = nn.gelu(reg_h)
         reg_logits = nn.Dense(self.num_reward_classes, name="condition_reg_head")(reg_h)
 
-        # sigmoid → [0, 1] 정규화 공간 (loss는 이 값으로 계산)
+        # sigmoid → [0, 1] normalize text (loss    text as  compute)
         condition_pred = jax.nn.sigmoid(reg_logits)
 
-        # 역변환 → 원래 스케일 (추론 시 사용)
-        # log1p 공간에서 정규화되었으므로: denorm → expm1
+        # textconvert → text text (text text text for )
+        # log1p text in  normalizetext to : denorm → expm1
         scale = cond_max - cond_min                              # (num_classes,)
-        condition_pred_log = condition_pred * scale + cond_min          # log1p 공간
-        condition_pred_raw = jnp.expm1(jnp.maximum(condition_pred_log, 0.0))  # 원래 스케일
+        condition_pred_log = condition_pred * scale + cond_min          # log1p text
+        condition_pred_raw = jnp.expm1(jnp.maximum(condition_pred_log, 0.0))  # text text
 
         return reward_logits, condition_pred, condition_pred_raw
 
@@ -286,12 +286,12 @@ class RewardDecoder(nn.Module):
 class ContrastiveDecoderModule(nn.Module):
     """ContrastiveModule + RewardDecoder.
 
-    기존 contrastive 학습에 디코더 브랜치를 추가하여
-    text embedding 으로부터 reward_enum과 condition을 예측한다.
+    existing contrastive training in  text text  text text
+    text embedding  as text reward_enum and  condition  text.
 
-    reward_enum_onehot_dim > 0 이면, pixel_values에 reward_enum의
-    one-hot 인코딩을 공간 차원으로 broadcast하여 채널 concat한다.
-    → CNN이 해당 레벨이 어떤 reward_enum인지 알 수 있다.
+    reward_enum_onehot_dim > 0  text, pixel_values in  reward_enum of
+    one-hot text  text dimension as  broadcasttext text concattext.
+    → CNN  text level  text reward_enumtext text text text.
     """
     encoders: Dict[str, nn.Module]
     decoder: RewardDecoder
@@ -325,7 +325,7 @@ class ContrastiveDecoderModule(nn.Module):
                     onehot[:, None, None, :], (B, H, W, self.reward_enum_onehot_dim)
                 )
             else:
-                # reward_enum 미제공 시 zeros (정보 없음)
+                # reward_enum text text zeros (info none)
                 onehot = jnp.zeros((B, H, W, self.reward_enum_onehot_dim))
             pixel_values = jnp.concatenate([pixel_values, onehot], axis=-1)
 
@@ -361,9 +361,9 @@ class ContrastiveDecoderModule(nn.Module):
 
         output_dict['text_state_temperature'] = self.text_state_temperature
 
-        # ── 디코더: text embedding 으로부터 reward_enum & condition 예측 ──
+        # ── text: text embedding  as text reward_enum & condition text ──
         if "text" in modes:
-            # decoder_nograd=True 이면 decoder loss가 encoder(latent space)까지 역전파되지 않음
+            # decoder_nograd=True  text decoder loss  encoder(latent space)text text before text text
             decoder_input = (
                 jax.lax.stop_gradient(output_dict["text_embed"])
                 if decoder_nograd
@@ -373,8 +373,8 @@ class ContrastiveDecoderModule(nn.Module):
                 decoder_input, training=training
             )
             output_dict["reward_logits"] = reward_logits
-            output_dict["condition_pred"] = condition_pred              # [0,1] 정규화 (loss용)
-            output_dict["condition_pred_raw"] = condition_pred_raw      # 원래 스케일 (추론용)
+            output_dict["condition_pred"] = condition_pred              # [0,1] normalize (loss for )
+            output_dict["condition_pred_raw"] = condition_pred_raw      # text text (text for )
 
         return output_dict
 
@@ -479,14 +479,14 @@ def get_cnnclip_decoder_encoder(config: EncoderConfig, decoder_config=None,
                                 RL_training: bool = False):
     """
     CNN-based CLIP encoder + RewardDecoder.
-    ContrastiveDecoderModule을 반환한다.
+    ContrastiveDecoderModule  returntext.
 
     Parameters
     ----------
     cond_norm_min : jnp.ndarray | None
-        (num_reward_classes,) — reward_enum별 condition min. 역변환용.
+        (num_reward_classes,) — reward_enumtext condition min. textconvert for .
     cond_norm_max : jnp.ndarray | None
-        (num_reward_classes,) — reward_enum별 condition max. 역변환용.
+        (num_reward_classes,) — reward_enumtext condition max. textconvert for .
     """
     from conf.config import DecoderConfig as _DC
     if decoder_config is None:
@@ -524,7 +524,7 @@ def get_cnnclip_decoder_encoder(config: EncoderConfig, decoder_config=None,
         cond_norm_max_init=cond_norm_max,
     )
 
-    # reward_enum one-hot 채널 추가 여부 결정
+    # reward_enum one-hot text text  text text
     _onehot_dim = decoder_config.num_reward_classes if getattr(decoder_config, 'cnn_reward_enum_onehot', False) else 0
 
     module = ContrastiveDecoderModule(

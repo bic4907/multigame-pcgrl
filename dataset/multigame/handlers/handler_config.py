@@ -1,9 +1,9 @@
 """
 dataset/multigame/handlers/handler_config.py
 ============================================
-핸들러 전처리 설정 관리.
+handler preprocessing config text.
 
-각 게임 및 슬라이싱 옵션의 중앙화된 설정.
+each game text text text text of  centertext config.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional
 
 @dataclass
 class DoomConfig:
-    """Doom 게임 설정"""
+    """Doom game config"""
     enabled: bool = True
     empty_max: int = 64
     floor_empty_max: int = 235
@@ -24,69 +24,69 @@ class DoomConfig:
 
 @dataclass
 class AugmentationConfig:
-    """데이터 증강 설정"""
-    enabled: bool = True  # 증강 활성화 여부
+    """data augmentation config"""
+    enabled: bool = True  # augmentation enable text
 
 
 @dataclass
 class VGLCGameConfig:
-    """VGLC 게임 기본 설정"""
+    """VGLC game default config"""
     pass
 
 
 @dataclass
 class ZeldaConfig(VGLCGameConfig):
-    """Zelda 게임 설정"""
-    rotate_90: bool = False  # 시계방향 90도 회전 증강
+    """Zelda game config"""
+    rotate_90: bool = False  # text 90 also  rotate augmentation
     max_samples: int = 1000
 
 
 @dataclass
 class MarioConfig(VGLCGameConfig):
-    """Mario 게임 설정"""
+    """Mario game config"""
     pass
 
 
 @dataclass
 class LodeRunnerConfig(VGLCGameConfig):
-    """Lode Runner 게임 설정"""
+    """Lode Runner game config"""
     pass
 
 
 @dataclass
 class KidIcarusConfig(VGLCGameConfig):
-    """Kid Icarus 게임 설정"""
+    """Kid Icarus game config"""
     pass
 
 
 @dataclass
 class MegaManConfig(VGLCGameConfig):
-    """MegaMan 게임 설정"""
+    """MegaMan game config"""
     pass
 
 
 @dataclass
 class DungeonConfig:
-    """Dungeon Level Dataset 설정"""
-    rotate_90: bool = False  # 시계방향 90도 회전 증강
+    """Dungeon Level Dataset config"""
+    rotate_90: bool = False  # text 90 also  rotate augmentation
     max_samples: int = 4000
 
 
 @dataclass
 class POKEMONConfig:
-    """Five-Dollar-Model (POKEMON) 게임 설정"""
-    rotate_90: bool = True  # 시계방향 90도 회전 증강
+    """Five-Dollar-Model (POKEMON) game config"""
+    rotate_90: bool = True  # text 90 also  rotate augmentation
     max_samples: int = 1000
-    # 필터링 설정
+    # filtering config
     enabled: bool = True
-    min_instruction_words: int = 2  # instruction이 이 이상의 단어 수를 가져야 함
-    max_tile_ratio: float = 0.95  # 한 타일이 차지하는 최대 비율 (0~1). 이상이면 제외. 예: 0.95 = 100개 중 95개 이상
-    max_tile_count: int = 250  # 패딩 후 16x16에서 한 타일이 차지할 수 있는 최대 개수
+    min_instruction_words: int = 2  # instruction    or more of  text text   text text
+    max_tile_ratio: float = 0.95  # text tile  text  maximum ratio (0~1). or more text text. text: 0.95 = 100text  during  95text or more
+    max_tile_count: int = 250  # padding  after  16x16 in  text tile  text text with maximum count
 
 
 @dataclass
 class HandlerConfig:
-    """모든 핸들러의 통합 설정"""
+    """text handler of  text config"""
     augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
     zelda: ZeldaConfig = field(default_factory=ZeldaConfig)
     mario: MarioConfig = field(default_factory=MarioConfig)
@@ -96,9 +96,9 @@ class HandlerConfig:
     dungeon: DungeonConfig = field(default_factory=DungeonConfig)
     pokemon: POKEMONConfig = field(default_factory=POKEMONConfig)
     doom: DoomConfig = field(default_factory=DoomConfig)
-    
+
     def to_dict(self) -> Dict[str, Any]:
-        """설정을 딕셔너리로 변환"""
+        """config  dictionary to  convert"""
         return {
             'augmentation': asdict(self.augmentation),
             'zelda': asdict(self.zelda),
@@ -116,7 +116,7 @@ class HandlerConfig:
         self,
         enabled: Optional[bool] = None,
     ) -> None:
-        """증강 설정 업데이트 (활성화 여부만)"""
+        """augmentation config update (enable text)"""
         if enabled is not None:
             self.augmentation.enabled = enabled
 
@@ -127,7 +127,7 @@ class HandlerConfig:
         max_tile_ratio: Optional[float] = None,
         max_tile_count: Optional[int] = None,
     ) -> None:
-        """POKEMON 필터링 설정 업데이트"""
+        """POKEMON filtering config update"""
         if enabled is not None:
             self.pokemon.enabled = enabled
         if min_instruction_words is not None:
@@ -138,7 +138,7 @@ class HandlerConfig:
             self.pokemon.max_tile_count = max_tile_count
 
 def get_default_config() -> HandlerConfig:
-    """기본 설정 반환"""
+    """default config return"""
     return HandlerConfig()
 
 

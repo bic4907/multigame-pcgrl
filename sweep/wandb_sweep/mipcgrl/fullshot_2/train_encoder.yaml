@@ -11,7 +11,7 @@ parameters:
     value: false
   saves_dir:
     value: '/mnt/nas/mgpcgrl/mipcgrl_fullshot_2'
-  # ── MIPCGRL 전용: task classifier 가중치 ──
+  # ── MIPCGRL  before  for : task classifier weight ──
   classifier_weight:
     value: 1.0
 command:

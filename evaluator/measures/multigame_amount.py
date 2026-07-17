@@ -1,6 +1,6 @@
 """evaluator/measures/multigame_amount.py
 
-MultigameTiles(INTERACTIVE, HAZARD, COLLECTABLE) 개수를 세는 유틸.
+MultigameTiles(INTERACTIVE, HAZARD, COLLECTABLE) count  text  utility.
 
 Usage
 -----
@@ -23,32 +23,32 @@ from envs.probs.multigame import MultigameTiles
 
 
 def get_interactive_count(env_map: chex.Array) -> jnp.ndarray:
-    """INTERACTIVE(3) 타일 개수를 반환한다."""
+    """INTERACTIVE(3) tile count  returntext."""
     return jnp.sum(env_map == MultigameTiles.INTERACTIVE).astype(float)
 
 
 def get_hazard_count(env_map: chex.Array) -> jnp.ndarray:
-    """HAZARD(4) 타일 개수를 반환한다."""
+    """HAZARD(4) tile count  returntext."""
     return jnp.sum(env_map == MultigameTiles.HAZARD).astype(float)
 
 
 def get_collectable_count(env_map: chex.Array) -> jnp.ndarray:
-    """COLLECTABLE(5) 타일 개수를 반환한다."""
+    """COLLECTABLE(5) tile count  returntext."""
     return jnp.sum(env_map == MultigameTiles.COLLECTABLE).astype(float)
 
 
 def get_multigame_tile_counts(env_map: chex.Array) -> dict:
-    """INTERACTIVE, HAZARD, COLLECTABLE 개수를 한 번에 반환한다.
+    """INTERACTIVE, HAZARD, COLLECTABLE count  text text in  returntext.
 
     Parameters
     ----------
     env_map : chex.Array
-        (H, W) 정수 배열. 값은 MultigameTiles enum.
+        (H, W) integer array. text  MultigameTiles enum.
 
     Returns
     -------
     dict with keys "interactive", "hazard", "collectable"
-        각 값은 jnp float scalar.
+        each text  jnp float scalar.
     """
     return {
         "interactive": get_interactive_count(env_map),

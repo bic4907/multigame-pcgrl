@@ -1,34 +1,34 @@
 """
 dataset/multigame/dataset.py
 ============================
-MultiGameDataset: Dungeon + POKEMON + Sokoban + DOOM 통합 데이터셋 클래스.
+MultiGameDataset: Dungeon + POKEMON + Sokoban + DOOM text dataset class.
 
-외부 의존: numpy (Pillow는 렌더링 시에만 필요).
+text  of text: numpy (Pillow  rendering text in text text).
 
 Example
 -------
     from dataset.multigame import MultiGameDataset
 
-    # use_tile_mapping=True (기본값): 모든 샘플 array가 unified 7-category로 변환되어 반환
+    # use_tile_mapping=True (default value): text sample array  unified 7-category to  converttext return
     ds = MultiGameDataset(include_dungeon=True, include_pokemon=True, include_doom=True)
     sample = ds[0]
-    # sample.array 값 범위: [0, 6]  (unified category index)
+    # sample.array text range: [0, 6]  (unified category index)
 
-    # use_tile_mapping=False: 원본 게임별 tile_id 그대로 반환
+    # use_tile_mapping=False: text gametext tile_id as-is return
     ds_raw = MultiGameDataset(use_tile_mapping=False)
     sample_raw = ds_raw[0]
-    # sample_raw.array 값: 게임 원본 정수 tile_id
+    # sample_raw.array text: game text integer tile_id
 
-    # 런타임 토글 (데이터셋 재로드 없이 전환)
-    ds.use_tile_mapping = False   # 이후 __getitem__ / __iter__ 원본 반환
-    ds.use_tile_mapping = True    # 다시 unified 반환
+    # text text (dataset textload text   before text)
+    ds.use_tile_mapping = False   #   after  __getitem__ / __iter__ text return
+    ds.use_tile_mapping = True    # text unified return
 
-    # 필터
+    # filter
     dungeon_samples = ds.by_game("dungeon")
     pokemon_samples = ds.by_game("pokemon")
     doom_samples = ds.by_game("doom")
 
-    # 렌더링 (use_tile_mapping 설정 자동 반영)
+    # rendering (use_tile_mapping config automatic apply)
     ds.render(sample, save_path="out.png")
     ds.render_grid(dungeon_samples[:8], save_path="grid.png")
 """
@@ -61,7 +61,7 @@ from .cache_utils import (
     find_game_cache_key,
     update_ann_batch_id,
     update_json_with_ann_keys,
-    # legacy (하위 호환)
+    # legacy (sub text)
     build_cache_key,
     load_samples_from_cache,
     save_samples_to_cache,
@@ -76,10 +76,10 @@ logger = logging.getLogger(__name__)
 class _WarningConditionsDict(dict):
     """
     placeholder conditions dict.
-    아직 per-sample annotation이 없는 게임에서 conditions 값에 접근하면
-    WARNING 로그를 출력한다.  (게임별 1회만)
+    text per-sample annotation  without game in  conditions text in  text
+    WARNING  to text  text.  (gametext 1text)
     """
-    _warned_games: set = set()  # 클래스 변수: 이미 경고한 게임 이름
+    _warned_games: set = set()  # class text:  text warningtext game name
 
     def __init__(self, data: dict, game: str, logger) -> None:
         super().__init__(data)
@@ -118,23 +118,23 @@ class _WarningConditionsDict(dict):
 
 class MultiGameDataset:
     """
-    Dungeon + Sokoban(Boxoban) + POKEMON + DOOM 통합 데이터셋 클래스.
+    Dungeon + Sokoban(Boxoban) + POKEMON + DOOM text dataset class.
 
     Parameters
     ----------
-    dungeon_root     : dungeon_level_dataset 루트 경로
-    pokemon_root     : Five-Dollar-Model 루트 경로
-    sokoban_root     : boxoban_levels 루트 경로
-    doom_root        : doom_levels 루트 경로
-    include_dungeon  : Dungeon 데이터셋 포함 여부
-    include_pokemon  : POKEMON 데이터셋 포함 여부
-    include_sokoban  : Sokoban 데이터셋 포함 여부
-    include_doom     : DOOM 데이터셋 포함 여부
-    use_tile_mapping : True(기본)면 array를 unified 7-category로 변환해서 반환.
-                       False면 원본 tile_id 그대로 반환.
-                       로드 이후에도 속성으로 언제든 토글 가능.
-    handler_config   : HandlerConfig 객체. None이면 기본값 사용.
-                       (게임별 전처리 설정 포함, augmentation 설정도 포함)
+    dungeon_root     : dungeon_level_dataset text path
+    pokemon_root     : Five-Dollar-Model text path
+    sokoban_root     : boxoban_levels text path
+    doom_root        : doom_levels text path
+    include_dungeon  : Dungeon dataset text text
+    include_pokemon  : POKEMON dataset text text
+    include_sokoban  : Sokoban dataset text text
+    include_doom     : DOOM dataset text text
+    use_tile_mapping : True(default)text array  unified 7-category to  converttext return.
+                       Falsetext text tile_id as-is return.
+                       load   after  in  also  text as  text text available.
+    handler_config   : HandlerConfig text. None text default value text for .
+                       (gametext preprocessing config text, augmentation config also  text)
     """
 
     def __init__(
@@ -161,14 +161,14 @@ class MultiGameDataset:
         max_samples_per_game: int = 0,
         max_samples_seed:     int = 42,
         instruction_field:    str = "uni",   # "uni" = instruction_uni, "raw" = instruction_raw
-        # 하위 호환: 구 파라미터명 지원
+        # sub text: text parametertext text
         boxoban_root:         Path | str | None = None,
         include_boxoban:      bool | None = None,
     ) -> None:
         self.use_tile_mapping: bool = use_tile_mapping
         self._instruction_field: str = instruction_field  # "uni" or "raw"
 
-        # 하위 호환 처리
+        # sub text process
         if boxoban_root is not None:
             sokoban_root = boxoban_root
         if include_boxoban is not None:
@@ -191,12 +191,12 @@ class MultiGameDataset:
         self._cache_dir = cache_dir
         self._use_cache = use_cache
 
-        # 게임별 캐시 키 추적 (annotation 로드에 사용)
+        # gametext cache text text (annotation load in  text for )
         self._game_cache_keys: Dict[str, str] = {}
 
         hc = handler_config.to_dict()
 
-        # ── 게임별 로드 설정 (game, include, root, handler_config_sub) ────────
+        # ── gametext load config (game, include, root, handler_config_sub) ────────
         _game_specs = []
         if include_dungeon:
             _game_specs.append(("dungeon", str(dungeon_root), hc.get("dungeon", {})))
@@ -206,14 +206,14 @@ class MultiGameDataset:
             _game_specs.append(("zelda", str(zelda_root), hc.get("zelda", {})))
         if include_pokemon:
             _game_specs.append(("pokemon", str(pokemon_root), hc.get("pokemon", {})))
-        # doom/doom2는 통합 처리 (루프 후 별도 블록에서)
+        # doom/doom2  text process (text  after  separate text in )
 
-        # ── 게임별 로드 루프 ─────────────────────────────────────────────────
+        # ── gametext load text ─────────────────────────────────────────────────
         for game, game_root, game_hc in _game_specs:
             cache_key = build_per_game_cache_key(game, game_root, game_hc)
             logger.debug("[%s] cache key: %s", game, cache_key[:12])
             self._game_cache_keys[game] = cache_key
-            # (1) per-game 캐시 히트 시도
+            # (1) per-game cache text text also
             if use_cache:
                 cached = load_game_samples_from_cache(cache_dir, game, cache_key)
                 if cached is not None:
@@ -222,29 +222,29 @@ class MultiGameDataset:
                         self._samples.append(s)
                     continue
 
-            # (2) 원본 데이터셋에서 로드
+            # (2) text dataset in  load
             game_samples = self._load_game_from_source(
                 game, game_root, handler_config
             )
 
             if game_samples is not None:
-                # 캐시 저장 전 max_samples 적용
+                # cache save  before  max_samples apply
                 max_s = game_hc.get("max_samples") if isinstance(game_hc, dict) else getattr(game_hc, "max_samples", None)
                 if max_s is not None and len(game_samples) > max_s:
                     game_samples = game_samples[:max_s]
-                # 캐시 저장 전 필터링 + 증강 적용 (viewer/annotate 모두 동일한 수를 보도록)
+                # cache save  before  filtering + augmentation apply (viewer/annotate text sametext text  text also text)
                 game_samples = self._postprocess_game_samples(game, game_samples, handler_config)
                 for s in game_samples:
                     s.order = len(self._samples)
                     self._samples.append(s)
-                # 캐시에 저장
+                # cache in  save
                 if use_cache:
                     save_game_samples_to_cache(
                         cache_dir, game, cache_key, game_samples
                     )
                 continue
 
-            # (3) artifact-only fallback: 키 불일치지만 해당 게임 캐시가 있으면 로드
+            # (3) artifact-only fallback: text text text game cache  text load
             if use_cache:
                 fallback = load_any_game_cache(cache_dir, game)
                 if fallback is not None:
@@ -253,16 +253,16 @@ class MultiGameDataset:
                     for s in fallback:
                         s.order = len(self._samples)
                         self._samples.append(s)
-                    # fallback 시 실제 로드된 파일의 키로 갱신
+                    # fallback text text loadtext file of  text to  text
                     actual_key = find_game_cache_key(cache_dir, game)
                     if actual_key:
                         self._game_cache_keys[game] = actual_key
                     continue
 
-            # (4) 아무것도 없으면 경고만 출력
+            # (4) text also  if missing warningtext text
             logger.warning("%s: no source data and no cache — skipped", game)
 
-        # ── doom + doom2 통합 로드 (합산 max_samples=1000 적용 후 캐시 저장) ──
+        # ── doom + doom2 text load (sum max_samples=1000 apply  after  cache save) ──
         if include_doom or include_doom2:
             doom_hc = hc.get("doom", {})
             doom_cache_key = build_combined_doom_cache_key(
@@ -304,24 +304,24 @@ class MultiGameDataset:
                         for s in fallback:
                             s.order = len(self._samples)
                             self._samples.append(s)
-                        # fallback 시 실제 로드된 파일의 키로 갱신
+                        # fallback text text loadtext file of  text to  text
                         actual_key = find_game_cache_key(cache_dir, "doom")
                         if actual_key:
                             self._game_cache_keys["doom"] = actual_key
 
-        # ── annotation 자동 로드 (ann.json → 샘플 복제) ─────────────────────
+        # ── annotation automatic load (ann.json → sample text) ─────────────────────
         if use_cache and self._game_cache_keys:
             self._ensure_and_load_all_annotations()
 
-        # ── raw counts 기록 (max_samples_per_game 적용 전, (game, reward_enum) 기준) ──
+        # ── raw counts write (max_samples_per_game apply  before , (game, reward_enum) basis) ──
         self._raw_game_re_counts: dict = {}
         for s in self._samples:
             re = s.meta.get("reward_enum")
             if re is not None:
                 self._raw_game_re_counts[(s.game, re)] = self._raw_game_re_counts.get((s.game, re), 0) + 1
 
-        # ── 게임별 베이스 샘플 수 제한 (source_id 기준, annotation 복제 이후) ──
-        # source_id 단위로 선택하므로 모든 reward_enum 복제본이 함께 유지됨
+        # ── gametext text text sample text text (source_id basis, annotation text   after ) ──
+        # source_id textabove to  selecttext to  text reward_enum text  text keeptext
         if max_samples_per_game >= 1:
             import random as _random
             _rng = _random.Random(max_samples_seed)
@@ -346,13 +346,13 @@ class MultiGameDataset:
                 logger.info("max_samples_per_game=%d: total %d → %d samples",
                             max_samples_per_game, _before, len(self._samples))
 
-        # ── N 샘플 서브샘플링 (게임별, 마스크 기반) ─────────────────────────
+        # ── N sample textsampletext (gametext, text based) ─────────────────────────
         if N >= 1:
             import random as _random
             _total = len(self._samples)
             _rng = _random.Random(42)
             _mask = [False] * _total
-            # 게임별 인덱스를 삽입 순서 유지로 수집
+            # gametext index  text order keep to  text
             _game_buckets: dict = {}
             for i, s in enumerate(self._samples):
                 _game_buckets.setdefault(s.game, []).append(i)
@@ -372,15 +372,15 @@ class MultiGameDataset:
         self, game: str, samples: List[GameSample], handler_config: HandlerConfig
     ) -> List[GameSample]:
         """
-        캐시 저장 전에 필터링과 증강을 적용한다.
+        cache save  before  in  filtering and  augmentation  applytext.
 
-        적용 순서:
-        1. Pokemon 타일셋 필터링 (max_tile_count 초과 샘플 제거)
-        2. Instruction 단어 수 필터링 (min_instruction_words 미만 제거)
-        3. 회전 증강 (rotate_90 설정 시 90도 회전 사본 추가)
-        4. 증강 후 max_samples 재적용
+        apply order:
+        1. Pokemon tiletext filtering (max_tile_count exceed sample remove)
+        2. Instruction text text filtering (min_instruction_words less than remove)
+        3. rotate augmentation (rotate_90 config text 90 also  rotate text text )
+        4. augmentation  after  max_samples textapply
         """
-        # (1) Pokemon 타일셋 필터링
+        # (1) Pokemon tiletext filtering
         if game == "pokemon" and handler_config.pokemon.enabled:
             max_tile_count = handler_config.pokemon.max_tile_count
             before = len(samples)
@@ -393,7 +393,7 @@ class MultiGameDataset:
                 logger.info("POKEMON tileset filtering: %d → %d (%d removed, max_tile_count=%d)",
                             before, len(samples), removed, max_tile_count)
 
-        # (2) Instruction 단어 수 필터링
+        # (2) Instruction text text filtering
         if handler_config.pokemon.enabled:
             min_words = handler_config.pokemon.min_instruction_words
             before = len(samples)
@@ -406,7 +406,7 @@ class MultiGameDataset:
                 logger.info("%s instruction filtering: %d → %d (%d removed, min_words=%d)",
                             game, before, len(samples), removed, min_words)
 
-        # (3) 회전 증강
+        # (3) rotate augmentation
         if handler_config.augmentation.enabled:
             should_augment = (
                 (game == "pokemon" and handler_config.pokemon.rotate_90) or
@@ -420,7 +420,7 @@ class MultiGameDataset:
                 logger.info("%s augmentation: %d rotated samples added → %d total",
                             game, len(rotated), len(samples))
 
-        # (4) 증강 후 max_samples 재적용
+        # (4) augmentation  after  max_samples textapply
         max_s: Optional[int] = None
         if game == "pokemon":
             max_s = handler_config.pokemon.max_samples
@@ -439,7 +439,7 @@ class MultiGameDataset:
     def _load_game_from_source(
         self, game: str, game_root: str, handler_config: HandlerConfig
     ) -> Optional[List[GameSample]]:
-        """원본 데이터셋에서 게임 샘플을 로드한다. 실패 시 None 반환."""
+        """text dataset in  game sample  loadtext. failure text None return."""
         root = Path(game_root)
         if not root.exists():
             return None
@@ -500,7 +500,7 @@ class MultiGameDataset:
 
     def _apply_floor_filtering(self, samples: List[GameSample], floor_empty_max: int) -> List[GameSample]:
         """
-        Floor + empty 개수가 floor_empty_max 이하인 샘플만 필터링
+        Floor + empty count  floor_empty_max  text sampletext filtering
         """
         filtered = []
         for sample in samples:
@@ -522,12 +522,12 @@ class MultiGameDataset:
 
     def _apply_pokemon_tileset_filtering(self) -> None:
         """
-        POKEMON 샘플만 타일셋 기준으로 필터링.
-        (패딩 후 16x16 그리드에서 한 타일이 250개 이상이면 제외)
+        POKEMON sampletext tiletext basis as  filtering.
+        (padding  after  16x16 text in  text tile  250text or more text text)
 
-        필터링 기준:
-        - POKEMON 게임만 대상
-        - 한 타일 종류가 256개 중 250개 이상이면 제외 (모노톤한 맵)
+        filtering basis:
+        - POKEMON gametext target
+        - text tile text  256text  during  250text or more text text (text map)
         """
         pokemon_indices = [i for i, s in enumerate(self._samples) if s.game == "pokemon"]
 
@@ -539,16 +539,16 @@ class MultiGameDataset:
 
         for i, sample in enumerate(self._samples):
             if sample.game == "pokemon":
-                # POKEMON 샘플: 타일셋 기준 필터링
+                # POKEMON sample: tiletext basis filtering
                 flat = sample.array.ravel()
                 tile_counts = np.bincount(flat.astype(int))
                 max_tile_count = int(np.max(tile_counts)) if len(tile_counts) > 0 else 0
 
-                # 256개 타일 중 250개 이상이 같은 타일이 아니면 유지
+                # 256text tile  during  250text or more  same tile  text keep
                 if max_tile_count < 250:
                     filtered_samples.append(sample)
             else:
-                # 다른 게임: 그대로 유지
+                # different game: as-is keep
                 filtered_samples.append(sample)
 
         self._samples = filtered_samples
@@ -561,16 +561,16 @@ class MultiGameDataset:
 
     def _augment_with_rotations_per_game(self) -> None:
         """
-        게임별 설정에 따라 각 게임의 샘플을 회전시켜 증강.
+        gametext config in  text each game of  sample  rotatetext augmentation.
 
-        각 게임의 config에 rotate_90 설정이 있으면 해당 게임만 회전 증강을 수행한다.
-        예: config.pokemon.rotate_90 = True면 POKEMON 게임만 회전 증강
+        each game of  config in  rotate_90 config  text text gametext rotate augmentation  textrowtext.
+        text: config.pokemon.rotate_90 = Truetext POKEMON gametext rotate augmentation
         """
         original_count = len(self._samples)
         rotated_samples = []
 
         for sample in self._samples:
-            # 게임별 config에서 rotate_90 설정 확인
+            # gametext config in  rotate_90 config check
             should_augment = False
             if sample.game == "pokemon" and self._handler_config.pokemon.rotate_90:
                 should_augment = True
@@ -585,10 +585,10 @@ class MultiGameDataset:
                 rotated = create_rotated_sample(sample)
                 rotated_samples.append(rotated)
 
-        # 원본 다음에 회전 샘플 추가
+        # text next in  rotate sample text
         self._samples.extend(rotated_samples)
 
-        # order 재지정
+        # order text
         for i, sample in enumerate(self._samples):
             sample.order = i
 
@@ -596,7 +596,7 @@ class MultiGameDataset:
             logger.info("Data augmentation: %d → %d samples (added %d rotated versions)",
                         original_count, len(self._samples), len(rotated_samples))
 
-        # ── 증강 후 각 게임별 제한 (handler_config의 max_samples 참조) ────────────
+        # ── augmentation  after  each gametext text (handler_config of  max_samples text) ────────────
         game_sample_counts = {}
         filtered_samples = []
 
@@ -605,7 +605,7 @@ class MultiGameDataset:
             if game not in game_sample_counts:
                 game_sample_counts[game] = 0
 
-            # 각 게임의 handler_config에서 max_samples 가져오기
+            # each game of  handler_config in  max_samples  text
             max_samples = None
             if game == "pokemon":
                 max_samples = self._handler_config.pokemon.max_samples
@@ -615,18 +615,18 @@ class MultiGameDataset:
                 max_samples = self._handler_config.zelda.max_samples
             elif game == "dungeon":
                 max_samples = self._handler_config.dungeon.max_samples
-            # sokoban은 handler_config에 설정이 없으므로 제한하지 않음
+            # sokoban  handler_config in  config  text to  text text
 
-            # max_samples 제한 확인
+            # max_samples text check
             if max_samples is None or game_sample_counts[game] < max_samples:
                 filtered_samples.append(sample)
                 game_sample_counts[game] += 1
 
-        # 필터링된 샘플이 있으면 적용
+        # filteringtext sample  text apply
         if len(filtered_samples) < len(self._samples):
             self._samples = filtered_samples
 
-            # order 재지정
+            # order text
             for i, sample in enumerate(self._samples):
                 sample.order = i
 
@@ -653,13 +653,13 @@ class MultiGameDataset:
                 else:
                     logger.info("  %s: %d (no limit)", game, count)
 
-    # ── ann.json 기반 annotation 자동 로드 ─────────────────────────────────────
+    # ── ann.json based annotation automatic load ─────────────────────────────────────
 
     def _ensure_and_load_all_annotations(self) -> None:
-        """모든 게임의 ann.json을 확인·생성하고 샘플에 부착한다.
+        """text game of  ann.json  check·createtext sample in  text.
 
-        ann.json이 없으면 compute_game_annotations()로 자동 계산 후 저장.
-        이미 있으면 그대로 로드.
+        ann.json  if missing compute_game_annotations() to  automatic compute  after  save.
+         text text as-is load.
         """
         import time as _time
 
@@ -671,7 +671,7 @@ class MultiGameDataset:
         for game, cache_key in games:
             existing = load_game_annotations_from_cache(self._cache_dir, game, cache_key)
             if existing is None:
-                # ann.json 없음: 자동 계산
+                # ann.json none: automatic compute
                 game_samples = [s for s in self._samples if s.game == game]
                 if not game_samples:
                     logger.info("[Annotation][%s] No samples — skipping", game)
@@ -680,7 +680,7 @@ class MultiGameDataset:
                             game, len(game_samples))
                 t0 = _time.perf_counter()
                 try:
-                    # JAX 의존 모듈 lazy import
+                    # JAX  of text text lazy import
                     from dataset.reward_annotations.annotate import compute_game_annotations
                     rows = compute_game_annotations(game_samples, game)
                 except Exception as exc:
@@ -698,14 +698,14 @@ class MultiGameDataset:
                 if existing is None:
                     logger.warning("[Annotation][%s] Failed to reload after save — skipping", game)
                     continue
-                # 신규 생성 시 .json에 ann_keys 기록
+                # text create text .json in  ann_keys write
                 update_json_with_ann_keys(self._cache_dir, game, cache_key, existing)
             else:
                 n_rows = len(existing.get("annotations", []))
                 has_instr = existing.get("has_instructions", False)
                 logger.debug("[Annotation][%s] ann.json cache hit: %d rows, has_instructions=%s",
                             game, n_rows, has_instr)
-                # ann_keys가 .json에 없으면 기록 (기존 캐시 호환)
+                # ann_keys  .json in  if missing write (existing cache text)
                 meta_path = self._cache_dir / game / f"{cache_key}.json"
                 if meta_path.exists():
                     import json as _json
@@ -726,15 +726,15 @@ class MultiGameDataset:
     def _try_submit_instruction_batch(
         self, game: str, cache_key: str, ann_data: Dict[str, Any]
     ) -> None:
-        """instruction이 없는 게임의 배치를 OpenAI Batch API에 제출한다.
+        """instruction  without game of  batch  OpenAI Batch API in  text.
 
-        - ann.json에 batch_id가 이미 있으면 제출 건너뜀 (완료 대기 중).
-        - OPENAI_API_KEY 환경 변수 없으면 건너뜀.
-        - 제출 성공 시 batch_id를 ann.json에 기록.
+        - ann.json in  batch_id   text text text text (finish text  during ).
+        - OPENAI_API_KEY text text if missing text.
+        - text success text batch_id  ann.json in  write.
         """
         import os
 
-        # 이미 배치 제출됨 → 상태 확인 후 완료 시 자동 수령
+        #  text batch text → text check  after  finish text automatic text
         existing_batch_id = ann_data.get("batch_id")
         if existing_batch_id:
             try:
@@ -757,7 +757,7 @@ class MultiGameDataset:
                     results = retrieve_batch_results(existing_batch_id)
                     n = update_caches(results, self._cache_dir, [game])
                     logger.info("[Instruction][%s] %d instructions applied to ann.json", game, n)
-                    # ann.json 재로드하여 existing 갱신 (부착 시 최신 데이터 사용)
+                    # ann.json textloadtext existing text (text text latest data text for )
                     updated = load_game_annotations_from_cache(self._cache_dir, game, cache_key)
                     if updated is not None:
                         ann_data.clear()
@@ -774,7 +774,7 @@ class MultiGameDataset:
                 logger.warning("[Instruction][%s] Failed to check batch status: %s", game, exc)
             return
 
-        # API 키 없으면 건너뜀
+        # API text if missing text
         if not os.environ.get("OPENAI_API_KEY"):
             logger.warning(
                 "[Instruction][%s] OPENAI_API_KEY not set — skipping instruction generation "
@@ -796,10 +796,10 @@ class MultiGameDataset:
             enums = list(range(5))
             cache_dir = self._cache_dir
 
-            # threshold=None 행 미리 채우기
+            # threshold=None row text text
             fill_none_instructions([game], enums, cache_dir)
 
-            # source_id → array 맵 구성 (shortened key 사용)
+            # source_id → array map text (shortened key text for )
             cache_by_game: Dict[str, Dict[str, Any]] = {}
             for s in self._samples:
                 if s.game == game:
@@ -819,17 +819,17 @@ class MultiGameDataset:
             logger.info("[Instruction][%s] Batch submitted: batch_id=%s (%d requests)",
                         game, batch_id, n_requests)
 
-            # ann.json에 batch_id 기록
+            # ann.json in  batch_id write
             update_ann_batch_id(cache_dir, game, cache_key, batch_id)
 
         except Exception as exc:
             logger.warning("[Instruction][%s] Batch submission failed: %s", game, exc)
 
     def _attach_annotations_from_cache(self, game: str, ann_data: Dict[str, Any]) -> None:
-        """ann.json 데이터를 게임 샘플에 reward_enum별로 복제·부착한다.
+        """ann.json data  game sample in  reward_enumby text·text.
 
-        ann_keys 기반 매핑 (샘플 meta["ann_keys"] → ann.json 행 직접 조회).
-        ann_keys 없는 구 포맷은 index 산술로 fallback.
+        ann_keys based text (sample meta["ann_keys"] → ann.json row direct text).
+        ann_keys without text text  index text to  fallback.
         """
         import dataclasses
         import time as _time
@@ -839,7 +839,7 @@ class MultiGameDataset:
             logger.warning("[Annotation][%s] No annotations in ann.json — skipping", game)
             return
 
-        # key → ann row 딕셔너리 (빠른 조회)
+        # key → ann row dictionary (text text)
         ann_by_key: Dict[str, Dict[str, Any]] = {r["key"]: r for r in all_rows}
 
         game_samples = [s for s in self._samples if s.game == game]
@@ -848,7 +848,7 @@ class MultiGameDataset:
             logger.warning("[Annotation][%s] No loaded samples — skipping", game)
             return
 
-        # fallback: index 산술용 정렬 행
+        # fallback: index text for  sort row
         sorted_rows = sorted(all_rows, key=lambda r: r["key"])
         n_rewards = len(sorted_rows) // n_samples if n_samples else 0
         if n_rewards == 0:
@@ -862,12 +862,12 @@ class MultiGameDataset:
         new_samples: List[GameSample] = []
 
         for i, sample in enumerate(game_samples):
-            # ann_keys 기반 (신규 포맷)
+            # ann_keys based (text text)
             ann_keys: Optional[List[str]] = sample.meta.get("ann_keys")
             if ann_keys:
                 ann_list = [ann_by_key[k] for k in ann_keys if k in ann_by_key]
             else:
-                # 구 포맷 fallback: index 산술
+                # text text fallback: index text
                 ann_list = [sorted_rows[r * n_samples + i]
                             for r in range(n_rewards)
                             if r * n_samples + i < len(sorted_rows)]
@@ -888,12 +888,12 @@ class MultiGameDataset:
                     if val is not None:
                         conditions[ci] = float(val)
                 target.meta["conditions"] = conditions
-                # instruction_raw / instruction_uni 분리 저장
+                # instruction_raw / instruction_uni separate save
                 raw = ann.get("instruction_raw")
                 uni = ann.get("instruction_uni")
                 target.meta["instruction_raw"] = str(raw) if raw and str(raw) != "None" else None
                 target.meta["instruction_uni"] = str(uni) if uni and str(uni) != "None" else None
-                # instruction 필드: instruction_field 설정에 따라 선택
+                # instruction text: instruction_field config in  text select
                 if self._instruction_field == "raw":
                     instr = target.meta["instruction_raw"] or target.meta["instruction_uni"]
                 else:
@@ -917,21 +917,21 @@ class MultiGameDataset:
 
     def _load_reward_annotations(self, annotations_dir: Path) -> None:
         """
-        reward_annotations 폴더에서 CSV 파일을 읽어 해당 게임 샘플의 meta에
-        reward annotation 정보를 부착한다.
-        - {game}_reward_annotations.csv         : per-sample 실제 annotation
-            → 각 샘플을 reward 수만큼 복제하여 reward_enum별 샘플 생성
-        - {game}_reward_annotations_placeholder.csv : 게임 단위 더미 annotation
-            → conditions 접근 시 WARNING 로그 출력
+        reward_annotations folder in  CSV file  text text game sample of  meta in
+        reward annotation info  text.
+        - {game}_reward_annotations.csv         : per-sample text annotation
+            → each sample  reward text text reward_enumtext sample create
+        - {game}_reward_annotations_placeholder.csv : game textabove text annotation
+            → conditions text text WARNING  to text text
         """
         import dataclasses
 
-        # ── per-sample CSV가 있는 게임: key 순서 기반으로 샘플을 reward 수만큼 복제 ──
-        # CSV 구조: key 순서로 정렬 시 [reward0: sample0..N-1, reward1: sample0..N-1, ...]
+        # ── per-sample CSV  with game: key order based as  sample  reward text text ──
+        # CSV structure: key order to  sort text [reward0: sample0..N-1, reward1: sample0..N-1, ...]
         for csv_path in sorted(annotations_dir.glob("*_reward_annotations.csv")):
             game_name = csv_path.name.replace("_reward_annotations.csv", "")
 
-            # key 순서대로 모든 행 로드
+            # key ordertext to  text row load
             all_rows: List[Dict[str, Any]] = []
             with open(csv_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -939,13 +939,13 @@ class MultiGameDataset:
                     all_rows.append(row)
             all_rows.sort(key=lambda r: r["key"])
 
-            # 이 게임의 로드된 샘플 목록 (순서 유지)
+            #   game of  loadtext sample list (order keep)
             game_samples = [s for s in self._samples if s.game == game_name]
             n_samples = len(game_samples)
             if n_samples == 0 or len(all_rows) == 0:
                 continue
 
-            # CSV 행 수 / 샘플 수 = reward 수
+            # CSV row text / sample text = reward text
             n_rewards = len(all_rows) // n_samples
             if n_rewards == 0:
                 logger.warning("Reward annotations [%s]: CSV rows (%d) < samples (%d), skipped",
@@ -976,7 +976,7 @@ class MultiGameDataset:
                         if val != "":
                             conditions[ci] = float(val)
                     target.meta["conditions"] = conditions
-                    # instruction_field 설정에 따라 raw 또는 uni 선택
+                    # instruction_field config in  text raw text  uni select
                     if self._instruction_field == "raw":
                         raw_val = ann.get("instruction_raw", "").strip()
                         uni_val = ann.get("instruction_uni", "").strip()
@@ -994,10 +994,10 @@ class MultiGameDataset:
                             game_name, n_samples, n_rewards, attached,
                             n_samples, len(new_samples))
 
-        # ── placeholder CSV: per-sample CSV가 없는 게임에만 적용 ──────────
+        # ── placeholder CSV: per-sample CSV  without game in text apply ──────────
         for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):
             game_name = ph_csv.name.replace("_reward_annotations_placeholder.csv", "")
-            # per-sample CSV가 이미 있으면 스킵
+            # per-sample CSV   text text text
             if (annotations_dir / f"{game_name}_reward_annotations.csv").exists():
                 continue
             ph_features: list[Dict[str, Any]] = []
@@ -1041,8 +1041,8 @@ class MultiGameDataset:
 
     def _apply_mapping(self, sample: GameSample) -> GameSample:
         """
-        use_tile_mapping 설정에 따라 array를 변환한 새 GameSample을 반환.
-        원본 _samples 리스트는 항상 raw tile_id를 유지한다.
+        use_tile_mapping config in  text array  converttext text GameSample  return.
+        text _samples text  always raw tile_id  keeptext.
         """
         if not self.use_tile_mapping:
             return sample
@@ -1051,7 +1051,7 @@ class MultiGameDataset:
         return dataclasses.replace(sample, array=unified_array)
 
     def _find_raw_sample(self, sample: GameSample) -> GameSample:
-        """source_id/game 기준으로 내부 raw 샘플을 찾아 반환한다."""
+        """source_id/game basis as  internal raw sample  text returntext."""
         for s in self._samples:
             if s.game == sample.game and s.source_id == sample.source_id:
                 return s
@@ -1068,70 +1068,70 @@ class MultiGameDataset:
     def __getitem__(self, idx: int) -> GameSample:
         return self._apply_mapping(self._samples[idx])
 
-    # ── 태그 기반 필터 ──────────────────────────────────────────────────────────
+    # ── text based filter ──────────────────────────────────────────────────────────
     def by_game(self, game: str) -> List[GameSample]:
-        """특정 게임 샘플만 반환."""
+        """text game sampletext return."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_game(self._samples, game)]
 
     def by_games(self, games: List[str]) -> List[GameSample]:
-        """복수 게임 샘플 반환."""
+        """text game sample return."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_games(self._samples, games)]
 
     def by_instruction(
         self, keyword: str, *, case_sensitive: bool = False
     ) -> List[GameSample]:
-        """instruction 키워드 필터."""
+        """instruction text filter."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_instruction(
                     self._samples, keyword, case_sensitive=case_sensitive)]
 
     def with_instruction(self) -> List[GameSample]:
-        """instruction이 있는 샘플만."""
+        """instruction  with sampletext."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_with_instruction(self._samples)]
 
     def without_instruction(self) -> List[GameSample]:
-        """instruction이 없는 샘플만."""
+        """instruction  without sampletext."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_without_instruction(self._samples)]
 
     def by_order(self, start: int, end: int) -> List[GameSample]:
-        """order 범위 [start, end) 샘플."""
+        """order range [start, end) sample."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_order(self._samples, start, end)]
 
     def by_meta(self, key: str, value: Any) -> List[GameSample]:
-        """meta 속성 필터."""
+        """meta text filter."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_meta(self._samples, key, value)]
 
     def filter(self, fn) -> List[GameSample]:
-        """임의 조건 함수로 필터링."""
+        """text of  condition function to  filtering."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_predicate(self._samples, fn)]
 
-    # ── reward annotation 기반 필터 ──────────────────────────────────────────
+    # ── reward annotation based filter ──────────────────────────────────────────
     def by_reward_enum(self, reward_enum: int) -> List[GameSample]:
-        """reward_enum 값으로 필터링 (1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction)."""
+        """reward_enum text as  filtering (1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction)."""
         return [self._apply_mapping(s)
                 for s in self._samples
                 if s.meta.get("reward_enum") == reward_enum]
 
     def by_feature_name(self, feature_name: str) -> List[GameSample]:
-        """feature_name으로 필터링 (region, path_length, block, bat_amount, bat_direction)."""
+        """feature_name as  filtering (region, path_length, block, bat_amount, bat_direction)."""
         return [self._apply_mapping(s)
                 for s in self._samples
                 if s.meta.get("feature_name") == feature_name]
 
     def with_reward_annotation(self) -> List[GameSample]:
-        """reward annotation이 있는 샘플만 반환."""
+        """reward annotation  with sampletext return."""
         return [self._apply_mapping(s)
                 for s in self._samples
                 if "reward_enum" in s.meta]
 
-    # ── 집계 ────────────────────────────────────────────────────────────────────
+    # ── text ────────────────────────────────────────────────────────────────────
     def group_by_game(self) -> Dict[str, List[GameSample]]:
         return tag_utils.group_by_game(self._samples)
 
@@ -1144,7 +1144,7 @@ class MultiGameDataset:
     def summary(self) -> Dict[str, Any]:
         return tag_utils.summary(self._samples)
 
-    # ── 렌더링 (Pillow 필요) ────────────────────────────────────────────────────
+    # ── rendering (Pillow text) ────────────────────────────────────────────────────
     def render(
         self,
         sample: GameSample,
@@ -1152,17 +1152,17 @@ class MultiGameDataset:
         save_path: Optional[Path | str] = None,
     ):
         """
-        단일 샘플 렌더링.
-        use_tile_mapping=True 이면 unified 스프라이트로, False 이면 원본 팔레트로 렌더링.
-        save_path 지정 시 PNG 저장, 없으면 PIL Image 반환.
+        text sample rendering.
+        use_tile_mapping=True  text unified text text to , False  text text palette to  rendering.
+        save_path text text PNG save, if missing PIL Image return.
         """
         from .render import render_sample_pil, save_rendered
         from .tile_utils import render_unified_rgb
         from PIL import Image
 
         if self.use_tile_mapping:
-            # array가 이미 unified로 변환된 sample을 받을 수도 있고
-            # 원본 raw sample을 받을 수도 있으므로 항상 mapping 적용
+            # array   text unified to  converttext sample  text  text also  text
+            # text raw sample  text  text also  text to  always mapping apply
             mapped = self._apply_mapping(sample)
             rgb = render_unified_rgb(mapped.array, tile_size=tile_size)
             img = Image.fromarray(rgb, "RGB")
@@ -1185,14 +1185,14 @@ class MultiGameDataset:
         save_path: Optional[Path | str] = None,
     ):
         """
-        여러 샘플 격자 렌더링.
-        use_tile_mapping 설정 자동 반영.
-        save_path 지정 시 PNG 저장, 없으면 PIL Image 반환.
+        text sample text rendering.
+        use_tile_mapping config automatic apply.
+        save_path text text PNG save, if missing PIL Image return.
         """
         from .render import render_grid as _rg, save_grid
         from PIL import Image
 
-        # 모든 샘플에 mapping 적용
+        # text sample in  mapping apply
         mapped_samples = [self._apply_mapping(s) for s in samples]
 
         if save_path:
@@ -1208,7 +1208,7 @@ class MultiGameDataset:
         save_path: Optional[Path | str] = None,
     ):
         """
-        원본(raw)과 7-category mapped 이미지를 좌우로 붙여 렌더링한다.
+        text(raw) and  7-category mapped image  text to  text renderingtext.
 
         Left  : raw palette
         Right : unified palette
@@ -1246,19 +1246,19 @@ class MultiGameDataset:
         show_tile_numbers: bool = False
     ) -> "Image.Image":
         """
-        샘플을 타일 이미지로 렌더링합니다.
-        
+        sample  tile image to  renderingtext.
+
         Parameters
         ----------
-        sample : GameSample 객체
-        tile_size : 타일 크기 (픽셀)
-        save_path : 저장 경로
-        show_tile_numbers : 타일 번호 표시 여부
-        
+        sample : GameSample text
+        tile_size : tile size (textcell)
+        save_path : save path
+        show_tile_numbers : tile text tabletext text
+
         Returns
         -------
-        PIL.Image.Image : 렌더링된 이미지
-        
+        PIL.Image.Image : renderingtext image
+
         Examples
         --------
         >>> ds = MultiGameDataset()
@@ -1275,7 +1275,7 @@ class MultiGameDataset:
             save_path=save_path,
             show_tile_numbers=show_tile_numbers
         )
-    
+
     def render_level(
         self,
         game: str,
@@ -1285,20 +1285,20 @@ class MultiGameDataset:
         show_tile_numbers: bool = False
     ) -> "Image.Image":
         """
-        게임 레벨을 타일 이미지로 직접 렌더링합니다.
-        
+        game level  tile image to  direct renderingtext.
+
         Parameters
         ----------
-        game : 게임 이름 (dungeon, doom, pokemon, sokoban, zelda)
+        game : game name (dungeon, doom, pokemon, sokoban, zelda)
         level : 2D numpy array
-        tile_size : 타일 크기 (픽셀)
-        save_path : 저장 경로
-        show_tile_numbers : 타일 번호 표시 여부
-        
+        tile_size : tile size (textcell)
+        save_path : save path
+        show_tile_numbers : tile text tabletext text
+
         Returns
         -------
-        PIL.Image.Image : 렌더링된 이미지
-        
+        PIL.Image.Image : renderingtext image
+
         Examples
         --------
         >>> ds = MultiGameDataset()
@@ -1316,20 +1316,20 @@ class MultiGameDataset:
         )
 
     def mapping_rows(self, game: str):
-        """tile_mapping.json 기준 원본 타일 -> unified 매핑 row 목록."""
+        """tile_mapping.json basis text tile -> unified text row list."""
         return game_mapping_rows(game)
 
-    # ── 유틸 ────────────────────────────────────────────────────────────────────
+    # ── utility ────────────────────────────────────────────────────────────────────
     def get_tags(self, idx: int) -> Dict[str, Any]:
-        """인덱스 기준 태그 dict 반환."""
+        """index basis text dict return."""
         return tag_utils.build_tags(self._samples[idx])
 
     def all_tags(self) -> List[Dict[str, Any]]:
-        """전체 샘플 태그 리스트."""
+        """all sample text text."""
         return [tag_utils.build_tags(s) for s in self._samples]
 
     def available_games(self) -> List[str]:
-        """등록된 게임 목록 반환."""
+        """text game list return."""
         return [GameTag.DUNGEON, GameTag.SOKOBAN, GameTag.DOOM, GameTag.POKEMON, GameTag.ZELDA]
 
     def sample(
@@ -1339,13 +1339,13 @@ class MultiGameDataset:
         seed: Optional[int] = None,
     ) -> List[GameSample]:
         """
-        랜덤 샘플링.
+        random sampletext.
 
         Parameters
         ----------
-        n    : 샘플 수
-        game : 특정 게임만 (None이면 전체)
-        seed : 랜덤 시드
+        n    : sample text
+        game : text gametext (None text all)
+        seed : random seed
         """
         rng  = np.random.default_rng(seed)
         pool = (tag_utils.extract_by_game(self._samples, game)

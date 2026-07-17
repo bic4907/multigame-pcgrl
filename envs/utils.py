@@ -223,13 +223,13 @@ def triangle_wave(x, x_peak=10.0, period=1.0):
     return tri
 
 
-# ── 타일 정보 유틸 ─────────────────────────────────────────────────────────────
+# ── tile info utility ─────────────────────────────────────────────────────────────
 
 from typing import Any, Dict
 
 
 def get_tile_info(problem: str = "dungeon", representation: str = "narrow") -> Dict[str, Any]:
-    """환경을 make 해서 타일 관련 정보를 반환한다.
+    """text  make text tile text info  returntext.
 
     Returns
     -------
@@ -237,14 +237,14 @@ def get_tile_info(problem: str = "dungeon", representation: str = "narrow") -> D
         problem             : str
         representation      : str
         tile_enum           : IntEnum class
-        all_tiles           : list[str]  – tile_enum 전체 이름 목록
-        n_all_tiles         : int        – tile_enum 전체 수 (BORDER 포함)
-        unavailable_tiles   : list       – env 에서 제외된 타일 값 목록
-        editable_tiles      : list[str]  – 실제로 배치 가능한 타일 이름 목록
-        n_editable_tiles    : int        – 실제로 배치 가능한 타일 수
-                                          (= action 의 tile 차원 크기)
+        all_tiles           : list[str]  – tile_enum all name list
+        n_all_tiles         : int        – tile_enum all text (BORDER text)
+        unavailable_tiles   : list       – env  in  text tile text list
+        editable_tiles      : list[str]  – text to  batch availabletext tile name list
+        n_editable_tiles    : int        – text to  batch availabletext tile text
+                                          (= action  of  tile dimension size)
     """
-    # 순환 임포트를 피하기 위해 지역 임포트
+    # text text  text abovetext text text
     from envs.pcgrl_env import PCGRLEnv, PCGRLEnvParams, ProbEnum, RepEnum
 
     prob_key = ProbEnum[problem.upper()]
@@ -274,7 +274,7 @@ def get_tile_info(problem: str = "dungeon", representation: str = "narrow") -> D
 
 
 def print_tile_info(problem: str = "dungeon", representation: str = "narrow") -> None:
-    """get_tile_info 결과를 보기 좋게 출력한다."""
+    """get_tile_info result  text text text."""
     info = get_tile_info(problem, representation)
     print(f"\n{'='*52}")
     print(f"  problem        : {info['problem']}")

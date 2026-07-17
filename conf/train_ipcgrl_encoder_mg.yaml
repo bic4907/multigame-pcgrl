@@ -1,5 +1,5 @@
 # conf/train_ipcgrl_encoder_mg.yaml
-# IPCGRL MLP 인코더 멀티게임 사전학습 설정
+# IPCGRL MLP text textgame pretraining config
 #
 # Usage:
 #   python train_ipcgrl_encoder_mg.py game=all
@@ -11,7 +11,7 @@ defaults:
   - _self_
 
 
-# ── MLP 인코더 설정 ──
+# ── MLP text config ──
 encoder:
   model: mlp
   num_layers: 2
@@ -20,12 +20,12 @@ encoder:
   dropout_rate: 0.0
   token_max_len: 77
 
-# ── MLP 디코더 설정 ──
+# ── MLP text config ──
 decoder:
   hidden_dim: 128
   num_layers: 2
   output_dim: 1
 
-# ── 체크포인트 / 로깅 ──
+# ── checkpoint /  to text ──
 ckpt_freq: 50
 embed_visualize_freq: 50

@@ -1,11 +1,11 @@
 """
 dataset/multigame/handlers/vglc_games/zelda.py
 ===============================================
-The Legend of Zelda (TheVGLC) 전처리 핸들러.
+The Legend of Zelda (TheVGLC) preprocessing handler.
 
-타일 매핑
+tile text
 ---------
-0  : empty / passable (-, 공백)
+0  : empty / passable (-, text)
 1  : wall   (W)
 2  : floor  (F)
 3  : door   (D)
@@ -25,7 +25,7 @@ import numpy as np
 from ...base import BasePreprocessor, TileLegend
 
 
-# ── 정수 타일 ID ────────────────────────────────────────────────────────────────
+# ── integer tile ID ────────────────────────────────────────────────────────────────
 class ZeldaTile:
     EMPTY   = 0
     WALL    = 1
@@ -35,11 +35,11 @@ class ZeldaTile:
     START   = 5
     MOB     = 6
     OBJECT  = 7
-    FLOOD   = 8   # 물/용암 등 위험 지형 (구 HAZARD)
+    FLOOD   = 8   # water/lava text hazard terrain (text HAZARD)
     UNKNOWN = 99
 
 
-# 문자 → 정수 매핑
+# character → integer text
 _CHAR_MAP: dict[str, int] = {
     "-": ZeldaTile.EMPTY,
     " ": ZeldaTile.EMPTY,
@@ -61,7 +61,7 @@ _CHAR_MAP: dict[str, int] = {
     "s": ZeldaTile.START,
 }
 
-# 렌더링용 컬러 팔레트 (RGB)
+# rendering for  color palette (RGB)
 ZELDA_PALETTE: dict[int, tuple[int, int, int]] = {
     ZeldaTile.EMPTY:   (0,   0,   0),
     ZeldaTile.WALL:    (80,  80,  80),
@@ -71,7 +71,7 @@ ZELDA_PALETTE: dict[int, tuple[int, int, int]] = {
     ZeldaTile.START:   (0,   200, 0),
     ZeldaTile.MOB:     (220, 50,  50),
     ZeldaTile.OBJECT:  (255, 215, 0),
-    ZeldaTile.FLOOD:   (50,  120, 220),  # 물/용암 – 파란색 계열
+    ZeldaTile.FLOOD:   (50,  120, 220),  # water/lava – text textcolumn
     ZeldaTile.UNKNOWN: (128, 0,   128),
 }
 
@@ -96,13 +96,13 @@ class ZeldaPreprocessor(BasePreprocessor):
 
     def postprocess_array(self, array: np.ndarray) -> np.ndarray:
         """
-        OBJECT 타일이 없는 맵에 한해, FLOOR 위치에 랜덤으로 OBJECT를 배치한다.
+        OBJECT tile  without map in  text, FLOOR abovetext in  random as  OBJECT  batchtext.
 
-        - OBJECT가 1개 이상이면 아무것도 하지 않음
-        - OBJECT가 0개이면 다음 확률로 추가 개수를 결정:
-            40% → 0개, 20% → 1개, 20% → 2개, 20% → 3개
-        - 배치 위치는 FLOOR 타일 중에서만 선택
-        - 시드는 맵 배열 내용의 MD5 해시 → 동일 입력이면 항상 동일 결과
+        - OBJECT  1text or more text text also  text text
+        - OBJECT  0text text next probability to  text  count  text:
+            40% → 0text, 20% → 1text, 20% → 2text, 20% → 3text
+        - batch abovetext  FLOOR tile  during  in text select
+        - seed  map array content of  MD5 text → same text text always same result
         """
         if np.any(array == ZeldaTile.OBJECT):
             return array
@@ -112,7 +112,7 @@ class ZeldaPreprocessor(BasePreprocessor):
         )
         rng = np.random.default_rng(seed)
 
-        # 40:20:20:20 확률로 추가 개수 결정
+        # 40:20:20:20 probability to  text  count text
         n = rng.choice([0, 1, 2, 3], p=[0.4, 0.2, 0.2, 0.2])
         if n == 0:
             return array

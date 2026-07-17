@@ -35,11 +35,11 @@ class Config:
     seed: int = 0
     saves_dir: str = "saves"
 
-    # Game selection — 2글자 약어 조합 (dg=dungeon, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
-    # 예: "dg" (dungeon만), "dgdm" (dungeon+doom+doom2), "all" (전체)
+    # Game selection — 2text abbreviation text (dg=dungeon, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
+    # text: "dg" (dungeontext), "dgdm" (dungeon+doom+doom2), "all" (all)
     game: str = "all"
 
-    # include_* 필드는 game 문자열에서 자동 파싱됨 (하위 호환용으로 유지)
+    # include_* text  game string in  automatic parsingtext (sub text for  as  keep)
     include_dungeon: bool = True
     include_pokemon: bool = False
     include_sokoban: bool = False
@@ -54,11 +54,11 @@ class Config:
     # NLP params
     use_nlp: bool = False
     nlp_input_dim: int = 768
-    
+
     # CLIP params
     use_clip: bool = False
-    # tile-only 채널 수 = unified category 수 (NUM_CATEGORIES).
-    # init_config()에서 coord 채널 2개를 더해 총 NUM_CATEGORIES+2 가 모델 입력 채널이 된다.
+    # tile-only text text = unified category text (NUM_CATEGORIES).
+    # init_config() in  coord text 2text  text total NUM_CATEGORIES+2   text text text  text.
     clip_input_channel: int = NUM_CATEGORIES
 
     vec_cont: bool = False
@@ -92,11 +92,11 @@ class Config:
 
     # How many milliseconds to wait between frames of the rendered gifs
     gif_frame_duration: int = 25
-    
+
     # mutation rate initial map generation
     map_mutation_rate: float = 0.1
 
-    # 다른 경로의 체크포인트에서 학습을 시작할 때 지정. None이면 exp_dir/ckpts에서 자동 복원.
+    # different path of  checkpoint in  training  starttext text text. None text exp_dir/ckpts in  automatic text.
     init_ckpt_path: Optional[str] = None
 
     """ DO NOT USE. WILL BE OVERWRITTEN. """
@@ -133,7 +133,7 @@ class Config:
     wandb_entity: Optional[str] = None
     wandb_resume: str = 'allow'
     evaluator: str = 'hr'  # 'vit', 'hr' (heuristic)
-    
+
     #Ablation study options. default is 1.0
     text_ratio: float = 1.0
     state_ratio: float = 1.0
@@ -160,17 +160,17 @@ class Config:
     dataset_reward_enum: Optional[Union[int, str]] = None   # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
 
-    # 공통 데이터 전처리 (모든 파이프라인에 동일하게 적용)
-    longtail_cut: bool = True          # 극단적 condition 값 샘플 제거
-    max_samples_per_game: int = 1000   # 게임별 source_id 상한 (0=무제한)
-    max_samples_seed: int = 42         # max_samples_per_game 서브샘플링 시드
-    rl_tile_offset: int = 1            # 타일 enum 값에 더할 오프셋 (RL 데이터로더용)
+    # common data preprocessing (text pipeline in  sametext apply)
+    longtail_cut: bool = True          # text condition text sample remove
+    max_samples_per_game: int = 1000   # gametext source_id text (0=text)
+    max_samples_seed: int = 42         # max_samples_per_game textsampletext seed
+    rl_tile_offset: int = 1            # tile enum text in  text text (RL data to text for )
 
-    # Multigame tile placement reward 가중치 (sweep 대상)
+    # Multigame tile placement reward weight (sweep target)
     placement_w_amount: float = 1.0
     placement_w_spread: float = 0.0
 
-    # Special tile (interactive/hazard/collectable) 존재 패널티 가중치
+    # Special tile (interactive/hazard/collectable) text penalty weight
     special_tile_penalty_weight: float = 0.05
 
 @dataclass
@@ -201,7 +201,7 @@ class EncoderConfig(CLIPConfig):
     ckpt_name: Optional[str] = None
     ckpt_path: Optional[str] = None
     trainable: bool = False
-    tile_offset: int = 0               # 타일 enum 값에 더할 오프셋 (인코더)
+    tile_offset: int = 0               # tile enum text in  text text (text)
 
 
 @dataclass
@@ -210,8 +210,8 @@ class DecoderConfig:
     num_layers: int = 2
     output_dim: int = 1
     num_reward_classes: int = 5
-    # CNN 입력에 reward_enum one-hot 채널을 추가할지 여부
-    # True이면 pixel_values에 (B, H, W, num_reward_classes) one-hot을 concat
+    # CNN text in  reward_enum one-hot text  text text text
+    # True text pixel_values in  (B, H, W, num_reward_classes) one-hot  concat
     cnn_reward_enum_onehot: bool = False
 
 
@@ -240,16 +240,16 @@ class TrainConfig(Config):
 
     use_embedding_cache: bool = True
 
-    # ── instruction prefix mode (train/eval/encoder 공통) ─────────────────
-    # "name" (기본): "In Zelda, ..." 같이 게임 이름 prefix
-    # "desc"      : "(traverse a room, fight creatures, ...) ..." 같이 게임 설명 prefix
-    # "none"/None : prefix 미적용
-    # 인코더 학습 시 사용한 값과 RL 학습/평가에서 동일해야 임베딩이 일치한다.
+    # ── instruction prefix mode (train/eval/encoder common) ─────────────────
+    # "name" (default): "In Zelda, ..." text  game name prefix
+    # "desc"      : "(traverse a room, fight creatures, ...) ..." text  game text prefix
+    # "none"/None : prefix textapply
+    # text training text text for text text and  RL training/evaluation in  sametext embedding  text.
     instruction_prefix: Optional[str] = "name"
 
-    # ── instruction field 선택 (train/eval/encoder 공통) ──────────────────
-    # "uni": instruction_uni 사용 (통합 표현)
-    # "raw" (기본): instruction_raw 사용 (게임별 치환 표현)
+    # ── instruction field select (train/eval/encoder common) ──────────────────
+    # "uni": instruction_uni text for  (text tabletext)
+    # "raw" (default): instruction_raw text for  (gametext text tabletext)
     instruction_field: str = "raw"
 
 
@@ -262,8 +262,8 @@ class CPCGRLConfig(TrainConfig):
     dataset_game: Optional[str] = "all"
     dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
-    # condition 값 기반 필터: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
-    # 여러 필터는 쉼표 구분: "enum_0_min_3_max_10,enum_2_max_50"
+    # condition text based filter: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
+    # text filter  texttable text: "enum_0_min_3_max_10,enum_2_max_50"
     dataset_condition_filter: Optional[str] = None
 
     vec_cont: bool = True
@@ -286,34 +286,34 @@ class CPCGRLConfig(TrainConfig):
 
 @dataclass
 class IPCGRLConfig(CPCGRLConfig):
-    """IPCGRL (Instructed PCGRL) — BERT 임베딩 → MLP 인코더."""
+    """IPCGRL (Instructed PCGRL) — BERT embedding → MLP text."""
     use_nlp: bool = True
     vec_cont: bool = False
     model: str = "nlpconv"
     nlp_input_dim: int = 768
 
     # ── Task variant marker ──
-    # IPCGRL/MIPCGRL 모두 use_nlp=True, encoder=mlp 라 RL 측 path_utils 에서
-    # 동일 분기를 타게 된다. 두 baseline 의 exp_dir / wandb name 을 분리하기 위해
-    # 이 플래그를 사용한다. (MIPCGRLConfig 에서 True 로 override)
+    # IPCGRL/MIPCGRL text use_nlp=True, encoder=mlp text RL text path_utils  in
+    # same text  text text. text baseline  of  exp_dir / wandb name   separatetext abovetext
+    #   text  text for text. (MIPCGRLConfig  in  True  to  override)
     is_mipcgrl: bool = False
 
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
     wandb_project: Optional[str] = f'{PREFIX}train_ipcgrl'
 
-    # ── encoder unseen 실험 지원 (mgpcgrl/vipcgrl 과 동일 시맨틱) ──────────────
-    # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
-    # 1.0 = 전체 seen 게임 데이터 사용 (기본값), 0.0~1.0 = seen 게임 데이터 prefix 비율
+    # ── encoder unseen experiment text (mgpcgrl/vipcgrl  and  same text) ──────────────
+    # encoder training text text for text seen_ratio — dataset_setting.json in  automatic injecttext.
+    # 1.0 = all seen game data text for  (default value), 0.0~1.0 = seen game data prefix ratio
     dataset_seen_ratio: float = 1.0
 
-    # encoder 학습 시 사용한 unseen_ratio — dataset_setting.json에서 자동 주입됨.
-    # None(기본값) = 기존 동작 유지 (per-game ratio 필터링 비활성).
+    # encoder training text text for text unseen_ratio — dataset_setting.json in  automatic injecttext.
+    # None(default value) = existing text keep (per-game ratio filtering disabled).
     dataset_unseen_ratio: Optional[float] = None
 
-    # encoder 학습 시 seen 게임 목록 — dataset_setting.json에서 자동 주입됨.
-    # (full name 리스트, e.g. ["dungeon", "doom", "zelda"]). 비어있지 않으면
-    # train_setting.json에 seen/unseen split이 기록되어 WandB 로깅에 사용된다.
+    # encoder training text seen game list — dataset_setting.json in  automatic injecttext.
+    # (full name text, e.g. ["dungeon", "doom", "zelda"]). text text
+    # train_setting.json in  seen/unseen split  writetext WandB  to text in  text for text.
     reward_seen_games: List[str] = field(default_factory=list)
 
 
@@ -327,32 +327,32 @@ class VIPCGRLConfig(CPCGRLConfig):
     vec_cont: bool = False
     nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
 
-    # coef_human_sim > 0: human_demo sim_reward 활성화 및 계수로 사용 (0이면 비활성)
+    # coef_human_sim > 0: human_demo sim_reward enable text text to  text for  (0 text disabled)
     coef_human_sim: float = 30.0
 
     wandb_project: Optional[str] = f"{PREFIX}train_vipcgrl"
 
     ignore_checkpoint: bool = False
 
-    # ── encoder unseen 실험 지원 (mgpcgrl 과 동일 시맨틱) ──────────────────────
-    # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
-    # 1.0 = 전체 seen 게임 데이터 사용 (기본값), 0.0~1.0 = seen 게임 데이터 prefix 비율
+    # ── encoder unseen experiment text (mgpcgrl  and  same text) ──────────────────────
+    # encoder training text text for text seen_ratio — dataset_setting.json in  automatic injecttext.
+    # 1.0 = all seen game data text for  (default value), 0.0~1.0 = seen game data prefix ratio
     dataset_seen_ratio: float = 1.0
 
-    # encoder 학습 시 사용한 unseen_ratio — dataset_setting.json에서 자동 주입됨.
-    # None(기본값) = 기존 동작 유지 (per-game ratio 필터링 비활성).
-    # VIPCGRL에서만 사용: 0.0 = unseen 게임 미로드, 0.0~1.0 = unseen 게임 prefix 비율.
-    # MGPCGRL은 항상 1.0(full)으로 주입하여 모든 unseen 게임 데이터를 로드한다.
+    # encoder training text text for text unseen_ratio — dataset_setting.json in  automatic injecttext.
+    # None(default value) = existing text keep (per-game ratio filtering disabled).
+    # VIPCGRL in text text for : 0.0 = unseen game textload, 0.0~1.0 = unseen game prefix ratio.
+    # MGPCGRL  always 1.0(full) as  injecttext text unseen game data  loadtext.
     dataset_unseen_ratio: Optional[float] = None
 
-    # ── game_setting_mode: 학습에 사용할 게임 범위 선택 ──
-    # "all"          : 전체 게임 사용
-    # "encoder_seen" : encoder 학습 시 seen 게임만 사용 (기본값, dataset_setting.json에서 자동 읽음)
+    # ── game_setting_mode: training in  text for text game range select ──
+    # "all"          : all game text for
+    # "encoder_seen" : encoder training text seen gametext text for  (default value, dataset_setting.json in  automatic text)
     game_setting_mode: str = "encoder_seen"
 
-    # encoder 학습 시 seen 게임 목록 — dataset_setting.json에서 자동 주입됨.
-    # (full name 리스트, e.g. ["dungeon", "doom", "zelda"]). 비어있지 않으면
-    # train_setting.json에 seen/unseen split이 기록되어 WandB 로깅에 사용된다.
+    # encoder training text seen game list — dataset_setting.json in  automatic injecttext.
+    # (full name text, e.g. ["dungeon", "doom", "zelda"]). text text
+    # train_setting.json in  seen/unseen split  writetext WandB  to text in  text for text.
     reward_seen_games: List[str] = field(default_factory=list)
 
 
@@ -361,44 +361,44 @@ class VIPCGRLConfig(CPCGRLConfig):
 class MGPCGRLConfig(VIPCGRLConfig):
     wandb_project: Optional[str] = f"{PREFIX}train_mgpcgrl"
 
-    # MGPCGRL: clip_decoder 기반 동적 보상 예측 (reward_i/condition)
+    # MGPCGRL: clip_decoder based dynamic reward text (reward_i/condition)
     use_decoder_reward_shaping: bool = True
 
-    # sim reward 사용 가능하되 기본값은 0.0 (비활성). 양수로 설정 시 활성화.
+    # sim reward text for  availabletext default value  0.0 (disabled). text to  config text enable.
     coef_human_sim: float = 0.0
 
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
 
     game_setting_mode: str = "all"
 
-    # ── reward_decoder_mode: reward/condition 소스 선택 (MGPCGRL 전용) ──
-    # "noop"  : 모든 게임에 대해 데이터셋 메타데이터를 그대로 사용 (decoder 미사용)
-    # "all"   : 모든 게임에 대해 CLIP decoder 예측값을 사용 (기본값)
-    # "unseen": seen 게임은 데이터셋 메타데이터, unseen 게임만 decoder 예측값 사용
+    # ── reward_decoder_mode: reward/condition text select (MGPCGRL  before  for ) ──
+    # "noop"  : text game in  text dataset metadata  as-is text for  (decoder text for )
+    # "all"   : text game in  text CLIP decoder text  text for  (default value)
+    # "unseen": seen game  dataset metadata, unseen gametext decoder text text for
     reward_decoder_mode: str = "unseen"
 
-    # ── 경로 식별용 파라미터 (encoder ckpt 해시 대체) ─────────────────────────
-    # encoder 학습 시 사용한 unseen games 약어 (e.g. "zd", "zddm")
+    # ── path text for  parameter (encoder ckpt text text) ─────────────────────────
+    # encoder training text text for text unseen games abbreviation (e.g. "zd", "zddm")
     train_unseen_abbr: Optional[str] = None
-    # encoder 학습 시 unseen game 데이터 비율 (0.0 ~ 1.0)
+    # encoder training text unseen game data ratio (0.0 ~ 1.0)
     train_unseen_ratio: Optional[float] = None
-    # encoder 학습 시 seen game 데이터 비율 (0.0 ~ 1.0)
+    # encoder training text seen game data ratio (0.0 ~ 1.0)
     train_seen_ratio: Optional[float] = None
 
-    # ── reward_unseen_ratio: unseen 게임 내 metadata/decoder 경계 ─────────────
-    # dataset_setting.json 의 unseen_ratio 에서 자동 주입됨.
-    # 각 unseen 게임의 샘플을 순서 기준으로 분할:
-    #   앞쪽 (reward_unseen_ratio 비율) → metadata (GT condition, encoder 학습 데이터)
-    #   나머지 (1 - reward_unseen_ratio) → reward decoder 로 condition 예측
-    # 0.0 (기본값) = 모든 unseen 샘플에 decoder 적용 (zero-shot 동작)
+    # ── reward_unseen_ratio: unseen game  inside  metadata/decoder text ─────────────
+    # dataset_setting.json  of  unseen_ratio  in  automatic injecttext.
+    # each unseen game of  sample  order basis as  split:
+    #   front (reward_unseen_ratio ratio) → metadata (GT condition, encoder training data)
+    #   remaining (1 - reward_unseen_ratio) → reward decoder  to  condition text
+    # 0.0 (default value) = text unseen sample in  decoder apply (zero-shot text)
     reward_unseen_ratio: float = 0.0
 
-    # ── encoder 학습 시 사용한 delta_weight (wandb 로깅/분석용) ──
-    # encoder_config.json에서 자동 주입됨. 0.0 = baseline (direction alignment 미사용).
+    # ── encoder training text text for text delta_weight (wandb  to text/text for ) ──
+    # encoder_config.json in  automatic injecttext. 0.0 = baseline (direction alignment text for ).
     encoder_delta_weight: float = 0.0
 
-    # MGPCGRL: unseen 게임 데이터 로드 비율 (기본값 1.0 = 전체 로드).
-    # CLI에서 변경 가능하며, 1.0이 아닌 경우 exp_dir 이름에 '_uro-XX' suffix가 붙는다.
+    # MGPCGRL: unseen game data load ratio (default value 1.0 = all load).
+    # CLI in  text availabletext, 1.0  text text exp_dir name in  '_uro-XX' suffix  text text.
     dataset_unseen_ratio: float = 1.0
 
 
@@ -413,41 +413,41 @@ class PretrainedCLIPPCGRLConfig(CPCGRLConfig):
     vec_cont: bool = False
     nlp_input_dim: int = 512  # encoder.output_dim (pretrained CLIP latent space, no projection)
 
-    # HuggingFace CLIP은 RGB 이미지(3채널)를 기대 — render_level_from_arr가 RGB 타일 이미지 생성
+    # HuggingFace CLIP  RGB image(3text)  text — render_level_from_arr  RGB tile image create
     clip_input_channel: int = 3
 
     use_pretrained_clip_reward: bool = True
     wandb_project: Optional[str] = f'{PREFIX}train_pretrained_clip_pcgrl'
 
-    # 학습에 사용된 게임 목록 — config.game 에서 자동 유도되어 train_setting.json 에 기록됨.
-    # (full name 리스트, e.g. ["dungeon", "doom", "zelda"]). 비어있지 않으면
-    # train_setting.json 에 seen/unseen split 이 기록되어 WandB 로깅에 사용된다.
+    # training in  text for text game list — config.game  in  automatic text also text train_setting.json  in  writetext.
+    # (full name text, e.g. ["dungeon", "doom", "zelda"]). text text
+    # train_setting.json  in  seen/unseen split   writetext WandB  to text in  text for text.
     reward_seen_games: List[str] = field(default_factory=list)
 
 
 @dataclass
 class FinetunedCLIPPCGRLConfig(PretrainedCLIPPCGRLConfig):
-    """Fine-tuned CLIP 보상 기반 PCGRL 학습 Config.
+    """Fine-tuned CLIP reward based PCGRL training Config.
 
-    PretrainedCLIPPCGRLConfig 와 동일한 모델/환경 구조를 사용하되,
-    `encoder.ckpt_name` (또는 ckpt_path) 으로 지정된 fine-tuned CLIP
-    체크포인트를 RL 인코더 subtree 에 inject 한다. (기존
-    `apply_encoder_params` 메커니즘 그대로 활용)
+    PretrainedCLIPPCGRLConfig  and  sametext text/text structure  text for text,
+    `encoder.ckpt_name` (text  ckpt_path)  as  text fine-tuned CLIP
+    checkpoint  RL text subtree  in  inject text. (existing
+    `apply_encoder_params` text as-is text for )
     """
     wandb_project: Optional[str] = f"{PREFIX}train_finetuned_clip_pcgrl"
     dir_prefix: str = "finetuned-clip-pcgrl-"
 
-    # ── Finetuned CLIP 전용 RL 모델 분기 ──────────────────────────────────
-    # pretrained_clip 와 파라미터 트리 구조는 동일하지만, `get_finetuned_clip_encoder`
-    # 로 모듈을 생성해 ckpt 의 trainable 파라미터 트리 (TrainablePretrained*Encoder)
-    # 와 정확히 일치시킨다. 별도 model 식별자로 exp_dir / encoder hash 충돌 회피.
+    # ── Finetuned CLIP  before  for  RL text text ──────────────────────────────────
+    # pretrained_clip  and  parameter text structure  sametext, `get_finetuned_clip_encoder`
+    #  to  text  createtext ckpt  of  trainable parameter text (TrainablePretrained*Encoder)
+    #  and  text text. separate model text to  exp_dir / encoder hash text text.
     model: str = "finetuned_clip"
 
-    # ── encoder unseen 실험 지원 (mgpcgrl/vipcgrl 와 동일 시맨틱) ──
+    # ── encoder unseen experiment text (mgpcgrl/vipcgrl  and  same text) ──
     dataset_seen_ratio: float = 1.0
 
-    # encoder 학습 시 unseen 게임 데이터 비율 (dataset_setting.json에서 자동 주입).
-    # None이면 기존 동작(전 게임에 dataset_seen_ratio 적용) 유지.
+    # encoder training text unseen game data ratio (dataset_setting.json in  automatic inject).
+    # None text existing text( before  game in  dataset_seen_ratio apply) keep.
     dataset_unseen_ratio: Optional[float] = None
 
     reward_seen_games: List[str] = field(default_factory=list)
@@ -498,10 +498,10 @@ class EvalConfig(TrainConfig):
 
 @dataclass
 class RandomEvalConfig(EvalConfig):
-    """완전 랜덤 정책 평가용 Config.
+    """text before  random text evaluation for  Config.
 
-    NN 없이 uniform random action을 사용하며,
-    exp_dir 이름이 "random_" 으로 시작한다 (cpcgrl_ 접두사와 대응).
+    NN text  uniform random action  text for text,
+    exp_dir name  "random_"  as  starttext (cpcgrl_ text and  text).
     """
 
     random_agent: bool = True
@@ -511,32 +511,32 @@ class RandomEvalConfig(EvalConfig):
     dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
     eval_games: str = 'all'
 
-    # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
+    # (game, re) text evaluation sample text. None text all text for .
     eval_samples_per_group: Optional[int] = 200
 
-    # 평가 시 복수 reward_enum 지정. None이면 dataset_reward_enum 단일값 사용.
-    # 숫자 연결 문자열로 지정 가능: "12" → [1,2],  "012" → [0,1,2]
-    # 리스트/튜플도 허용: [0,1,2]
+    # evaluation text text reward_enum text. None text dataset_reward_enum text text for .
+    # text text string to  text available: "12" → [1,2],  "012" → [0,1,2]
+    # text/text also  text for : [0,1,2]
     eval_dataset_reward_enums: Optional[str] = None
 
 
 
 @dataclass
 class CPCGRLEvalConfig(EvalConfig):
-    """CPCGRL 평가용 Config.
+    """CPCGRL evaluation for  Config.
 
-    CPCGRLConfig 와 동일한 모델/환경 설정을 EvalConfig 위에 덮어쓴다.
+    CPCGRLConfig  and  sametext text/text config  EvalConfig above in  text.
     """
     problem: str = "multigame"
 
-    # ── CPCGRLConfig 와 동일한 game / dataset 기본값 → exp_dir 이름 일치 ──
+    # ── CPCGRLConfig  and  sametext game / dataset default value → exp_dir name text ──
     game: str = "all"
     dataset_game: Optional[str] = "all"
     dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
 
-    # 평가 대상 게임 (None이면 game과 동일). 체크포인트 로딩은 game 기준, 평가 데이터는 eval_games 기준.
-    # 예: game="all" 로 학습된 모델을 특정 게임만 평가할 때 eval_games="dg" 처럼 지정.
+    # evaluation target game (None text game and  same). checkpoint  to text  game basis, evaluation data  eval_games basis.
+    # text: game="all"  to  trainingtext text  text gametext evaluationtext text eval_games="dg" text text.
     eval_games: str = 'all'
 
     vec_cont: bool = True
@@ -547,17 +547,17 @@ class CPCGRLEvalConfig(EvalConfig):
     vec_input_dim: Optional[int] = 5
     nlp_input_dim: int = 0
 
-    max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+    max_samples: Optional[int] = None  # dry-run for : data count text (None text all text for )
 
-    # (game, re) 그룹당 평가 샘플 수. None이면 전체 사용.
+    # (game, re) text evaluation sample text. None text all text for .
     eval_samples_per_group: Optional[int] = 200
 
-    # 평가 시 복수 reward_enum 지정. None이면 dataset_reward_enum 단일값 사용.
-    # 숫자 연결 문자열로 지정 가능: "12" → [1,2],  "012" → [0,1,2]
-    # 리스트/튜플도 허용: [0,1,2]
+    # evaluation text text reward_enum text. None text dataset_reward_enum text text for .
+    # text text string to  text available: "12" → [1,2],  "012" → [0,1,2]
+    # text/text also  text for : [0,1,2]
     eval_dataset_reward_enums: Optional[str] = None
 
-    # True이면 체크포인트 없어도 진행 (WARNING 출력). False(기본)이면 체크포인트 없을 시 에러.
+    # True text checkpoint text also  textrow (WARNING text). False(default) text checkpoint text  text  in text.
     ignore_checkpoint: bool = False
 
 
@@ -565,10 +565,10 @@ class CPCGRLEvalConfig(EvalConfig):
 
 @dataclass
 class VIPCGRLEvalConfig(CPCGRLEvalConfig):
-    """VIPCGRL 평가용 Config.
+    """VIPCGRL evaluation for  Config.
 
-    pretrained CLIP 임베딩을 nlp_obs 에 주입하는 평가 설정.
-    Decoder reward shaping 없이 CLIP embedding만 사용한다.
+    pretrained CLIP embedding  nlp_obs  in  injecttext  evaluation config.
+    Decoder reward shaping text  CLIP embeddingtext text for text.
     """
     wandb_project: Optional[str] = f"{PREFIX}eval_vipcgrl"
 
@@ -582,27 +582,27 @@ class VIPCGRLEvalConfig(CPCGRLEvalConfig):
 
     ignore_checkpoint: bool = False
 
-    # ── encoder unseen 실험 지원 (mgpcgrl eval 과 동일 시맨틱) ───────────────
-    # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
-    # 분석/로깅용으로만 사용하며, eval 데이터셋 필터링에는 적용되지 않음.
+    # ── encoder unseen experiment text (mgpcgrl eval  and  same text) ───────────────
+    # encoder training text text for text seen_ratio — dataset_setting.json in  automatic injecttext.
+    # text/ to text for  as text text for text, eval dataset filtering in   applytext text.
     train_seen_ratio: float = 1.0
 
-    # 학습 시 seen/unseen 게임 목록 — dataset_setting.json에서 자동 주입됨.
+    # training text seen/unseen game list — dataset_setting.json in  automatic injecttext.
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
-    # ── game_setting_mode: 평가 시 사용할 게임 범위 선택 ──
-    # train_vipcgrl 의 기본값(encoder_seen) 과 맞춰서 exp_dir 매칭이 일관되도록 한다.
+    # ── game_setting_mode: evaluation text text for text game range select ──
+    # train_vipcgrl  of  default value(encoder_seen)  and  text exp_dir text  text also text text.
     game_setting_mode: str = "encoder_seen"
 
 
 @dataclass
 class PretrainedCLIPEvalConfig(CPCGRLEvalConfig):
-    """PretrainedCLIP PCGRL 평가용 Config.
+    """PretrainedCLIP PCGRL evaluation for  Config.
 
-    train_pretrained_clip.py 로 학습한 체크포인트를 평가한다.
-    사전 계산된 CLIP 텍스트 임베딩을 nlp_obs 에 주입하며,
-    별도의 encoder 체크포인트 없이 모델 자체에 포함된 CLIP 비전 인코더를 사용한다.
+    train_pretrained_clip.py  to  trainingtext checkpoint  evaluationtext.
+    precomputed CLIP text embedding  nlp_obs  in  injecttext,
+    separate of  encoder checkpoint text  text text in  text CLIP vision text  text for text.
     """
     wandb_project: Optional[str] = f"{PREFIX}eval_pretrained_clip"
 
@@ -612,18 +612,18 @@ class PretrainedCLIPEvalConfig(CPCGRLEvalConfig):
     vec_cont: bool = False
     model: str = "pretrained_clip"
     use_nlp: bool = False
-    nlp_input_dim: int = 512  # pretrained CLIP 텍스트 임베딩 차원 (projection 없음)
+    nlp_input_dim: int = 512  # pretrained CLIP text embedding dimension (projection none)
 
     ignore_checkpoint: bool = False
 
-    # 학습 시 seen/unseen 게임 목록 — train_setting.json 에서 자동 주입됨.
+    # training text seen/unseen game list — train_setting.json  in  automatic injecttext.
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
 
 @dataclass
 class FinetunedCLIPEvalConfig(PretrainedCLIPEvalConfig):
-    """Fine-tuned CLIP PCGRL 평가용 Config."""
+    """Fine-tuned CLIP PCGRL evaluation for  Config."""
     wandb_project: Optional[str] = f"{PREFIX}eval_finetuned_clip"
     dir_prefix: str = "finetuned-clip-pcgrl-"
     model: str = "finetuned_clip"
@@ -631,9 +631,9 @@ class FinetunedCLIPEvalConfig(PretrainedCLIPEvalConfig):
 
 @dataclass
 class MGPCGRLEvalConfig(CPCGRLEvalConfig):
-    """MGPCGRL 평가용 Config.
+    """MGPCGRL evaluation for  Config.
 
-    CPCGRLConfig 와 동일한 모델/환경 설정을 EvalConfig 위에 덮어쓴다.
+    CPCGRLConfig  and  sametext text/text config  EvalConfig above in  text.
     """
     wandb_project: Optional[str] = f"{PREFIX}eval_mgpcgrl"
 
@@ -647,42 +647,42 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
 
     ignore_checkpoint: bool = False
 
-    # encoder 학습 시 사용한 seen_ratio — dataset_setting.json에서 자동 주입됨.
-    # 분석/로깅용으로만 사용하며, eval 데이터셋 필터링에는 적용되지 않음.
+    # encoder training text text for text seen_ratio — dataset_setting.json in  automatic injecttext.
+    # text/ to text for  as text text for text, eval dataset filtering in   applytext text.
     train_seen_ratio: float = 1.0
 
-    # exp_dir 경로 매칭용 — train과 동일한 기본값(unseen) 유지.
-    # 실제 eval condition 소스는 eval_reward_decoder_mode로 별도 제어한다.
+    # exp_dir path text for  — train and  sametext default value(unseen) keep.
+    # text eval condition text  eval_reward_decoder_mode to  separate text.
     reward_decoder_mode: str = "unseen"
 
-    # eval 시 실제로 사용할 condition 소스.
-    # "noop" → GT condition 사용 (기본값, 공정한 비교를 위해).
-    # "unseen" → unseen 게임만 decoder 예측 사용.
+    # eval text text to  text for text condition text.
+    # "noop" → GT condition text for  (default value, text text  abovetext).
+    # "unseen" → unseen gametext decoder text text for .
     eval_reward_decoder_mode: str = "noop"
 
-    # 학습 시 seen/unseen 게임 목록 — reward_decoder_config.json에서 자동 주입됨.
+    # training text seen/unseen game list — reward_decoder_config.json in  automatic injecttext.
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
 
-    # ── 경로 식별용 파라미터 (encoder ckpt 해시 대체) ─────────────────────────
-    # train 시 MGPCGRLConfig와 동일한 값을 지정해야 exp_dir가 일치함.
+    # ── path text for  parameter (encoder ckpt text text) ─────────────────────────
+    # train text MGPCGRLConfig and  sametext text  text exp_dir  text.
     train_unseen_abbr: Optional[str] = None
     train_unseen_ratio: Optional[float] = None
     train_seen_ratio: Optional[float] = None
 
-    # ── encoder 학습 시 사용한 delta_weight (wandb 로깅/분석용) ──
+    # ── encoder training text text for text delta_weight (wandb  to text/text for ) ──
     encoder_delta_weight: float = 0.0
 
-    # train과 동일한 값을 지정해야 exp_dir가 일치함. 1.0이 아닌 경우 '_uro-XX' suffix.
+    # train and  sametext text  text exp_dir  text. 1.0  text text '_uro-XX' suffix.
     dataset_unseen_ratio: float = 1.0
 
 
 @dataclass
 class IPCGRLEvalConfig(CPCGRLEvalConfig):
-    """IPCGRL 평가용 Config.
+    """IPCGRL evaluation for  Config.
 
-    CPCGRLEvalConfig 를 상속하고 BERT 임베딩 + MLP 인코더 설정을 추가한다.
+    CPCGRLEvalConfig   text BERT embedding + MLP text config  text text.
     """
     use_nlp: bool = True
     vec_cont: bool = False
@@ -695,10 +695,10 @@ class IPCGRLEvalConfig(CPCGRLEvalConfig):
 
     wandb_project: Optional[str] = f"{PREFIX}eval_ipcgrl"
 
-    # ── encoder 학습 시 seen_ratio (analysis only) ──────────────────────────────
+    # ── encoder training text seen_ratio (analysis only) ──────────────────────────────
     train_seen_ratio: float = 1.0
 
-    # ── 학습 시 seen/unseen 게임 목록 — dataset_setting.json에서 자동 주입됨 ──
+    # ── training text seen/unseen game list — dataset_setting.json in  automatic injecttext ──
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
@@ -706,35 +706,35 @@ class IPCGRLEvalConfig(CPCGRLEvalConfig):
     # the same encoder seen-game metadata so exp_dir matches the trained run.
     reward_seen_games: List[str] = field(default_factory=list)
 
-    # ── MIPCGRL variant 구분자 (IPCGRLConfig 와 동일 시맨틱) ──
+    # ── MIPCGRL variant text (IPCGRLConfig  and  same text) ──
     is_mipcgrl: bool = False
 
 
 @dataclass
 class MIPCGRLEvalConfig(IPCGRLEvalConfig):
-    """MIPCGRL 평가용 Config — IPCGRLEvalConfig 와 동일 구조, is_mipcgrl=True."""
+    """MIPCGRL evaluation for  Config — IPCGRLEvalConfig  and  same structure, is_mipcgrl=True."""
     wandb_project: Optional[str] = f"{PREFIX}eval_mipcgrl"
     is_mipcgrl: bool = True
 
 
 @dataclass
 class CollectBufferConfig(CPCGRLConfig):
-    """학습 중 trajectory 버퍼를 수집하는 Config.
+    """training  during  trajectory text  text  Config.
 
-    학습 50%~100% 구간(collect_start_ratio~collect_end_ratio)에서
-    첫 번째 환경(env_idx=0) 기준으로 데이터를 수집하여
-    실험 폴더의 buffer/ 디렉토리에 .npz 파일로 저장한다.
+    training 50%~100% bin(collect_start_ratio~collect_end_ratio) in
+    text text text(env_idx=0) basis as  data  text
+    experiment folder of  buffer/ directory in  .npz file to  savetext.
     """
     wandb_project: str = 'collect_buffer'
     dir_prefix: str = "buffer-"
 
-    # ── 버퍼 수집 파라미터 ──
-    buffer_max_samples: int = 10_000       # 수집할 최대 transition 수
-    collect_start_ratio: float = 0.5        # 수집 시작 비율 (0.5 = 학습 50%)
-    collect_end_ratio: float = 1.0          # 수집 종료 비율 (1.0 = 학습 100%)
-    buffer_save_dir: Optional[str] = None   # 저장 경로 (None이면 exp_dir/buffer)
+    # ── text text parameter ──
+    buffer_max_samples: int = 10_000       # text maximum transition text
+    collect_start_ratio: float = 0.5        # text start ratio (0.5 = training 50%)
+    collect_end_ratio: float = 1.0          # text text ratio (1.0 = training 100%)
+    buffer_save_dir: Optional[str] = None   # save path (None text exp_dir/buffer)
 
-    # 학습 중 env_map을 transition에 저장 (수집에 필요)
+    # training  during  env_map  transition in  save (text in  text)
     collect_env_map: bool = True
 
 
@@ -828,7 +828,7 @@ class RewardConfig(Config):
     steps_per_epoch: Optional[int] = None
     warmup_epochs: int = 10  # set 10% of the total timesteps
 
-    max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+    max_samples: Optional[int] = None  # dry-run for : data count text (None text all text for )
 
 
 
@@ -848,10 +848,10 @@ class RewardTrainConfig(RewardConfig):
 @dataclass
 class CLIPTrainConfig(Config):
     exp_name: str = "def"
-    
+
     wandb_project: str = f"{PREFIX}train_vipcgrl_encoder"
     seed: int = 0
-    
+
     overwrite: bool = False
     ckpt_freq: int = int(50)
     ckpt_keep: int = 2
@@ -859,7 +859,7 @@ class CLIPTrainConfig(Config):
     # Goal img path
     img_data_path: str = "./human_dataset"
     instruct: str = "scn-1_se-whole"
-    
+
     n_max_points: int = 1000
     embed_visualize_freq: int = 500
 
@@ -870,55 +870,55 @@ class CLIPTrainConfig(Config):
     batch_size: int = 2048
     buffer_ratio: float = 1.0 # Not implemented for clip yet.
     train_shuffle: bool = False
-    
+
     dir_prefix: str = "clip-"
     figure_dir: str = "figures"
-    
+
     steps_per_epoch: Optional[int] = None
-    max_samples: Optional[int] = None  # dry-run용: 데이터 개수 제한 (None이면 전체 사용)
+    max_samples: Optional[int] = None  # dry-run for : data count text (None text all text for )
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
 
-    # instruction prefix mode: "name" (e.g. "In Zelda, ...") / "desc" / "mix" / "none" (또는 None)
+    # instruction prefix mode: "name" (e.g. "In Zelda, ...") / "desc" / "mix" / "none" (text  None)
     instruction_prefix: Optional[str] = "name"
 
-    # instruction field 선택: "uni" / "raw" (기본)
+    # instruction field select: "uni" / "raw" (default)
     instruction_field: str = "raw"
 
     # overwrite
     embed_type: str = "humanai"
 
-    # ── Seen/Unseen 게임 분리 설정 (CLIPDecoderTrainConfig 와 동일 시맨틱) ──
-    # unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda).
-    # None/"" 이면 기존 동작 (전체 게임을 train/test 비율로 split).
+    # ── Seen/Unseen game separate config (CLIPDecoderTrainConfig  and  same text) ──
+    # unseen game text (2text abbreviation, e.g., "zd"=zelda, "pkzd"=pokemon+zelda).
+    # None/""  text existing text (all game  train/test ratio to  split).
     unseen_games: Optional[str] = None
-    # few-shot ratio: unseen 학습 풀 중 사용할 비율 (0.0=zero-shot, 1.0=전부)
+    # few-shot ratio: unseen training text  during  text for text ratio (0.0=zero-shot, 1.0= before text)
     unseen_ratio: float = 0.0
-    # seen 게임 데이터 비율 (1.0=전부 사용)
+    # seen game data ratio (1.0= before text text for )
     seen_ratio: float = 1.0
-    # 테스트셋 분할 시드 (재현 가능)
+    # text split seed (text available)
     split_seed: int = 42
 
 @dataclass
 class FinetunedCLIPEncoderTrainConfig(CLIPTrainConfig):
-    """HuggingFace pretrained CLIP을 사용자의 (image, text) 데이터로
-    파인튜닝하기 위한 Config.
+    """HuggingFace pretrained CLIP  text for text of  (image, text) data to
+    text abovetext Config.
 
-    파라미터 트리 구조가 `pretrained_clip_model.ContrastiveModule` 과 동일하므로
-    저장된 체크포인트를 그대로 RL 파이프라인(`apply_encoder_params`)에서 inject 할 수 있다.
+    parameter text structure  `pretrained_clip_model.ContrastiveModule`  and  sametext to
+    savetext checkpoint  as-is RL pipeline(`apply_encoder_params`) in  inject text text text.
     """
     wandb_project: str = f"{PREFIX}train_finetuned_clip_encoder"
     dir_prefix: str = "finetuned-clip-"
 
-    # HF CLIP은 224×224 입력을 기대 → 좌표채널 OFF
+    # HF CLIP  224×224 text  text → coordinatetext OFF
     clip_input_channel: int = 3
 
-    # encoder 모델 식별 (path/exp 이름 일관성). RL 단계에서는 'clip'로 로딩됨.
+    # encoder text text (path/exp name text). RL text in   'clip' to   to text.
     encoder: EncoderConfig = field(
         default_factory=lambda: EncoderConfig(model="clip", state=True)
     )
 
-    # HF CLIP은 미세조정 시 학습률을 매우 작게 잡고, epoch 도 적게 (5~15) 유지하는 편
-    # → catastrophic forgetting 방지 + 빠른 도메인 적응
+    # HF CLIP  text text trainingtext  text text text, epoch  also  text (5~15) keeptext  text
+    # → catastrophic forgetting text + text  also text text
     lr: float = 5.0e-6
     weight_decay: float = 0.1
     n_epochs: int = 100
@@ -944,115 +944,115 @@ class CLIPEvalConfig(EvalConfig):
 
 @dataclass
 class CLIPDecoderTrainConfig(CLIPTrainConfig):
-    """CLIP Encoder + Reward Decoder 학습 Config.
+    """CLIP Encoder + Reward Decoder training Config.
 
-    기존 contrastive loss에 더해 디코더 브랜치를 추가하여
-    state embedding으로부터 reward_enum(분류)과 condition(회귀)을 예측한다.
+    existing contrastive loss in  text text text  text text
+    state embedding as text reward_enum(text) and  condition(text)  text.
     """
     wandb_project: str = f'{PREFIX}train_mgpcgrl_encoder'
     dir_prefix: str = "clipdec-"
 
-    # ── 디코더 설정 ──
+    # ── text config ──
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
 
-    # ── loss 가중치 ──
-    contrastive_weight: float = 1.0    # contrastive loss 가중치
-    cls_weight: float = 1.0            # reward_enum 분류 loss 가중치
-    reg_weight: float = 1.0            # condition 회귀 loss 가중치
+    # ── loss weight ──
+    contrastive_weight: float = 1.0    # contrastive loss weight
+    cls_weight: float = 1.0            # reward_enum text loss weight
+    reg_weight: float = 1.0            # condition text loss weight
 
     # ── Continuous Task-wise Cross-game Direction Alignment Loss ──
-    # 같은 task 안에서 condition이 증가할 때 text embedding이 움직이는 방향을
-    # 게임 간에 정렬시키는 regularizer. 0.0 → 비활성(baseline 재현).
+    # same task text in  condition  text text text text embedding  text   text
+    # game text in  sorttext  regularizer. 0.0 → disabled(baseline text).
     delta_weight: float = 0.03
-    delta_min_group_samples: int = 2   # (game, task) 그룹 최소 sample 수
-    delta_var_eps: float = 1e-4        # condition variance 하한 (작으면 그룹 invalid)
-    compute_delta_when_zero: bool = True  # delta_weight=0.0이어도 alignment metric 계산
+    delta_min_group_samples: int = 2   # (game, task) text minimum sample text
+    delta_var_eps: float = 1e-4        # condition variance text (text text invalid)
+    compute_delta_when_zero: bool = True  # delta_weight=0.0 text also  alignment metric compute
 
-    # ── regression loss 종류 ──
+    # ── regression loss text ──
     # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
     regression_loss: str = "mae"
 
-    # ── Seen/Unseen 게임 분리 설정 ──
-    # unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda). None=전체 seen
+    # ── Seen/Unseen game separate config ──
+    # unseen game text (2text abbreviation, e.g., "zd"=zelda, "pkzd"=pokemon+zelda). None=all seen
     unseen_games: Optional[str] = None
-    # few-shot ratio: unseen 학습 풀 중 사용할 비율 (0.0=zero-shot, 1.0=전부)
+    # few-shot ratio: unseen training text  during  text for text ratio (0.0=zero-shot, 1.0= before text)
     unseen_ratio: float = 0.0
-    # seen 게임 데이터 비율 (1.0=전부 사용)
+    # seen game data ratio (1.0= before text text for )
     seen_ratio: float = 1.0
-    # 테스트셋 분할 시드 (재현 가능)
+    # text split seed (text available)
     split_seed: int = 42
 
     n_epochs: int = 3000
 
-    # ── Step 기반 체크포인트 / 평가 주기 ──
-    ckpt_freq: int = 1000   # 체크포인트 저장 주기 (steps, 0이면 비활성)
-    scatter_freq: int = 500  # scatter plot 업로드 주기 (epochs, 0/음수면 비활성)
+    # ── Step based checkpoint / evaluation text ──
+    ckpt_freq: int = 1000   # checkpoint save text (steps, 0 text disabled)
+    scatter_freq: int = 500  # scatter plot upload text (epochs, 0/text disabled)
 
-    # ── Unseen 게임 전용 로깅 주기 ──
-    unseen_eval_freq: int = 100    # unseen regression 메트릭 로깅 주기 (epochs, 0이면 비활성)
-    unseen_scatter_freq: int = 500  # unseen scatter plot 로깅 주기 (epochs, 0이면 비활성)
+    # ── Unseen game  before  for   to text text ──
+    unseen_eval_freq: int = 100    # unseen regression text  to text text (epochs, 0 text disabled)
+    unseen_scatter_freq: int = 500  # unseen scatter plot  to text text (epochs, 0 text disabled)
 
-    # ── Unseen 평가 데이터 비율 ──
-    # unseen_ratio  : 학습 데이터에 흘러들어가는 unseen 게임 데이터 비율 (train pool 기준)
-    # eval_unseen_ratio : unseen_eval_freq 평가에 사용할 unseen test set 비율 (0.0~1.0, 1.0=전체)
+    # ── Unseen evaluation data ratio ──
+    # unseen_ratio  : training data in  text   unseen game data ratio (train pool basis)
+    # eval_unseen_ratio : unseen_eval_freq evaluation in  text for text unseen test set ratio (0.0~1.0, 1.0=all)
     eval_unseen_ratio: float = 1.0
     export_unseen_predictions_csv: bool = True
 
-    # ── Gradient 흐름 제어 ──
-    # True: decoder loss (cls + reg)의 gradient가 encoder(latent space)까지 전파되지 않음
-    # False (기본값): decoder loss가 encoder까지 역전파됨
+    # ── Gradient text text ──
+    # True: decoder loss (cls + reg) of  gradient  encoder(latent space)text  before text text
+    # False (default value): decoder loss  encodertext text before text
     decoder_nograd: bool = False
 
 
 @dataclass
 class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
-    """Seen/Unseen 게임 분리 + Few-shot Ratio Sweep Config.
+    """Seen/Unseen game separate + Few-shot Ratio Sweep Config.
 
-    Seen 게임의 전체 학습 데이터와 Unseen 게임의 가변 비율 학습 데이터로
-    CLIP Decoder 모델을 학습하고, 고정된 테스트셋에서 게임별 reward_accuracy를 측정한다.
+    Seen game of  all training data and  Unseen game of   text ratio training data to
+    CLIP Decoder text  trainingtext, fixedtext text in  gametext reward_accuracy  measuretext.
     """
     wandb_project: str = 'train_clip_decoder_unseen'
     dir_prefix: str = "clipdec-"
 
-    # ── Unseen 게임 지정 (2글자 약어, e.g., "zd"=zelda, "pkzd"=pokemon+zelda) ──
+    # ── Unseen game text (2text abbreviation, e.g., "zd"=zelda, "pkzd"=pokemon+zelda) ──
     unseen_games: Optional[str] = None
 
-    # ── Few-shot ratio (단일 실행용) ──
-    # 0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen 학습 풀 전부 사용
+    # ── Few-shot ratio (text Usage for ) ──
+    # 0.0 = zero-shot (unseen training data 0%), 1.0 = unseen training text  before text text for
     unseen_ratio: float = 0.01
 
-    # ── Seen 게임 데이터 비율 ──
-    # 1.0 = seen 학습 풀 전부 사용 (기본값), 0.0 = seen 학습 데이터 0%
+    # ── Seen game data ratio ──
+    # 1.0 = seen training text  before text text for  (default value), 0.0 = seen training data 0%
     seen_ratio: float = 1.0
 
-    # ── 테스트셋 설정 ──
-    # train_ratio: 학습 데이터 비율 (부모 CLIPTrainConfig 상속, 기본 0.99 → 여기서 0.8로 재정의)
-    # test 비율 = 1.0 - train_ratio
+    # ── text config ──
+    # train_ratio: training data ratio (text CLIPTrainConfig text, default 0.99 → text 0.8 to  text of )
+    # test ratio = 1.0 - train_ratio
     train_ratio: float = 0.99
-    split_seed: int = 42              # 테스트셋 분할 시드 (재현 가능)
+    split_seed: int = 42              # text split seed (text available)
 
 
 @dataclass
 class CLIPDecoderUnseenSweepConfig(CLIPDecoderUnseenConfig):
-    """Seen/Unseen 게임 분리 + Few-shot Ratio **Sweep** Config.
+    """Seen/Unseen game separate + Few-shot Ratio **Sweep** Config.
 
-    CLIPDecoderUnseenConfig 를 상속하며, unseen_ratios 리스트를 추가로 정의한다.
-    sweep/runnable_sweep/unseen_games.py 에서 사용한다.
+    CLIPDecoderUnseenConfig   text, unseen_ratios text  text  to  text of text.
+    sweep/runnable_sweep/unseen_games.py  in  text for text.
     """
-    # ── Few-shot ratio sweep 설정 ──
-    # 0.0 = zero-shot, 1.0 = unseen 학습 풀 전부 사용
+    # ── Few-shot ratio sweep config ──
+    # 0.0 = zero-shot, 1.0 = unseen training text  before text text for
     unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1)
 
 
 @dataclass
 class IPCGRLEncoderMGConfig(RewardConfig):
-    """IPCGRL MLP 인코더 멀티게임 사전학습 Config.
+    """IPCGRL MLP text textgame pretraining Config.
 
-    Annotation 형식 MultiGameDataset 기반.
-    - 입력: BERT(instruction) → 768-dim embedding
-    - 모델: MLP 인코더 + MLP 디코더
-    - 출력: condition value 회귀 (log1p + per-enum min-max 정규화)
-    - unseen_games: 학습에서 제외할 게임 지정 (zero-shot 평가용)
+    Annotation text MultiGameDataset based.
+    - text: BERT(instruction) → 768-dim embedding
+    - text: MLP text + MLP text
+    - text: condition value text (log1p + per-enum min-max normalize)
+    - unseen_games: training in  text game text (zero-shot evaluation for )
 
     Usage:
         python train_ipcgrl_encoder_mg.py game=all
@@ -1062,28 +1062,28 @@ class IPCGRLEncoderMGConfig(RewardConfig):
     dir_prefix: str = "ipcgrl-enc-mg-"
     ckpt_freq: int = 10
 
-    # BERT 설정
+    # BERT config
     use_nlp: bool = True
     nlp_input_dim: int = 768
 
-    # Unseen 게임 설정 (2글자 약어, e.g. "zd"=zelda, "pkzd"=pokemon+zelda)
-    # 빈 문자열 = 제외 없음 (전체 게임 학습)
+    # Unseen game config (2text abbreviation, e.g. "zd"=zelda, "pkzd"=pokemon+zelda)
+    # text string = text none (all game training)
     unseen_games: str = ""
 
-    # ── Seen/Unseen 데이터 비율 (CLIPTrainConfig와 동일) ──
-    # unseen_ratio: unseen 학습 풀 중 사용할 비율 (0.0=zero-shot, 1.0=전부)
+    # ── Seen/Unseen data ratio (CLIPTrainConfig and  same) ──
+    # unseen_ratio: unseen training text  during  text for text ratio (0.0=zero-shot, 1.0= before text)
     unseen_ratio: float = 0.0
-    # seen_ratio: seen 게임 데이터 비율 (1.0=전부 사용)
+    # seen_ratio: seen game data ratio (1.0= before text text for )
     seen_ratio: float = 1.0
 
-    # Annotation 데이터셋 설정 (CLIPTrainConfig 와 동일한 변인 통제)
-    # instruction_prefix mode: "name" (기본) / "desc" / "none" (또는 None)
+    # Annotation dataset config (CLIPTrainConfig  and  sametext text text)
+    # instruction_prefix mode: "name" (default) / "desc" / "none" (text  None)
     instruction_prefix: Optional[str] = "name"
 
-    # instruction field 선택: "uni" / "raw" (기본)
+    # instruction field select: "uni" / "raw" (default)
     instruction_field: str = "raw"
 
-    # MLP 인코더 (apply_encoder_model 에서 model='mlp' 분기 사용)
+    # MLP text (apply_encoder_model  in  model='mlp' text text for )
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
 
@@ -1095,10 +1095,10 @@ class MIPCGRLConfig(IPCGRLConfig):
 
 @dataclass
 class MIPCGRLEncoderMGConfig(IPCGRLEncoderMGConfig):
-    """MIPCGRL MLP 인코더 멀티게임 사전학습 Config.
+    """MIPCGRL MLP text textgame pretraining Config.
 
-    IPCGRL 인코더(condition value 회귀만 수행)에 더해, 동일 latent z 로부터
-    task(reward_enum) 분류 head 를 추가로 학습한다.
+    IPCGRL text(condition value text textrow) in  text, same latent z  to text
+    task(reward_enum) text head   text  to  trainingtext.
         Loss = MSE(condition) + classifier_weight * CrossEntropy(reward_enum)
 
     Usage:
@@ -1108,14 +1108,14 @@ class MIPCGRLEncoderMGConfig(IPCGRLEncoderMGConfig):
     wandb_project: Optional[str] = f"{PREFIX}train_mipcgrl_encoder"
     dir_prefix: str = "mipcgrl-enc-mg-"
 
-    # ── Classifier 설정 ──
-    # task(reward_enum) 분류 head 의 손실 가중치. 0 이면 IPCGRL 과 동일.
+    # ── Classifier config ──
+    # task(reward_enum) text head  of  text weight. 0  text IPCGRL  and  same.
     classifier_weight: float = 1.0
-    # classifier MLP hidden / layer 수 (output_size 는 num_classes 로 자동 결정)
+    # classifier MLP hidden / layer text (output_size   num_classes  to  automatic text)
     classifier_num_layers: int = 2
     classifier_hidden_dim: int = 128
     classifier_dropout_rate: float = 0.0
-    # 분류 클래스 수. None 이면 데이터셋의 고유 reward_enum 개수로 자동 설정.
+    # text class text. None  text dataset of  text reward_enum count to  automatic config.
     num_classes: Optional[int] = None
 
 

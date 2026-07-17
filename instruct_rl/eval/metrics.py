@@ -39,11 +39,11 @@ def run_post_eval(
         config      : EvalConfig (or subclass).
         instruct_df : Original instruct DataFrame.
         n_eps       : Number of episodes (seeds).
-        gt_levels   : (M, H, W) int — TPKL 계산용.
-        gt_images   : (M, H*ts, W*ts, 3) uint8 — ViT 계산용 dataset 렌더링 이미지.
+        gt_levels   : (M, H, W) int — TPKL compute for .
+        gt_images   : (M, H*ts, W*ts, 3) uint8 — ViT compute for  dataset rendering image.
 
     Returns:
-        EvaluationResult — 각 metric의 scores 배열.
+        EvaluationResult — each metric of  scores array.
     """
     kwargs = dict(
         instruct_df=instruct_df,

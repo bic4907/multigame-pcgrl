@@ -1,11 +1,11 @@
 """
 evaluator/metrics/lpips.py
 ===========================
-LPIPS (Learned Perceptual Image Patch Similarity) 지표.
+LPIPS (Learned Perceptual Image Patch Similarity) texttable.
 
-입력: LevelBundle.image — (H, W, 3) uint8 RGB 이미지
-유사도: 1 - LPIPS_dist / max_dist  ∈ [0, 1]  (1 = 완전 동일)
-의존: lpips, torch  (pip install lpips)
+text: LevelBundle.image — (H, W, 3) uint8 RGB image
+text also : 1 - LPIPS_dist / max_dist  ∈ [0, 1]  (1 = text before  same)
+ of text: lpips, torch  (pip install lpips)
 """
 from __future__ import annotations
 
@@ -18,26 +18,26 @@ from .base import BaseMetricEvaluator, LevelBundle
 
 class LPIPSMetric(BaseMetricEvaluator):
     """
-    Learned Perceptual Image Patch Similarity (LPIPS) 지표.
+    Learned Perceptual Image Patch Similarity (LPIPS) texttable.
 
-    AlexNet/VGG 퍼셉추얼 거리를 정규화하여 유사도로 반환한다:
+    AlexNet/VGG text distance  normalizetext text also  to  returntext:
         similarity = 1 - dist / max_dist  ∈ [0, 1]
 
     Parameters
     ----------
     net : {"alex", "vgg", "squeeze"}
-        LPIPS 백본 네트워크.  "alex" 가 가장 빠르고 권장됨.
+        LPIPS text network.  "alex"    text text recommendedtext.
     """
 
     def __init__(self, net: str = "alex") -> None:
         import importlib
-        # 파일명 충돌 방지: 외부 lpips 패키지를 직접 지정해서 로드
+        # filetext text text: text lpips text  direct text load
         _lpips_lib = importlib.import_module("lpips")
         self.net = net
         self._loss_fn = _lpips_lib.LPIPS(net=net, verbose=False)
         self._loss_fn.eval()
 
-    # ── BaseMetricEvaluator 구현 ──────────────────────────────────────────────
+    # ── BaseMetricEvaluator text ──────────────────────────────────────────────
 
     @property
     def name(self) -> str:
@@ -45,8 +45,8 @@ class LPIPSMetric(BaseMetricEvaluator):
 
     def similarity_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
-        (N, N) 유사도 행렬: sim = 1 − dist / max_dist.
-        대각선 = 1.0.
+        (N, N) text also  rowtext: sim = 1 − dist / max_dist.
+        texteachtext = 1.0.
         """
         dist_mat = self._distance_matrix(bundles)
         max_d    = dist_mat.max()
@@ -54,13 +54,13 @@ class LPIPSMetric(BaseMetricEvaluator):
         np.fill_diagonal(sim, 1.0)
         return sim
 
-    # ── 추가 공개 API ─────────────────────────────────────────────────────────
+    # ── text  public API ─────────────────────────────────────────────────────────
 
     def distance_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
-        """(N, N) pairwise LPIPS 거리 행렬 (낮을수록 유사)."""
+        """(N, N) pairwise LPIPS distance rowtext (text text text)."""
         return self._distance_matrix(bundles)
 
-    # ── 내부 유틸 ─────────────────────────────────────────────────────────────
+    # ── internal utility ─────────────────────────────────────────────────────────────
 
     def _to_tensor(self, img: np.ndarray):
         """(H, W, 3) uint8 → (1, 3, H, W) float32 tensor in [-1, 1]."""

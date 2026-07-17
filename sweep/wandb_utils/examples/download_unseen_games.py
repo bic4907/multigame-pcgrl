@@ -1,11 +1,11 @@
-"""sweep_unseen_games 프로젝트에서 table/results 를 CSV 로 다운로드하는 예시.
+"""sweep_unseen_games text to text in  table/results   CSV  to  downloadtext  text.
 
-사용법:
+Usage:
     python -m sweep.wandb_utils.examples.download_unseen_games
 
-결과물:
-    outputs/sweep_unseen_games/<run_id>/results.csv   — 테이블 데이터 + config 컬럼
-    outputs/sweep_unseen_games/<run_id>/results.json   — 원본 table JSON
+resultwater:
+    outputs/sweep_unseen_games/<run_id>/results.csv   — text text data + config text
+    outputs/sweep_unseen_games/<run_id>/results.json   — text table JSON
     outputs/sweep_unseen_games/<run_id>/config.json    — run config
 """
 
@@ -14,12 +14,12 @@ from sweep.wandb_utils import WandbTableDownloader
 
 def main():
     downloader = WandbTableDownloader(
-        output_dir="outputs",          # 다운로드 결과 저장 경로
-        target_files=["results"],      # W&B 에서 받을 테이블 이름 (media/table/results)
-        num_workers=4,                 # 병렬 워커 수
+        output_dir="outputs",          # download result save path
+        target_files=["results"],      # W&B  in  text  text text name (media/table/results)
+        num_workers=4,                 # parallel text text
     )
 
-    # sweep_unseen_games 프로젝트의 모든 run 다운로드
+    # sweep_unseen_games text to text of  text run download
     downloader.download("sweep_unseen_games")
 
 

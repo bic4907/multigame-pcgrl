@@ -157,11 +157,11 @@ def make_train(config: RewardConfig):
 
                     train_y_gt.extend(y_batch), train_y_pd.extend(predictions), train_reward_id.extend(reward_id)
 
-                    pbar.update(1)  # Progress bar 업데이트
+                    pbar.update(1)  # Progress bar update
                     pbar.set_postfix({"Train Loss": train_losses['total'] / i, "Val Loss": val_losses['total']})
                     i += 1
 
-                train_losses = {k: float(v / n_train_batch) for k, v in train_losses.items()}  # Training Loss 평균 계산
+                train_losses = {k: float(v / n_train_batch) for k, v in train_losses.items()}  # Training Loss mean compute
 
                 # Validation Loop
                 i = 1
@@ -185,11 +185,11 @@ def make_train(config: RewardConfig):
 
                     val_y_gt.extend(y_batch), val_y_pd.extend(predictions), val_reward_id.extend(reward_id)
 
-                    pbar.update(1)  # Progress bar 업데이트
+                    pbar.update(1)  # Progress bar update
                     pbar.set_postfix({"Train Loss": train_losses['total'], "Val Loss": val_losses['total'] / i})
                     i += 1
 
-                val_losses = {k: float(v / n_test_batch) for k, v in val_losses.items()}  # Validation Loss 평균 계산
+                val_losses = {k: float(v / n_test_batch) for k, v in val_losses.items()}  # Validation Loss mean compute
 
             if (epoch + 1) % config.ckpt_freq == 0:
                 save_encoder_checkpoint(config, train_state, step=epoch + 1)
@@ -232,7 +232,7 @@ def make_train(config: RewardConfig):
             min_train_len = min(len(train_reward_ids), len(train_y_gt_array))
             min_val_len = min(len(val_reward_ids), len(val_y_gt_array))
 
-            # Pandas DataFrame 생성
+            # Pandas DataFrame create
             df_train = pd.DataFrame({
                 "epoch": epoch,
                 "reward_id": [train_reward_ids[j] for j in rand_train_idx if j < min_train_len],

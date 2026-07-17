@@ -38,7 +38,7 @@ from encoder.utils.visualize import create_clip_embedding_figures
 
 from transformers import CLIPProcessor, FlaxCLIPModel
 
-# Seen/Unseen split helpers (train_clip_decoder.py 에서 재사용)
+# Seen/Unseen split helpers (train_clip_decoder.py  in  reuse)
 from train_clip_decoder import (
     parse_unseen_game_names,
     split_dataset_by_game,
@@ -105,12 +105,12 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
         )
 
         text_embed = outputs["text_embed"]
-        
+
         text_state_temperature = outputs["text_state_temperature"]
 
         state_embed = outputs.get("state_embed", jnp.zeros_like(text_embed))
         state_mask = jnp.any(state_embed != 0).astype(jnp.float32)    # 0.0 or 1.0
-        
+
         embed_pairs = {
             "state2text": (state_embed, text_embed, state_mask, text_state_temperature),
         }
@@ -147,7 +147,7 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch, rng_key:jax
         metrics["total_loss"] = loss
 
         return loss, metrics
-    
+
     (loss, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(train_state.params)
     train_state = jax.lax.cond(
         is_train,
@@ -187,10 +187,10 @@ def make_train(config: CLIPTrainConfig):
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
         class_id2reward_cond = dataset_builder.get_class_id2reward_cond()
 
-        # ── Seen/Unseen 게임 분리 (unseen_games 가 지정된 경우) ──────────────
-        # CLIPDecoderTrainConfig 와 동일한 split 로직을 적용하여 mgpcgrl 과
-        # 동일한 ckpt 이름/구조를 갖도록 한다. vipcgrl 은 디코더 없이 contrastive
-        # 학습만 수행하지만, encoder 입장에서의 seen/unseen 분포는 동일하게 통제된다.
+        # ── Seen/Unseen game separate (unseen_games   text text) ──────────────
+        # CLIPDecoderTrainConfig  and  sametext split  to text  applytext mgpcgrl  and
+        # sametext ckpt name/structure  text also text text. vipcgrl   text text  contrastive
+        # trainingtext textrowtext, encoder text in  of  seen/unseen distribution  sametext text.
         unseen_games_str = getattr(config, "unseen_games", None)
         if unseen_games_str:
             full_dataset = dataset_builder.get_dataset()
@@ -211,7 +211,7 @@ def make_train(config: CLIPTrainConfig):
             logger.info("  Total samples: %d", len(full_dataset.class_ids))
             logger.info("=" * 70)
 
-            # ── dataset_setting.json 저장 (RL 학습 시 자동 주입에 사용됨) ──
+            # ── dataset_setting.json save (RL training text automatic inject in  text for text) ──
             os.makedirs(config.exp_dir, exist_ok=True)
             dataset_setting = {
                 "all_games":    unique_games,
@@ -225,7 +225,7 @@ def make_train(config: CLIPTrainConfig):
                 json.dump(dataset_setting, f, indent=2, ensure_ascii=False)
             logger.info("Dataset setting saved: %s", dataset_setting_path)
 
-            # ── 게임별 train pool / test 분할 후 ratio 적용 ──
+            # ── gametext train pool / test split  after  ratio apply ──
             game_train_pool, game_test, _ = split_dataset_by_game(
                 full_dataset,
                 unseen_game_set,
@@ -258,7 +258,7 @@ def make_train(config: CLIPTrainConfig):
             logger.info("  Train set = %d samples %s", len(train_indices), _game_counts)
             logger.info("  Test  set = %d samples", len(test_indices))
 
-        # dry-run: 데이터 개수 제한
+        # dry-run: data count text
         if config.max_samples is not None:
             n = config.max_samples
             n_train_orig = len(train_clip_dataset.class_ids)
@@ -319,25 +319,25 @@ def make_train(config: CLIPTrainConfig):
             }
             val_losses = deepcopy(train_losses)
             val_metrics = deepcopy(train_metrics)
-            
+
             i = 1
 
             with tqdm(total=n_train_batch + n_test_batch, desc=f"Epoch {epoch + 1}") as pbar:
                 rng_key, subkey = jax.random.split(rng_key)
-                
+
                 # Training Loop
                 for clip_batch_data in create_clip_batch(train_clip_dataset, config.batch_size, rng_key=subkey):
                     class_ids = clip_batch_data.class_ids
                     clip_batch_data = jax.device_put(clip_batch_data)
-                    
+
                     train_state, loss, metrics, rng_key = train_step(
-                        train_state, 
+                        train_state,
                         clip_batch_data,
                         rng_key=subkey,
                         is_train=True,
                         mode=config.encoder.mode
                     )
-                    
+
                     state_embed = metrics["state_embed"]
                     text_embed = metrics["text_embed"]
 
@@ -347,7 +347,7 @@ def make_train(config: CLIPTrainConfig):
                     train_losses["total"] += loss
                     train_losses["state2text"] += metrics["state2text_loss"]
                     train_losses["text2state"] += metrics["text2state_loss"]
-                    
+
                     train_metrics["state2text_correct_pr"] += metrics["state2text_correct_pr"]
                     train_metrics["text2state_correct_pr"] += metrics["text2state_correct_pr"]
                     train_metrics["state2text_top1_accuracy"] += metrics["state2text_top1_accuracy"]
@@ -361,16 +361,16 @@ def make_train(config: CLIPTrainConfig):
 
                 train_losses = {k: float(v / n_train_batch) for k, v in train_losses.items()}  # calculate average Training Loss
                 train_metrics = {k: float(v / n_train_batch) for k, v in train_metrics.items()}  # calculate average Training Loss
-                
+
                 # Validation Loop
                 i = 1
 
                 for clip_batch_data in create_clip_batch(test_clip_dataset, config.batch_size, rng_key=subkey):
                     class_ids = clip_batch_data.class_ids
                     clip_batch_data = jax.device_put(clip_batch_data)
-                    
+
                     _, loss, metrics, rng_key = train_step(
-                        train_state, 
+                        train_state,
                         clip_batch_data,
                         is_train=False,
                         rng_key=subkey,
@@ -386,7 +386,7 @@ def make_train(config: CLIPTrainConfig):
                     val_losses["total"] += loss
                     val_losses["state2text"] += metrics["state2text_loss"]
                     val_losses["text2state"] += metrics["text2state_loss"]
-                    
+
                     val_metrics["state2text_correct_pr"] += metrics["state2text_correct_pr"]
                     val_metrics["text2state_correct_pr"] += metrics["text2state_correct_pr"]
                     val_metrics["state2text_top1_accuracy"] += metrics["state2text_top1_accuracy"]
@@ -401,7 +401,7 @@ def make_train(config: CLIPTrainConfig):
 
             if (epoch + 1) % config.ckpt_freq == 0:
                 save_checkpoint(config, train_state, step=epoch + 1)
- 
+
             if (epoch + 1) % config.embed_visualize_freq == 0:
 
                 task_train_embed_paths = create_clip_embedding_figures(train_embed_queue, class_id2reward_cond, epoch, config, postfix='_train')
@@ -416,8 +416,8 @@ def make_train(config: CLIPTrainConfig):
 
             if wandb.run is not None:
                 wandb.log({
-                    "total/train_loss": train_losses["total"], 
-                    
+                    "total/train_loss": train_losses["total"],
+
                     "train(text-state)/state-text_temperature": train_metrics["text_state_temperature"],
                     "train(text-state)/state2text_loss": train_losses["state2text"],
                     "train(text-state)/text2state_loss": train_losses["text2state"],
@@ -425,16 +425,16 @@ def make_train(config: CLIPTrainConfig):
                     "train(text-state)/text2state_correct_pr": train_metrics["text2state_correct_pr"],
                     "train(text-state)/state2text_top1_accuracy": train_metrics["state2text_top1_accuracy"],
                     "train(text-state)/text2state_top1_accuracy": train_metrics["text2state_top1_accuracy"],
-                    
+
                     "total/val_loss": val_losses["total"],
-                    
+
                     "val(text-state)/state2text_loss": val_losses["state2text"],
                     "val(text-state)/text2state_loss": val_losses["text2state"],
                     "val(text-state)/state2text_correct_pr": val_metrics["state2text_correct_pr"],
                     "val(text-state)/text2state_correct_pr": val_metrics["text2state_correct_pr"],
                     "val(text-state)/state2text_top1_accuracy": val_metrics["state2text_top1_accuracy"],
                     "val(text-state)/text2state_top1_accuracy": val_metrics["text2state_top1_accuracy"],
-                    
+
                     "total/epoch": epoch,
                     "total/lr": lr_schedular(train_state.step),
                     **aux_dict

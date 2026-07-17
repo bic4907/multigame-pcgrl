@@ -1,10 +1,10 @@
 """
-ann.json 파일의 instruction_uni를 읽어 표현을 치환한 결과를 instruction_raw에 쓴다.
-instruction_uni는 변경하지 않는다.
+ann.json file of  instruction_uni  text tabletext  text result  instruction_raw in  text.
+instruction_uni  text text text.
 
-term_dst.json의 dst 값을 채운 뒤 실행하면 된다.
+term_dst.json of  dst text  text text Usagetext text.
 
-사용법:
+Usage:
     python -m dataset.multigame.scripts.replace_instruction_terms
     python -m dataset.multigame.scripts.replace_instruction_terms --dry-run
     python -m dataset.multigame.scripts.replace_instruction_terms --enums 2 3
@@ -18,10 +18,10 @@ import re
 import shutil
 from pathlib import Path
 
-# ── 찾을 표현 (src) 고정 정의 ────────────────────────────────────────────────────
-# 각 enum마다 longer match(tile 포함)를 먼저, shorter(단독)를 나중에 치환한다.
-# 복수형(s)도 함께 매칭한다.
-# 모든 패턴이 동일한 dst로 치환된다.
+# ── text  tabletext (src) fixed text of  ────────────────────────────────────────────────────
+# each enumtext longer match(tile text)  text, shorter(text)  text during  in  text.
+# text(s) also  text text.
+# text text  sametext dst to  text.
 
 TERM_PATTERNS: dict[int, list[str]] = {
     2: [r"interactive tiles?", r"interactives?"],   # longer first
@@ -29,14 +29,14 @@ TERM_PATTERNS: dict[int, list[str]] = {
     4: [r"collectable tiles?", r"collectables?"],
 }
 
-# ── dst 파일 기본 경로 ────────────────────────────────────────────────────────────
+# ── dst file default path ────────────────────────────────────────────────────────────
 DEFAULT_DST_FILE = Path(__file__).parent / "term_dst.json"
 
 ANN_DIR = Path("dataset/multigame/cache/artifacts")
 
 
 def load_dst(dst_file: Path) -> dict[str, dict[int, str]]:
-    """term_dst.json 로드. { game: { enum(int): dst(str) } }"""
+    """term_dst.json load. { game: { enum(int): dst(str) } }"""
     with dst_file.open(encoding="utf-8") as f:
         raw = json.load(f)
     return {
@@ -46,7 +46,7 @@ def load_dst(dst_file: Path) -> dict[str, dict[int, str]]:
 
 
 def _pluralize(word: str) -> str:
-    """영어 복수형 규칙 적용."""
+    """text text rule apply."""
     w = word.lower()
     if w.endswith(("s", "ss", "sh", "ch", "x", "z")):
         return word + "es"
@@ -60,9 +60,9 @@ def _pluralize(word: str) -> str:
 
 
 def _replace_pattern(text: str, pattern: str, dst: str) -> str:
-    """단어 경계를 지키면서 pattern → dst 치환.
-    - 매칭된 단어가 s로 끝나면 dst를 복수형으로 변환 (collectables → items)
-    - 매칭 첫 글자 대소문자 보존
+    """text text  text pattern → dst text.
+    - text text  s to  text dst  text as  convert (collectables → items)
+    - text text text textcharacter preserve
     """
     compiled = re.compile(r"\b" + pattern + r"\b", re.IGNORECASE)
 
@@ -92,7 +92,7 @@ def replace_in_text(
     return text
 
 
-COPY_ENUMS = {0, 1}   # instruction_uni를 instruction_raw에 그대로 복사
+COPY_ENUMS = {0, 1}   # instruction_uni  instruction_raw in  as-is copy
 
 
 def process_file(
@@ -107,7 +107,7 @@ def process_file(
 
     result_text = original_text
     changed = 0
-    pos = 0  # 순서대로 교체하기 위한 검색 시작 위치
+    pos = 0  # ordertext to  text abovetext text start abovetext
 
     for ann in data["annotations"]:
         enum = int(ann["reward_enum"])
@@ -119,7 +119,7 @@ def process_file(
             uni = ann.get("instruction_uni") or ""
             new_raw = replace_in_text(uni, game, enum, dst_map)
             if new_raw == uni:
-                # 치환 없음 — instruction_raw 위치만 pos 전진
+                # text none — instruction_raw abovetext pos  before text
                 old_field = '"instruction_raw":' + json.dumps(old_raw, ensure_ascii=False)
                 idx = result_text.find(old_field, pos)
                 if idx >= 0:
@@ -146,22 +146,22 @@ def process_file(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="instruction_uni 표현 치환")
+    parser = argparse.ArgumentParser(description="instruction_uni tabletext text")
     parser.add_argument("--ann-dir", type=Path, default=ANN_DIR)
     parser.add_argument("--dst-file", type=Path, default=DEFAULT_DST_FILE,
-                        help=f"dst 정의 JSON 파일 (기본: {DEFAULT_DST_FILE})")
+                        help=f"dst text of  JSON file (default: {DEFAULT_DST_FILE})")
     parser.add_argument("--enums", nargs="*", type=int, default=[2, 3, 4],
-                        help="치환 대상 enum (기본: 2 3 4). enum 0,1은 항상 uni→raw 복사)")
+                        help="text target enum (default: 2 3 4). enum 0,1  always uni→raw copy)")
     parser.add_argument("--games", nargs="*", default=None)
     parser.add_argument("--dry-run", action="store_true",
-                        help="실제 파일 수정 없이 변경 내역만 출력")
+                        help="text file text text  text  inside text text")
     args = parser.parse_args()
 
     enums = set(args.enums)
     dst_map = load_dst(args.dst_file)
-    print(f"dst 파일: {args.dst_file.resolve()}")
+    print(f"dst file: {args.dst_file.resolve()}")
 
-    # dst가 비어있는 항목 경고
+    # dst  textwith text warning
     empty_dst = [
         f"{g} / enum {e}"
         for g, enum_map in dst_map.items()
@@ -170,7 +170,7 @@ def main() -> None:
         if e in enums and not dst
     ]
     if empty_dst:
-        print("[WARN] dst가 비어있어 건너뜀:")
+        print("[WARN] dst  text text:")
         for item in empty_dst:
             print(f"  {item}")
 
@@ -178,7 +178,7 @@ def main() -> None:
     if args.games:
         ann_files = [p for p in ann_files if p.parent.name in args.games]
 
-    print(f"\n{'[DRY RUN] ' if args.dry_run else ''}처리 대상: {len(ann_files)}개 파일  enums={sorted(enums)}\n")
+    print(f"\n{'[DRY RUN] ' if args.dry_run else ''}process target: {len(ann_files)}text file  enums={sorted(enums)}\n")
 
     total_changed = 0
     for ann_path in ann_files:
@@ -188,9 +188,9 @@ def main() -> None:
         print(f"  [{game}]  {status}  ({result['changed']:,} / {result['total']:,} annotations)")
         total_changed += result["changed"]
 
-    print(f"\n총 변경: {total_changed:,}개 annotation")
+    print(f"\ntotal text: {total_changed:,}text annotation")
     if args.dry_run:
-        print("(dry-run: 파일은 수정되지 않았습니다)")
+        print("(dry-run: file  text text)")
 
 
 if __name__ == "__main__":

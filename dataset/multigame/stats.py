@@ -1,21 +1,21 @@
 """
 dataset/multigame/stats.py
 ===========================
-MultiGameDataset 통계 유틸리티.
+MultiGameDataset text utility.
 
-데이터셋을 열고(학습 없이) 각 게임별 레벨 통계를 산출한다.
+dataset  columntext(training text ) each gametext level text  text.
 
 Usage
 -----
     from dataset.multigame.stats import compute_dataset_stats, print_dataset_stats
 
-    # MultiGameDataset 인스턴스로부터 통계 계산
+    # MultiGameDataset text to text text compute
     from dataset.multigame import MultiGameDataset
     ds = MultiGameDataset()
     stats = compute_dataset_stats(ds)
     print_dataset_stats(stats)
 
-    # CLI 실행
+    # CLI Usage
     python -m dataset.multigame.stats
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ from .tile_utils import (
 
 
 def compute_sample_stats(sample: GameSample) -> Dict[str, Any]:
-    """단일 GameSample에 대한 기본 통계를 반환한다.
+    """text GameSample in  text default text  returntext.
 
     Returns
     -------
@@ -42,10 +42,10 @@ def compute_sample_stats(sample: GameSample) -> Dict[str, Any]:
         "height": int,
         "width": int,
         "n_tiles": int,
-        "unique_raw_tiles": int,             # 원본 tile id 종류 수
-        "category_counts": Dict[str, int],   # unified 카테고리별 타일 수
+        "unique_raw_tiles": int,             # text tile id text text
+        "category_counts": Dict[str, int],   # unified text tile text
         "has_instruction": bool,
-        "instruction_len": int | None,        # 단어 수 (None if no instruction)
+        "instruction_len": int | None,        # text text (None if no instruction)
         "has_reward_annotation": bool,
     }
     """
@@ -53,10 +53,10 @@ def compute_sample_stats(sample: GameSample) -> Dict[str, Any]:
     h, w = arr.shape[:2]
     n_tiles = h * w
 
-    # 원본 타일 고유값 수
+    # text tile text text
     unique_raw = len(np.unique(arr))
 
-    # unified 카테고리 분포 (count)
+    # unified text distribution (count)
     unified = to_unified(arr, sample.game, warn_unmapped=False)
     cat_counts = category_distribution(unified, normalize=False)
 
@@ -83,7 +83,7 @@ def compute_game_stats(
     samples: List[GameSample],
     game: str,
 ) -> Dict[str, Any]:
-    """하나의 게임에 속하는 샘플 리스트로부터 집계 통계를 산출한다.
+    """text of  game in  text  sample text to text text text  text.
 
     Returns
     -------
@@ -203,29 +203,29 @@ def compute_game_stats(
 
 
 def compute_dataset_stats(dataset) -> Dict[str, Any]:
-    """MultiGameDataset 인스턴스로부터 전체 + 게임별 통계를 산출한다.
+    """MultiGameDataset text to text all + gametext text  text.
 
     Parameters
     ----------
-    dataset : MultiGameDataset (또는 List[GameSample])
+    dataset : MultiGameDataset (text  List[GameSample])
 
     Returns
     -------
     {
         "total_samples": int,
         "games": List[str],
-        "per_game": { game_name: <compute_game_stats 결과> },
+        "per_game": { game_name: <compute_game_stats result> },
         "overall_category_distribution": { <category>: mean_ratio },
     }
     """
-    # dataset이 리스트인 경우 직접 사용
+    # dataset  text text direct text for
     if isinstance(dataset, list):
         samples = dataset
     else:
-        # MultiGameDataset: _samples 를 raw로 직접 접근
+        # MultiGameDataset: _samples   raw to  direct text
         samples = list(dataset._samples)
 
-    # 게임별 그룹핑
+    # gametext text
     game_groups: Dict[str, List[GameSample]] = defaultdict(list)
     for s in samples:
         game_groups[s.game].append(s)
@@ -234,7 +234,7 @@ def compute_dataset_stats(dataset) -> Dict[str, Any]:
     for game in sorted(game_groups.keys()):
         per_game[game] = compute_game_stats(game_groups[game], game)
 
-    # 전체 카테고리 평균 비율
+    # all text mean ratio
     cat_names = list(UNIFIED_CATEGORIES.values())
     overall_cat: Dict[str, float] = {}
     total = len(samples)
@@ -258,7 +258,7 @@ def compute_dataset_stats(dataset) -> Dict[str, Any]:
 
 
 def print_dataset_stats(stats: Dict[str, Any]) -> None:
-    """compute_dataset_stats 결과를 사람이 읽기 좋게 출력한다."""
+    """compute_dataset_stats result  text  read text text."""
     print("=" * 72)
     print(f"  MultiGameDataset Statistics  (total: {stats['total_samples']} samples)")
     print(f"  Games: {', '.join(stats['games'])}")
@@ -323,7 +323,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     parser = argparse.ArgumentParser(description="Compute MultiGameDataset statistics")
-    parser.add_argument("--json", action="store_true", help="JSON 형식으로 출력")
+    parser.add_argument("--json", action="store_true", help="JSON text as  text")
     parser.add_argument("--include-dungeon", action="store_true", default=True)
     parser.add_argument("--include-pokemon", action="store_true", default=True)
     parser.add_argument("--include-sokoban", action="store_true", default=True)
@@ -344,14 +344,14 @@ if __name__ == "__main__":
         include_sokoban=not args.no_sokoban,
         include_doom=not args.no_doom,
         include_zelda=not args.no_zelda,
-        use_tile_mapping=False,  # raw 상태에서 통계 계산
+        use_tile_mapping=False,  # raw text in  text compute
     )
     print(f"Loaded: {ds}")
 
     stats = compute_dataset_stats(ds)
 
     if args.json:
-        # numpy 타입 직렬화를 위한 변환
+        # numpy text text  abovetext convert
         def _convert(obj):
             if isinstance(obj, (np.integer,)):
                 return int(obj)

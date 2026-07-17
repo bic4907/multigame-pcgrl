@@ -2,13 +2,13 @@
 """
 dataset/reward_annotations/resubmit_keys.py
 ============================================
-특정 맵 키에 대해서만 배치를 제출한다 (실패한 샘플 재처리용).
+text map text in  text batch  text (failuretext sample textprocess for ).
 
-TARGET_KEYS 배열에 재처리할 맵 키(= ann.json row["key"])를 넣고 실행하면 된다.
+TARGET_KEYS array in  textprocesstext map text(= ann.json row["key"])  text Usagetext text.
 
 Usage:
-    python dataset/reward_annotations/resubmit_keys.py              # 제출 + 완료 대기 + ann.json 업데이트
-    python dataset/reward_annotations/resubmit_keys.py --dry-run    # JSONL 생성만, 제출 X
+    python dataset/reward_annotations/resubmit_keys.py              # text + finish text + ann.json update
+    python dataset/reward_annotations/resubmit_keys.py --dry-run    # JSONL createtext, text X
     python dataset/reward_annotations/resubmit_keys.py --retrieve BATCH_ID
 """
 from __future__ import annotations
@@ -52,13 +52,13 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 재제출할 맵 키 목록 — 여기에 원하는 맵 키를 넣어라
-# 맵 키 = ann.json 각 row 의 "key" 필드
-#   doom    예시: "dm000000", "dm000123"
-#   zelda   예시: "zl000000"
-#   sokoban 예시: "sk000000"
-#   pokemon 예시: "pk000000"
-#   dungeon 예시: "dg000000"
+# text map text list — text in  text  map text  text
+# map text = ann.json each row  of  "key" text
+#   doom    text: "dm000000", "dm000123"
+#   zelda   text: "zl000000"
+#   sokoban text: "sk000000"
+#   pokemon text: "pk000000"
+#   dungeon text: "dg000000"
 # ─────────────────────────────────────────────────────────────────────────────
 TARGET_KEYS: list[str] = [
     "pk001058",
@@ -67,7 +67,7 @@ TARGET_KEYS: list[str] = [
 # ─────────────────────────────────────────────────────────────────────────────
 
 _ALL_GAMES = ["doom", "zelda", "sokoban", "pokemon", "dungeon"]
-_POLL_INTERVAL = 10  # 배치 완료 확인 주기 (초)
+_POLL_INTERVAL = 10  # batch finish check text (seconds)
 
 
 def build_jsonl_for_keys(
@@ -76,7 +76,7 @@ def build_jsonl_for_keys(
     cache_by_game: dict,
     system_prompt: str,
 ) -> tuple[Path, list[str]] | tuple[None, None]:
-    """TARGET_KEYS에 해당하는 행만 골라 JSONL을 생성한다."""
+    """TARGET_KEYS in  text  rowtext text JSONL  createtext."""
     key_set = set(target_keys)
     lines: list[str] = []
     matched_games: set[str] = set()
@@ -95,12 +95,12 @@ def build_jsonl_for_keys(
                 continue
             array = sid_map.get(row["source_id"])
             if array is None:
-                logger.warning(f"array 없음: game={game} source_id={row['source_id']}")
+                logger.warning(f"array none: game={game} source_id={row['source_id']}")
                 continue
 
             feature_name = row["feature_name"]
             if CUSTOM_THRESHOLDS.get(f"{game}_{feature_name}") is None:
-                logger.info(f"threshold=None 건너뜀: {row['key']}")
+                logger.info(f"threshold=None text: {row['key']}")
                 continue
 
             reward_enum = int(row["reward_enum"])
@@ -120,41 +120,41 @@ def build_jsonl_for_keys(
             )
             lines.append(json.dumps(req, ensure_ascii=False))
             matched_games.add(game)
-            logger.info(f"  추가: {row['key']}  game={game}  enum={reward_enum}  feature={feature_name}")
+            logger.info(f"  text : {row['key']}  game={game}  enum={reward_enum}  feature={feature_name}")
 
     if not lines:
-        logger.warning("매칭된 키가 없습니다. TARGET_KEYS를 확인하세요.")
+        logger.warning("text text  text. TARGET_KEYS  checktext.")
         return None, None
 
     _BATCH_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out_path = _BATCH_DIR / f"resubmit_{ts}.jsonl"
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    logger.info(f"JSONL 생성: {out_path.name}  ({len(lines)} requests)")
+    logger.info(f"JSONL create: {out_path.name}  ({len(lines)} requests)")
     return out_path, list(matched_games)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="특정 맵 키만 배치 재제출")
+    parser = argparse.ArgumentParser(description="text map text batch text")
     parser.add_argument("--dry-run", action="store_true",
-                        help="JSONL 생성만 하고 배치 제출은 하지 않음")
+                        help="JSONL createtext text batch text  text text")
     parser.add_argument("--retrieve", metavar="BATCH_ID",
-                        help="완료된 배치 결과를 조회하여 ann.json에 반영")
+                        help="finishtext batch result  text ann.json in  apply")
     args = parser.parse_args()
 
     # ── retrieve ──
     if args.retrieve:
-        logger.info(f"결과 조회: {args.retrieve}")
+        logger.info(f"result text: {args.retrieve}")
         results = retrieve_batch_results(args.retrieve)
         n = update_caches(results, _CACHE_DIR, _ALL_GAMES)
-        logger.info(f"총 {n}개 업데이트 완료")
+        logger.info(f"total {n}text update finish")
         return
 
     if not TARGET_KEYS:
-        logger.error("TARGET_KEYS가 비어 있습니다. resubmit_keys.py 상단의 TARGET_KEYS에 키를 추가하세요.")
+        logger.error("TARGET_KEYS  text text. resubmit_keys.py top of  TARGET_KEYS in  text  text text.")
         sys.exit(1)
 
-    logger.info(f"대상 맵 키: {len(TARGET_KEYS)}개")
+    logger.info(f"target map text: {len(TARGET_KEYS)}text")
     system_prompt = load_system_prompt()
     cache_by_game = load_cache_by_game(_CACHE_DIR)
 
@@ -165,14 +165,14 @@ def main() -> None:
         sys.exit(1)
 
     if args.dry_run:
-        logger.info("--dry-run 모드: 배치 제출 건너뜀")
+        logger.info("--dry-run mode: batch text text")
         return
 
-    # ── 제출 + 완료 대기 + ann.json 업데이트 ──
+    # ── text + finish text + ann.json update ──
     n_requests = sum(1 for _ in jsonl_path.open(encoding="utf-8"))
     batch_id = submit_batch(jsonl_path, matched_games or _ALL_GAMES, [], n_requests)
-    logger.info(f"배치 제출 완료: {batch_id}")
-    logger.info(f"완료 대기 중 (interval={_POLL_INTERVAL}s) …")
+    logger.info(f"batch text finish: {batch_id}")
+    logger.info(f"finish text  during  (interval={_POLL_INTERVAL}s) …")
 
     start_time = time.time()
     while True:
@@ -190,12 +190,12 @@ def main() -> None:
             print()
             results = retrieve_batch_results(batch_id)
             n = update_caches(results, _CACHE_DIR, _ALL_GAMES)
-            logger.info(f"총 {n}개 업데이트 완료")
+            logger.info(f"total {n}text update finish")
             break
         elif status in ("failed", "expired", "cancelled"):
             print()
-            logger.error(f"배치 실패/만료/취소: {status}")
-            logger.info(f"수동 조회: python resubmit_keys.py --retrieve {batch_id}")
+            logger.error(f"batch failure/text/text: {status}")
+            logger.info(f"text text: python resubmit_keys.py --retrieve {batch_id}")
             sys.exit(1)
 
 

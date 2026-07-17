@@ -1,12 +1,12 @@
 """
 train_ipcgrl.py
 ================
-IPCGRL (Instructed PCGRL) — BERT 임베딩 → MLP 인코더를 거친 피처를 입력으로 사용.
+IPCGRL (Instructed PCGRL) — BERT embedding → MLP text  text text  text as  text for .
 
-기존 train.py 의 `encoder.model='mlp'` 모드에 해당하며,
-dataset 기반 파이프라인(MultiGameDataset)으로 동작한다.
+existing train.py  of  `encoder.model='mlp'` mode in  text,
+dataset based pipeline(MultiGameDataset) as  text.
 
-실행:
+Usage:
     python -m train_ipcgrl [overrides]
 """
 import json
@@ -24,10 +24,10 @@ suppress_jax_debug_logs()
 logger = logging.getLogger(__name__)
 
 
-# ── IPCGRL obs 주입: embedding → nlp_obs ─────────────────────────────────────
+# ── IPCGRL obs inject: embedding → nlp_obs ─────────────────────────────────────
 
 def inject_ipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """BERT 임베딩을 nlp_obs 에 주입. 이후 네트워크 내부의 MLP 인코더가 처리."""
+    """BERT embedding  nlp_obs  in  inject.   after  network internal of  MLP text  process."""
     return last_obs.replace(nlp_obs=instruct_sample.embedding)
 
 
@@ -35,14 +35,14 @@ def inject_ipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
 
 @hydra.main(version_base=None, config_path="./conf", config_name="train_ipcgrl")
 def main(config: IPCGRLConfig):
-    # ── MGPCGRL과 동일한 로직: encoder의 dataset_setting.json에서 seen/unseen 게임 정보 주입 ──
+    # ── MGPCGRL and  sametext  to text: encoder of  dataset_setting.json in  seen/unseen game info inject ──
     if config.encoder.ckpt_dir and config.encoder.ckpt_name:
         dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
         if os.path.exists(dataset_setting_path):
             with open(dataset_setting_path, "r") as f:
                 dataset_setting = json.load(f)
 
-            # ── seen_ratio 주입: encoder 학습 때 쓴 seen 게임 데이터 비율을 그대로 사용 ──
+            # ── seen_ratio inject: encoder training text text seen game data ratio  as-is text for  ──
             seen_ratio = dataset_setting.get("seen_ratio", 1.0)
             if hasattr(config, "dataset_seen_ratio") and seen_ratio != config.dataset_seen_ratio:
                 logger.info(
@@ -51,7 +51,7 @@ def main(config: IPCGRLConfig):
                 )
                 config.dataset_seen_ratio = seen_ratio
 
-            # ── unseen_ratio 주입 ──
+            # ── unseen_ratio inject ──
             unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
             if hasattr(config, "dataset_unseen_ratio") and unseen_ratio != config.dataset_unseen_ratio:
                 logger.info(
@@ -60,7 +60,7 @@ def main(config: IPCGRLConfig):
                 )
                 config.dataset_unseen_ratio = unseen_ratio
 
-            # ── seen_games 주입 ──
+            # ── seen_games inject ──
             seen_games = dataset_setting.get("seen_games", [])
             unseen_games = dataset_setting.get("unseen_games", [])
             if seen_games and hasattr(config, "reward_seen_games"):

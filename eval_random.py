@@ -1,12 +1,12 @@
 """
 eval_random.py
 ==============
-완전 랜덤 정책(Pure Random Policy)으로 PCGRL 환경을 평가하는 엔트리포인트.
+text before  random text(Pure Random Policy) as  PCGRL text  evaluationtext  entry point.
 
-NN을 사용하지 않고 매 스텝마다 action space에서 uniform random sampling을 수행한다.
-(초기화된 NN policy가 아닌 진짜 random임을 주의)
+NN  text for text text text text action space in  uniform random sampling  textrowtext.
+(initializetext NN policy  text text randomtext  warning)
 
-실행:
+Usage:
     python -m eval_random [overrides]
 """
 import hydra
@@ -22,12 +22,12 @@ suppress_jax_debug_logs()
 
 @hydra.main(version_base=None, config_path="./conf", config_name="eval_random")
 def main(config: RandomEvalConfig):
-    # ── 완전 random policy 보장 ──────────────────────────────────────────────
-    # random_agent=True → runner.py에서 NN forward pass 없이
-    # action space에서 uniform random sampling 수행 (진짜 랜덤, initialized policy 아님)
+    # ── text before  random policy text ──────────────────────────────────────────────
+    # random_agent=True → runner.py in  NN forward pass text
+    # action space in  uniform random sampling textrow (text random, initialized policy text)
     config.random_agent = True
 
-    # inject_obs_fn=None: obs 변환 없이 그대로 사용 (어차피 NN 미사용이므로 무관)
+    # inject_obs_fn=None: obs convert text  as-is text for  (text NN text for  text to  text)
     main_eval_entry(config, inject_obs_fn=None)
 
 

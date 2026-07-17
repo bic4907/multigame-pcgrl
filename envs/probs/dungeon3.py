@@ -149,9 +149,9 @@ class Dungeon3Problem(Problem):
 
     @partial(jax.jit, static_argnums=(0, 3))
     def get_cont_obs(self, env_map, condition, raw_obs: bool = False) -> jnp.array:
-        """condition (5,) → observation (5,) 변환.
+        """condition (5,) → observation (5,) convert.
 
-        condition 인덱스:
+        condition index:
           0=region, 1=path_length, 2=block, 3=bat_amount, 4=bat_direction
         """
         _condition = condition[:5]
@@ -180,7 +180,7 @@ class Dungeon3Problem(Problem):
         n_bat = jnp.sum(env_map == Dungeon3Tiles.BAT)
         stats = stats.at[3].set(n_bat)
 
-        # condition[4] (bat_direction 등)도 수치로 그대로 사용
+        # condition[4] (bat_direction text) also  text to  as-is text for
         stats = stats.at[4].set(_condition[4])
 
         if raw_obs is False:

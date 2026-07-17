@@ -26,10 +26,10 @@ class TPKLEvaluator(BaseEvaluator):
 
     run(pred_levels, gt_levels, window_sizes, epsilon)
     --------------------------------------------------
-    pred_levels  : (N, H, W) int — 평가할 레벨 배열
-    gt_levels    : (M, H, W) int — GT 레벨 배열
-    window_sizes : 슬라이딩 윈도우 크기 목록  e.g. (2, 3)
-    epsilon      : Laplace smoothing 값
+    pred_levels  : (N, H, W) int — evaluationtext level array
+    gt_levels    : (M, H, W) int — GT level array
+    window_sizes : text text text also text size list  e.g. (2, 3)
+    epsilon      : Laplace smoothing text
     """
 
     def run(
@@ -43,7 +43,7 @@ class TPKLEvaluator(BaseEvaluator):
         """
         Returns
         -------
-        scores : (N,) float — 낮을수록 GT와 분포가 유사 (JSD 스타일)
+        scores : (N,) float — text text GT and  distribution  text (JSD texttile)
         """
         window_sizes = tuple(window_sizes)
         pred_levels  = np.asarray(pred_levels, dtype=np.int32)

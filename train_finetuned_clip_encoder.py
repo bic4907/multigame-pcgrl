@@ -1,18 +1,18 @@
 """
 train_finetuned_clip_encoder.py
 ================================
-HuggingFace pretrained CLIP을 사용자의 (맵 이미지, 텍스트 지시) 페어로
-파인튜닝하는 entrypoint.
+HuggingFace pretrained CLIP  text for text of  (map image, text text) text to
+text  entrypoint.
 
-- `MultiGameDataset` + `CLIPDatasetBuilder` 로 224×224 픽셀 이미지 + 토크나이즈된
-  텍스트를 구성 (기존 `train_clip.py` 와 동일한 변인 통제).
-- 인코더는 `encoder.finetuned_clip_model.get_finetuned_clip_encoder()` → trainable
-  버전의 `ContrastiveModule` (파라미터 트리 구조는 RL 쪽 `ContrastiveModule`
-  과 완전히 동일).
-- 저장된 체크포인트(`pretrained_encoders/finetuned-clip-...`)는 RL 학습 시
-  `encoder.ckpt_name=finetuned-clip-...` 로 그대로 inject 된다 (수정 없음).
+- `MultiGameDataset` + `CLIPDatasetBuilder`  to  224×224 textcell image + text text
+  text  text (existing `train_clip.py`  and  sametext text text).
+- text  `encoder.finetuned_clip_model.get_finetuned_clip_encoder()` → trainable
+  text before  of  `ContrastiveModule` (parameter text structure  RL text `ContrastiveModule`
+   and  text before text same).
+- savetext checkpoint(`pretrained_encoders/finetuned-clip-...`)  RL training text
+  `encoder.ckpt_name=finetuned-clip-...`  to  as-is inject text (text none).
 
-실행:
+Usage:
     python -m train_finetuned_clip_encoder
     python -m train_finetuned_clip_encoder game=all unseen_games=zd unseen_ratio=0.0
 """
@@ -57,11 +57,11 @@ logger = logging.getLogger(basename(__file__))
 logger.setLevel(getattr(logging, log_level, logging.INFO))
 
 
-# ── HF CLIP용 RGB pixel_values 변환 ───────────────────────────────────────────
+# ── HF CLIP for  RGB pixel_values convert ───────────────────────────────────────────
 #
-# CLIPDatasetBuilder 가 생성하는 pixel_values 는 cnnclip 용 (B, 16, 16, C_onehot+2)
-# 포맷이지만 HuggingFace CLIP 은 (B, 224, 224, 3) RGB 입력을 요구한다.
-# → one-hot 채널에서 raw tile enum 을 복원 → 타일 렌더링 → 224×224 정규화.
+# CLIPDatasetBuilder   createtext  pixel_values   cnnclip  for  (B, 16, 16, C_onehot+2)
+# text text HuggingFace CLIP   (B, 224, 224, 3) RGB text  text.
+# → one-hot text in  raw tile enum   text → tile rendering → 224×224 normalize.
 
 def _render_rgb_pixel_values(pixel_values_5ch: np.ndarray,
                              num_tile_classes: int = 3) -> np.ndarray:
@@ -76,10 +76,10 @@ def _render_rgb_pixel_values(pixel_values_5ch: np.ndarray,
 def _replace_pixel_values_with_rgb(dataset: CLIPDataset,
                                    num_tile_classes: int = 3,
                                    chunk_size: int = 256) -> CLIPDataset:
-    """CLIPDataset 의 pixel_values 만 HF CLIP RGB 포맷으로 대체한 새 CLIPDataset 반환."""
+    """CLIPDataset  of  pixel_values text HF CLIP RGB text as  text text CLIPDataset return."""
     n = len(dataset.class_ids)
     if n == 0:
-        # 빈 데이터셋: shape만 맞춰 둠
+        # text dataset: shapetext text text
         rgb = np.zeros((0, 224, 224, 3), dtype=np.float32)
     else:
         chunks = []
@@ -101,7 +101,7 @@ def _replace_pixel_values_with_rgb(dataset: CLIPDataset,
     )
 
 
-# ── train_step (train_clip.py 와 동일한 contrastive loss) ────────────────────
+# ── train_step (train_clip.py  and  sametext contrastive loss) ────────────────────
 
 @partial(jax.jit, static_argnums=(3, 4))
 def train_step(train_state: TrainState, batch: CLIPContrastiveBatch,
@@ -156,7 +156,7 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch,
     return train_state, loss, metrics, rng_key
 
 
-# ── train state 생성 (train_clip.py 의 구조 차용) ───────────────────────────
+# ── train state create (train_clip.py  of  structure text for ) ───────────────────────────
 
 def get_train_state(config: FinetunedCLIPEncoderTrainConfig, rng_key):
     lr_sched = create_learning_rate_fn(config, config.lr, config.steps_per_epoch)
@@ -192,7 +192,7 @@ def save_checkpoint(config, state, step):
     logger.info(f"Checkpoint saved at step {step} → {ckpt_dir}")
 
 
-# ── 메인 학습 루프 ──────────────────────────────────────────────────────────
+# ── text training text ──────────────────────────────────────────────────────────
 
 def make_train(config: FinetunedCLIPEncoderTrainConfig):
     def train(rng_key):
@@ -218,7 +218,7 @@ def make_train(config: FinetunedCLIPEncoderTrainConfig):
         )
         train_ds, test_ds = builder.get_split_dataset()
 
-        # ── Seen/Unseen 게임 분리 (train_clip.py 와 동일) ──────────────────
+        # ── Seen/Unseen game separate (train_clip.py  and  same) ──────────────────
         if getattr(config, "unseen_games", None):
             full_dataset = builder.get_dataset()
             unseen_set = parse_unseen_game_names(config.unseen_games)
@@ -281,11 +281,11 @@ def make_train(config: FinetunedCLIPEncoderTrainConfig):
         mode = "text_state" if config.encoder.state else "text"
         config.encoder.mode = mode
 
-        # ── HF CLIP 입력 포맷으로 pixel_values 변환 (one-time) ───────────────
-        # CLIPDatasetBuilder 는 (B, 16, 16, num_classes+2) one-hot+coord 를 만들지만,
-        # HuggingFace pretrained CLIP 은 (B, 224, 224, 3) RGB 를 받는다.
-        # → raw tile enum 복원 → 타일 렌더 → 224×224 정규화 후 교체.
-        # 좌표 채널 2 개 + clip_input_channel(=raw) 으로부터 one-hot 채널 수 계산.
+        # ── HF CLIP text text as  pixel_values convert (one-time) ───────────────
+        # CLIPDatasetBuilder   (B, 16, 16, num_classes+2) one-hot+coord   text,
+        # HuggingFace pretrained CLIP   (B, 224, 224, 3) RGB   text text.
+        # → raw tile enum text → tile render → 224×224 normalize  after  text.
+        # coordinate text 2 text + clip_input_channel(=raw)  as text one-hot text text compute.
         _num_tile_classes = max(1, int(getattr(config, "clip_input_channel", 5)) - 2)
         logger.info("Rendering RGB pixel_values for HF CLIP (num_tile_classes=%d, n_train=%d, n_test=%d) ...",
                     _num_tile_classes, n_train, n_test)

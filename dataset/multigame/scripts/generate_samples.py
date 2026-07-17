@@ -1,19 +1,19 @@
 """
 dataset/multigame/scripts/generate_samples.py
 =============================================
-데이터셋 클래스에서 샘플을 불러와 samples/ 폴더에 렌더링 이미지를 저장한다.
+dataset class in  sample  text and  samples/ folder in  rendering image  savetext.
 
-생성 구조:
+create structure:
   samples/
     {game}/
-      {game}_raw_01.png      ← 게임 원본 tile_ims 스프라이트 (맵핑 전)
-      {game}_unified_01.png  ← unified 7-category tile_ims 스프라이트 (맵핑 후)
+      {game}_raw_01.png      ← game text tile_ims text text (maptext  before )
+      {game}_unified_01.png  ← unified 7-category tile_ims text text (maptext  after )
       ...
     overview_raw.png
     overview_unified.png
     compare_raw_vs_unified.png
 
-실행:
+Usage:
   cd /path/to/multigame-pcgrl
   python -m dataset.multigame.scripts.generate_samples
 """
@@ -43,18 +43,18 @@ from dataset.multigame.tile_utils import (
     to_unified,
 )
 
-# ── 경로 상수 ─────────────────────────────────────────────────────────────────
+# ── path text ─────────────────────────────────────────────────────────────────
 TILE_IMS_DIR = _REPO_ROOT / "envs" / "probs" / "tile_ims"
 SAMPLES_DIR  = _MULTIGAME / "samples"
 
-# ── 설정 ─────────────────────────────────────────────────────────────────────
-TILE_SIZE = 16    # 타일 이미지가 이미 16×16이므로 upscale 불필요
+# ── config ─────────────────────────────────────────────────────────────────────
+TILE_SIZE = 16    # tile image   text 16×16 text to  upscale text
 N_SAMPLES = 5
 LABEL_H   = 22
 GAP       = 6
 BG        = (30, 30, 30)
 
-# ── 폰트 ─────────────────────────────────────────────────────────────────────
+# ── text ─────────────────────────────────────────────────────────────────────
 def _font(size: int = 11):
     for path in [
         "/System/Library/Fonts/Helvetica.ttc",
@@ -70,12 +70,12 @@ FONT    = _font(11)
 FONT_LG = _font(12)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 1.  tile_ims 스프라이트 로더
+# 1.  tile_ims text text  to text
 # ──────────────────────────────────────────────────────────────────────────────
 _SPRITE_CACHE: dict[str, Image.Image] = {}
 
 def _load_sprite(name: str) -> Image.Image:
-    """tile_ims/{name}.png 를 로드해 RGBA로 반환. 없으면 None."""
+    """tile_ims/{name}.png   loadtext RGBA to  return. if missing None."""
     if name in _SPRITE_CACHE:
         return _SPRITE_CACHE[name]
     path = TILE_IMS_DIR / f"{name}.png"
@@ -87,10 +87,10 @@ def _load_sprite(name: str) -> Image.Image:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 2.  게임별 tile_id → sprite name 매핑
-#     (envs/probs/dungeon.py DungeonTiles 기준)
+# 2.  gametext tile_id → sprite name text
+#     (envs/probs/dungeon.py DungeonTiles basis)
 # ──────────────────────────────────────────────────────────────────────────────
-# dungeon: tile_id(int) → sprite filename (확장자 제외)
+# dungeon: tile_id(int) → sprite filename (expandtext text)
 _DUNGEON_SPRITE: dict[int, str] = {
     0: "solid",    # BORDER
     1: "empty",    # EMPTY
@@ -103,25 +103,25 @@ _DUNGEON_SPRITE: dict[int, str] = {
     8: "door",     # DOOR
 }
 
-# unified category index → 대표 sprite name
-#   dungeon tile_ims 중 의미상 가장 적합한 것을 사용
-#   hazard(6)는 tile_ims에 없으므로 색상 fallback
+# unified category index → texttable sprite name
+#   dungeon tile_ims  during   of text  text text text  text for
+#   hazard(6)  tile_ims in  text to  color fallback
 _UNIFIED_SPRITE: dict[int, str | None] = {
     0: "empty",    # empty
     1: "solid",    # wall
-    2: "empty",    # floor  (dungeon의 빈 바닥)
-    3: "bat",      # enemy  (bat을 대표 적으로)
-    4: "key",      # object (key를 대표 아이템으로)
-    5: "door",     # spawn  (door를 대표 스폰으로)
+    2: "empty",    # floor  (dungeon of  text text)
+    3: "bat",      # enemy  (bat  texttable text as )
+    4: "key",      # object (key  texttable text text as )
+    5: "door",     # spawn  (door  texttable text as )
     6: "lava",     # hazard
 }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 3.  스프라이트 기반 레벨 렌더링
+# 3.  text text based level rendering
 # ──────────────────────────────────────────────────────────────────────────────
 def _color_tile(color_rgb: tuple[int, int, int], size: int = TILE_SIZE) -> Image.Image:
-    """단색 RGBA 타일 생성 (sprite 없을 때 fallback)."""
+    """text RGBA tile create (sprite text  text fallback)."""
     tile = Image.new("RGBA", (size, size), (*color_rgb, 255))
     return tile
 
@@ -131,18 +131,18 @@ def _composite_sprite(
     fallback_color: tuple[int, int, int],
     size: int = TILE_SIZE,
 ) -> Image.Image:
-    """sprite(RGBA)를 fallback_color 배경 위에 합성해 RGB로 반환."""
+    """sprite(RGBA)  fallback_color text above in  text RGB to  return."""
     bg = Image.new("RGB", (size, size), fallback_color)
     if sprite is not None:
         sp = sprite.resize((size, size), Image.NEAREST)
-        bg.paste(sp, (0, 0), sp)  # RGBA alpha 사용
+        bg.paste(sp, (0, 0), sp)  # RGBA alpha text for
     return bg
 
 
 def render_raw_sprites(array: np.ndarray, game: str) -> np.ndarray:
     """
-    게임 원본 tile_id → tile_ims 스프라이트로 렌더링 (맵핑 전).
-    dungeon만 tile_ims가 있으므로 나머지 게임은 원본 팔레트 색상 사용.
+    game text tile_id → tile_ims text text to  rendering (maptext  before ).
+    dungeontext tile_ims  text to  remaining game  text palette color text for .
     """
     from dataset.multigame.render import array_to_rgb, get_palette
 
@@ -160,7 +160,7 @@ def render_raw_sprites(array: np.ndarray, game: str) -> np.ndarray:
                 tile_img = _composite_sprite(sprite, fallback)
                 canvas.paste(tile_img, (c * TILE_SIZE, r * TILE_SIZE))
     else:
-        # VGLC 게임: 원본 팔레트 색상
+        # VGLC game: text palette color
         palette = get_palette(game)
         small   = array_to_rgb(array, palette)
         big     = np.repeat(np.repeat(small, TILE_SIZE, axis=0), TILE_SIZE, axis=1)
@@ -171,8 +171,8 @@ def render_raw_sprites(array: np.ndarray, game: str) -> np.ndarray:
 
 def render_unified_sprites(array: np.ndarray, game: str) -> np.ndarray:
     """
-    tile_mapping.json 기준 unified category로 맵핑 후
-    unified category별 대표 tile_ims 스프라이트로 렌더링 (맵핑 후).
+    tile_mapping.json basis unified category to  maptext  after
+    unified categorytext texttable tile_ims text text to  rendering (maptext  after ).
     """
     unified = to_unified(array, game, warn_unmapped=False)
     h, w = unified.shape
@@ -191,10 +191,10 @@ def render_unified_sprites(array: np.ndarray, game: str) -> np.ndarray:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 4.  범례 이미지
+# 4.  legend image
 # ──────────────────────────────────────────────────────────────────────────────
 def make_unified_legend() -> Image.Image:
-    """unified 7-category 범례: sprite + 색상 + 이름."""
+    """unified 7-category legend: sprite + color + name."""
     cell_h = TILE_SIZE + 6
     padding = 6
     label_w = 90
@@ -224,7 +224,7 @@ def make_unified_legend() -> Image.Image:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 5.  공통 유틸
+# 5.  common utility
 # ──────────────────────────────────────────────────────────────────────────────
 def _add_label(img_arr: np.ndarray, text: str) -> np.ndarray:
     h, w = img_arr.shape[:2]
@@ -282,7 +282,7 @@ def add_game_header(col: np.ndarray, name: str) -> np.ndarray:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 6.  메인
+# 6.  text
 # ──────────────────────────────────────────────────────────────────────────────
 def process_game(game: str, samples: list):
     raw_imgs, unified_imgs = [], []
@@ -299,7 +299,7 @@ def main() -> None:
     all_unified_cols: list[np.ndarray] = []
     all_game_names:   list[str]        = []
 
-    # VGLC 게임
+    # VGLC game
     for game in [GameTag.ZELDA, GameTag.MARIO, GameTag.LODE_RUNNER, GameTag.DOOM]:
         print(f"\n[{game}] loading...")
         try:
@@ -319,7 +319,7 @@ def main() -> None:
         all_unified_cols.append(stack_vertical(unified_imgs))
         all_game_names.append(game)
 
-    # Dungeon (tile_ims 스프라이트 사용)
+    # Dungeon (tile_ims text text text for )
     print(f"\n[dungeon] loading...")
     try:
         handler = DungeonHandler()
@@ -341,20 +341,20 @@ def main() -> None:
         print("No samples generated.")
         return
 
-    # overview 그리드
+    # overview text
     print("\n[overview] generating grids...")
     raw_cols_h     = [add_game_header(c, g) for c, g in zip(all_raw_cols,     all_game_names)]
     unified_cols_h = [add_game_header(c, g) for c, g in zip(all_unified_cols, all_game_names)]
     _save(stack_horizontal(raw_cols_h),     SAMPLES_DIR / "overview_raw.png")
     _save(stack_horizontal(unified_cols_h), SAMPLES_DIR / "overview_unified.png")
 
-    # compare (raw | unified 나란히)
+    # compare (raw | unified text)
     print("\n[compare] generating side-by-side...")
     sbs_rows = []
     for raw_col, uni_col in zip(all_raw_cols, all_unified_cols):
         divider = np.full((max(raw_col.shape[0], uni_col.shape[0]), 3, 3),
                           (80, 80, 80), dtype=np.uint8)
-        # 높이 맞추기
+        # text  text
         max_h = max(raw_col.shape[0], uni_col.shape[0])
         def _pad_h(a):
             if a.shape[0] < max_h:
@@ -366,7 +366,7 @@ def main() -> None:
         sbs_rows.append(np.full((GAP, row.shape[1], 3), BG, dtype=np.uint8))
     _save(np.concatenate(sbs_rows[:-1], axis=0), SAMPLES_DIR / "compare_raw_vs_unified.png")
 
-    # unified 범례 저장
+    # unified legend save
     legend_img = make_unified_legend()
     legend_path = SAMPLES_DIR / "legend_unified.png"
     legend_path.parent.mkdir(parents=True, exist_ok=True)

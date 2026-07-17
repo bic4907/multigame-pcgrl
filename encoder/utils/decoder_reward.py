@@ -1,11 +1,11 @@
 """
 encoder/utils/decoder_reward.py
 ================================
-학습된 CLIP Decoder 체크포인트를 로드하여,
-instruction(text) embedding → (reward_enum, condition) 예측을 수행하는 유틸리티.
+trainingtext CLIP Decoder checkpoint  loadtext,
+instruction(text) embedding → (reward_enum, condition) text  textrowtext  utility.
 
-RL 학습 루프에서 `get_reward_batch` 대신 디코더가 예측한
-reward_enum / condition 으로 보상을 계산할 때 사용한다.
+RL training text in  `get_reward_batch` text text  text
+reward_enum / condition  as  reward  computetext text text for text.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Checkpoint 로드
+#  Checkpoint load
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def load_decoder(
@@ -33,7 +33,7 @@ def load_decoder(
     cond_norm_min: jnp.ndarray | None = None,
     cond_norm_max: jnp.ndarray | None = None,
 ) -> Tuple:
-    """CLIP Decoder 체크포인트를 로드한다.
+    """CLIP Decoder checkpoint  loadtext.
 
     Returns
     -------
@@ -43,8 +43,8 @@ def load_decoder(
     """
     from encoder.clip_model import get_cnnclip_decoder_encoder
 
-    # 체크포인트는 RL_training=False 로 학습되었으므로 동일한 모드로 module 생성
-    # → params tree 구조가 체크포인트와 일치
+    # checkpoint  RL_training=False  to  trainingtext to  sametext mode to  module create
+    # → params tree structure  checkpoint and  text
     module, _ = get_cnnclip_decoder_encoder(
         encoder_config,
         decoder_config=decoder_config,
@@ -72,7 +72,7 @@ def load_decoder(
         logger.warning(f"Decoder checkpoint path not found: {ckpt_dir}. Falling back to initialized decoder.")
         return module.apply, variables_template
 
-    # 최신 step 디렉토리 탐색 (ckpt_dir 이 ckpts/ 레벨일 수 있음)
+    # latest step directory text (ckpt_dir   ckpts/ leveltext text text)
     from glob import glob
     from os.path import basename, join
     step_dirs = [d for d in glob(join(ckpt_dir, '*')) if basename(d).isdigit()]
@@ -82,19 +82,19 @@ def load_decoder(
     else:
         restore_dir = ckpt_dir
 
-    # ── target 기반 복원 ──
-    # train_clip_decoder 는 TrainState.create(params=variables) 로 저장하므로
-    # 체크포인트 = {"step": ..., "params": <variables>, "opt_state": ...}
+    # ── target based text ──
+    # train_clip_decoder   TrainState.create(params=variables)  to  savetext to
+    # checkpoint = {"step": ..., "params": <variables>, "opt_state": ...}
     # <variables> = {"params": {...}, "norm_stats": {...}}
-    # flax restore_checkpoint 에 target={"params": template} 을 넘기면
-    # 체크포인트의 "params" 필드를 template 구조로 매핑해 복원한다.
+    # flax restore_checkpoint  in  target={"params": template}   text
+    # checkpoint of  "params" text  template structure to  text text.
     from flax.training.train_state import TrainState
     import optax
 
     dummy_state = TrainState.create(
         apply_fn=module.apply,
         params=variables_template,
-        tx=optax.identity(),  # optimizer는 불필요 (추론 전용)
+        tx=optax.identity(),  # optimizer  text (text  before  for )
     )
 
     restored_state = checkpoints.restore_checkpoint(
@@ -112,7 +112,7 @@ def load_decoder(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  배치 추론: text_embeddings → (reward_i, condition)
+#  batch text: text_embeddings → (reward_i, condition)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def reward_decode(
@@ -124,29 +124,29 @@ def reward_decode(
     num_classes: int,
     batch_size: int = 256,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """CLIP 디코더로 텍스트 임베딩에서 reward_i / condition을 배치 예측한다.
+    """CLIP text to  text embedding in  reward_i / condition  batch text.
 
     Parameters
     ----------
     text_embeddings : (N, D) jnp.ndarray
-        CLIP encoder를 통과한 latent embedding.
+        CLIP encoder  text and text latent embedding.
     apply_fn : Callable
-        ContrastiveDecoderModule.apply (또는 동일 시그니처의 함수).
+        ContrastiveDecoderModule.apply (text  same text of  function).
     variables : dict
-        디코더 파라미터 변수 딕셔너리 (``{"params": ..., "norm_stats": ...}``).
+        text parameter text dictionary (``{"params": ..., "norm_stats": ...}``).
     cond_norm_min, cond_norm_max : Dict[int, float]
-        reward_enum별 log-space 정규화 min/max 값.
+        reward_enumtext log-space normalize min/max text.
     num_classes : int
-        reward_enum 클래스 수.
+        reward_enum class text.
     batch_size : int
-        배치 크기 (기본값 256).
+        batch size (default value 256).
 
     Returns
     -------
     reward_i : (N, 1) jnp.int32
-        예측된 reward_enum (0-based).
+        text reward_enum (0-based).
     condition : (N, num_classes) jnp.float32
-        예측된 condition 벡터. 선택된 enum 슬롯만 값이 채워지고 나머지는 -1.
+        text condition text. selecttext enum slottext text  text remaining  -1.
     """
     from tqdm import tqdm
 
@@ -193,7 +193,7 @@ def reward_decode(
         float(pred_cond_raw.max()),
     )
 
-    # ── 최종 텐서 조립 ──
+    # ── text text text ──
     reward_i = jnp.array(reward_i_flat, dtype=jnp.int32).reshape(-1, 1)
     condition = jnp.full((n, num_classes), -1.0, dtype=jnp.float32)
     condition = condition.at[jnp.arange(n), reward_i_flat].set(jnp.array(pred_cond_raw))
@@ -206,7 +206,7 @@ def reward_decode(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  추론: instruction/text embedding → (reward_enum, condition)
+#  text: instruction/text embedding → (reward_enum, condition)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def predict_reward_condition(
@@ -215,17 +215,17 @@ def predict_reward_condition(
     instruction_embedding: jnp.ndarray,
     num_reward_classes: int = 5,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """디코더를 사용하여 instruction embedding으로부터
-    reward_enum (1-based)과 condition 벡터를 예측한다.
+    """text  text for text instruction embedding as text
+    reward_enum (1-based) and  condition text  text.
 
     Parameters
     ----------
     instruction_embedding : (n_envs, D)
-        사전학습된 CLIP encoder를 통과한 latent embedding (e.g. 64-dim).
+        pretrained CLIP encoder  text and text latent embedding (e.g. 64-dim).
     """
     n_envs = instruction_embedding.shape[0]
 
-    # ContrastiveDecoderModule 내부 decoder 서브모듈을 직접 호출한다.
+    # ContrastiveDecoderModule internal decoder text  direct calltext.
     reward_logits, _, condition_pred_raw = apply_fn(
         variables,
         instruction_embedding,
@@ -234,18 +234,18 @@ def predict_reward_condition(
     )
 
     reward_logits = reward_logits[:, :num_reward_classes]  # (n_envs, num_classes)
-    condition_pred_raw = condition_pred_raw[:, :num_reward_classes]  # (n_envs, num_classes) — 원래 스케일
+    condition_pred_raw = condition_pred_raw[:, :num_reward_classes]  # (n_envs, num_classes) — text text
 
     # argmax → 0-based → 1-based
     pred_enum_0based = jnp.argmax(reward_logits, axis=-1)    # (n_envs,)
     reward_i = (pred_enum_0based + 1).reshape(-1, 1).astype(jnp.int32)  # (n_envs, 1)
 
-    # condition 벡터 구성: (n_envs, 9)
-    # get_reward_batch 는 condition[:, enum-1] 을 사용.
-    # 예측된 enum 슬롯에만 값을 채우고 나머지는 -1.
+    # condition text text: (n_envs, 9)
+    # get_reward_batch   condition[:, enum-1]   text for .
+    # text enum slot in text text  text remaining  -1.
     condition = jnp.full((n_envs, 9), -1.0, dtype=jnp.float32)
 
-    # 각 환경에서 predicted enum에 해당하는 condition 값을 gather
+    # each text in  predicted enum in  text  condition text  gather
     pred_cond_val = condition_pred_raw[
         jnp.arange(n_envs), pred_enum_0based
     ]  # (n_envs,)
@@ -257,7 +257,7 @@ def predict_reward_condition(
 
 
 def _extract_instruction_embedding(instruct_sample, curr_obs):
-    """inject 콜백 입력에서 instruction embedding을 안정적으로 꺼낸다."""
+    """inject callback text in  instruction embedding  text as  text."""
     if instruct_sample is not None and hasattr(instruct_sample, "embedding"):
         return instruct_sample.embedding
     if curr_obs is not None and hasattr(curr_obs, "nlp_obs"):
@@ -271,7 +271,7 @@ def predict_from_instruction(
     instruction_embedding: jnp.ndarray,
     num_reward_classes: int = 5,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """instruction embedding에서 reward_i/condition을 예측한다."""
+    """instruction embedding in  reward_i/condition  text."""
     return predict_reward_condition(
         apply_fn=apply_fn,
         variables=variables,
@@ -281,7 +281,7 @@ def predict_from_instruction(
 
 
 def build_decoder_reward_inject_fn(config) -> Callable:
-    """train_utils.inject_reward_fn 시그니처에 맞는 콜백을 생성한다."""
+    """train_utils.inject_reward_fn text in  text  callback  createtext."""
     from conf.config import DecoderConfig
 
     decoder_cfg = DecoderConfig(num_reward_classes=config.decoder.num_reward_classes)

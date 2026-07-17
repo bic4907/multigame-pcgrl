@@ -1,10 +1,10 @@
 """
 eval_cpcgrl.py
 ==============
-CPCGRL (Conditional PCGRL) 평가 엔트리포인트.
-raw condition 벡터를 nlp_obs 에 주입하여 평가한다.
+CPCGRL (Conditional PCGRL) evaluation entry point.
+raw condition text  nlp_obs  in  injecttext evaluationtext.
 
-실행:
+Usage:
     python -m eval_cpcgrl [overrides]
 """
 import hydra

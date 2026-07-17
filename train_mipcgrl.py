@@ -1,14 +1,14 @@
 """
 train_mipcgrl.py
 ================
-MIPCGRL (Multi-task Instructed PCGRL) — IPCGRL과 동일한 RL 학습 파이프라인.
+MIPCGRL (Multi-task Instructed PCGRL) — IPCGRL and  sametext RL training pipeline.
 
-차이점은 사용하는 인코더 체크포인트뿐이다. MIPCGRL 인코더는 condition value
-회귀에 더해 task(reward_enum) 분류를 함께 학습한 가중치이지만, RL 단계에서는
-인코더 forward(latent z 추출)만 사용하므로 train_ipcgrl 과 동일한 inject 함수를
-재사용한다.
+text text  text for text  text checkpointtext text. MIPCGRL text  condition value
+text in  text task(reward_enum) text  text trainingtext weight text, RL text in
+text forward(latent z extract)text text for text to  train_ipcgrl  and  sametext inject function
+reusetext.
 
-실행:
+Usage:
     python -m train_mipcgrl encoder.ckpt_dir=... encoder.ckpt_name=...
 """
 import json
@@ -27,13 +27,13 @@ logger = logging.getLogger(__name__)
 
 
 def inject_mipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """BERT 임베딩을 nlp_obs 에 주입. 이후 네트워크 내부의 MLP 인코더가 처리."""
+    """BERT embedding  nlp_obs  in  inject.   after  network internal of  MLP text  process."""
     return last_obs.replace(nlp_obs=instruct_sample.embedding)
 
 
 @hydra.main(version_base=None, config_path="./conf", config_name="train_mipcgrl")
 def main(config: MIPCGRLConfig):
-    # ── encoder 의 dataset_setting.json 에서 seen/unseen 게임 정보 자동 주입 ──
+    # ── encoder  of  dataset_setting.json  in  seen/unseen game info automatic inject ──
     if config.encoder.ckpt_dir and config.encoder.ckpt_name:
         dataset_setting_path = os.path.join(
             config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json"

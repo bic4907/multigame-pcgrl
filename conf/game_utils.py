@@ -1,17 +1,17 @@
 """
 conf/game_utils.py
 ==================
-게임 선택 관련 유틸리티.
+game select text utility.
 
-약어 규칙 (2글자):
+abbreviation rule (2text):
     dg = dungeon
     pk = pokemon
     sk = sokoban
-    dm = doom  (doom + doom2 동시 활성화)
+    dm = doom  (doom + doom2 text enable)
     zd = zelda
 
-특수값:
-    all = 전체 게임 활성화
+text:
+    all = all game enable
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ import re
 
 from typing import Dict, List, Optional, Set
 
-# ── 게임 2글자 약어 ↔ include 플래그 매핑 ──────────────────────────────────────
-# dm 은 doom + doom2 를 동시에 가리킨다.
+# ── game 2text abbreviation ↔ include text text ──────────────────────────────────────
+# dm   doom + doom2   text in   text.
 GAME_ABBR: Dict[str, List[str]] = {
     "dg": ["dungeon"],
     "pk": ["pokemon"],
@@ -30,10 +30,10 @@ GAME_ABBR: Dict[str, List[str]] = {
     "zd": ["zelda"],
 }
 
-# 전체 게임 이름 목록 (include_* 필드 기준)
+# all game name list (include_* text basis)
 ALL_GAMES: List[str] = ["dungeon", "pokemon", "sokoban", "doom", "doom2", "zelda"]
 
-# doom 과 doom2 는 단일 게임군으로 본다 → 정식 게임 목록은 5개
+# doom  and  doom2   text gametext as  text → text game list  5text
 CANONICAL_GAMES: List[str] = [g for g in ALL_GAMES if g != "doom2"]
 CANONICAL_GAMES_TOTAL = 5
 assert len(CANONICAL_GAMES) == CANONICAL_GAMES_TOTAL, (
@@ -41,7 +41,7 @@ assert len(CANONICAL_GAMES) == CANONICAL_GAMES_TOTAL, (
     f"got {len(CANONICAL_GAMES)}: {CANONICAL_GAMES}"
 )
 
-# 역방향 매핑 (full name → abbr)  doom, doom2 → dm
+# text text (full name → abbr)  doom, doom2 → dm
 GAME_ABBR_INV: Dict[str, str] = {}
 for _abbr, _names in GAME_ABBR.items():
     for _name in _names:
@@ -49,17 +49,17 @@ for _abbr, _names in GAME_ABBR.items():
 
 
 def parse_game_str(game_str: str) -> Dict[str, bool]:
-    """2글자 약어 문자열을 ``include_*`` dict 로 변환한다.
+    """2text abbreviation string  ``include_*`` dict  to  converttext.
 
     Parameters
     ----------
     game_str : str
-        2글자 약어를 이어 붙인 문자열. ``"all"`` 이면 전체 활성화.
+        2text abbreviation   text text string. ``"all"``  text all enable.
 
     Returns
     -------
     Dict[str, bool]
-        ``include_dungeon``, ``include_pokemon``, ... 키를 가진 dict.
+        ``include_dungeon``, ``include_pokemon``, ... text   text dict.
 
     Examples
     --------
@@ -76,17 +76,17 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
     if not game_str:
         return includes
 
-    # 특수값: all
+    # text: all
     if game_str.lower() == "all":
         return {k: True for k in includes}
 
-    # 2글자씩 파싱
+    # 2text parsing
     for i in range(0, len(game_str), 2):
         abbr = game_str[i:i + 2]
         if abbr not in GAME_ABBR:
             raise ValueError(
-                f"알 수 없는 게임 약어: '{abbr}'. "
-                f"사용 가능: {list(GAME_ABBR.keys())} 또는 'all'"
+                f"text text without game abbreviation: '{abbr}'. "
+                f"text for  available: {list(GAME_ABBR.keys())} text  'all'"
             )
         for full_name in GAME_ABBR[abbr]:
             includes[f"include_{full_name}"] = True
@@ -95,7 +95,7 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
 
 
 def parse_unseen_game_names(unseen_str: str) -> set:
-    """2글자 약어 문자열 → full game name set.
+    """2text abbreviation string → full game name set.
 
     Examples
     --------
@@ -110,9 +110,9 @@ def parse_unseen_game_names(unseen_str: str) -> set:
 
 
 def parse_game_names(game_str: str, *, canonical: bool = False) -> List[str]:
-    """2글자 약어 문자열 또는 ``all``을 full game name 리스트로 변환한다.
+    """2text abbreviation string text  ``all``  full game name text to  converttext.
 
-    ``canonical=True``이면 ``doom2``를 제외하고 ``doom`` 게임군으로만 반환한다.
+    ``canonical=True`` text ``doom2``  text ``doom`` gametext as text returntext.
     """
     if not game_str:
         return []
@@ -133,7 +133,7 @@ def parse_game_names(game_str: str, *, canonical: bool = False) -> List[str]:
 
 
 def infer_seen_games_from_ckpt_name(ckpt_name: str) -> List[str]:
-    """Encoder checkpoint folder name에서 canonical seen game 리스트를 추론한다.
+    """Encoder checkpoint folder name in  canonical seen game text  text.
 
     Newer zero/few-shot ckpts may carry ``_unseen-XX`` directly. Older
     full-shot subset ckpts only look like ``clip-game-dgpk_exp-def_0``; for
@@ -182,9 +182,9 @@ def build_game_str(
     include_doom2: bool = False,
     include_zelda: bool = False,
 ) -> str:
-    """``include_*`` 불리언으로부터 game 약어 문자열을 생성한다.
+    """``include_*`` text as text game abbreviation string  createtext.
 
-    doom, doom2 중 하나라도 True 면 ``dm`` 을 추가한다 (중복 방지).
+    doom, doom2  during  text also  True text ``dm``   text text (duplicate text).
     """
     parts: List[str] = []
     if include_dungeon:

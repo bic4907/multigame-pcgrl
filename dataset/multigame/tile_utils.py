@@ -53,37 +53,37 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
-# ── 설정 파일 로드 ──────────────────────────────────────────────────────────────
+# ── config file load ──────────────────────────────────────────────────────────────
 _MAPPING_FILE = Path(__file__).parent / "tile_mapping.json"
 
 with _MAPPING_FILE.open("r", encoding="utf-8") as _f:
     _MAPPING_CONFIG: Dict[str, Any] = json.load(_f)
 
-# ── 공개 상수 ────────────────────────────────────────────────────────────────────
+# ── public text ────────────────────────────────────────────────────────────────────
 UNIFIED_CATEGORIES: Dict[int, str] = {
     int(k): v for k, v in _MAPPING_CONFIG["_categories"].items()
 }
-"""int → 카테고리 이름 (e.g. {0: 'empty', 1: 'wall', ...})"""
+"""int → text name (e.g. {0: 'empty', 1: 'wall', ...})"""
 
 CATEGORY_COLORS: Dict[int, Tuple[int, int, int]] = {
     int(k): (int(v[0]), int(v[1]), int(v[2]))
     for k, v in _MAPPING_CONFIG["_category_colors_rgb"].items()
 }
-"""int → RGB 튜플 (렌더링용)"""
+"""int → RGB text (rendering for )"""
 
 NUM_CATEGORIES: int = len(UNIFIED_CATEGORIES)
-"""통합 카테고리 수 (7)"""
+"""text text text (7)"""
 
-# ── 내부: 게임별 정수→정수 LUT 빌드 ────────────────────────────────────────────
+# ── internal: gametext integer→integer LUT build ────────────────────────────────────────────
 def _build_lut(game: str) -> Dict[int, int]:
-    """tile_mapping.json에서 게임별 LUT(lookup table) 빌드."""
+    """tile_mapping.json in  gametext LUT(lookup table) build."""
     if game not in _MAPPING_CONFIG:
         return {}
     raw = _MAPPING_CONFIG[game]["mapping"]
     return {int(k): int(v) for k, v in raw.items()}
 
 
-# LUT 캐시 (런타임 1회 빌드)
+# LUT cache (text 1text build)
 _LUT_CACHE: Dict[str, Dict[int, int]] = {}
 
 
@@ -93,7 +93,7 @@ def _get_lut(game: str) -> Dict[int, int]:
     return _LUT_CACHE[game]
 
 
-# ── 공개 API ─────────────────────────────────────────────────────────────────────
+# ── public API ─────────────────────────────────────────────────────────────────────
 
 def to_unified(
     array: np.ndarray,
@@ -102,17 +102,17 @@ def to_unified(
     warn_unmapped: bool = True,
 ) -> np.ndarray:
     """
-    게임별 정수 타일 배열을 unified category index 배열로 변환한다.
+    gametext integer tile array  unified category index array to  converttext.
 
     Parameters
     ----------
     array        : (H, W) int32 ndarray – GameSample.array
-    game         : GameTag 문자열 (e.g. "zelda", "dungeon")
-    warn_unmapped: True이면 매핑 규칙에 없는 타일 값에 대해 warning 발생
+    game         : GameTag string (e.g. "zelda", "dungeon")
+    warn_unmapped: True text text rule in  without tile text in  text warning text
 
     Returns
     -------
-    (H, W) int32 ndarray, 값 범위 [0, NUM_CATEGORIES-1]
+    (H, W) int32 ndarray, text range [0, NUM_CATEGORIES-1]
     """
     lut = _get_lut(game)
     if not lut:
@@ -153,20 +153,20 @@ def to_onehot(
     num_categories: int = NUM_CATEGORIES,
 ) -> np.ndarray:
     """
-    Unified category index 배열을 one-hot 배열로 변환한다.
+    Unified category index array  one-hot array to  converttext.
 
     Parameters
     ----------
-    unified        : (H, W) int32 ndarray, 값 범위 [0, num_categories-1]
-    num_categories : 카테고리 수 (기본 7)
+    unified        : (H, W) int32 ndarray, text range [0, num_categories-1]
+    num_categories : text text (default 7)
 
     Returns
     -------
-    (H, W, C) uint8 ndarray, 값 ∈ {0, 1}
+    (H, W, C) uint8 ndarray, text ∈ {0, 1}
 
     Raises
     ------
-    ValueError : unified에 범위 밖 값이 있을 때
+    ValueError : unified in  range outside text  text  text
     """
     flat = unified.ravel()
     out_of_range = np.where((flat < 0) | (flat >= num_categories))[0]
@@ -191,7 +191,7 @@ def to_unified_and_onehot(
     num_categories: int = NUM_CATEGORIES,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    GameSample.array에서 unified index와 one-hot을 한 번에 반환한다.
+    GameSample.array in  unified index and  one-hot  text text in  returntext.
 
     Returns
     -------
@@ -210,18 +210,18 @@ def validate_onehot(
     num_categories: int = NUM_CATEGORIES,
 ) -> Tuple[bool, Dict[str, Any]]:
     """
-    One-hot 배열의 min/max 및 구조를 검증한다.
+    One-hot array of  min/max text structure  validatetext.
 
     Parameters
     ----------
     onehot         : (H, W, C) ndarray
-    num_categories : 예상 카테고리 수
+    num_categories : text text text
 
     Returns
     -------
     (ok, info)
-      ok   : 모든 검사 통과 여부
-      info : 검사 결과 상세 dict
+      ok   : text validate text and  text
+      info : validate result detail dict
         {
           'shape'           : onehot.shape,
           'min'             : global min value,
@@ -240,18 +240,18 @@ def validate_onehot(
     global_max = int(onehot.max())
     unique_vals = set(np.unique(onehot).tolist())
 
-    # min/max 범위 체크
+    # min/max range text
     if global_min < 0:
         errors.append(f"min value {global_min} < 0")
     if global_max > 1:
         errors.append(f"max value {global_max} > 1")
 
-    # 값이 {{0, 1}} 만 포함하는지
+    # text  {{0, 1}} text text text
     invalid_vals = unique_vals - {0, 1}
     if invalid_vals:
         errors.append(f"unexpected values in one-hot: {sorted(invalid_vals)}")
 
-    # 각 셀(H×W)의 합이 1인지
+    # each cell(H×W) of  text  1text
     cell_sums = onehot.sum(axis=-1)  # (H, W)
     bad_cells = int((cell_sums != 1).sum())
     if bad_cells > 0:
@@ -260,7 +260,7 @@ def validate_onehot(
             f"(got sums: min={cell_sums.min()}, max={cell_sums.max()})"
         )
 
-    # 카테고리 수 체크
+    # text text text
     if onehot.ndim != 3:
         errors.append(f"expected 3D array (H, W, C), got ndim={onehot.ndim}")
     elif onehot.shape[2] != num_categories:
@@ -287,13 +287,13 @@ def validate_onehot(
 def onehot_to_unified(onehot: np.ndarray) -> np.ndarray:
     """
     One-hot (H, W, C) → unified category index (H, W).
-    각 셀에서 argmax를 취한다.
+    each cell in  argmax  text.
     """
     return onehot.argmax(axis=-1).astype(np.int32)
 
 
 def category_name(idx: int) -> str:
-    """카테고리 인덱스 → 이름."""
+    """text index → name."""
     return UNIFIED_CATEGORIES.get(idx, f"unknown({idx})")
 
 
@@ -303,12 +303,12 @@ def category_distribution(
     normalize: bool = False,
 ) -> Dict[str, float]:
     """
-    Unified 배열의 카테고리별 빈도 분포.
+    Unified array of  text text also  distribution.
 
     Parameters
     ----------
     unified   : (H, W) int32
-    normalize : True이면 비율(0~1), False이면 카운트
+    normalize : True text ratio(0~1), False text text
 
     Returns
     -------
@@ -325,13 +325,13 @@ def category_distribution(
 
 
 def available_games() -> List[str]:
-    """tile_mapping.json에 정의된 게임 목록."""
+    """tile_mapping.json in  text of text game list."""
     return [k for k in _MAPPING_CONFIG if not k.startswith("_")]
 
 
 def game_mapping_info(game: str) -> Dict[str, Any]:
     """
-    tile_mapping.json의 게임별 매핑 정보를 정규화해 반환한다.
+    tile_mapping.json of  gametext text info  normalizetext returntext.
 
     Returns
     -------
@@ -361,7 +361,7 @@ def game_mapping_info(game: str) -> Dict[str, Any]:
 
 
 def game_mapping_rows(game: str) -> List[Dict[str, Any]]:
-    """원본 타일 -> unified 카테고리 매핑을 표 형태 row 리스트로 반환한다."""
+    """text tile -> unified text text  table form row text to  returntext."""
     info = game_mapping_info(game)
     tile_names: Dict[int, str] = info["tile_names"]
     mapping: Dict[int, int] = info["mapping"]
@@ -383,12 +383,12 @@ def render_unified_rgb(
     tile_size: int = 16,
 ) -> np.ndarray:
     """
-    Unified category index 배열을 RGB numpy 이미지로 변환.
+    Unified category index array  RGB numpy image to  convert.
 
     Parameters
     ----------
     unified   : (H, W) int32
-    tile_size : 픽셀 단위 타일 크기
+    tile_size : textcell textabove tile size
 
     Returns
     -------

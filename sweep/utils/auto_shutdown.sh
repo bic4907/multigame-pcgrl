@@ -1,18 +1,18 @@
 #!/bin/bash
 # auto_shutdown.sh
-# GPU 사용량(utilization)을 30초마다 확인하여
-# 30분(=60회) 연속으로 0%이면 노드를 종료한다.
+# GPU utilization(utilization)  checked every 30 seconds
+# 30text(=60text) shut down the node after continuous idle readings.
 
-IDLE_THRESHOLD=3          # 모든 GPU util이 이 % 이하일 때 "미사용"으로 판단
-CHECK_INTERVAL=30         # 체크 주기 (초)
-MAX_IDLE_COUNT=20         # 이 횟수 연속 idle이면 종료 (30초 × 20 = 10분)
+IDLE_THRESHOLD=3          # Treat all GPUs as idle when utilization is at or below this percentage
+CHECK_INTERVAL=30         # check interval (seconds)
+MAX_IDLE_COUNT=20         # shut down after this many consecutive idle checks (30seconds × 20 = 10text)
 LOG_FILE="/tmp/auto_shutdown.log"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
 }
 
-# nvidia-smi 존재 확인
+# Check whether nvidia-smi exists
 if ! command -v nvidia-smi &>/dev/null; then
     log "ERROR: nvidia-smi not found. Exiting without shutdown."
     exit 1
@@ -27,8 +27,8 @@ idle_count=0
 idle_since=""
 
 while true; do
-    # 멀티 GPU: 각 GPU util을 읽어 최댓값을 기준으로 판단
-    # 하나라도 IDLE_THRESHOLD 초과면 active로 간주
+    # multi-GPU: read each GPU utilization and use the maximum
+    # consider the node active if any GPU exceeds IDLE_THRESHOLD
     max_util=0
     gpu_utils=$(nvidia-smi --query-gpu=index,utilization.gpu --format=csv,noheader,nounits)
     gpu_summary=""
@@ -42,7 +42,7 @@ while true; do
     done <<< "$gpu_utils"
 
     if [ "$max_util" -le "$IDLE_THRESHOLD" ]; then
-        # idle 시작 시각 기록
+        # record idle start time
         if [ "$idle_count" -eq 0 ]; then
             idle_since=$(date '+%Y-%m-%d %H:%M:%S')
         fi

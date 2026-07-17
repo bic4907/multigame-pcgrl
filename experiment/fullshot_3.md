@@ -1,6 +1,6 @@
 ### IPCGRL (Fullshot 3)
 
-게임 3개 조합 3가지: dgpksk (dungeon+pokemon+sokoban), pkdmzd (pokemon+doom+zelda), skdmzd (sokoban+doom+zelda)
+Three three-game combinations: dgpksk (dungeon+pokemon+sokoban), pkdmzd (pokemon+doom+zelda), skdmzd (sokoban+doom+zelda)
 
 ---
 
@@ -22,7 +22,7 @@ wandb sweep --project eval_ipcgrl_fullshot_3 --entity <wandb-entity> ../sweep/wa
 
 ### MIPCGRL (Fullshot 3)
 
-게임 3개 조합 3가지: dgpksk (dungeon+pokemon+sokoban), pkdmzd (pokemon+doom+zelda), skdmzd (sokoban+doom+zelda)
+Three three-game combinations: dgpksk (dungeon+pokemon+sokoban), pkdmzd (pokemon+doom+zelda), skdmzd (sokoban+doom+zelda)
 
 ---
 
@@ -44,7 +44,7 @@ wandb sweep --project eval_mipcgrl_fullshot_3 --entity <wandb-entity> ../sweep/w
 
 ### VIPCGRL (Fullshot 3)
 
-게임 3개 조합 3가지: dgpksk (dungeon+pokemon+sokoban), pkdmzd (pokemon+doom+zelda), skdmzd (sokoban+doom+zelda)
+Three three-game combinations: dgpksk (dungeon+pokemon+sokoban), pkdmzd (pokemon+doom+zelda), skdmzd (sokoban+doom+zelda)
 
 ---
 

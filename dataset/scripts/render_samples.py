@@ -1,18 +1,18 @@
 """
 dataset/scripts/render_samples.py
 ---------------------------------
-간단한 스크립트: 프로젝트 내 `dataset` 폴더에 있는 멀티게임 데이터셋에서
-샘플을 렌더링하여 PNG 이미지로 저장합니다.
+text script: text to text  inside  `dataset` folder in  with textgame dataset in
+sample  renderingtext PNG image to  savetext.
 
-사용법 (프로젝트 루트에서):
+Usage (text to text text in ):
     python dataset/scripts/render_samples.py
 
-생성물:
+createwater:
     dataset/samples/zelda_sample.png
     dataset/samples/dungeon_sample.png
     dataset/samples/grid_samples.png
 
-참고: 이 스크립트는 로컬 `dataset` 디렉터리에 있는 `multigame` 패키지를 직접 임포트합니다.
+text:   script   to text `dataset` text in  with `multigame` text  direct text.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def main():
     ds = MultiGameDataset(vglc_games=["zelda", "mario", "lode_runner"], include_dungeon=True)
     print(f"Loaded MultiGameDataset with total samples: {len(ds)}")
 
-    # Zelda 샘플 (첫 번째)
+    # Zelda sample (text text)
     zelda_pool = ds.by_game("zelda")
     if zelda_pool:
         z = zelda_pool[0]
@@ -42,7 +42,7 @@ def main():
     else:
         print("No Zelda samples found")
 
-    # Dungeon 샘플 (첫 번째)
+    # Dungeon sample (text text)
     dungeon_pool = ds.by_game("dungeon")
     if dungeon_pool:
         d = dungeon_pool[0]
@@ -52,7 +52,7 @@ def main():
     else:
         print("No Dungeon samples found")
 
-    # 그리드: Zelda 3개 + Dungeon 3개 (가능한 경우)
+    # text: Zelda 3text + Dungeon 3text (availabletext text)
     grid_samples = []
     grid_samples.extend(zelda_pool[:3])
     grid_samples.extend(dungeon_pool[:3])

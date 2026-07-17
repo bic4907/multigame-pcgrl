@@ -1,15 +1,15 @@
 """
 encoder/data/mlp_batch.py
 =========================
-Annotation 형식 MultiGameDataset → MLP 인코더 학습용 Dataset.
+Annotation text MultiGameDataset → MLP text training for  Dataset.
 
-CLIPDatasetBuilder 와 동일한 전처리 파이프라인(instruction 필터, prefix,
-longtail cut, log1p 정규화, stratified split, pixel_values 포함)을 그대로
-위임하고, BERT CLS 임베딩만 추가로 계산한다.
+CLIPDatasetBuilder  and  sametext preprocessing pipeline(instruction filter, prefix,
+longtail cut, log1p normalize, stratified split, pixel_values text)  as-is
+abovetext, BERT CLS embeddingtext text  to  computetext.
 
-인코더 타입(CLIP vs MLP)만 바꾸면서 나머지 변인을 통제해야 하므로
-생성자 시그니처를 CLIPDatasetBuilder 와 최대한 동일하게 맞춘다.
-BERT 임베딩은 instruct_rl.utils.dataset_loader._compute_bert_embeddings 재사용.
+text text(CLIP vs MLP)text text remaining text  text text to
+createtext text  CLIPDatasetBuilder  and  maximumtext sametext text.
+BERT embedding  instruct_rl.utils.dataset_loader._compute_bert_embeddings reuse.
 """
 
 from __future__ import annotations
@@ -34,19 +34,19 @@ logging.getLogger("absl").setLevel(logging.ERROR)
 
 @dataclass
 class MLPDataset:
-    """MLP 인코더 학습용 Dataset.
+    """MLP text training for  Dataset.
 
-    CLIPDataset 과 대응 관계:
-        bert_embeddings  ← (CLIPDataset 에는 없음)  BERT CLS 임베딩
-        pixel_values     ← CLIPDataset.pixel_values  레벨 맵 (H, W, C)
-        condition_targets           ← 동일
-        reward_enum_targets         ← 동일
-        game_names                  ← reward_cond 에서 추출
-        instructions                ← 원본 instruction 텍스트
-        is_train                    ← 동일 (unseen 게임은 False)
+    CLIPDataset  and  text text:
+        bert_embeddings  ← (CLIPDataset  in   none)  BERT CLS embedding
+        pixel_values     ← CLIPDataset.pixel_values  level map (H, W, C)
+        condition_targets           ← same
+        reward_enum_targets         ← same
+        game_names                  ← reward_cond  in  extract
+        instructions                ← text instruction text
+        is_train                    ← same (unseen game  False)
     """
     bert_embeddings: np.ndarray      # (N, nlp_input_dim)
-    pixel_values: np.ndarray         # (N, H, W, C)  레벨 맵 (CLIPDataset 과 동일)
+    pixel_values: np.ndarray         # (N, H, W, C)  level map (CLIPDataset  and  same)
     condition_targets: np.ndarray    # (N,)  log1p + per-enum min-max → [0, 1]
     reward_enum_targets: np.ndarray  # (N,)  0-indexed
     game_names: np.ndarray           # (N,)  str
@@ -57,38 +57,38 @@ class MLPDataset:
 # ── Dataset Builder ───────────────────────────────────────────────────────────
 
 class MLPDatasetBuilder:
-    """CLIPDatasetBuilder + BERT 임베딩으로 MLPDataset 을 생성한다.
+    """CLIPDatasetBuilder + BERT embedding as  MLPDataset   createtext.
 
-    생성자 시그니처는 CLIPDatasetBuilder 와 동일하며,
-    MLP 전용 파라미터(exclude_games, nlp_input_dim)만 추가한다.
+    createtext text  CLIPDatasetBuilder  and  sametext,
+    MLP  before  for  parameter(exclude_games, nlp_input_dim)text text text.
 
-    Parameters  (CLIPDatasetBuilder 와 동일한 순서·이름)
+    Parameters  (CLIPDatasetBuilder  and  sametext order·name)
     ----------
     processor : CLIPProcessor
-        CLIPDatasetBuilder 내부 tokenizer. BERT 임베딩 계산과는 무관.
+        CLIPDatasetBuilder internal tokenizer. BERT embedding compute and   text.
     paired_data : MultiGameDataset
     rng_key : jax.random.PRNGKey
     train_ratio : float
     max_len : int
     max_samples : int | None
-    prepend 옵션 (단일 instruction_prefix)
+    prepend text (text instruction_prefix)
     -------------------------------------
     instruction_prefix : str | None
-        "name" / "desc" / "none" (또는 None) — CLIPDatasetBuilder 와 동일.
+        "name" / "desc" / "none" (text  None) — CLIPDatasetBuilder  and  same.
     longtail_cut : bool
 
-    Parameters  (MLP 전용)
+    Parameters  (MLP  before  for )
     ----------------------
     exclude_games : set[str] | None
-        unseen 게임 이름 집합. ``unseen_ratio`` 만큼만 학습에 포함하고
-        나머지는 is_train=False (val) 로 돌려 zero/few-shot 평가에 사용한다.
+        unseen game name text. ``unseen_ratio`` text training in  text
+        remaining  is_train=False (val)  to  text zero/few-shot evaluation in  text for text.
     nlp_input_dim : int
-        BERT 임베딩 차원 (기본 768).
+        BERT embedding dimension (default 768).
     unseen_ratio : float
-        unseen 게임(train pool) 중 학습에 사용할 비율 (few-shot ratio).
-        0.0 = zero-shot (unseen 학습 데이터 0%), 1.0 = unseen train pool 전부.
+        unseen game(train pool)  during  training in  text for text ratio (few-shot ratio).
+        0.0 = zero-shot (unseen training data 0%), 1.0 = unseen train pool  before text.
     seen_ratio : float
-        seen 게임(train pool) 중 학습에 사용할 비율. 1.0 = 전부 사용.
+        seen game(train pool)  during  training in  text for text ratio. 1.0 =  before text text for .
     """
 
     def __init__(
@@ -102,7 +102,7 @@ class MLPDatasetBuilder:
         instruction_prefix: Optional[str] = "name",
         longtail_cut: bool = True,
         tile_offset: int = 0,
-        # MLP 전용
+        # MLP  before  for
         exclude_games: Optional[Set[str]] = None,
         nlp_input_dim: int = 768,
         unseen_ratio: float = 0.0,
@@ -115,7 +115,7 @@ class MLPDatasetBuilder:
         self.unseen_ratio = float(unseen_ratio)
         self.seen_ratio = float(seen_ratio)
 
-        # 1. CLIPDatasetBuilder 로 전처리 (필터·prefix·정규화·split·pixel_values)
+        # 1. CLIPDatasetBuilder  to  preprocessing (filter·prefix·normalize·split·pixel_values)
         self._clip_builder = CLIPDatasetBuilder(
             processor=processor,
             paired_data=paired_data,
@@ -130,20 +130,20 @@ class MLPDatasetBuilder:
         clip_ds = self._clip_builder.get_dataset()
         d = self._clip_builder.preprocessed_dataset_dict
 
-        # 2. CLIPDatasetBuilder 가 전처리한 instruction(prefix 포함)으로 BERT 임베딩 계산
+        # 2. CLIPDatasetBuilder   preprocessingtext instruction(prefix text) as  BERT embedding compute
         instructions: list[str] = d["language_inst"]
         bert_embeds = self._compute_bert(instructions)
 
-        # 3. game_names 추출 (CLIPDataset 에서는 reward_cond 안에 있음)
+        # 3. game_names extract (CLIPDataset  in   reward_cond text in  text)
         game_names = np.array(d["game_type"])
 
-        # 4. is_train: CLIPDatasetBuilder split + few-shot ratio 적용
-        #    - seen  게임: train pool 중 seen_ratio prefix 만 학습에 사용
-        #    - unseen 게임: train pool 중 unseen_ratio prefix 만 학습에 사용
-        #      (나머지는 is_train=False 로 돌려 zero/few-shot 평가에 사용)
+        # 4. is_train: CLIPDatasetBuilder split + few-shot ratio apply
+        #    - seen  game: train pool  during  seen_ratio prefix text training in  text for
+        #    - unseen game: train pool  during  unseen_ratio prefix text training in  text for
+        #      (remaining  is_train=False  to  text zero/few-shot evaluation in  text for )
         is_train = self._apply_fewshot_split(game_names, clip_ds.is_train.copy())
 
-        # 5. 요약 로그
+        # 5. summary  to text
         self._log_split(game_names, is_train)
 
         self._dataset = MLPDataset(
@@ -156,19 +156,19 @@ class MLPDatasetBuilder:
             is_train=is_train,
         )
 
-    # ── 공개 API ──────────────────────────────────────────────────────────────
+    # ── public API ──────────────────────────────────────────────────────────────
 
     def get_dataset(self) -> MLPDataset:
         return self._dataset
 
     def get_condition_norm_stats(self) -> tuple[dict, dict]:
-        """CLIPDatasetBuilder 의 reward_enum별 condition 정규화 파라미터 반환."""
+        """CLIPDatasetBuilder  of  reward_enumtext condition normalize parameter return."""
         return self._clip_builder.get_condition_norm_stats()
 
-    # ── 내부 메서드 ───────────────────────────────────────────────────────────
+    # ── internal text ───────────────────────────────────────────────────────────
 
     def _compute_bert(self, instructions: list[str]) -> np.ndarray:
-        """CLIPDatasetBuilder 가 전처리한 instruction 문자열 → BERT CLS 임베딩."""
+        """CLIPDatasetBuilder   preprocessingtext instruction string → BERT CLS embedding."""
         from instruct_rl.utils.dataset_loader import _compute_bert_embeddings
 
         class _FakeSample:
@@ -182,28 +182,28 @@ class MLPDatasetBuilder:
     def _apply_fewshot_split(
         self, game_names: np.ndarray, is_train: np.ndarray
     ) -> np.ndarray:
-        """게임별 train pool 에 few-shot ratio 를 적용한다.
+        """gametext train pool  in  few-shot ratio   applytext.
 
-        CLIPDatasetBuilder 의 자연 train/val split 결과(``is_train``)를 받아
-        각 게임의 train pool(is_train=True) 중 ratio prefix 만 학습에 남긴다.
+        CLIPDatasetBuilder  of  text train/val split result(``is_train``)  text
+        each game of  train pool(is_train=True)  during  ratio prefix text training in  text.
 
-        - seen  게임 (game ∉ exclude_games): seen_ratio prefix 사용
-        - unseen 게임 (game ∈ exclude_games): unseen_ratio prefix 사용
-          (unseen_ratio=0.0 → 전부 제외 = 기존 exclude_games 동작 = zero-shot)
+        - seen  game (game ∉ exclude_games): seen_ratio prefix text for
+        - unseen game (game ∈ exclude_games): unseen_ratio prefix text for
+          (unseen_ratio=0.0 →  before text text = existing exclude_games text = zero-shot)
 
-        prefix 선택은 자연 인덱스 순서 기준으로 결정적(deterministic)이며,
-        CLIP few-shot(``build_train_indices_for_ratio`` 의 pool[:n_use])과
-        동일한 시맨틱을 갖는다.
+        prefix select  text index order basis as  deterministic(deterministic) text,
+        CLIP few-shot(``build_train_indices_for_ratio``  of  pool[:n_use]) and
+        sametext text  text text.
         """
         new_is_train = is_train.copy()
         for game in sorted(set(game_names.tolist())):
             is_unseen = game in self.exclude_games
             ratio = self.unseen_ratio if is_unseen else self.seen_ratio
             if ratio >= 1.0:
-                continue  # 전부 사용 → 변경 없음
+                continue  #  before text text for  → text none
             game_train_idx = np.where((game_names == game) & is_train)[0]
             n_use = int(len(game_train_idx) * ratio)
-            drop_idx = game_train_idx[n_use:]  # ratio 초과분은 학습 제외
+            drop_idx = game_train_idx[n_use:]  # ratio exceedtext  training text
             new_is_train[drop_idx] = False
         return new_is_train
 
@@ -236,14 +236,14 @@ def create_mlp_batches(
     train: bool,
     rng: jax.random.PRNGKey,
 ) -> Iterator[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
-    """MLPDataset 에서 미니배치를 생성한다.
+    """MLPDataset  in  textbatch  createtext.
 
     Parameters
     ----------
     dataset : MLPDataset
     batch_size : int
     train : bool
-        True → is_train=True 샘플, False → val 샘플.
+        True → is_train=True sample, False → val sample.
     rng : jax.random.PRNGKey
 
     Yields

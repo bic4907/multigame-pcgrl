@@ -1,10 +1,10 @@
 """
 evaluator/metrics/clip_score.py
 ================================
-CLIPScore 지표 — HuggingFace CLIP / SigLIP 텍스트–이미지 유사도.
+CLIPScore texttable — HuggingFace CLIP / SigLIP text–image text also .
 
-입력: LevelBundle.text (instruction) + LevelBundle.image (rendered RGB)
-유사도: text_i ↔ image_j 코사인 유사도 (대칭화: (ti + tj) / 2)
+text: LevelBundle.text (instruction) + LevelBundle.image (rendered RGB)
+text also : text_i ↔ image_j text text also  (text: (ti + tj) / 2)
 """
 from __future__ import annotations
 
@@ -30,20 +30,20 @@ def _infer_backend(model_name: str, backend: Optional[str]) -> str:
 
 class CLIPScoreMetric(BaseMetricEvaluator):
     """
-    CLIPScore 지표.
+    CLIPScore texttable.
 
-    text–image 코사인 유사도를 대칭화하여 유사도 행렬로 반환한다.
+    text–image text text also   text text also  rowtext to  returntext.
 
     Parameters
     ----------
     model_name : str
-        HuggingFace 모델 ID.
-        Flax 백엔드: "openai/clip-vit-large-patch14" (기본)
+        HuggingFace text ID.
+        Flax text: "openai/clip-vit-large-patch14" (default)
                      "openai/clip-vit-large-patch14-336"
-        Torch 백엔드: "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"
+        Torch text: "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"
                       "google/siglip-so400m-patch14-384"
     backend : {"flax", "torch"} | None
-        None 이면 model_name 으로 자동 추론.
+        None  text model_name  as  automatic text.
     """
 
     _DEFAULT_MODEL = "openai/clip-vit-large-patch14-336"
@@ -58,7 +58,7 @@ class CLIPScoreMetric(BaseMetricEvaluator):
         self._is_siglip  = any(model_name.startswith(p) for p in _SIGLIP_PREFIXES)
         self._load_model()
 
-    # ── 모델 로드 ─────────────────────────────────────────────────────────────
+    # ── text load ─────────────────────────────────────────────────────────────
 
     def _load_model(self) -> None:
         if self._backend == "flax":
@@ -75,7 +75,7 @@ class CLIPScoreMetric(BaseMetricEvaluator):
             self._model  = AutoModel.from_pretrained(self._model_name).to(self._device).eval()
             self._processor = AutoProcessor.from_pretrained(self._model_name)
 
-    # ── BaseMetricEvaluator 구현 ──────────────────────────────────────────────
+    # ── BaseMetricEvaluator text ──────────────────────────────────────────────
 
     @property
     def name(self) -> str:
@@ -83,7 +83,7 @@ class CLIPScoreMetric(BaseMetricEvaluator):
 
     def similarity_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
-        (N, N) 대칭 CLIPScore 행렬.
+        (N, N) text CLIPScore rowtext.
         sim[i, j] = (cos(text_i, img_j) + cos(text_j, img_i)) / 2
         """
         texts  = [b.text for b in bundles]
@@ -92,11 +92,11 @@ class CLIPScoreMetric(BaseMetricEvaluator):
         text_embs  = self._encode_texts(texts)
         image_embs = self._encode_images(images)
 
-        # (N, N) 코사인 유사도
+        # (N, N) text text also
         ti_mat = np.matmul(text_embs, image_embs.T)
         return (ti_mat + ti_mat.T) / 2
 
-    # ── 인코딩 ────────────────────────────────────────────────────────────────
+    # ── text ────────────────────────────────────────────────────────────────
 
     def _encode_texts(self, texts: List[str]) -> np.ndarray:
         if self._backend == "flax":

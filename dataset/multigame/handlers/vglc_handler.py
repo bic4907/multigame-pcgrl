@@ -1,14 +1,14 @@
 """
 dataset/multigame/handlers/vglc_handler.py
 ==========================================
-TheVGLC 데이터셋 핸들러.
+TheVGLC dataset handler.
 
-- 게임 선택 가능 (selected_games 리스트로 필터링)
-- 각 게임 폴더의 Processed/*.txt 파일을 자동 탐색
-- 게임별 전처리기로 char → int 변환
-- MegaMan 처럼 Processed/ 폴더가 없는 경우 루트 *.txt 파일도 지원
+- game select available (selected_games text to  filtering)
+- each game folder of  Processed/*.txt file  automatic text
+- gametext preprocessingtext to  char → int convert
+- MegaMan text Processed/ folder  without text text *.txt file also  text
 
-외부 패키지 의존 없음 (numpy만 사용).
+text text  of text none (numpytext text for ).
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from ..base import (
 )
 from .vglc_games import PREPROCESSORS, LEGEND_FACTORIES, SUPPORTED_GAMES
 
-# ── VGLC 게임 이름 → 폴더명 매핑 ───────────────────────────────────────────────
+# ── VGLC game name → foldertext text ───────────────────────────────────────────────
 _GAME_DIR: Dict[str, str] = {
     GameTag.ZELDA:       "The Legend of Zelda",
     GameTag.MARIO:       "Super Mario Bros",
@@ -38,7 +38,7 @@ _GAME_DIR: Dict[str, str] = {
     GameTag.MEGA_MAN:    "MegaMan",
 }
 
-# ── Processed 폴더가 없는 게임(루트에 txt가 있는 경우) ──────────────────────────
+# ── Processed folder  without game(text in  txt  with text) ──────────────────────────
 _ROOT_TXT_GAMES = {GameTag.MEGA_MAN}
 
 _DEFAULT_VGLC_ROOT = Path(__file__).parent.parent.parent / "TheVGLC"
@@ -46,14 +46,14 @@ _DEFAULT_VGLC_ROOT = Path(__file__).parent.parent.parent / "TheVGLC"
 
 class VGLCGameHandler(BaseGameHandler):
     """
-    단일 VGLC 게임 핸들러.
+    text VGLC game handler.
 
     Parameters
     ----------
-    game_tag  : GameTag 상수 (e.g. GameTag.ZELDA)
-    vglc_root : TheVGLC 저장소 루트 경로
-    split     : 사용할 하위 폴더 (기본 "Processed")
-    handler_config : HandlerConfig 객체 (doom_slicing 설정)
+    game_tag  : GameTag text (e.g. GameTag.ZELDA)
+    vglc_root : TheVGLC savetext text path
+    split     : text for text sub folder (default "Processed")
+    handler_config : HandlerConfig text (doom_slicing config)
     """
 
     def __init__(
@@ -95,8 +95,8 @@ class VGLCGameHandler(BaseGameHandler):
             else:
                 txt_files = sorted(processed.glob("*.txt"))
         txt_files = [p for p in txt_files if not p.name.lower().startswith("readme")]
-        
-        # Preprocessor가 별도 discovery/slicing 로직을 가진 경우 위임
+
+        # Preprocessor  separate discovery/slicing  to text   text text abovetext
         if hasattr(self._preprocessor, 'discover_and_process'):
             return self._preprocessor.discover_and_process(
                 files=txt_files,
@@ -114,19 +114,19 @@ class VGLCGameHandler(BaseGameHandler):
         return self._entries
 
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
-        # 캐시에 있으면 반환 (slicing된 데이터 등)
+        # cache in  text return (slicingtext data text)
         if source_id in self._sliced_cache:
             sample = self._sliced_cache[source_id]
             if order is not None:
-                # 주의: 객체를 재사용하므로 order를 바꾸면 캐시된 객체도 바뀜.
-                # 필요하다면 copy를 해야 하지만, 보통 순차 접근 시에는 덮어써도 무방할 수 있음.
-                # 하지만 안전을 위해 얕은 복사본을 반환하거나, order 설정 로직을 분리하는게 좋음.
-                # 여기서는 원본 수정 방식 유지하되, 전체 구조상 큰 문제없는지 확인 필요.
-                # 일단 사용자 요청대로 "캐싱 및 반환"에 집중.
+                # warning: text  reusetext to  order  text cachetext text also  text.
+                # text copy  text text, text text text text in   text also  text text text.
+                # text text before   abovetext text  copytext  returntext, order config  to text  separatetext text text.
+                # text  text text text keeptext, all structuretext text issuewithouttext check text.
+                # text text for text requesttext to  "text text return" in  text during .
                 sample.order = order
             return sample
-        
-        # 일반 VGLC 게임
+
+        # text VGLC game
         path = Path(source_id)
         text = path.read_text(encoding="utf-8", errors="replace")
         char_grid = self._preprocessor.parse_txt(text)
@@ -147,10 +147,10 @@ class VGLCGameHandler(BaseGameHandler):
             order=order,
             meta={"file": str(path.name), "game_dir": str(self._root)},
         )
-        
-        # 캐시에 저장 (일반 게임도 한 번 로드하면 캐싱)
+
+        # cache in  save (text game also  text text loadtext text)
         self._sliced_cache[source_id] = sample
-        
+
         return sample
 
     def __repr__(self) -> str:
@@ -162,14 +162,14 @@ class VGLCGameHandler(BaseGameHandler):
 
 class VGLCHandler:
     """
-    TheVGLC 전체 핸들러 (여러 게임 통합).
+    TheVGLC all handler (text game text).
 
     Parameters
     ----------
-    vglc_root      : TheVGLC 저장소 루트 경로
-    selected_games : 불러올 게임 태그 리스트 (None이면 전체)
-    split          : 사용할 하위 폴더 (기본 "Processed")
-    handler_config : HandlerConfig 객체 (doom_slicing 등 설정)
+    vglc_root      : TheVGLC savetext text path
+    selected_games : text game text text (None text all)
+    split          : text for text sub folder (default "Processed")
+    handler_config : HandlerConfig text (doom_slicing text config)
 
     Example
     -------
@@ -218,7 +218,7 @@ class VGLCHandler:
         return self._game_handlers[game_tag]
 
     def list_entries(self, game_tag: Optional[str] = None) -> List[str]:
-        """특정 게임 또는 전체 게임의 source_id 목록 반환."""
+        """text game text  all game of  source_id list return."""
         if game_tag:
             return self.game_handler(game_tag).list_entries()
         entries = []
@@ -227,12 +227,12 @@ class VGLCHandler:
         return entries
 
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
-        """source_id 경로를 보고 자동으로 해당 게임 핸들러로 위임."""
+        """source_id path  text automatic as  text game handler to  abovetext."""
         p = Path(source_id)
         for g, h in self._game_handlers.items():
             if _GAME_DIR[g] in str(p):
                 return h.load_sample(source_id, order=order)
-        # fallback: 모든 핸들러에서 확인
+        # fallback: text handler in  check
         for h in self._game_handlers.values():
             if source_id in h.list_entries():
                 return h.load_sample(source_id, order=order)

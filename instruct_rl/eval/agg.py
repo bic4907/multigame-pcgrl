@@ -1,7 +1,7 @@
 """
 instruct_rl/eval/utils.py
 =========================
-평가 공통 유틸리티.
+evaluation common utility.
 """
 
 import numpy as np
@@ -9,12 +9,12 @@ import pandas as pd
 
 
 def iqr_mean(x: pd.Series) -> float:
-    """IQR 기반 robust mean.
+    """IQR based robust mean.
 
-    - NaN 제외 후 계산.
-    - 샘플이 4개 미만이면 IQR 필터링 없이 단순 평균 반환
-      (샘플이 너무 적으면 IQR=0이 되어 전부 이상치로 판정될 수 있음).
-    - 유효값이 없으면 NaN 반환.
+    - NaN text  after  compute.
+    - sample  4text less than text IQR filtering text  text mean return
+      (sample  text text IQR=0  text  before text or moretext to  text text text).
+    - validtext  if missing NaN return.
     """
     x = x.dropna()
     if x.empty:
@@ -24,7 +24,7 @@ def iqr_mean(x: pd.Series) -> float:
     q1, q3 = x.quantile(0.25), x.quantile(0.75)
     iqr = q3 - q1
     if iqr == 0:
-        # IQR=0 → 중앙값과 다른 값만 이상치로 처리
+        # IQR=0 → centertext and  different text or moretext to  process
         median = x.median()
         filtered = x[x == median]
     else:

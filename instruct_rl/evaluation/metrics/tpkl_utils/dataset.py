@@ -1,7 +1,7 @@
 """
 dataset.py
 ==========
-MultiGameDataset에서 GT 레벨을 로드한다.
+MultiGameDataset in  GT level  loadtext.
 """
 from __future__ import annotations
 
@@ -22,14 +22,14 @@ def load_gt_levels(
     reward_enums: Iterable[int] | None = None,
 ) -> np.ndarray:
     """
-    MultiGameDataset에서 reward annotation이 있는 레벨을 로드하여 (N, H, W) 배열로 반환.
+    MultiGameDataset in  reward annotation  with level  loadtext (N, H, W) array to  return.
 
     Parameters
     ----------
-    train_ratio   : 0 < x ≤ 1.0. 1.0 이면 전체, 미만이면 train split만 반환
-    seed          : train split 랜덤 시드
-    games         : 포함할 게임 이름 목록. None 이면 전체.
-    reward_enums  : 포함할 reward_enum 값 목록. None 이면 전체.
+    train_ratio   : 0 < x ≤ 1.0. 1.0  text all, less than text train splittext return
+    seed          : train split random seed
+    games         : text game name list. None  text all.
+    reward_enums  : text reward_enum text list. None  text all.
 
     Returns
     -------

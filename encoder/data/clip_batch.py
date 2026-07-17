@@ -47,8 +47,8 @@ class CLIPDataset:
     is_train: np.ndarray
     reward_enum_targets: np.ndarray = None   # (N,) 0-indexed reward_enum
     condition_targets: np.ndarray = None     # (N,) condition float value
-    quantized_condition_targets: np.ndarray = None  # (N,) quantized bin index (0~7, CUSTOM_THRESHOLDS 기준 — 8 bins)
-    game_ids: np.ndarray = None              # (N,) global game index (self.game2idx 기준)
+    quantized_condition_targets: np.ndarray = None  # (N,) quantized bin index (0~7, CUSTOM_THRESHOLDS basis — 8 bins)
+    game_ids: np.ndarray = None              # (N,) global game index (self.game2idx basis)
 
 @dataclass
 class CLIPEmbedData:
@@ -67,20 +67,20 @@ class CLIPContrastiveBatch:
 
 @dataclass
 class CLIPDecoderBatch:
-    """Contrastive + Decoder 학습용 배치."""
+    """Contrastive + Decoder training for  batch."""
     class_ids: np.ndarray
     input_ids: np.ndarray
     attention_mask: np.ndarray
     pixel_values: np.ndarray
     duplicate_matrix: np.ndarray     # (B, B)
-    reward_enum_target: np.ndarray   # (B,)  — 0-indexed reward_enum 클래스
-    condition_target: np.ndarray     # (B,)  — condition 값 (regression target)
+    reward_enum_target: np.ndarray   # (B,)  — 0-indexed reward_enum class
+    condition_target: np.ndarray     # (B,)  — condition text (regression target)
     game_id: np.ndarray              # (B,)  — global game index
 
 
 
-# ── 게임별 prefix 템플릿 (5개 variation) ──────────────────────────────────────────
-# {game} 자리에 표시 이름이 들어간다.  instruction 앞에 랜덤으로 하나가 붙는다.
+# ── gametext prefix text (5text variation) ──────────────────────────────────────────
+# {game} text in  tabletext name  text.  instruction text in  random as  text  text text.
 _GAME_PREFIX_TEMPLATES: List[str] = [
     "In {game}, ",
     "For a {game} map, ",
@@ -89,7 +89,7 @@ _GAME_PREFIX_TEMPLATES: List[str] = [
     "Playing {game}, ",
 ]
 
-# game tag(소문자) → 표시 이름
+# game tag(textcharacter) → tabletext name
 _GAME_DISPLAY_NAMES: dict = {
     "dungeon":  "Dungeon",
     "pokemon":  "Pokémon",
@@ -101,19 +101,19 @@ _GAME_DISPLAY_NAMES: dict = {
 
 
 def _prepend_game_prefix(instruction: str, game: str, rng: random.Random) -> str:
-    """instruction 앞에 게임 이름 prefix를 랜덤으로 붙인다."""
+    """instruction text in  game name prefix  random as  text."""
     display = _GAME_DISPLAY_NAMES.get(game, game.capitalize())
     template = rng.choice(_GAME_PREFIX_TEMPLATES)
     prefix = template.format(game=display)
-    # 첫 글자 소문자 처리 (prefix 뒤에 이어지므로)
+    # text text textcharacter process (prefix text in   text to )
     if instruction and instruction[0].isupper():
         instruction = instruction[0].lower() + instruction[1:]
     return prefix + instruction
 
 
-# ── 게임별 짧은 설명 (description prefix용, 게임 이름 비명시) ─────────────────────
-# 게임 메커니즘을 추상적으로 설명, 괄호로 감싸서 prefix에 삽입
-# 게임당 5개 variation — 랜덤으로 하나 선택
+# ── gametext text  text (description prefix for , game name text) ─────────────────────
+# game text  text as  text, text to  text prefix in  text
+# gametext 5text variation — random as  text select
 _GAME_SHORT_DESCS: dict = {
     "dungeon": [
         "(navigate rooms, avoid enemies, collect treasures)",
@@ -159,7 +159,7 @@ _GAME_SHORT_DESCS: dict = {
     ],
 }
 
-# {desc} 자리에 괄호로 감싼 메커니즘 설명이 들어감
+# {desc} text in  text to  text text text  text
 _GAME_DESC_TEMPLATES: List[str] = [
     "{desc} ",
     "In a game {desc}, ",
@@ -170,20 +170,20 @@ _GAME_DESC_TEMPLATES: List[str] = [
 
 
 def _prepend_game_desc(instruction: str, game: str, rng: random.Random) -> str:
-    """instruction 앞에 게임 설명 prefix를 랜덤으로 붙인다."""
+    """instruction text in  game text prefix  random as  text."""
     desc_list = _GAME_SHORT_DESCS.get(game, [f"({game})"])
     desc = rng.choice(desc_list)
     template = rng.choice(_GAME_DESC_TEMPLATES)
     prefix = template.format(desc=desc)
-    # 첫 글자 소문자 처리 (prefix 뒤에 이어지므로)
+    # text text textcharacter process (prefix text in   text to )
     if instruction and instruction[0].isupper():
         instruction = instruction[0].lower() + instruction[1:]
     return prefix + instruction
 
 
-# ── 통합 instruction prefix dispatcher ───────────────────────────────────────
-# mode: "name" / "desc" / "none" (또는 None) — 게임 이름 prefix, 게임 설명 prefix,
-#       prefix 없음을 각각 지정한다.
+# ── text instruction prefix dispatcher ───────────────────────────────────────
+# mode: "name" / "desc" / "none" (text  None) — game name prefix, game text prefix,
+#       prefix none  eacheach text.
 INSTRUCTION_PREFIX_MODES = ("name", "desc", "mix", "none")
 
 
@@ -201,7 +201,7 @@ def _normalize_instruction_prefix_mode(mode) -> str:
     return s
 
 def _prepend_game_mix(instruction: str, game: str, rng: random.Random) -> str:
-    """name/desc 중 하나를 랜덤하게 선택하여 prefix를 붙인다."""
+    """name/desc  during  text  randomtext selecttext prefix  text."""
     if rng.random() < 0.5:
         return _prepend_game_prefix(instruction, game, rng)
     else:
@@ -211,11 +211,11 @@ def _prepend_game_mix(instruction: str, game: str, rng: random.Random) -> str:
 def apply_instruction_prefix(
     instruction: str, game: str, rng: random.Random, mode
 ) -> str:
-    """단일 instruction 에 mode 에 따른 prefix 를 붙여 반환.
+    """text instruction  in  mode  in  text prefix   text return.
 
     mode == "name" → _prepend_game_prefix
     mode == "desc" → _prepend_game_desc
-    mode == "none" → instruction 그대로
+    mode == "none" → instruction as-is
     """
     if not instruction or not game:
         return instruction
@@ -284,7 +284,7 @@ class CLIPDatasetBuilder:
     def preprocess_paired_data(self):
         samples = self.paired_data._samples
 
-        # ── max_samples: dry-run용 — 토큰화/전처리 전에 샘플 수를 제한 ──
+        # ── max_samples: dry-run for  — text/preprocessing  before  in  sample text  text ──
         if self.max_samples is not None and len(samples) > self.max_samples:
             logger.info(f"[dry-run] max_samples={self.max_samples}: "
                         f"samples {len(samples)} → {self.max_samples}")
@@ -305,7 +305,7 @@ class CLIPDatasetBuilder:
         except Exception:
             pass
 
-        # Extract game types and create mapping to integer IDs (필터 이후 기준)
+        # Extract game types and create mapping to integer IDs (filter   after  basis)
         games_type = [s.game for s in samples]  # N is the number of samples
         unique_games = sorted(set(games_type))
         game2idx = {game: idx for idx, game in enumerate(unique_games)}
@@ -313,18 +313,18 @@ class CLIPDatasetBuilder:
         logger.info(f"Detected {len(unique_games)} unique games: {game2idx}")
 
         # Extract level arrays and language instructions
-        # unified 카테고리: 0=empty, 1=wall, 2=interactive, 3=hazard, 4=collectable (5개)
-        # map2onehot은 value-1 을 index로 쓰므로 category 0(empty)은 all-zeros(implicit bg),
-        # category 1-4는 채널 0-3에 정확히 표현된다.
+        # unified text: 0=empty, 1=wall, 2=interactive, 3=hazard, 4=collectable (5text)
+        # map2onehot  value-1   index to  text to  category 0(empty)  all-zeros(implicit bg),
+        # category 1-4  text 0-3 in  text tabletext.
         level_arrays = jnp.stack([s.array for s in samples], 0)  # (N, 16, 16)
         level_arrays = map2onehot_batch(level_arrays, num_classes=NUM_CATEGORIES)  # (N, 16, 16, NUM_CATEGORIES)
         level_arrays = add_coord_channel_batch(level_arrays)  # (N, 16, 16, 7)
 
         language_inst_list = [s.instruction for s in samples]
 
-        # ── 게임 prefix 추가 (옵션) ──
+        # ── game prefix text  (text) ──
         if self.instruction_prefix != "none":
-            prefix_rng = random.Random(42)  # 재현 가능하도록 고정 시드
+            prefix_rng = random.Random(42)  # text availabletext also text fixed seed
             game_list = [s.game for s in samples]
             language_inst_list = [
                 apply_instruction_prefix(inst, game, prefix_rng, self.instruction_prefix)
@@ -344,23 +344,23 @@ class CLIPDatasetBuilder:
             game_idx = self.game2idx.get(s.game, -1)  # Get game index
             reward_enum = s.meta.get("reward_enum", 0)
             conditions = s.meta.get("conditions", {})
-            # reward_enum에 해당하는 condition 값을 사용 (없으면 첫 번째 값 fallback)
+            # reward_enum in  text  condition text  text for  (if missing text text text fallback)
             condition_value = conditions.get(reward_enum, next(iter(conditions.values()), None))
 
-            # ── CUSTOM_THRESHOLDS 기반 condition 양자화 ──
+            # ── CUSTOM_THRESHOLDS based condition text ──
             feature_name = s.meta.get("feature_name", "")
             threshold_key = f"{s.game}_{feature_name}"
             thresholds = CUSTOM_THRESHOLDS.get(threshold_key)
             if thresholds is not None and condition_value is not None:
                 quantized_bin = int(np.digitize(condition_value, thresholds))  # 0~7 (8 bins)
             else:
-                quantized_bin = 0  # threshold 없는 조합은 단일 bin
+                quantized_bin = 0  # threshold without text  text bin
 
             reward_cond_tuple = (game_idx, int(reward_enum), condition_value)
             reward_cond_list.append(reward_cond_tuple)
             quantized_cond_list.append(quantized_bin)
 
-        # ── class_id: 양자화된 condition 기준 (game_idx, reward_enum, quantized_bin) ──
+        # ── class_id: text condition basis (game_idx, reward_enum, quantized_bin) ──
         quantized_reward_cond_list = [
             (rc[0], rc[1], q_bin)
             for rc, q_bin in zip(reward_cond_list, quantized_cond_list)
@@ -369,11 +369,11 @@ class CLIPDatasetBuilder:
         quantized_rc2class_id = {rc: idx for idx, rc in enumerate(unique_quantized_rc)}
         class_ids = np.array([quantized_rc2class_id[rc] for rc in quantized_reward_cond_list])
 
-        # Store the mapping for reference (양자화 기준)
+        # Store the mapping for reference (text basis)
         self.reward_cond2class_id = quantized_rc2class_id
         self.class_id2reward_cond = {v: k for k, v in quantized_rc2class_id.items()}
 
-        # ── 양자화 요약 로그 ──
+        # ── text summary  to text ──
         from collections import defaultdict
         _game_bins = defaultdict(dict)  # {game_name: {enum: n_bins}}
         for (g_idx, re, q_bin) in set(quantized_reward_cond_list):
@@ -418,24 +418,24 @@ class CLIPDatasetBuilder:
             is_train[perm[:n_train]] = True
         logger.info(f"Train: {is_train.sum()} samples, Val: {(~is_train).sum()} samples")
 
-        # ── 디코더 학습용 타겟 ──
-        # reward_enum: 이미 0-indexed (0=region … 4=collectable)
+        # ── text training for  text ──
+        # reward_enum:  text 0-indexed (0=region … 4=collectable)
         reward_enum_targets = np.array([
-            int(rc[1]) for rc in reward_cond_list   # 0-indexed 그대로 사용
+            int(rc[1]) for rc in reward_cond_list   # 0-indexed as-is text for
         ], dtype=np.int32)
         condition_targets_raw = np.array([
             float(rc[2]) if rc[2] is not None else 0.0
             for rc in reward_cond_list
         ], dtype=np.float32)
 
-        # ── log1p 변환: right-skewed 분포의 high-value 영역 확장 ──
-        # 데이터 특성: 낮은 값에 밀집 / 높은 값은 long-tail → log1p로 균등화
+        # ── log1p convert: right-skewed distribution of  high-value text expand ──
+        # data text: text  text in  text / text  text  long-tail → log1p to  text
         condition_targets_log = np.log1p(np.maximum(condition_targets_raw, 0.0))
 
-        # ── reward_enum별 min-max normalization → [0, 1] (log 공간에서) ──
+        # ── reward_enumtext min-max normalization → [0, 1] (log text in ) ──
         unique_enums = sorted(set(reward_enum_targets))
-        cond_norm_min = {}   # {enum_idx: log1p 공간의 min}
-        cond_norm_max = {}   # {enum_idx: log1p 공간의 max}
+        cond_norm_min = {}   # {enum_idx: log1p text of  min}
+        cond_norm_max = {}   # {enum_idx: log1p text of  max}
         condition_targets = condition_targets_log.copy()
 
         for eidx in unique_enums:
@@ -458,7 +458,7 @@ class CLIPDatasetBuilder:
 
         quantized_condition_targets = np.array(quantized_cond_list, dtype=np.int32)
 
-        # ── 글로벌 game_ids (self.game2idx 기준, 전역 일관성) ──
+        # ── text to text game_ids (self.game2idx basis,  before text text) ──
         global_game_ids = np.array(
             [self.game2idx.get(g, -1) for g in games_type], dtype=np.int32
         )
@@ -478,7 +478,7 @@ class CLIPDatasetBuilder:
             "game_ids":             global_game_ids,
         }
 
-    
+
     def get_split_dataset(self):
         """
         Get train, test datasets based on the 'is_train' flag.
@@ -524,11 +524,11 @@ class CLIPDatasetBuilder:
         return self.class_id2reward_cond
 
     def get_condition_norm_stats(self):
-        """reward_enum별 condition 정규화 파라미터 반환.
+        """reward_enumtext condition normalize parameter return.
 
         Returns:
-            (cond_norm_min, cond_norm_max): 각각 {enum_idx(0-indexed): float} dict.
-            역변환: original = normalized * (max - min) + min
+            (cond_norm_min, cond_norm_max): eacheach {enum_idx(0-indexed): float} dict.
+            textconvert: original = normalized * (max - min) + min
         """
         return self.cond_norm_min, self.cond_norm_max
 
@@ -638,8 +638,7 @@ if __name__ == "__main__":
         print("Duplicate Matrix shape:", batch.duplicate_matrix.shape)
         rng_key, subkey = jax.random.split(rng_key)
         break
-    
-    
-    
-    
-    
+
+
+
+

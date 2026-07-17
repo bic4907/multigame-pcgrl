@@ -1,12 +1,12 @@
 """
-게임별·reward_enum별 instruction_uni 빈도 통계.
+gametext·reward_enumtext instruction_uni text also  text.
 
-사용법:
+Usage:
     python -m dataset.multigame.scripts.instruction_stats
     python -m dataset.multigame.scripts.instruction_stats --top-n 20
-    python -m dataset.multigame.scripts.instruction_stats --top-n -1              # 무제한
-    python -m dataset.multigame.scripts.instruction_stats --no-save               # 출력만
-    python -m dataset.multigame.scripts.instruction_stats --out-dir /tmp/stats    # 저장 위치 변경
+    python -m dataset.multigame.scripts.instruction_stats --top-n -1              # text
+    python -m dataset.multigame.scripts.instruction_stats --no-save               # text
+    python -m dataset.multigame.scripts.instruction_stats --out-dir /tmp/stats    # save abovetext text
 """
 
 import argparse
@@ -27,7 +27,7 @@ DEFAULT_CACHE_DIR = Path(__file__).parents[1] / "cache"
 
 
 def load_ann_files(cache_dir: Path) -> dict[str, list[dict]]:
-    """game → annotation 리스트 반환."""
+    """game → annotation text return."""
     result = {}
     for ann_path in sorted(cache_dir.rglob("*.ann.json")):
         game = ann_path.parent.name
@@ -80,9 +80,9 @@ def print_table(
             top = counter.most_common(None if unlimited else top_n)
             others = total - sum(cnt for _, cnt in top)
 
-            # 컬럼 너비 계산
+            # text text compute
             max_inst_len = max(len(inst) for inst, _ in top)
-            max_inst_len = max(max_inst_len, 11)  # "Instruction" 헤더 최소
+            max_inst_len = max(max_inst_len, 11)  # "Instruction" text minimum
             max_inst_len = min(max_inst_len, 80)
 
             header = f"  {'Instruction':<{max_inst_len}}  {'Count':>7}  {'%':>6}"
@@ -164,43 +164,43 @@ def print_summary(stats: dict[tuple[str, int], Counter]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Instruction_uni 빈도 통계")
+    parser = argparse.ArgumentParser(description="Instruction_uni text also  text")
     parser.add_argument(
         "--cache-dir",
         type=Path,
         default=DEFAULT_CACHE_DIR,
-        help="캐시 디렉토리 (기본: dataset/multigame/cache)",
+        help="cache directory (default: dataset/multigame/cache)",
     )
     parser.add_argument(
         "--top-n",
         type=int,
         default=10,
-        help="game×enum 별 상위 N개 출력 (기본: 10, -1=무제한)",
+        help="game×enum text textabove Ntext text (default: 10, -1=text)",
     )
     parser.add_argument(
         "--out-dir",
         type=Path,
         default=DEFAULT_OUT_DIR,
         metavar="DIR",
-        help="CSV 저장 루트 디렉토리 (기본: dataset/multigame/cache/statics)",
+        help="CSV save text directory (default: dataset/multigame/cache/statics)",
     )
     parser.add_argument(
         "--no-save",
         action="store_true",
-        help="CSV 저장 생략",
+        help="CSV save text",
     )
     parser.add_argument(
         "--games",
         nargs="*",
         default=None,
-        help="특정 게임만 출력 (예: --games dungeon zelda)",
+        help="text gametext text (text: --games dungeon zelda)",
     )
     parser.add_argument(
         "--enums",
         nargs="*",
         type=int,
         default=None,
-        help="특정 reward_enum만 출력 (예: --enums 0 1)",
+        help="text reward_enumtext text (text: --enums 0 1)",
     )
     args = parser.parse_args()
 

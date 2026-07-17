@@ -103,7 +103,7 @@ def denorm_condition(
 
 
 def _build_instruct(sample_list, config):
-    """샘플 리스트에서 Instruct 객체를 빌드한다."""
+    """sample text in  Instruct text  buildtext."""
     logger.info(
         "Building Instruct: samples=%d, use_clip=%s, use_nlp=%s, use_decoder=%s",
         len(sample_list),
@@ -168,7 +168,7 @@ def _build_instruct(sample_list, config):
 
 
 def _load_shared_clip_module_and_ckpt(config):
-    """CLIP 인코더 모듈을 init 하고 encoder.ckpt_path 의 체크포인트를 1회 복원한다."""
+    """CLIP text text  init text encoder.ckpt_path  of  checkpoint  1text text."""
     encoder_config = config.encoder
     module, variables = _load_clip_encoder_module(config, encoder_config)
     variables = _restore_encoder_checkpoint(encoder_config, variables)
@@ -176,7 +176,7 @@ def _load_shared_clip_module_and_ckpt(config):
 
 
 def _build_instruct_embedding(sample_list, config, *, shared_module=None, shared_variables=None):
-    """설정값에 따라 텍스트 임베딩을 계산한다."""
+    """configtext in  text text embedding  computetext."""
     n = len(sample_list)
     if getattr(config, "use_clip", False) and config.nlp_input_dim > 0:
         embedding = _compute_clip_embeddings(
@@ -205,21 +205,21 @@ def _build_reward_and_condition(
     shared_module=None,
     shared_variables=None,
 ):
-    """reward_i 및 condition 벡터를 생성한다.
+    """reward_i text condition text  createtext.
 
-    동작 순서:
-    1. 항상 데이터셋 메타데이터로 전체 배열을 초기화한다.
-    2. reward_decoder_mode에 따라 decoder로 덮어쓸 범위를 결정한다:
-       - "noop"  : 초기화한 메타데이터를 그대로 반환 (decoder 미사용)
-       - "all"   : 전체 게임을 decoder 예측값으로 덮어쓴다
-       - "unseen": unseen 게임 샘플만 decoder 예측값으로 덮어쓴다
+    text order:
+    1. always dataset metadata to  all array  initializetext.
+    2. reward_decoder_mode in  text decoder to  text range  text:
+       - "noop"  : initializetext metadata  as-is return (decoder text for )
+       - "all"   : all game  decoder text as  text
+       - "unseen": unseen game sampletext decoder text as  text
     """
     use_decoder = getattr(config, "use_clip", False) and hasattr(config, "decoder")
     num_classes = config.decoder.num_reward_classes if use_decoder else 5
     reward_decoder_mode = getattr(config, "reward_decoder_mode", "unseen")
     n = len(sample_list)
 
-    # ── 1. 메타데이터로 전체 배열 초기화 (항상) ───────────────────────────────
+    # ── 1. metadata to  all array initialize (always) ───────────────────────────────
     reward_i_arr = np.zeros((n, 1), dtype=np.int32)
     condition_arr = np.full((n, num_classes), -1.0, dtype=np.float32)
     for idx, sample in enumerate(sample_list):
@@ -230,12 +230,12 @@ def _build_reward_and_condition(
             condition_arr[idx, j] = float(val)
     logger.info("Reward/Condition: metadata loaded for all %d samples", n)
 
-    # ── 2. "noop" 모드 또는 decoder 미사용: 메타데이터 그대로 반환 ─────────────
+    # ── 2. "noop" mode text  decoder text for : metadata as-is return ─────────────
     if reward_decoder_mode == "noop" or not use_decoder:
         logger.info("Reward/Condition mode: noop (metadata only, decoder not applied)")
         return jnp.array(reward_i_arr, dtype=jnp.int32), jnp.array(condition_arr, dtype=jnp.float32)
 
-    # ── 3. decoder로 덮어쓸 target_indices 결정 ───────────────────────────────
+    # ── 3. decoder to  text target_indices text ───────────────────────────────
     if reward_decoder_mode == "unseen":
         reward_seen_games = set(getattr(config, "reward_seen_games", None) or [])
         # doom / doom2 alias
@@ -251,9 +251,9 @@ def _build_reward_and_condition(
             reward_unseen_ratio = float(getattr(config, "reward_unseen_ratio", 0.0))
 
             if reward_unseen_ratio > 0.0:
-                # ── few-shot 분할: 각 unseen 게임 내에서 샘플을 순서 기준으로 분할 ──
-                # 앞쪽 (reward_unseen_ratio 비율) → metadata 유지 (encoder 학습분)
-                # 나머지 (1 - reward_unseen_ratio) → decoder 적용
+                # ── few-shot split: each unseen game  inside  in  sample  order basis as  split ──
+                # front (reward_unseen_ratio ratio) → metadata keep (encoder training subset)
+                # remaining (1 - reward_unseen_ratio) → decoder apply
                 from collections import defaultdict
                 unseen_game_indices: dict = defaultdict(list)
                 for i, s in enumerate(sample_list):
@@ -263,7 +263,7 @@ def _build_reward_and_condition(
                 decoder_set: set = set()
                 for game, indices in unseen_game_indices.items():
                     n_meta = int(len(indices) * reward_unseen_ratio)
-                    # 앞쪽 n_meta 개 → metadata, 나머지 → decoder
+                    # front n_meta text → metadata, remaining → decoder
                     for idx in indices[n_meta:]:
                         decoder_set.add(idx)
 
@@ -275,7 +275,7 @@ def _build_reward_and_condition(
                     reward_unseen_ratio, n_meta_total, len(target_indices),
                 )
             else:
-                # ── zero-shot: 모든 unseen 게임 샘플에 decoder 적용 ──────────
+                # ── zero-shot: text unseen game sample in  decoder apply ──────────
                 target_indices = [i for i, s in enumerate(sample_list) if s.game not in reward_seen_games]
                 logger.info(
                     "Reward/Condition mode: unseen→decoder (zero-shot) "
@@ -284,7 +284,7 @@ def _build_reward_and_condition(
                     len(target_indices),
                 )
     else:
-        # "all": 전체를 decoder로 덮어쓴다
+        # "all": all  decoder to  text
         target_indices = list(range(n))
         logger.info("Reward/Condition mode: all (%d samples → decoder)", n)
 
@@ -292,7 +292,7 @@ def _build_reward_and_condition(
         logger.info("No decoder target samples — returning metadata as-is")
         return jnp.array(reward_i_arr, dtype=jnp.int32), jnp.array(condition_arr, dtype=jnp.float32)
 
-    # ── 4. 대상 samples에 대해 decoder 예측 후 덮어쓰기 ──────────────────────
+    # ── 4. target samples in  text decoder text  after  overwrite ──────────────────────
     target_samples = [sample_list[i] for i in target_indices]
     target_embeddings = (
         np.asarray(text_embeddings)[target_indices]
@@ -330,7 +330,7 @@ def _build_reward_and_condition_with_decoder(
     module=None,
     variables=None,
 ):
-    """CLIP decoder 추론으로 reward_i/condition을 생성한다."""
+    """CLIP decoder text as  reward_i/condition  createtext."""
     from conf.config import DecoderConfig
 
     n = len(sample_list)
@@ -439,7 +439,7 @@ def _build_reward_and_condition_with_decoder(
             f"text_embeddings batch mismatch: got={_text_embed_arr.shape[0]}, expected={n}"
         )
 
-    # ── 배치 추론 + denorm: reward_decode에 위임 ──
+    # ── batch text + denorm: reward_decode in  abovetext ──
     from encoder.utils.decoder_reward import reward_decode
 
     reward_i, condition = reward_decode(
@@ -469,17 +469,17 @@ def _build_reward_and_condition_with_decoder(
 
 
 def _tokenize_texts(sample_list, encoder_config, instruction_prefix: str = "none"):
-    """샘플 리스트에서 CLIP 토크나이저로 input_ids / attention_mask 를 반환한다."""
+    """sample text in  CLIP text text to  input_ids / attention_mask   returntext."""
     from transformers import CLIPProcessor
     import random as _random
 
     model_name = "openai/clip-vit-base-patch32"
     processor = CLIPProcessor.from_pretrained(model_name)
 
-    # instruction_prefix dispatcher 를 인코더 학습 코드와 공유
+    # instruction_prefix dispatcher   text training text and  text
     from encoder.data.clip_batch import apply_instruction_prefix
 
-    # 재현성을 위해 고정 시드로 rng 생성
+    # reproducibility  abovetext fixed seed to  rng create
     _rng = _random.Random(42)
 
     texts, has_text = [], []
@@ -521,19 +521,19 @@ def _tokenize_texts(sample_list, encoder_config, instruction_prefix: str = "none
 
 
 def _load_clip_encoder_module(config, encoder_config):
-    """config에 따라 ContrastiveModule 또는 ContrastiveDecoderModule을 초기화한다.
+    """config in  text ContrastiveModule text  ContrastiveDecoderModule  initializetext.
 
-    분기:
+    text:
       - model == 'pretrained_clip'  → encoder.pretrained_clip_model.ContrastiveModule
-        (HF CLIP wrapper, `final_text_projection` 없음 — pretrained CLIP ckpt 와 일치)
-      - model == 'finetuned_clip'   → encoder.finetuned_clip_model 의 trainable 변종
-        (구조는 pretrained 과 동일, stop_gradient 만 제거)
-      - 그 외                       → 기존 cnnclip / cnnclip+decoder 경로
-        (`encoder.clip_model.PretrainedTextEncoder` 의 `final_text_projection` 분기 사용)
+        (HF CLIP wrapper, `final_text_projection` none — pretrained CLIP ckpt  and  text)
+      - model == 'finetuned_clip'   → encoder.finetuned_clip_model  of  trainable text
+        (structure  pretrained  and  same, stop_gradient text remove)
+      - text text                       → existing cnnclip / cnnclip+decoder path
+        (`encoder.clip_model.PretrainedTextEncoder`  of  `final_text_projection` text text for )
     """
     _model = getattr(config, "model", None)
 
-    # ── pretrained / finetuned CLIP 분기 ──────────────────────────────────
+    # ── pretrained / finetuned CLIP text ──────────────────────────────────
     if _model in ("pretrained_clip", "finetuned_clip"):
         if _model == "finetuned_clip":
             from encoder.finetuned_clip_model import (
@@ -548,7 +548,7 @@ def _load_clip_encoder_module(config, encoder_config):
         rng = jax.random.PRNGKey(0)
         dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
         dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
-        # HF pretrained CLIP vision tower 는 항상 224×224×3 RGB 입력
+        # HF pretrained CLIP vision tower   always 224×224×3 RGB text
         dummy_pix = jnp.ones((1, 224, 224, 3), dtype=jnp.float32)
         mode = "text_state" if encoder_config.state else "text"
         variables = module.init(
@@ -557,7 +557,7 @@ def _load_clip_encoder_module(config, encoder_config):
         )
         return module, variables
 
-    # ── 기존 cnnclip 경로 ─────────────────────────────────────────────────
+    # ── existing cnnclip path ─────────────────────────────────────────────────
     from encoder.clip_model import get_cnnclip_decoder_encoder, get_cnnclip_encoder
 
     use_decoder = hasattr(config, "decoder")
@@ -590,7 +590,7 @@ def _load_clip_encoder_module(config, encoder_config):
 
 
 def _format_num_bytes(num_bytes: int) -> str:
-    """바이트 수를 사람이 읽기 쉬운 문자열로 변환한다."""
+    """text text text  text  read text string to  converttext."""
     if num_bytes < 1024:
         return f"{num_bytes} B"
     if num_bytes < 1024**2:
@@ -599,7 +599,7 @@ def _format_num_bytes(num_bytes: int) -> str:
 
 
 def _compute_tree_signature_hash(tree, *, algo: str = "sha256"):
-    """중첩 dict/PyTree의 결정론적 signature hash를 계산한다."""
+    """ during text dict/PyTree of  text signature hash  computetext."""
     from flax.core import FrozenDict
     from flax.traverse_util import flatten_dict
 
@@ -651,7 +651,7 @@ def _compute_tree_signature_hash(tree, *, algo: str = "sha256"):
 
 
 def _checkpoint_signature_for_cache(variables) -> str:
-    """캐시 키 생성을 위한 체크포인트 시그니처(hex)를 계산한다."""
+    """cache text create  abovetext checkpoint text(hex)  computetext."""
     try:
         signature_hex, _, _ = _compute_tree_signature_hash(variables)
         return signature_hex
@@ -660,9 +660,9 @@ def _checkpoint_signature_for_cache(variables) -> str:
 
 
 def _resolve_instruction_prefix(config) -> str:
-    """config에서 instruction_prefix 모드 문자열을 읽어 normalize한다.
+    """config in  instruction_prefix mode string  text normalizetext.
 
-    Returns "name" / "desc" / "none" 중 하나.
+    Returns "name" / "desc" / "none"  during  text.
     """
     from encoder.data.clip_batch import _normalize_instruction_prefix_mode
     return _normalize_instruction_prefix_mode(getattr(config, "instruction_prefix", "none"))
@@ -671,7 +671,7 @@ def _resolve_instruction_prefix(config) -> str:
 def _build_clip_embedding_cache_path(
     sample_list, *, ckpt_signature: str, instruction_prefix: str = "none"
 ) -> tuple[str, Path]:
-    """CLIP 임베딩 캐시 키와 저장 경로를 생성한다."""
+    """CLIP embedding cache text and  save path  createtext."""
     hasher = hashlib.sha256()
     hasher.update(b"clip-latent-embedding-cache-v2")
     hasher.update(f"|ckpt_signature={ckpt_signature}".encode("utf-8"))
@@ -690,12 +690,12 @@ def _build_clip_embedding_cache_path(
 def _build_decoder_reward_cache_path(
     sample_list, *, ckpt_signature: str, instruction_prefix: str = "none"
 ) -> tuple[str, Path]:
-    """디코더 reward/condition 예측 캐시 키와 저장 경로를 생성한다."""
+    """text reward/condition text cache text and  save path  createtext."""
     hasher = hashlib.sha256()
     hasher.update(b"decoder-reward-cache-v4-text-embed")
     hasher.update(f"|ckpt_signature={ckpt_signature}".encode("utf-8"))
-    # 디코더 입력은 CLIP text embedding이므로 instruction_prefix 가 바뀌면
-    # text embedding도 바뀐다 → 캐시 키에 반드시 포함해야 한다.
+    # text text  CLIP text embedding text to  instruction_prefix   text
+    # text embedding also  text → cache text in  text text text.
     hasher.update(f"|instruction_prefix={instruction_prefix}".encode("utf-8"))
 
     for sample in sample_list:
@@ -712,7 +712,7 @@ def _build_decoder_reward_cache_path(
 
 
 def _log_checkpoint_signature_hash(state, *, ckpt_dir: str, step: int, fmt: str):
-    """복원된 체크포인트 state의 signature hash를 로그로 출력한다."""
+    """text checkpoint state of  signature hash   to text to  text."""
     try:
         signature_hex, leaf_count, total_bytes = _compute_tree_signature_hash(state)
         logger.info(
@@ -733,7 +733,7 @@ def _log_checkpoint_signature_hash(state, *, ckpt_dir: str, step: int, fmt: str)
 
 
 def _restore_encoder_checkpoint(encoder_config, variables):
-    """encoder_config.ckpt_path 에서 가장 최신 체크포인트를 복원한다."""
+    """encoder_config.ckpt_path  in   text latest checkpoint  text."""
     ckpt_path = encoder_config.ckpt_path
     if ckpt_path is None:
         logger.warning(
@@ -782,7 +782,7 @@ def _restore_encoder_checkpoint(encoder_config, variables):
 
 
 def _encode_texts_batched(module, variables, input_ids, attention_mask, batch_size=256):
-    """module.apply 를 배치 단위로 호출해 text_embed 를 수집한다."""
+    """module.apply   batch textabove to  calltext text_embed   text."""
     from tqdm import tqdm
 
     @jax.jit
@@ -807,7 +807,7 @@ def _encode_texts_batched(module, variables, input_ids, attention_mask, batch_si
 
 
 def _postprocess_embeddings(embeddings, has_text, nlp_input_dim):
-    """instruction 없는 행을 zeros 로 채우고, nlp_input_dim 에 맞게 패딩/절삭한다."""
+    """instruction without row  zeros  to  text, nlp_input_dim  in  text padding/truncatetext."""
     for i, has_text_flag in enumerate(has_text):
         if not has_text_flag:
             embeddings[i] = 0.0
@@ -823,7 +823,7 @@ def _postprocess_embeddings(embeddings, has_text, nlp_input_dim):
 
 
 def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None):
-    """사전학습된 CLIP encoder를 통해 instruction 텍스트 -> latent embedding을 계산한다."""
+    """pretrained CLIP encoder  text instruction text -> latent embedding  computetext."""
     nlp_input_dim = config.nlp_input_dim
     encoder_config = config.encoder
 
@@ -902,7 +902,7 @@ def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None
 
 
 def _compute_bert_embeddings(sample_list, nlp_input_dim):
-    """BERT를 사용하여 instruction 텍스트에서 임베딩을 계산한다."""
+    """BERT  text for text instruction text in  embedding  computetext."""
     try:
         from transformers import AutoTokenizer, FlaxAutoModel
     except ImportError as e:

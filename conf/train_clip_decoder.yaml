@@ -1,5 +1,5 @@
 # conf/train_clip_decoder.yaml
-# CLIP Encoder + Reward Decoder 학습 설정
+# CLIP Encoder + Reward Decoder training config
 # Usage: python train_clip_decoder.py game=all
 
 defaults:
@@ -9,9 +9,9 @@ defaults:
 encoder:
   model: cnnclip
 
-# 디코더 설정
+# text config
 decoder:
   hidden_dim: 128
   num_layers: 2
   num_reward_classes: 5
-  cnn_reward_enum_onehot: true   # CNN 입력에 reward_enum one-hot 채널 추가
+  cnn_reward_enum_onehot: true   # CNN text in  reward_enum one-hot text text

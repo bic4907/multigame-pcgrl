@@ -1,7 +1,7 @@
 """
 dataset/multigame/handlers/vglc_games/__init__.py
 ==================================================
-게임별 전처리기 레지스트리.
+gametext preprocessingtext registry.
 """
 from __future__ import annotations
 

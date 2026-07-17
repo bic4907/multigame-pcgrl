@@ -1,29 +1,29 @@
 """
 dataset/multigame/handlers/zelda_handler.py
 ===========================================
-The Legend of Zelda (TheVGLC) 핸들러.
+The Legend of Zelda (TheVGLC) handler.
 
-TheVGLC의 젤다 데이터는 전체 던전 맵이 하나의 텍스트 파일로 제공된다.
-각 문자가 타일 하나를 의미하며, 방(room)은 11×16(W×H) 크기의 패치로 분할된다.
-전부 void('-')로 이루어진 패치는 빈 공간이므로 제거한다.
+TheVGLC of  text data  all text before  map  text of  text file to  text.
+each character  tile text   of text, text(room)  11×16(W×H) size of  text to  splittext.
+ before text void('-') to   text text  text text text to  removetext.
 
-방 구조 (NES The Legend of Zelda)
+text structure (NES The Legend of Zelda)
 ----------------------------------
-  - 한 방 = 가로 11문자 × 세로 16줄
-  - 구성: 상하 벽(WW…) 2줄씩 + 좌우 벽(WW) 2문자씩 + 내부 7×12
-  - 인접 방은 벽을 나란히 놓음 (WWWW = 방1 오른벽 + 방2 왼벽)
-  - 분리된 방은 11문자 대시('-----------')로 구분
+  - text text =   to  11character × text to  16text
+  - text: text wall(WW…) 2text + text wall(WW) 2charactertext + internal 7×12
+  - adjacent text  wall  text text (WWWW = text1 textwall + text2 textwall)
+  - separatetext text  11character text('-----------') to  text
 
-전처리:
-  1. 11×16 패치에서 외곽 벽 1줄/1칸씩 제거 → 9×14 (내부 + 벽 1겹)
-  2. 짧은 축(가로 9)을 nearest-neighbor stretch → 14×14 정사각형
-  3. 14×14를 16×16 가운데 정렬 (WALL 패딩)
-  4. 90도 회전 증강으로 데이터 2배
-  5. 일부 맵(50%)에 FLOOR/EMPTY 위치에 MOB·OBJECT를 1~5개 랜덤 드롭 (seed=42 고정)
+preprocessing:
+  1. 11×16 text in  border wall 1text/1text remove → 9×14 (internal + wall 1text)
+  2. text  text(  to  9)  nearest-neighbor stretch → 14×14 texteachtext
+  3. 14×14  16×16  text sort (WALL padding)
+  4. 90 also  rotate augmentation as  data 2text
+  5. text map(50%) in  FLOOR/EMPTY abovetext in  MOB·OBJECT  1~5text random text (seed=42 fixed)
 
-타일 매핑 (vglc_games/zelda.py 기준)
+tile text (vglc_games/zelda.py basis)
 -------------------------------------
-0  : EMPTY   (-, 공백)
+0  : EMPTY   (-, text)
 1  : WALL    (W)
 2  : FLOOR   (F)
 3  : DOOR    (D)
@@ -53,23 +53,23 @@ from .vglc_games.zelda import (
     make_legend,
 )
 
-# ── 경로 기본값 ─────────────────────────────────────────────────────────────────
+# ── path default value ─────────────────────────────────────────────────────────────────
 _DEFAULT_ZELDA_ROOT = (
     Path(__file__).parent.parent.parent / "TheVGLC" / "The Legend of Zelda"
 )
 
-# ── 패치 크기 (NES 젤다 방 크기) ─────────────────────────────────────────────────
-PATCH_W = 11   # 가로 (문자 수)
-PATCH_H = 16   # 세로 (줄 수)
-TARGET_SIZE = 16  # 최종 출력 크기 (16×16)
+# ── text size (NES text text size) ─────────────────────────────────────────────────
+PATCH_W = 11   #   to  (character text)
+PATCH_H = 16   # text to  (text text)
+TARGET_SIZE = 16  # text text size (16×16)
 
-# 외곽 벽 제거 후 크기
+# border wall remove  after  size
 TRIMMED_W = PATCH_W - 2   # 11 - 2 = 9
 TRIMMED_H = PATCH_H - 2   # 16 - 2 = 14
 
 
 def _read_map_text(path: Path) -> List[str]:
-    """텍스트 파일을 읽어 줄 목록을 반환한다. 끝의 빈 줄은 제거."""
+    """text file  text text list  returntext. text of  text text  remove."""
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     while lines and not lines[-1].strip():
         lines.pop()
@@ -81,8 +81,8 @@ def _text_to_int_grid(
     preprocessor: ZeldaPreprocessor,
 ) -> np.ndarray:
     """
-    전체 텍스트 맵을 정수 2D 배열로 변환한다.
-    모든 줄을 동일 너비로 맞추고(단축 줄은 EMPTY 패딩), 문자→정수 변환.
+    all text map  integer 2D array to  converttext.
+    text text  same text to  text(text text  EMPTY padding), character→integer convert.
     """
     if not lines:
         return np.zeros((0, 0), dtype=np.int32)
@@ -101,15 +101,15 @@ def _extract_rooms(
     patch_w: int = PATCH_W,
 ) -> List[Tuple[np.ndarray, int, int]]:
     """
-    전체 맵 그리드를 patch_h × patch_w 패치로 분할하고,
-    전부 EMPTY(0)인 패치는 제외한다.
+    all map text  patch_h × patch_w text to  splittext,
+     before text EMPTY(0)text text  text.
 
     Returns
     -------
     list of (patch_array, row_idx, col_idx)
         patch_array : (patch_h, patch_w) int32
-        row_idx     : 패치 행 인덱스 (0-based)
-        col_idx     : 패치 열 인덱스 (0-based)
+        row_idx     : text row index (0-based)
+        col_idx     : text column index (0-based)
     """
     H, W = grid.shape
     rooms = []
@@ -117,7 +117,7 @@ def _extract_rooms(
     for iy, y in enumerate(range(0, H - patch_h + 1, patch_h)):
         for ix, x in enumerate(range(0, W - patch_w + 1, patch_w)):
             patch = grid[y : y + patch_h, x : x + patch_w]
-            # 전부 empty (void) 인 패치는 제외
+            #  before text empty (void) text text  text
             if np.all(patch == ZeldaTile.EMPTY):
                 continue
             rooms.append((patch.copy(), iy, ix))
@@ -127,30 +127,30 @@ def _extract_rooms(
 
 def _trim_outer_wall(patch: np.ndarray) -> np.ndarray:
     """
-    11×16 패치에서 외곽 벽 1줄/1칸 제거.
+    11×16 text in  border wall 1text/1text remove.
 
-    원본 (16H × 11W):
-        row 0  : WWWWWWWWWWW  ← 제거 (벽 행)
-        row 1  : WWWWDDDWWWW  ← 유지 (벽+문)
+    text (16H × 11W):
+        row 0  : WWWWWWWWWWW  ← remove (wall row)
+        row 1  : WWWWDDDWWWW  ← keep (wall+text)
         ...
-        row 14 : WWWWDDDWWWW  ← 유지
-        row 15 : WWWWWWWWWWW  ← 제거 (벽 행)
-        col 0  : W (제거)
-        col 10 : W (제거)
+        row 14 : WWWWDDDWWWW  ← keep
+        row 15 : WWWWWWWWWWW  ← remove (wall row)
+        col 0  : W (remove)
+        col 10 : W (remove)
 
-    결과: 9W × 14H
+    result: 9W × 14H
     """
     return patch[1:-1, 1:-1].copy()
 
 
 def _stretch_to_square(patch: np.ndarray) -> np.ndarray:
     """
-    직사각형 패치의 짧은 축을 nearest-neighbor로 늘려 정사각형으로 만든다.
+    texteachtext text of  text  text  nearest-neighbor to  text texteachtext as  text.
 
-    예: 14H × 9W → 14 × 14  (가로 9→14 stretch)
-        9H × 14W → 14 × 14  (세로 9→14 stretch)
+    text: 14H × 9W → 14 × 14  (  to  9→14 stretch)
+        9H × 14W → 14 × 14  (text to  9→14 stretch)
 
-    정수 타일 ID를 유지하기 위해 nearest-neighbor 인덱스 매핑을 사용한다.
+    integer tile ID  keeptext abovetext nearest-neighbor index text  text for text.
     """
     h, w = patch.shape
     if h == w:
@@ -159,19 +159,19 @@ def _stretch_to_square(patch: np.ndarray) -> np.ndarray:
     target = max(h, w)
 
     if w < h:
-        # 가로가 짧음 → 가로를 h 크기로 늘림
+        #   to   text →   to   h size to  text
         col_indices = np.round(np.linspace(0, w - 1, target)).astype(int)
         return patch[:, col_indices].copy()
     else:
-        # 세로가 짧음 → 세로를 w 크기로 늘림
+        # text to   text → text to   w size to  text
         row_indices = np.round(np.linspace(0, h - 1, target)).astype(int)
         return patch[row_indices, :].copy()
 
 
 def _center_pad_to_16x16(patch: np.ndarray) -> np.ndarray:
     """
-    임의 크기 패치를 16×16 중앙 정렬로 패딩한다.
-    빈 영역은 WALL(1)로 채운다 (외곽이므로).
+    text of  size text  16×16 center sort to  paddingtext.
+    text text  WALL(1) to  text (border text to ).
     """
     h, w = patch.shape
     if h == TARGET_SIZE and w == TARGET_SIZE:
@@ -184,43 +184,43 @@ def _center_pad_to_16x16(patch: np.ndarray) -> np.ndarray:
 
 
 def _rotate_90(patch: np.ndarray) -> np.ndarray:
-    """시계방향 90도 회전."""
+    """text 90 also  rotate."""
     return np.rot90(patch, k=-1).copy()
 
 
 def _flip_ud(patch: np.ndarray) -> np.ndarray:
-    """상하 반전."""
+    """text flip."""
     return np.flipud(patch).copy()
 
 
 def _is_uniform_center_12x12(padded: np.ndarray) -> bool:
     """
-    16x16 맵의 중앙 12x12 영역(테두리 2줄 제외)이 모두 같은 타일인지 확인.
-    
+    16x16 map of  center 12x12 text(text 2text text)  text same tiletext check.
+
     Parameters
     ----------
     padded : np.ndarray
-        16x16 맵
-    
+        16x16 map
+
     Returns
     -------
     bool
-        중앙 12x12가 모두 같은 값이면 True
+        center 12x12  text same text text True
     """
-    center = padded[2:14, 2:14]  # 중앙 12x12 추출
+    center = padded[2:14, 2:14]  # center 12x12 extract
     return bool(np.all(center == center[0, 0]))
 
 
-# 드롭 가능한 타일 종류
+# text availabletext tile text
 _DROP_TILES = [ZeldaTile.MOB, ZeldaTile.OBJECT]
 
-# 드롭 대상이 되는 빈 타일 (FLOOR, EMPTY 모두 가능)
+# text target  text  text tile (FLOOR, EMPTY text available)
 _DROPPABLE_TILES = {ZeldaTile.FLOOR, ZeldaTile.EMPTY}
 
-# 드롭 증강 비율 (원본 중 몇 %에 적용할지)
-DROP_AUG_RATIO = 1.0  # 원본의 100%에 드롭 적용
+# text augmentation ratio (text  during  text % in  applytext)
+DROP_AUG_RATIO = 1.0  # text of  100% in  text apply
 
-# 드롭 개수 범위
+# text count range
 DROP_COUNT_MIN = 0
 DROP_COUNT_MAX = 25
 
@@ -230,10 +230,10 @@ def _augment_random_drop(
     rng: np.random.Generator,
 ) -> Optional[np.ndarray]:
     """
-    16×16 패치의 FLOOR 또는 EMPTY 타일 중 0~25개를 랜덤으로
-    MOB 또는 OBJECT로 교체한다.
+    16×16 text of  FLOOR text  EMPTY tile  during  0~25text  random as
+    MOB text  OBJECT to  text.
 
-    드롭 가능한 위치가 없으면 None을 반환한다.
+    text availabletext abovetext  if missing None  returntext.
     """
     droppable = np.argwhere(
         np.isin(padded, list(_DROPPABLE_TILES))
@@ -254,10 +254,10 @@ def _augment_random_drop(
 
 def _fill_missing_tiles(padded: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     """
-    MOB(hazard) 또는 OBJECT(collectable)가 없는 맵에 해당 타일을 in-place로 추가한다.
+    MOB(hazard) text  OBJECT(collectable)  without map in  text tile  in-place to  text text.
 
-    - MOB 없음  → FLOOR/EMPTY 중 1~DROP_COUNT_MAX개를 MOB으로 교체
-    - OBJECT 없음 → 남은 FLOOR/EMPTY 중 1~DROP_COUNT_MAX개를 OBJECT로 교체
+    - MOB none  → FLOOR/EMPTY  during  1~DROP_COUNT_MAXtext  MOB as  text
+    - OBJECT none → text  FLOOR/EMPTY  during  1~DROP_COUNT_MAXtext  OBJECT to  text
     """
     result = padded.copy()
 
@@ -280,7 +280,7 @@ def _fill_missing_tiles(padded: np.ndarray, rng: np.random.Generator) -> np.ndar
     return result
 
 
-# ── 정수 → 대표 문자 역매핑 ─────────────────────────────────────────────────────
+# ── integer → texttable character text ─────────────────────────────────────────────────────
 _INT_TO_CHAR: Dict[int, str] = {
     ZeldaTile.EMPTY:   "-",
     ZeldaTile.WALL:    "W",
@@ -299,26 +299,26 @@ def _int_to_char(val: int) -> str:
 
 
 def _array_to_char_grid(arr: np.ndarray) -> List[List[str]]:
-    """정수 배열 → 문자 그리드."""
+    """integer array → character text."""
     return [[_int_to_char(int(val)) for val in row] for row in arr]
 
 
 class ZeldaHandler(BaseGameHandler):
     """
-    The Legend of Zelda (TheVGLC) 핸들러.
+    The Legend of Zelda (TheVGLC) handler.
 
-    전처리 과정:
-      1. Processed/ 폴더의 텍스트 맵을 11×16 패치로 분할
-      2. 빈 방(전부 EMPTY) 제거
-      3. 외곽 벽 1줄/1칸 제거 → 9×14
-      4. 짧은 축(가로) nearest-neighbor stretch → 14×14
-      5. 16×16 가운데 정렬 (WALL 패딩)
-      6. 90도 회전 증강 → 데이터 2배
+    preprocessing  and text:
+      1. Processed/ folder of  text map  11×16 text to  split
+      2. text text( before text EMPTY) remove
+      3. border wall 1text/1text remove → 9×14
+      4. text  text(  to ) nearest-neighbor stretch → 14×14
+      5. 16×16  text sort (WALL padding)
+      6. 90 also  rotate augmentation → data 2text
 
     Parameters
     ----------
-    root  : TheVGLC/The Legend of Zelda 폴더 경로
-    split : 하위 폴더명 (기본 "Processed")
+    root  : TheVGLC/The Legend of Zelda folder path
+    split : sub foldertext (default "Processed")
     """
 
     def __init__(
@@ -338,10 +338,10 @@ class ZeldaHandler(BaseGameHandler):
     def game_tag(self) -> str:
         return GameTag.ZELDA
 
-    # ── 파일 탐색 ────────────────────────────────────────────────────────────────
+    # ── file text ────────────────────────────────────────────────────────────────
 
     def _discover_files(self) -> List[Path]:
-        """Processed/ 폴더에서 텍스트 파일 목록을 반환한다."""
+        """Processed/ folder in  text file list  returntext."""
         processed = self._root / self._split
         if not processed.exists():
             raise FileNotFoundError(
@@ -351,13 +351,13 @@ class ZeldaHandler(BaseGameHandler):
         files = [p for p in files if not p.name.lower().startswith("readme")]
         return files
 
-    # ── 전체 로드 ────────────────────────────────────────────────────────────────
+    # ── all load ────────────────────────────────────────────────────────────────
 
     def _load_all(self) -> List[GameSample]:
         files = self._discover_files()
         if not files:
             raise FileNotFoundError(
-                f"[zelda] 레벨 파일을 찾을 수 없습니다: {self._root / self._split}"
+                f"[zelda] level file  text  text text: {self._root / self._split}"
             )
 
         rng = np.random.default_rng(seed=42)
@@ -373,16 +373,16 @@ class ZeldaHandler(BaseGameHandler):
 
             rooms = _extract_rooms(grid)
             for patch, ry, rx in rooms:
-                # 1) 외곽 벽 제거 → 14H × 9W
+                # 1) border wall remove → 14H × 9W
                 trimmed = _trim_outer_wall(patch)
 
-                # 2) 짧은 축 stretch → 14 × 14 정사각형
+                # 2) text  text stretch → 14 × 14 texteachtext
                 squared = _stretch_to_square(trimmed)
 
-                # 3) 16×16 가운데 정렬 (상하좌우 1칸 WALL 패딩)
+                # 3) 16×16  text sort (text 1text WALL padding)
                 padded = _center_pad_to_16x16(squared)
 
-                # 4) OBJECT가 없는 맵에 확률적으로 OBJECT 배치 (결정적)
+                # 4) OBJECT  without map in  probabilitytext as  OBJECT batch (deterministic)
                 base_padded = self._preprocessor.postprocess_array(padded)
 
                 source_id = f"{fname}_r{ry}_c{rx}"
@@ -396,7 +396,7 @@ class ZeldaHandler(BaseGameHandler):
                     "output_size": (TARGET_SIZE, TARGET_SIZE),
                 }
 
-                # 원본 — 독립적으로 MOB/OBJECT 채움
+                # text — independently MOB/OBJECT text
                 arr_orig = _fill_missing_tiles(base_padded, rng)
                 samples.append(GameSample(
                     game=GameTag.ZELDA,
@@ -409,7 +409,7 @@ class ZeldaHandler(BaseGameHandler):
                     meta={**base_meta, "augmented": False},
                 ))
 
-                # 90도 회전 증강 — 독립적으로 MOB/OBJECT 채움
+                # 90 also  rotate augmentation — independently MOB/OBJECT text
                 rotated = _fill_missing_tiles(_rotate_90(base_padded), rng)
                 samples.append(GameSample(
                     game=GameTag.ZELDA,
@@ -422,7 +422,7 @@ class ZeldaHandler(BaseGameHandler):
                     meta={**base_meta, "augmented": True, "augmentation": "rot90"},
                 ))
 
-                # 상하 반전 증강 — 독립적으로 MOB/OBJECT 채움
+                # text flip augmentation — independently MOB/OBJECT text
                 flipped = _fill_missing_tiles(_flip_ud(base_padded), rng)
                 samples.append(GameSample(
                     game=GameTag.ZELDA,
@@ -435,13 +435,13 @@ class ZeldaHandler(BaseGameHandler):
                     meta={**base_meta, "augmented": True, "augmentation": "flipud"},
                 ))
 
-        # ── 필터링: uniform center 맵의 증강 버전만 제거 ─────────────────────────
+        # ── filtering: uniform center map of  augmentation text before text remove ─────────────────────────
         samples_before_filter = len(samples)
-        
-        # 1단계: uniform center 맵의 증강 버전만 제거 (원본은 유지)
+
+        # 1text: uniform center map of  augmentation text before text remove (text  keep)
         uniform_source_ids = set()
         for sample in samples:
-            # 원본이 uniform인지 확인 (rot90, drop이 아닌 원본만 체크)
+            # text  uniformtext check (rot90, drop  text text text)
             if not any(sample.source_id.endswith(s) for s in ("_rot90", "_flipud", "_drop")):
                 padded_array = sample.array
                 if _is_uniform_center_12x12(padded_array):
@@ -449,17 +449,17 @@ class ZeldaHandler(BaseGameHandler):
                     uniform_source_ids.add(f"{base_id}_rot90")
                     uniform_source_ids.add(f"{base_id}_flipud")
                     uniform_source_ids.add(f"{base_id}_drop")
-        
-        # 2단계: uniform center 맵의 증강 버전 제거
+
+        # 2text: uniform center map of  augmentation text before  remove
         filtered_samples = [s for s in samples if s.source_id not in uniform_source_ids]
-        
-        # 3단계: order 재설정
+
+        # 3text: order textconfig
         for i, sample in enumerate(filtered_samples):
             sample.order = i
 
         return filtered_samples
 
-    # ── BaseGameHandler 인터페이스 ────────────────────────────────────────────────
+    # ── BaseGameHandler interface ────────────────────────────────────────────────
 
     def _ensure_loaded(self) -> None:
         if self._samples is None:

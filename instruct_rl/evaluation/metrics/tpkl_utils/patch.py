@@ -1,18 +1,18 @@
 """
 patch.py
 ========
-슬라이딩 윈도우 추출 및 패치 해싱 내부 헬퍼.
+text text text also text extract text text text internal text.
 """
 from __future__ import annotations
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
-MAX_TILE = 64  # 타일 종류 상한; 초과 시 자동 조정됨
+MAX_TILE = 64  # tile text text; exceed text automatic text
 
 
 def hash_patches(patches: np.ndarray, n_tiles: int) -> np.ndarray:
-    """(M, k²) int 패치 → (M,) int64 해시. base-n_tiles 인코딩."""
+    """(M, k²) int text → (M,) int64 text. base-n_tiles text."""
     k2 = patches.shape[1]
     bases = (n_tiles ** np.arange(k2, dtype=np.int64)).reshape(1, k2)
     return (patches.astype(np.int64) * bases).sum(axis=1)
@@ -27,7 +27,7 @@ def extract_windows(levels: np.ndarray, k: int) -> np.ndarray:
 
 def patches_to_dist(patches: np.ndarray, epsilon: float,
                     n_tiles: int | None = None) -> dict:
-    """(M, k²) → {hash_int: 확률} dict. Laplace smoothing 적용."""
+    """(M, k²) → {hash_int: probability} dict. Laplace smoothing apply."""
     if n_tiles is None:
         n_tiles = int(patches.max()) + 1 if patches.size > 0 else MAX_TILE
     hashes = hash_patches(patches, n_tiles)

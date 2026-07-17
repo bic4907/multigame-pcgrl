@@ -1,26 +1,26 @@
 """
 dataset/multigame/handlers/dungeon_handler.py
 =============================================
-dungeon_level_dataset 핸들러.
+dungeon_level_dataset handler.
 
-- dungeon_levels.npz + dungeon_levels_metadata.csv 로드
-- instruction / instruction_slug / level_id / sample_id 태깅 지원
-- DungeonLevelDataset 코드를 직접 복사하지 않고 독립적으로 재구현
-  (외부 패키지 참조 없음, numpy만 사용)
+- dungeon_levels.npz + dungeon_levels_metadata.csv load
+- instruction / instruction_slug / level_id / sample_id text text
+- DungeonLevelDataset text  direct copytext text independently text
+  (text text text none, numpytext text for )
 
-타일 매핑 (dungeon_level_dataset README 기준)
+tile text (dungeon_level_dataset README basis)
 ---------------------------------------------
 0  : padding / unknown
-1  : floor  (원본 값 1)
-2  : wall   (원본 값 2)
-3  : enemy  (원본 값 3)
+1  : floor  (text text 1)
+2  : wall   (text text 2)
+3  : enemy  (text text 3)
 
-전처리 필터 (캐시 저장 전 적용, legacy annotation 기준)
+preprocessing filter (cache save  before  apply, legacy annotation basis)
 ---------------------------------------------
-1. RG(region, reward_enum==1) 값이 25 또는 35인 샘플 제거
-2. BD(bat_direction, reward_enum==5) 샘플을 instruction별로 절반 제거
-   (key 오름차순 정렬 후 앞 절반 유지 → 재현 가능)
-3. 전체 4000개로 절단
+1. RG(region, reward_enum==1) text  25 text  35text sample remove
+2. BD(bat_direction, reward_enum==5) sample  instructionby text remove
+   (key text sort  after  text text keep → text available)
+3. all 4000text to  text
 """
 from __future__ import annotations
 
@@ -48,12 +48,12 @@ _LEGACY_ANNOT_PATH = (
     / "reward_annotations" / "legacy" / "dungeon_reward_annotations.csv"
 )
 
-# ── 전처리 상수 ─────────────────────────────────────────────────────────────────
+# ── preprocessing text ─────────────────────────────────────────────────────────────────
 _EXCLUDE_RG: frozenset[int] = frozenset({25, 35})
 _TARGET_COUNT: int = 4_000
 
 
-# ── 타일 상수 ────────────────────────────────────────────────────────────────────
+# ── tile text ────────────────────────────────────────────────────────────────────
 class DungeonTile:
     UNKNOWN  = 0
     FLOOR    = 1
@@ -73,9 +73,9 @@ DUNGEON_PALETTE: dict[int, tuple[int, int, int]] = {
 
 def _place_treasure(array: np.ndarray, key: str) -> np.ndarray:
     """
-    FLOOR 타일 각각에 대해 독립적으로 10% 확률로 TREASURE(4)로 교체한다.
-    key(='000000' 형식)를 정수로 변환해 seed로 사용 → 재현 가능.
-    FLOOR 가 없으면 array 를 그대로 반환한다.
+    FLOOR tile eacheach in  text independently 10% probability to  TREASURE(4) to  text.
+    key(='000000' text)  integer to  converttext seed to  text for  → text available.
+    FLOOR   if missing array   as-is returntext.
     """
     rng = np.random.RandomState(int(key))
     floor_pos = np.argwhere(array == DungeonTile.FLOOR)
@@ -98,16 +98,16 @@ def _make_legend() -> TileLegend:
 
 def _apply_preprocess_filter(all_keys: List[str]) -> List[str]:
     """
-    legacy annotation CSV 를 읽어 전처리 필터 후 남길 key 목록을 반환한다.
+    legacy annotation CSV   text preprocessing filter  after  text key list  returntext.
 
-    필터 적용 순서
+    filter apply order
     --------------
-    1. reward_enum==1 (RG) 이면서 condition_1 in _EXCLUDE_RG 인 샘플 제거
-    2. reward_enum==5 (BD) 샘플을 instruction 별로 절반 유지
-       (key 오름차순 정렬 후 앞 절반 → 재현 가능)
-    3. 전체 _TARGET_COUNT 개로 절단 (원래 순서 유지)
+    1. reward_enum==1 (RG)  text condition_1 in _EXCLUDE_RG text sample remove
+    2. reward_enum==5 (BD) sample  instruction by text keep
+       (key text sort  after  text text → text available)
+    3. all _TARGET_COUNT text to  text (text order keep)
 
-    annotation CSV 가 없으면 all_keys 를 그대로 반환한다.
+    annotation CSV   if missing all_keys   as-is returntext.
     """
     if not _LEGACY_ANNOT_PATH.exists():
         return all_keys
@@ -123,7 +123,7 @@ def _apply_preprocess_filter(all_keys: List[str]) -> List[str]:
     for key in all_keys:
         row = annot.get(key)
         if row is None:
-            # annotation 에 없는 샘플은 그대로 유지
+            # annotation  in  without sample  as-is keep
             keep_set.add(key)
             continue
 
@@ -131,7 +131,7 @@ def _apply_preprocess_filter(all_keys: List[str]) -> List[str]:
         cond1_raw   = row.get("condition_1", "")
 
         if reward_enum == "1":
-            # RG 값이 제외 대상이면 스킵
+            # RG text  text target text text
             try:
                 rg = int(float(cond1_raw))
             except (ValueError, TypeError):
@@ -140,24 +140,24 @@ def _apply_preprocess_filter(all_keys: List[str]) -> List[str]:
                 continue
 
         if reward_enum == "5":
-            # BD 샘플은 instruction 별로 그룹화해서 나중에 처리
+            # BD sample  instruction by text text during  in  process
             instr = row.get("instruction", "")
             bd_by_instruction.setdefault(instr, []).append(key)
         else:
             keep_set.add(key)
 
-    # BD: instruction 별로 정렬 후 앞 절반만 유지
+    # BD: instruction by sort  after  text text keep
     for instr in sorted(bd_by_instruction):
-        group = sorted(bd_by_instruction[instr])   # key 오름차순 → 재현 가능
+        group = sorted(bd_by_instruction[instr])   # key text → text available
         half = max(1, len(group) // 2)
         keep_set.update(group[:half])
 
-    # 원래 순서 유지 후 절단
+    # text order keep  after  text
     filtered = [k for k in all_keys if k in keep_set]
     return filtered[:_TARGET_COUNT]
 
 
-# ── 메타 dataclass (경량) ────────────────────────────────────────────────────────
+# ── meta dataclass (text) ────────────────────────────────────────────────────────
 class _DungeonMeta:
     __slots__ = ("index", "key", "instruction", "instruction_slug",
                  "level_id", "sample_id")
@@ -174,13 +174,13 @@ class _DungeonMeta:
 
 class DungeonHandler(BaseGameHandler):
     """
-    dungeon_level_dataset 핸들러.
+    dungeon_level_dataset handler.
 
     Parameters
     ----------
-    root      : dungeon_level_dataset 폴더 경로
-    npz_name  : npz 파일명 (기본 'dungeon_levels.npz')
-    meta_name : csv 파일명 (기본 'dungeon_levels_metadata.csv')
+    root      : dungeon_level_dataset folder path
+    npz_name  : npz filetext (default 'dungeon_levels.npz')
+    meta_name : csv filetext (default 'dungeon_levels_metadata.csv')
 
     Example
     -------
@@ -188,7 +188,7 @@ class DungeonHandler(BaseGameHandler):
         for sample in handler:
             print(sample.instruction, sample.shape)
 
-        # instruction으로 필터
+        # instruction as  filter
         subset = handler.filter_by_instruction("bat swarm")
     """
 
@@ -225,13 +225,13 @@ class DungeonHandler(BaseGameHandler):
                 )
                 raw_metas[m.key] = m
 
-        # 전처리 필터 적용 (캐시 저장 전)
+        # preprocessing filter apply (cache save  before )
         all_keys = [m.key for m in sorted(raw_metas.values(), key=lambda m: m.index)]
 
-        # 1차: ndim!=2 맵 제거 (형식 이상 맵, RuntimeWarning 발생원)
+        # 1text: ndim!=2 map remove (text or more map, RuntimeWarning text)
         all_keys = [k for k in all_keys if self._archive[k].ndim == 2]
 
-        # 2차: legacy annotation 기반 필터 (RG, BD, 4000개 절단)
+        # 2text: legacy annotation based filter (RG, BD, 4000text text)
         kept_keys = _apply_preprocess_filter(all_keys)
 
         for key in kept_keys:
@@ -245,11 +245,11 @@ class DungeonHandler(BaseGameHandler):
 
     # ── BaseGameHandler ─────────────────────────────────────────────────────────
     def list_entries(self) -> List[str]:
-        """npz key 목록 반환."""
+        """npz key list return."""
         return [m.key for m in self._metas]
 
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
-        """npz key → GameSample 반환."""
+        """npz key → GameSample return."""
         m = self._key_to_meta.get(source_id)
         if m is None:
             raise KeyError(f"Key not found in dungeon dataset: {source_id!r}")
@@ -276,11 +276,11 @@ class DungeonHandler(BaseGameHandler):
             },
         )
 
-    # ── 확장 쿼리 메서드 ─────────────────────────────────────────────────────────
+    # ── expand text text ─────────────────────────────────────────────────────────
     def filter_by_instruction(
         self, keyword: str, *, case_sensitive: bool = False
     ) -> List[GameSample]:
-        """instruction에 keyword가 포함된 샘플 목록 반환."""
+        """instruction in  keyword  text sample list return."""
         kw = keyword if case_sensitive else keyword.lower()
         result = []
         for i, m in enumerate(self._metas):
@@ -290,7 +290,7 @@ class DungeonHandler(BaseGameHandler):
         return result
 
     def group_by_instruction(self) -> Dict[str, List[GameSample]]:
-        """instruction_slug → 샘플 리스트 딕셔너리."""
+        """instruction_slug → sample text dictionary."""
         groups: Dict[str, List[GameSample]] = {}
         for i, m in enumerate(self._metas):
             sample = self.load_sample(m.key, order=i)
@@ -299,7 +299,7 @@ class DungeonHandler(BaseGameHandler):
 
 
     def category_names(self) -> List[str]:
-        """고유 instruction 문자열 목록."""
+        """text instruction string list."""
         seen = {}
         for m in self._metas:
             seen[m.instruction_slug] = m.instruction

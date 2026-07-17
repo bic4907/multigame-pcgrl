@@ -1,12 +1,12 @@
 """
 train_vipcgrl.py
 =================
-VIPCGRL (Vision-Instructed PCGRL) — pretrained CLIP 임베딩을 입력 피처로 사용.
+VIPCGRL (Vision-Instructed PCGRL) — pretrained CLIP embedding  text text to  text for .
 
-기존 train.py 의 `encoder.model='cnnclip'` 모드에 해당하며,
-dataset 기반 파이프라인(MultiGameDataset)으로 동작한다.
+existing train.py  of  `encoder.model='cnnclip'` mode in  text,
+dataset based pipeline(MultiGameDataset) as  text.
 
-실행:
+Usage:
     python -m train_vipcgrl [overrides]
     python -m train_vipcgrl dataset_game=dungeon dataset_reward_enum=1 SIM_COEF=3.5
 """
@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 suppress_jax_debug_logs()
 
 
-# ── VIPCGRL obs 주입: CLIP embedding → nlp_obs ───────────────────────────────
+# ── VIPCGRL obs inject: CLIP embedding → nlp_obs ───────────────────────────────
 
 def inject_vipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """pretrained CLIP 인코더로 계산된 임베딩을 nlp_obs 에 주입."""
+    """pretrained CLIP text to  computetext embedding  nlp_obs  in  inject."""
     return last_obs.replace(nlp_obs=instruct_sample.embedding)
 
 
@@ -72,14 +72,14 @@ def main(config: VIPCGRLConfig):
     if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
         raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
-    # ── encoder의 dataset_setting.json에서 seen_ratio / seen_games 자동 주입 ──
-    # (mgpcgrl 의 동일 로직을 포팅. VIPCGRL은 decoder가 없으므로 reward_decoder_mode 는 다루지 않음.)
+    # ── encoder of  dataset_setting.json in  seen_ratio / seen_games automatic inject ──
+    # (mgpcgrl  of  same  to text  text. VIPCGRL  decoder  text to  reward_decoder_mode   text text.)
     dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
     if os.path.exists(dataset_setting_path):
         with open(dataset_setting_path, "r") as f:
             dataset_setting = json.load(f)
 
-        # ── seen_ratio 주입: encoder 학습 때 쓴 seen 게임 데이터 비율을 그대로 사용 ──
+        # ── seen_ratio inject: encoder training text text seen game data ratio  as-is text for  ──
         seen_ratio = dataset_setting.get("seen_ratio", 1.0)
         if seen_ratio != config.dataset_seen_ratio:
             logger.info(
@@ -88,7 +88,7 @@ def main(config: VIPCGRLConfig):
             )
             config.dataset_seen_ratio = seen_ratio
 
-        # ── unseen_ratio 주입: encoder 학습 때 쓴 unseen 게임 데이터 비율을 그대로 사용 ──
+        # ── unseen_ratio inject: encoder training text text unseen game data ratio  as-is text for  ──
         unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
         if unseen_ratio != config.dataset_unseen_ratio:
             logger.info(
@@ -97,7 +97,7 @@ def main(config: VIPCGRLConfig):
             )
             config.dataset_unseen_ratio = unseen_ratio
 
-        # ── game 범위 결정 + reward_seen_games 주입 ─────────────────────────────
+        # ── game range text + reward_seen_games inject ─────────────────────────────
         # The seen/unseen split reflects the encoder training distribution and is
         # used to write train_setting.json for downstream WandB analysis.
         seen_games = dataset_setting.get("seen_games", [])

@@ -1,30 +1,30 @@
 # Reward Annotation Pipeline
 
-게임 레벨 샘플에 대해 reward measure를 계산하고, OpenAI Batch API로 자연어 instruction을 생성하는 2단계 파이프라인.
+game level sample in  text reward measure  computetext, OpenAI Batch API to  text instruction  createtext  2text pipeline.
 
 ```
-캐시 (MultiGameDataset)
+cache (MultiGameDataset)
     ↓  annotate.py
-{key}.ann.json  (5개 measure 값, instruction 비어있음)
+{key}.ann.json  (5text measure text, instruction text)
     ↓  generate_instructions.py --run
-{key}.ann.json  (instruction_raw / instruction_uni 채워진 최종본)
+{key}.ann.json  (instruction_raw / instruction_uni text text)
 ```
 
 ---
 
-## 전체 실행 (--run)
+## all Usage (--run)
 
 ```bash
 # Step 1: measure annotation
 python dataset/reward_annotations/annotate.py
 
-# Step 2: instruction 생성 (제출 → 완료 대기 → 자동 저장)
+# Step 2: instruction create (text → finish text → automatic save)
 python dataset/reward_annotations/generate_instructions.py --run
 ```
 
-`--run`은 게임별로 배치를 제출하고, 완료될 때까지 폴링하며, 완료 즉시 ann.json에 결과를 반영한다.
+`--run`  gameby batch  text, finishtext text text, finish text ann.json in  result  applytext.
 
-### 부분 실행 (특정 게임 / enum)
+### text Usage (text game / enum)
 
 ```bash
 python dataset/reward_annotations/annotate.py --games doom zelda
@@ -37,21 +37,21 @@ python dataset/reward_annotations/generate_instructions.py --run \
 
 ## Step 1 — annotate.py
 
-캐시(`dataset/multigame/cache/artifacts/`)에서 맵 배열을 읽어 5가지 measure를 계산하고 `{key}.ann.json`에 저장한다.
+cache(`dataset/multigame/cache/artifacts/`) in  map array  text 5 text measure  computetext `{key}.ann.json` in  savetext.
 
-### Reward Enum 정의
+### Reward Enum text of
 
-| enum | feature_name | 내용 |
+| enum | feature_name | content |
 |------|------|------|
-| 0 | `region` | 연결된 passable 영역 수 |
-| 1 | `path_length` | 가장 긴 경로 길이 |
-| 2 | `interactable_count` | Interactive 타일 수 |
-| 3 | `hazard_count` | Hazard 타일 수 |
-| 4 | `collectable_count` | Collectable 타일 수 |
+| 0 | `region` | text passable text text |
+| 1 | `path_length` |  text text path text  |
+| 2 | `interactable_count` | Interactive tile text |
+| 3 | `hazard_count` | Hazard tile text |
+| 4 | `collectable_count` | Collectable tile text |
 
-**passable 기준**: unified EMPTY(1) + HAZARD(4) + COLLECTABLE(5) — 모든 게임 공통
+**passable basis**: unified EMPTY(1) + HAZARD(4) + COLLECTABLE(5) — text game common
 
-### 게임별 sub_condition (count 계산 기준 타일)
+### gametext sub_condition (count compute basis tile)
 
 | game | interactable | hazard | collectable |
 |------|------|------|------|
@@ -61,15 +61,15 @@ python dataset/reward_annotations/generate_instructions.py --run \
 | pokemon | spawn + water | enemy | object |
 | dungeon | — | enemy | treasure |
 
-### 주요 옵션
+### text text
 
-| 옵션 | 기본값 | 설명 |
+| text | default value | text |
 |------|------|------|
-| `--games` | 전체 5개 | 처리할 게임 목록 |
-| `--cache-dir` | `dataset/multigame/cache/artifacts` | 캐시 루트 디렉토리 |
-| `--force` | False | 기존 ann.json 덮어쓰기 |
+| `--games` | all 5text | processtext game list |
+| `--cache-dir` | `dataset/multigame/cache/artifacts` | cache text directory |
+| `--force` | False | existing ann.json overwrite |
 
-### 출력
+### text
 
 `dataset/multigame/cache/artifacts/{hash}/{game}/{key}.ann.json`
 
@@ -96,63 +96,63 @@ python dataset/reward_annotations/generate_instructions.py --run \
 
 ## Step 2 — generate_instructions.py
 
-ann.json을 읽어 각 샘플에 대해 GPT에게 `instruction_raw` / `instruction_uni` 생성을 요청하고 결과를 ann.json에 저장한다.
+ann.json  text each sample in  text GPT in text `instruction_raw` / `instruction_uni` create  requesttext result  ann.json in  savetext.
 
-### --run 동작 흐름
+### --run text text
 
 ```
-1. threshold=None 인 (game, feature) 조합 → instruction을 "None"으로 직접 채움
-2. 미처리 행에 대해 게임별 JSONL 파일 생성 (batches/{timestamp}.jsonl)
-3. OpenAI Batch API에 게임별로 배치 제출
-4. 폴링 루프 (기본 10초 간격):
-     - 완료된 배치 → 결과 파싱 → ann.json 업데이트
-     - 실패/만료 → 로그 출력 후 skip
-5. 모든 배치 완료 시 종료
+1. threshold=None text (game, feature) text → instruction  "None" as  direct text
+2. textprocess row in  text gametext JSONL file create (batches/{timestamp}.jsonl)
+3. OpenAI Batch API in  gameby batch text
+4. text text (default 10seconds text):
+     - finishtext batch → result parsing → ann.json update
+     - failure/text →  to text text  after  skip
+5. text batch finish text text
 ```
 
 ### instruction_raw vs instruction_uni
 
-| 필드 | 기준 |
+| text | basis |
 |------|------|
-| `instruction_raw` | 게임 원본 타일 이름 사용 (ENEMY, DOOR, SPAWN 등) |
-| `instruction_uni` | unified 카테고리 사용 (empty / wall / interactive / hazard / collectable) |
+| `instruction_raw` | game text tile name text for  (ENEMY, DOOR, SPAWN text) |
+| `instruction_uni` | unified text text for  (empty / wall / interactive / hazard / collectable) |
 
-### 주요 옵션
+### text text
 
-| 옵션 | 기본값 | 설명 |
+| text | default value | text |
 |------|------|------|
-| `--games` | 전체 5개 | 처리할 게임 목록 |
-| `--enums` | `0 1 2 3 4` | 처리할 reward_enum |
-| `--cache-dir` | `dataset/multigame/cache/artifacts` | 캐시 루트 |
-| `--force` | False | 이미 채워진 instruction도 재생성 |
-| `--poll-interval` | 10 | 폴링 간격 (초) |
-| `--limit` | None | 처리할 최대 행 수 (테스트용) |
+| `--games` | all 5text | processtext game list |
+| `--enums` | `0 1 2 3 4` | processtext reward_enum |
+| `--cache-dir` | `dataset/multigame/cache/artifacts` | cache text |
+| `--force` | False |  text text instruction also  textcreate |
+| `--poll-interval` | 10 | text text (seconds) |
+| `--limit` | None | processtext maximum row text (text for ) |
 
-### 단계별 개별 실행
+### text text Usage
 
 ```bash
-# JSONL 생성 + 배치 제출만 (완료 대기 없음)
+# JSONL create + batch text (finish text none)
 python dataset/reward_annotations/generate_instructions.py --submit
 
-# 완료된 배치 결과 조회 + ann.json 업데이트
+# finishtext batch result text + ann.json update
 python dataset/reward_annotations/generate_instructions.py --retrieve BATCH_ID
 
-# 배치 상태 확인
+# batch text check
 python dataset/reward_annotations/generate_instructions.py --status BATCH_ID
 
-# 배치 이력 조회
+# batch  text text
 python dataset/reward_annotations/generate_instructions.py --log
 ```
 
-배치 제출 이력은 `batches/batch_log.csv`에 기록된다.
+batch text  text  `batches/batch_log.csv` in  writetext.
 
 ---
 
-## 프롬프트 수정
+## text text
 
 ### system_prompt.txt
 
-GPT에게 전달되는 시스템 지시문. 출력 형식, 문체, 제약 조건을 정의한다.
+GPT in text  before text  text text. text text, text, text condition  text of text.
 
 ```
 You are a game level description writer for PCGRL.
@@ -160,33 +160,33 @@ Write one sentence (≤10 words) describing the level's intensity.
 Output JSON: {"instruction_raw": "...", "instruction_uni": "..."}
 ```
 
-**주요 수정 포인트:**
-- 문장 길이 제한 (`STRICT LIMIT: 10 words or fewer`)
-- 문체 방향 (`brief, factual description` / `NOT a design command`)
-- 금지 표현 (숫자·수치 언급 금지)
+**text text text:**
+- text text  text (`STRICT LIMIT: 10 words or fewer`)
+- text text (`brief, factual description` / `NOT a design command`)
+- text tabletext (text·text text text)
 
 ### instruction_config.py
 
-유저 프롬프트 생성에 사용되는 모든 설정 상수. 아래 항목을 수정해 프롬프트 내용을 제어한다.
+text text create in  text for text  text config text. below text  text text content  text.
 
 #### CUSTOM_THRESHOLDS
 
-feature 값을 4개 intensity level로 분할하는 경계값 (3개 경계 → 4 구간).
-`None`이면 GPT 호출 없이 `"None"` 문자열로 채워진다.
+feature text  4text intensity level to  splittext  text (3text text → 4 bin).
+`None` text GPT call text  `"None"` string to  text.
 
 ```python
 CUSTOM_THRESHOLDS = {
     "dungeon_region":       [1.5, 4.5, 14.5],  # very few / somewhat few / somewhat many / very many
-    "sokoban_hazard_count": None,               # 소코반에 hazard 없음 → 스킵
+    "sokoban_hazard_count": None,               # text in  hazard none → text
     ...
 }
 ```
 
-> 경계값 변경 후 instruction을 재생성하려면 `--force` 옵션 사용.
+> text text  after  instruction  textcreatetext `--force` text text for .
 
 #### FEATURE_ZONE_LABELS
 
-intensity level 0~3에 대응하는 레이블 문자열. 유저 프롬프트의 `Intensity level` 항목에 표시된다.
+intensity level 0~3 in  text  text text string. text text of  `Intensity level` text in  tabletext.
 
 ```python
 FEATURE_ZONE_LABELS = {
@@ -198,7 +198,7 @@ FEATURE_ZONE_LABELS = {
 
 #### VOCAB_SETS
 
-각 intensity level별로 GPT에게 제안하는 어휘 목록. 프롬프트에 `Suggested vocabulary` 힌트로 삽입되며, 매 요청마다 목록에서 랜덤하게 1개 선택된다.
+each intensity levelby GPT in text text  text list. text in  `Suggested vocabulary` text to  text, text requesttext list in  randomtext 1text selecttext.
 
 ```python
 VOCAB_SETS = {
@@ -214,7 +214,7 @@ VOCAB_SETS = {
 
 #### GAME_DESCRIPTIONS / FEATURE_DESCRIPTIONS
 
-유저 프롬프트 상단에 삽입되는 게임 및 feature 설명. GPT가 문맥을 이해하는 데 사용된다.
+text text top in  text  game text feature text. GPT  text   text  text text for text.
 
 ```python
 GAME_DESCRIPTIONS = {
@@ -230,21 +230,21 @@ FEATURE_DESCRIPTIONS = {
 
 ---
 
-## 모델 설정
+## text config
 
-`generate_instructions.py` 상단에서 직접 수정:
+`generate_instructions.py` top in  direct text:
 
 ```python
-MODEL       = "gpt-5.4-mini"   # 사용할 OpenAI 모델
-MAX_TOKENS  = 300              # 최대 출력 토큰
-TEMPERATURE = 2.0              # 다양성 (높을수록 다양한 표현)
+MODEL       = "gpt-5.4-mini"   # text for text OpenAI text
+MAX_TOKENS  = 300              # maximum text text
+TEMPERATURE = 2.0              # text (text text text tabletext)
 ```
 
 ---
 
-## 환경 변수
+## text text
 
-`.env` 파일에 설정:
+`.env` file in  config:
 
 ```
 OPENAI_API_KEY=sk-...
@@ -252,15 +252,15 @@ OPENAI_API_KEY=sk-...
 
 ---
 
-## 파일 구조
+## file structure
 
 ```
 dataset/reward_annotations/
-├── annotate.py              # Step 1: measure 계산 → ann.json 생성
-├── generate_instructions.py # Step 2: OpenAI Batch API → instruction 채움
-├── instruction_config.py    # 프롬프트 설정 상수 (threshold, vocab, 설명)
-├── system_prompt.txt        # GPT 시스템 프롬프트
+├── annotate.py              # Step 1: measure compute → ann.json create
+├── generate_instructions.py # Step 2: OpenAI Batch API → instruction text
+├── instruction_config.py    # text config text (threshold, vocab, text)
+├── system_prompt.txt        # GPT text text
 └── batches/
-    ├── batch_log.csv        # 배치 제출/완료 이력
-    └── batch_{timestamp}.jsonl  # 게임별 배치 요청 파일
+    ├── batch_log.csv        # batch text/finish  text
+    └── batch_{timestamp}.jsonl  # gametext batch request file
 ```

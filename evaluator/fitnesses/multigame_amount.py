@@ -1,6 +1,6 @@
 """evaluator/fitnesses/multigame_amount.py
 
-Multigame 타일 개수 기반 fitness (현재 맵의 조건 달성도).
+Multigame tile count based fitness (current map of  condition achievement).
 """
 import chex
 
@@ -12,20 +12,20 @@ def get_multigame_amount_fitness(
     cond: chex.Array,
     tile_name: str = "interactive",
 ) -> chex.Array:
-    """현재 맵에서 multigame 타일 개수와 목표의 차이 (부호 유지).
+    """current map in  multigame tile count and  texttable of  text  (text keep).
 
     Parameters
     ----------
     curr_env_map : chex.Array
-        (H, W) 정수 맵.
+        (H, W) integer map.
     cond : chex.Array
-        목표 타일 개수.
+        texttable tile count.
     tile_name : str
-        "interactive", "hazard", "collectable" 중 하나.
+        "interactive", "hazard", "collectable"  during  text.
 
     Returns
     -------
-    chex.Array : fitness 값 (cond 보다 많으면 양수, 적으면 음수).
+    chex.Array : fitness text (cond text text text, text text).
     """
     curr_loss = multigame_amount_loss(curr_env_map, tile_name, cond, absolute=False)
     return curr_loss.astype(float)

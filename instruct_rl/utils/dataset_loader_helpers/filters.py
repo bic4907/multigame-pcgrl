@@ -8,13 +8,13 @@ from .constants import REWARD_ENUM_NAMES
 
 
 def _parse_dataset_reward_enum_filter(raw_value, *, field_name: str = "dataset_reward_enum"):
-    """dataset_reward_enum 설정을 정규화한다.
+    """dataset_reward_enum config  normalizetext.
 
     Returns
     -------
     list[int] | None
-        None 이면 필터 비활성화(=전체 reward_enum 허용).
-        예: "01" -> [0, 1], "0,1" -> [0, 1], 2 -> [2]
+        None  text filter textenable(=all reward_enum text for ).
+        text: "01" -> [0, 1], "0,1" -> [0, 1], 2 -> [2]
     """
     if raw_value is None:
         return None
@@ -61,11 +61,11 @@ def _parse_dataset_reward_enum_filter(raw_value, *, field_name: str = "dataset_r
 
 
 def _parse_reward_enum_list(raw_value, *, field_name: str = "eval_dataset_reward_enums"):
-    """복수 reward_enum 설정을 int 리스트로 정규화한다.
+    """text reward_enum config  int text to  normalizetext.
 
     None/'none'/'' -> None
     'all'          -> [0,1,2,3,4]
-    '012'          -> [0,1,2]   (기존 동작 유지)
+    '012'          -> [0,1,2]   (existing text keep)
     '0,2,4'        -> [0,2,4]
     """
     if raw_value is None:
@@ -101,7 +101,7 @@ def _parse_reward_enum_list(raw_value, *, field_name: str = "eval_dataset_reward
 
 @dataclass
 class _ConditionFilter:
-    """단일 condition 필터 조건."""
+    """text condition filter condition."""
 
     enum_idx: int
     min_val: Optional[float] = None
@@ -109,9 +109,9 @@ class _ConditionFilter:
 
 
 def _parse_condition_filters(filter_str: str) -> List[_ConditionFilter]:
-    """필터 문자열을 파싱한다.
+    """filter string  parsingtext.
 
-    포맷 (쉼표로 여러 개 구분):
+    text (texttable to  text text text):
         enum_{i}_min_{lo}_max_{hi}   — lo ≤ condition[i] ≤ hi
         enum_{i}_min_{lo}            — lo ≤ condition[i]
         enum_{i}_max_{hi}            — condition[i] ≤ hi
@@ -146,7 +146,7 @@ def _parse_condition_filters(filter_str: str) -> List[_ConditionFilter]:
 
 
 def _apply_condition_filters(samples, filters: List[_ConditionFilter]):
-    """필터 리스트를 AND 조합으로 적용하여 샘플을 필터링한다."""
+    """filter text  AND text as  applytext sample  filteringtext."""
     for filt in filters:
         def _keep(sample, _f=filt):
             conds = sample.meta.get("conditions", {})

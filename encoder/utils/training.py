@@ -1,8 +1,8 @@
 """
 encoder/utils/training.py
 =========================
-train_ipcgrl_encoder / train_clip / train_clip_decoder 에서 공유하는
-데이터셋 생성 · 체크포인트 저장 · wandb 초기화 유틸리티.
+train_ipcgrl_encoder / train_clip / train_clip_decoder  in  text
+dataset create · checkpoint save · wandb initialize utility.
 """
 
 from __future__ import annotations
@@ -28,19 +28,19 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  MultiGameDataset 생성
+#  MultiGameDataset create
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def build_multigame_dataset(config: Config) -> MultiGameDataset:
-    """config.include_* 플래그와 max_samples_per_game 을 사용하여
-    MultiGameDataset 을 생성한다.
+    """config.include_* text and  max_samples_per_game   text for text
+    MultiGameDataset   createtext.
 
     Parameters
     ----------
-    config : Config (또는 하위 클래스 — RewardConfig, CLIPTrainConfig 등)
+    config : Config (text  sub class — RewardConfig, CLIPTrainConfig text)
         ``include_dungeon``, ``include_pokemon``, ``include_sokoban``,
         ``include_doom``, ``include_doom2``, ``include_zelda``,
-        ``max_samples_per_game``, ``max_samples_seed`` 필드를 참조.
+        ``max_samples_per_game``, ``max_samples_seed`` text  text.
 
     Returns
     -------
@@ -63,11 +63,11 @@ def build_multigame_dataset(config: Config) -> MultiGameDataset:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  체크포인트 저장
+#  checkpoint save
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def save_encoder_checkpoint(config: Config, state, step: int) -> None:
-    """flax checkpoints 를 사용해 인코더 체크포인트를 저장한다."""
+    """flax checkpoints   text for text text checkpoint  savetext."""
     ckpt_dir = get_ckpt_dir(config)
     ckpt_dir = os.path.abspath(ckpt_dir)
     ckpt_keep = int(getattr(config, "ckpt_keep", 2))
@@ -107,15 +107,15 @@ def save_norm_stats(config: Config, cond_norm_min: dict, cond_norm_max: dict) ->
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Wandb 초기화
+#  Wandb initialize
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def setup_wandb(config: Config) -> None:
-    """wandb 를 초기화한다.
+    """wandb   initializetext.
 
-    API 키는 ``instruct_rl.utils.env_loader.get_wandb_key()`` (.env 기반)
-    을 우선 사용하고, 없으면 ``config.wandb_key`` 를 fallback 으로 확인한다.
-    키가 없으면 wandb 를 비활성 상태로 둔다.
+    API text  ``instruct_rl.utils.env_loader.get_wandb_key()`` (.env based)
+      text text for text, if missing ``config.wandb_key``   fallback  as  checktext.
+    text  if missing wandb   disabled text to  text.
     """
     from instruct_rl.utils.env_loader import get_wandb_key
 

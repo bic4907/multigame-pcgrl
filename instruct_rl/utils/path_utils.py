@@ -34,29 +34,29 @@ def is_default_hiddims(config: Config):
 
 
 def _game_abbr(dataset_game: str) -> str:
-    """dataset_game 문자열(전체명 또는 약어) → 2글자 약어로 변환."""
+    """dataset_game string(alltext text  abbreviation) → 2text abbreviation to  convert."""
     from conf.game_utils import GAME_ABBR_INV
     full = GAME_ABBR[dataset_game][0] if dataset_game in GAME_ABBR else dataset_game
     return GAME_ABBR_INV.get(full, full)
 
 
 def _enc_str(encoder_config) -> str:
-    """encoder ckpt 이름 기반 6자리 해시 (VIPCGRL 등 비-MGPCGRL 모델 전용)."""
+    """encoder ckpt name based 6text text (VIPCGRL text text-MGPCGRL text  before  for )."""
     ckpt = getattr(encoder_config, 'ckpt_name', None) or getattr(encoder_config, 'ckpt_path', None) or ""
     h = hashlib.md5(ckpt.encode()).hexdigest()[:6] if ckpt else "scratch"
     return f'_enc-{h}'
 
 
 def _to_pstr(v: float) -> str:
-    """0.05 → '0p05', 1.0 → '1' 형태로 변환."""
+    """0.05 → '0p05', 1.0 → '1' form to  convert."""
     return f"{v:g}".replace('.', 'p')
 
 
 def _build_unseen_suffix(un_abbr, ur, sr) -> str:
-    """un_abbr/ur/sr → '_un-XX_ur-YY_sr-ZZ' 형태 suffix.
+    """un_abbr/ur/sr → '_un-XX_ur-YY_sr-ZZ' form suffix.
 
-    모두 None/empty 이면 빈 문자열을 반환한다 (unseen 정보가 없으면 생략).
-    sr == 1.0 이면 실험명에 포함하지 않는다.
+    text None/empty  text text string  returntext (unseen info  if missing text).
+    sr == 1.0  text experimenttext in  text text text.
     """
     parts = []
     if un_abbr:
@@ -69,7 +69,7 @@ def _build_unseen_suffix(un_abbr, ur, sr) -> str:
 
 
 def _parse_unseen_from_ckpt(ckpt_name: str):
-    """encoder ckpt 이름에서 (un_abbr, ur, sr) 추출. 없으면 None."""
+    """encoder ckpt name in  (un_abbr, ur, sr) extract. if missing None."""
     if not ckpt_name:
         return None, None, None
     import re
@@ -84,30 +84,30 @@ def _parse_unseen_from_ckpt(ckpt_name: str):
 
 
 def _unseen_abbr_from_seen_games(seen_games):
-    """seen game list에서 canonical unseen game 약어 문자열을 만든다."""
+    """seen game list in  canonical unseen game abbreviation string  text."""
     return unseen_abbr_from_seen_games(seen_games)
 
 
 
 def _unseen_suffix(config) -> str:
-    """공통 unseen suffix 빌더 (VIPCGRL / MGPCGRL 공용).
+    """common unseen suffix text (VIPCGRL / MGPCGRL text for ).
 
-    우선순위:
-      1. config.train_unseen_abbr / config.train_unseen_ratio / config.train_seen_ratio (명시 파라미터, MGPCGRL only)
-      2. config.encoder.ckpt_name 에서 파싱 (VIPCGRL / MGPCGRL 공통)
-      3. config.reward_seen_games/seen_games 에서 자동 계산 (un_abbr only)
+    textabove:
+      1. config.train_unseen_abbr / config.train_unseen_ratio / config.train_seen_ratio (text parameter, MGPCGRL only)
+      2. config.encoder.ckpt_name  in  parsing (VIPCGRL / MGPCGRL common)
+      3. config.reward_seen_games/seen_games  in  automatic compute (un_abbr only)
 
-    unseen 정보가 전혀 없으면 빈 문자열을 반환한다 (suffix 생략).
-    형식: '_un-XX_ur-YY_sr-ZZ'
+    unseen info   before text if missing text string  returntext (suffix text).
+    text: '_un-XX_ur-YY_sr-ZZ'
     """
-    # ── 1. 명시 파라미터 (MGPCGRL config 에만 존재) ──────────────────────────
+    # ── 1. text parameter (MGPCGRL config  in text text) ──────────────────────────
     un_abbr = getattr(config, 'train_unseen_abbr', None)   # e.g. "zd"
     ur      = getattr(config, 'train_unseen_ratio', None)  # e.g. 0.05
-    # train_seen_ratio는 RL 학습 파라미터이므로 sr 경로명에는 사용하지 않음
-    # encoder ckpt_name에서 파싱한 sr을 우선 사용
+    # train_seen_ratio  RL training parameter text to  sr pathtext in   text for text text
+    # encoder ckpt_name in  parsingtext sr  text text for
     sr      = None
 
-    # ── 2. encoder.ckpt_name 에서 파싱 ──────────────────────────────────────
+    # ── 2. encoder.ckpt_name  in  parsing ──────────────────────────────────────
     if un_abbr is None or ur is None or sr is None:
         enc_cfg = getattr(config, 'encoder', None)
         ckpt_name = (getattr(enc_cfg, 'ckpt_name', None)
@@ -126,13 +126,13 @@ def _unseen_suffix(config) -> str:
                 infer_seen_games_from_ckpt_name(ckpt_name)
             )
 
-    # ── train_seen_ratio fallback (encoder sr 없을 때만, 1.0 제외) ───────────
+    # ── train_seen_ratio fallback (encoder sr text  text, 1.0 text) ───────────
     if sr is None:
         train_sr = getattr(config, 'train_seen_ratio', None)
         if train_sr is not None and train_sr != 1.0:
             sr = train_sr
 
-    # ── 3. seen-game metadata 에서 자동 계산 (un_abbr only) ───────────────
+    # ── 3. seen-game metadata  in  automatic compute (un_abbr only) ───────────────
     # Train configs populate reward_seen_games from encoder dataset_setting.json.
     # Eval configs populate seen_games from the same source. Treat both as the
     # same path identity signal so eval looks under the trained exp_dir.
@@ -144,14 +144,14 @@ def _unseen_suffix(config) -> str:
         )
         un_abbr = _unseen_abbr_from_seen_games(seen_games)
 
-    # unseen 정보가 전혀 없으면 suffix 생략
+    # unseen info   before text if missing suffix text
     return _build_unseen_suffix(un_abbr, ur, sr)
 
 
 def get_exp_group(config) -> str:
-    """실험 그룹명 반환 (시드 미포함).
+    """experiment text return (seed text).
 
-    WandB group 및 exp_dir 경로 prefix로 사용된다.
+    WandB group text exp_dir path prefix to  text for text.
     """
     exp_name = getattr(config, 'exp_name', None) or 'def'
 
@@ -159,7 +159,7 @@ def get_exp_group(config) -> str:
     if getattr(config, 'random_agent', False):
         return f'random_exp-{exp_name}'
 
-    # ── MultiGameDataset 기반 모드 (CPCGRL / IPCGRL / VIPCGRL / MGPCGRL) ──────
+    # ── MultiGameDataset based mode (CPCGRL / IPCGRL / VIPCGRL / MGPCGRL) ──────
     if not (hasattr(config, 'dataset_game') and config.dataset_game is not None):
         return config.env_name  # fallback for non-dataset configs
 
@@ -173,22 +173,22 @@ def get_exp_group(config) -> str:
         return f'cpcgrl_game-{game}{re_s}{exp_s}'
 
     # IPCGRL / MIPCGRL: BERT embedding
-    # encoder ckpt 이름에서 unseen 정보 파싱해 suffix 추가 (VIPCGRL / MGPCGRL 와 동일 규칙).
-    # unseen 정보가 없으면 suffix 생략.
-    # MIPCGRL 은 동일한 use_nlp=True 분기를 타지만 ``is_mipcgrl`` 플래그로 prefix 를
-    # 구분해 IPCGRL 체크포인트와 디스크/wandb 충돌을 방지한다.
+    # encoder ckpt name in  unseen info parsingtext suffix text  (VIPCGRL / MGPCGRL  and  same rule).
+    # unseen info  if missing suffix text.
+    # MIPCGRL   sametext use_nlp=True text  text ``is_mipcgrl`` text to  prefix
+    # text IPCGRL checkpoint and  text/wandb text  text.
     if getattr(config, 'use_nlp', False):
         enc = _unseen_suffix(config)
         kind = 'mipcgrl' if getattr(config, 'is_mipcgrl', False) else 'ipcgrl'
         return f'{kind}_game-{game}{re_s}{exp_s}{enc}'
 
-    # PretrainedCLIP: model=pretrained_clip, enc suffix 없음
+    # PretrainedCLIP: model=pretrained_clip, enc suffix none
     if getattr(config, 'model', None) == 'pretrained_clip':
         return f'preclip_pcgrl_game-{game}{re_s}{exp_s}'
 
-    # FinetunedCLIP: model=finetuned_clip, encoder ckpt 해시 suffix 포함
-    # (동일 게임/실험명이라도 어떤 fine-tuned ckpt 를 inject 했는지에 따라
-    # exp_dir 가 분리되도록 — mgpcgrl 와 동일 시맨틱)
+    # FinetunedCLIP: model=finetuned_clip, encoder ckpt text suffix text
+    # (same game/experimenttext text also  text fine-tuned ckpt   inject text text in  text
+    # exp_dir   separatetext also text — mgpcgrl  and  same text)
     if getattr(config, 'model', None) == 'finetuned_clip':
         enc = _enc_str(config.encoder)
         return f'finclip_pcgrl_game-{game}{re_s}{exp_s}{enc}'
@@ -208,8 +208,8 @@ def get_exp_group(config) -> str:
 
         return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{enc}{delta_s}{uro_s}{exp_s}'
 
-    # VIPCGRL: encoder ckpt 이름에서 unseen 정보 파싱해 suffix 추가 (MGPCGRL 와 동일 규칙).
-    # unseen 정보가 없으면 suffix 생략.
+    # VIPCGRL: encoder ckpt name in  unseen info parsingtext suffix text  (MGPCGRL  and  same rule).
+    # unseen info  if missing suffix text.
     enc = _unseen_suffix(config)
     if getattr(config, 'use_clip', False):
         return f'vipcgrl_game-{game}{re_s}{exp_s}{enc}'
@@ -252,23 +252,23 @@ def get_exp_dir(config):
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
-    # ── random_expname: exp_name 을 UUID 기반으로 랜덤 결정 ──
+    # ── random_expname: exp_name   UUID based as  random text ──
     if getattr(config, 'random_exp_name', False):
         config.exp_name = uuid.uuid4().hex[:8]
         logger.info(f"[random_exp_name] exp_name randomly set to: {config.exp_name}")
 
-    # ── game 약어 → include_* 자동 동기화 ──
+    # ── game abbreviation → include_* automatic sync ──
     if hasattr(config, 'game') and config.game:
         includes = parse_game_str(config.game)
         for key, val in includes.items():
             setattr(config, key, val)
 
-        # ── dataset_game 동기화: game 파라미터가 명시적으로 전달된 경우 dataset_game을 override ──
-        # dataset_game이 None이거나 기본값("all")인 경우 game 값으로 덮어씌운다.
+        # ── dataset_game sync: game parameter  text as   before text text dataset_game  override ──
+        # dataset_game  None text default value("all")text text game text as  text.
         if hasattr(config, 'dataset_game'):
             _dg_val = getattr(config, 'dataset_game', None)
             if _dg_val is None or _dg_val == 'all':
-                # 약어(dg 등)를 정식 게임명으로 변환
+                # abbreviation(dg text)  text gametext as  convert
                 _game_key = config.game.lower()
                 if _game_key in GAME_ABBR:
                     config.dataset_game = GAME_ABBR[_game_key][0]
@@ -276,14 +276,14 @@ def init_config(config: Config):
                     config.dataset_game = config.game
                 logger.debug(f"[init_config] dataset_game overridden by game='{config.game}' → '{config.dataset_game}'")
 
-    # ── MultiGameDataset 기반 CPCGRL / IPCGRL / VIPCGRL 모드 ─────────────
+    # ── MultiGameDataset based CPCGRL / IPCGRL / VIPCGRL mode ─────────────
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:
         config.raw_obs = True
-        # instruct_csv는 사용하지 않음
+        # instruct_csv  text for text text
         config.instruct_csv = None
 
         if config.use_clip:
-            # ── VIPCGRL / PretrainedCLIP 모드: CLIP latent embedding을 입력으로 사용 ──
+            # ── VIPCGRL / PretrainedCLIP mode: CLIP latent embedding  text as  text for  ──
             config.vec_cont = False
             config.use_nlp = False
             if config.encoder.model is None:
@@ -291,7 +291,7 @@ def init_config(config: Config):
             if config.nlp_input_dim <= 0:
                 config.nlp_input_dim = config.encoder.output_dim  # encoder output dim (e.g. 64)
             config.vec_input_dim = config.nlp_input_dim
-            # dataset 기반 VIPCGRL: cnnclipconv/clipconv 가 이미 설정된 경우 유지
+            # dataset based VIPCGRL: cnnclipconv/clipconv    text configtext text keep
             if config.model not in ('nlpconv', 'cnnclipconv', 'clipconv', 'pretrained_clip', 'finetuned_clip'):
                 config.model = 'nlpconv'
             _mode_tag = (
@@ -303,14 +303,14 @@ def init_config(config: Config):
                         f"nlp_input_dim={config.nlp_input_dim}, "
                         f"encoder={config.encoder.model}")
         elif config.use_nlp:
-            # ── IPCGRL 모드: BERT → MLP 인코더 피처를 입력으로 사용 ──
+            # ── IPCGRL mode: BERT → MLP text text  text as  text for  ──
             config.vec_cont = False
             if config.nlp_input_dim <= 0:
                 config.nlp_input_dim = 768  # BERT base dim
             config.vec_input_dim = config.nlp_input_dim
             if config.model not in ('nlpconv',):
                 config.model = 'nlpconv'
-            # IPCGRL 은 MLP 인코더를 기본으로 사용
+            # IPCGRL   MLP text  default as  text for
             if config.encoder.model is None:
                 config.encoder.model = 'mlp'
             logger.info(f"[IPCGRL] dataset_game={config.dataset_game}, "
@@ -318,7 +318,7 @@ def init_config(config: Config):
                         f"nlp_input_dim={config.nlp_input_dim}, "
                         f"encoder={config.encoder.model}")
         else:
-            # ── CPCGRL 모드: raw condition 벡터를 사용 ──
+            # ── CPCGRL mode: raw condition text  text for  ──
             config.vec_cont = True
             config.use_nlp = False
             config.vec_input_dim = 5
@@ -330,7 +330,7 @@ def init_config(config: Config):
                 config.model = 'contconv'
                 logger.info("[CPCGRL] Setting model to `contconv` due to the vec_cont flag")
 
-        # exp_dir 등 공통 설정은 아래에서 계속 처리
+        # exp_dir text common config  below in  text process
 
     elif config.aug_type is not None and config.embed_type is not None and config.instruct is not None:
         config.instruct_csv = f'{config.aug_type}/{config.embed_type}/{config.instruct}'
@@ -378,11 +378,11 @@ def init_config(config: Config):
 
         config.text_ratio = min([0.25, 0.5, 0.75, 1.0], key=lambda x: abs(x - config.text_ratio))
 
-        # ── encoder.ckpt_path 가 이미 지정된 경우 스킵 ──
+        # ── encoder.ckpt_path    text text text text ──
         if config.encoder.ckpt_path is not None:
             logger.info(f"Encoder checkpoint path already set: [{config.encoder.ckpt_path}]")
 
-        # ── encoder.ckpt_name 으로 pretrained_encoders/ 에서 직접 로드 ──
+        # ── encoder.ckpt_name  as  pretrained_encoders/  in  direct load ──
         elif config.encoder.ckpt_name is not None:
             _project_root = os.path.dirname(os.path.dirname(os.path.dirname(abspath(__file__))))
             _pretrained_dir = join(_project_root, config.encoder.ckpt_dir, config.encoder.ckpt_name, "ckpts")
@@ -392,7 +392,7 @@ def init_config(config: Config):
             config.encoder.ckpt_path = _pretrained_dir
             logger.info(f"Encoder checkpoint set from ckpt_name='{config.encoder.ckpt_name}' → [{config.encoder.ckpt_path}]")
 
-        # encoder.ckpt 가 지정되지 않은 경우(dataset 기반 IPCGRL 등) 체크포인트 탐색 스킵
+        # encoder.ckpt   text text  text(dataset based IPCGRL text) checkpoint text text
         elif config.encoder.ckpt is None and hasattr(config, 'dataset_game') and config.dataset_game is not None:
             logger.info("[IPCGRL] encoder.ckpt not specified — MLP encoder will be trained from scratch")
         else:
@@ -485,7 +485,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         config.model = 'contconv'
 
     if config.encoder.model is not None:
-        # dataset 기반 모드에서는 model이 이미 설정되어 있으므로 스킵
+        # dataset based mode in   model   text configtext text to  text
         _is_dataset_mode = hasattr(config, 'dataset_game') and config.dataset_game is not None
         if not _is_dataset_mode:
             if config.encoder.model == 'clip':
@@ -503,7 +503,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
 
     elif config.model == "nlpconv" or config.model == 'contconv':
 
-        # dataset 기반 VIPCGRL: encoder 불필요 (CLIP 임베딩이 사전 계산됨)
+        # dataset based VIPCGRL: encoder text (CLIP embedding  text before  computetext)
         _skip_encoder = (
                 hasattr(config, 'dataset_game') and config.dataset_game is not None
                 and config.encoder.model in ('cnnclip', 'clip')
@@ -589,9 +589,9 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         )
 
     elif config.model == "finetuned_clip":
-        # Fine-tuned CLIP: ckpt 파라미터 트리(TrainablePretrained*Encoder) 와
-        # 동일한 모듈을 RL 측에도 사용해야 `apply_encoder_params` 의 subtree
-        # replace 가 안전하다.
+        # Fine-tuned CLIP: ckpt parameter text(TrainablePretrained*Encoder)  and
+        # sametext text  RL text in  also  text for text `apply_encoder_params`  of  subtree
+        # replace   text before text.
         network = EncoderCLIPConvForward(
             config=config.encoder,
             encoder=get_finetuned_clip_encoder(config.encoder)[0] if config.encoder.model else None,
@@ -668,12 +668,12 @@ def get_env_params_from_config(config: Config):
     prob_cls = PROB_CLASSES[problem]
     ctrl_metrics = tuple([int(prob_cls.metrics_enum[c.upper()]) for c in config.ctrl_metrics])
 
-    # dataset 기반 VIPCGRL 은 nlp_input_dim 으로 CLIP embedding 차원을 전달
+    # dataset based VIPCGRL   nlp_input_dim  as  CLIP embedding dimension   before text
     _use_nlp_dim = config.use_nlp or (
             config.use_clip and hasattr(config, 'dataset_game') and config.dataset_game is not None
     )
 
-    # cnnclipconv/clipconv 모델은 nlp_input_dim과 clip_input_channel 둘 다 필요
+    # cnnclipconv/clipconv text  nlp_input_dim and  clip_input_channel text text text
     _needs_clip_channel = config.model in ('cnnclipconv', 'clipconv', 'pretrained_clip', 'finetuned_clip')
 
     env_params = PCGRLEnvParams(

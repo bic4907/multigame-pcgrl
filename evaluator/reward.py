@@ -26,7 +26,7 @@ _COLLECTABLE_TILE = _tile_value_or_default("COLLECTABLE", "COLLECTIBLE")
 
 
 def _build_penalty_exclude_tiles(reward_idx_row: chex.Array) -> chex.Array:
-    """reward_i(0-based)에서 현재 학습 타일을 골라 패널티 제외 목록으로 변환."""
+    """reward_i(0-based) in  current training tile  text penalty text list as  convert."""
     reward_idx_row = jnp.ravel(reward_idx_row).astype(jnp.int32)
 
     ex_interactive = jnp.any(reward_idx_row == 2)
@@ -59,11 +59,11 @@ def get_reward_batch(
 ) -> chex.Array:
     """Compute batch rewards by mapping indices to reward functions and executing them in parallel.
 
-    reward_i 는 다음 인덱스를 따른다.
+    reward_i   next index  text.
 
     0: region
     1: path_length
-    2: interactive placement (multigame — 개수 + 배치품질)
+    2: interactive placement (multigame — count + batchquality)
     3: hazard placement (multigame)
     4: collectable placement (multigame)
     """
@@ -79,7 +79,7 @@ def get_reward_batch(
             prev_map, curr_map, cond[1]
         ) * RewardWeight.PATH_LENGTH + RewardBias.PATH_LENGTH,
 
-        # 2: interactive placement (개수 + spread)
+        # 2: interactive placement (count + spread)
         lambda cond, prev_map, curr_map: get_multigame_tile_placement_reward(
             prev_map, curr_map, cond[2], tile_name="interactive",
             w_amount=placement_w_amount, w_spread=placement_w_spread,
@@ -109,8 +109,8 @@ def get_reward_batch(
     compute_reward_vmap = vmap(compute_value, in_axes=(0, 0, 0, 0))
     rewards = compute_reward_vmap(reward_i, condition, prev_env_map, curr_env_map)
 
-    # special tile (interactive/hazard/collectable) 패널티.
-    # 단, 현재 학습 대상 타일(reward_i 2/3/4)은 패널티에서 제외.
+    # special tile (interactive/hazard/collectable) penalty.
+    # text, current training target tile(reward_i 2/3/4)  penalty in  text.
     penalty_exclude_tiles = vmap(_build_penalty_exclude_tiles)(reward_i)  # (batch, 3)
     special_penalty = vmap(
         lambda p, c, ex: get_special_tile_penalty(

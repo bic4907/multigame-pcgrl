@@ -1,7 +1,7 @@
 """
 instruct_rl/eval/batch_save.py
 ================================
-평가 루프 내 배치 결과 저장 헬퍼.
+evaluation loop  inside  batch result save text.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def save_batch_results(
     result,
     last_states,
     instruct_df=None,
-    h5_writer=None,   # AsyncH5Writer 인스턴스
+    h5_writer=None,   # AsyncH5Writer text
 ):
 
     for idx, (row_i, reward_i, repeat_i, feature, state) in enumerate(zip(
@@ -26,7 +26,7 @@ def save_batch_results(
         result.feature[:batch_valid_size],
         last_states.env_state.env_map[0, :][:batch_valid_size],
     )):
-        # 폴더명: {game}_re{re}_{row_i:04d}  (메타 없으면 기존 reward_{row_i} 유지)
+        # foldertext: {game}_re{re}_{row_i:04d}  (meta if missing existing reward_{row_i} keep)
         if instruct_df is not None and row_i < len(instruct_df):
             meta = instruct_df.iloc[int(row_i)]
             game   = str(meta.get('game', 'unknown'))
@@ -35,7 +35,7 @@ def save_batch_results(
         else:
             folder_name = f"reward_{row_i}"
 
-        # ── 비동기 HDF5 저장 — state(env_map)를 writer 큐에 전달 ──────────────
+        # ── asynchronous HDF5 save — state(env_map)  writer queue in   before text ──────────────
         if h5_writer is not None:
             h5_writer.write(folder_name, int(repeat_i), state)
 

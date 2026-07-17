@@ -1,8 +1,8 @@
 """
 embedding.py
 ============
-eval CSV → Instruct 변환.
-CLIP / cnnclip / 기본 BERT 임베딩 세 가지 케이스를 처리한다.
+eval CSV → Instruct convert.
+CLIP / cnnclip / default BERT embedding text  text text text  processtext.
 """
 import logging
 
@@ -21,14 +21,14 @@ logger = logging.getLogger(__name__)
 
 
 def prepare_instruct(config, network, runner_state, instruct_df, init_x) -> Instruct:
-    """instruct_df (CSV 로드 결과) → Instruct 반환.
+    """instruct_df (CSV load result) → Instruct return.
 
-    config.encoder.model 에 따라:
-      - 'clip'    : 텍스트 토크나이즈 → 네트워크 forward → text embedding
-      - 'cnnclip' : eval_modality ('text' or 'state') → 네트워크 forward → embedding
-      - 기타(bert 등): CSV의 embed_* 컬럼을 그대로 사용
+    config.encoder.model  in  text:
+      - 'clip'    : text text text → network forward → text embedding
+      - 'cnnclip' : eval_modality ('text' or 'state') → network forward → embedding
+      - text(bert text): CSV of  embed_* text  as-is text for
     """
-    # ── 기본 embedding (CSV embed_* 컬럼) ─────────────────────────────────────
+    # ── default embedding (CSV embed_* text) ─────────────────────────────────────
     embedding_df = instruct_df.filter(regex="embed_*")
     embedding_df = embedding_df.reindex(
         sorted(embedding_df.columns, key=lambda x: int(x.split("_")[-1])),

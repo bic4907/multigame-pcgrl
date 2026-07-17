@@ -1,16 +1,16 @@
 """instruct_rl/utils/format_utils.py
 
-공통 문자열 포매팅 유틸리티.
+common string text utility.
 """
 
 
 def simple_table(rows, headers):
-    """psql 스타일 ASCII 테이블 문자열을 반환한다.
+    """psql texttile ASCII text text string  returntext.
 
     Parameters
     ----------
-    rows    : list of tuple — 각 행의 셀 값
-    headers : list of str  — 헤더 이름
+    rows    : list of tuple — each row of  cell text
+    headers : list of str  — text name
 
     Example output
     --------------

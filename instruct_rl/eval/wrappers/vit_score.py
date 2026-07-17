@@ -3,14 +3,14 @@ instruct_rl/eval/wrappers/vit_score.py
 ========================================
 ViTScoreWrapper — ViT-based human-likeness scoring.
 
-HDF5에서 state(env_map)를 읽어 render_unified_rgb()로 동적 렌더링하고,
-eval_utils가 전달한 GT 이미지와 1:1 코사인 유사도를 계산한다.
+HDF5 in  state(env_map)  text render_unified_rgb() to  dynamic renderingtext,
+eval_utils   before text GT image and  1:1 text text also   computetext.
 
-책임 분리
+text separate
 ---------
-- eval_utils.py   : GT 이미지 렌더링 (render_unified_rgb, dataset 팔레트)
-- ViTScoreWrapper : HDF5 state 로드 → 동적 렌더링 → ViTEvaluator 위임
-- ViTEvaluator    : run_pairwise() — 순수 ViT 임베딩 + 코사인 유사도
+- eval_utils.py   : GT image rendering (render_unified_rgb, dataset palette)
+- ViTScoreWrapper : HDF5 state load → dynamic rendering → ViTEvaluator abovetext
+- ViTEvaluator    : run_pairwise() — text ViT embedding + text text also
 """
 from __future__ import annotations
 
@@ -51,23 +51,23 @@ class ViTScoreWrapper:
     def run(
         self,
         instruct_df: pd.DataFrame,
-        gt_images: np.ndarray,        # (N, H, W, 3) uint8 — eval_utils가 dataset 렌더링으로 전달
+        gt_images: np.ndarray,        # (N, H, W, 3) uint8 — eval_utils  dataset rendering as   before text
         n_eps: int,
         **_,
     ) -> np.ndarray:
         """
         Parameters
         ----------
-        instruct_df : 평가 대상 DataFrame (game, reward_enum, ...)
+        instruct_df : evaluation target DataFrame (game, reward_enum, ...)
         gt_images   : (N*n_eps, H*ts, W*ts, 3) uint8
-        n_eps       : 시드(에피소드) 수
+        n_eps       : seed( in text) text
         """
         from envs.probs.multigame import render_multigame_maps_batch
 
         tile_size = getattr(self.config, 'vit_tile_size', 16)
         n_samples = len(instruct_df) * n_eps
 
-        # ① HDF5에서 state 일괄 로드 (렌더링은 아직 안 함)
+        # ① HDF5 in  state text load (rendering  text text text)
         env_map_list = []
         with open_eval_store(self.config.eval_dir, mode="r") as h5, \
              tqdm(total=n_samples, desc="[ViT] Load pred states") as pbar:
@@ -80,7 +80,7 @@ class ViTScoreWrapper:
                     env_map_list.append(env_map.astype(np.int32))
                     pbar.update(1)
 
-        # ② numpy fancy-indexing 배치 렌더링 (for 루프 / PIL 없음)
+        # ② numpy fancy-indexing batch rendering (for text / PIL none)
         env_maps_batch = np.stack(env_map_list, axis=0)  # (N, H, W)
         logger.info("[ViTScoreWrapper] Batch rendering %d maps...", len(env_maps_batch))
         pred_images = render_multigame_maps_batch(env_maps_batch, tile_size=tile_size)  # (N, H*ts, W*ts, 3)
@@ -90,7 +90,7 @@ class ViTScoreWrapper:
             pred_images.shape, gt_images.shape,
         )
 
-        # ② GT 임베딩 — 디스크 캐시
+        # ② GT embedding — text cache
         evaluator = ViTEvaluator()
         t0 = time.perf_counter()
 
@@ -107,7 +107,7 @@ class ViTScoreWrapper:
             os.makedirs(os.path.dirname(gt_cache), exist_ok=True)
             np.save(gt_cache, gt_feats)
 
-        # ③ pred 임베딩 계산 후 코사인 유사도
+        # ③ pred embedding compute  after  text text also
         pred_feats = np.array(evaluator.get_embeddings(pred_images, norm=True, desc="[ViT] pred embedding"))
         scores = np.sum(pred_feats * gt_feats, axis=1).reshape(-1)  # (N,)
         elapsed = time.perf_counter() - t0

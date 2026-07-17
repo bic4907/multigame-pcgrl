@@ -1,10 +1,10 @@
 """
 eval_pretrained_clip.py
 =======================
-PretrainedCLIP PCGRL 평가 엔트리포인트.
-사전 계산된 CLIP 텍스트 임베딩을 nlp_obs 에 주입하여 평가한다.
+PretrainedCLIP PCGRL evaluation entry point.
+precomputed CLIP text embedding  nlp_obs  in  injecttext evaluationtext.
 
-실행:
+Usage:
     python -m eval_pretrained_clip [overrides]
     python -m eval_pretrained_clip dataset_reward_enum=4 game=all
 """

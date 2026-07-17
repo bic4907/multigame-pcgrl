@@ -2,13 +2,13 @@
 """
 dataset/cpcgrl_buffer/build_pair_dataset.py
 ============================================
-saves/ 폴더의 CPCGRL 학습 버퍼(.npz)를 (game, reward_enum) 별로 읽어서
-연속 쌍 (env_map[t], env_map[t+1]) 을 구성하고,
-중복 제거 후 **단일 .npz 파일**에 dict 형태로 저장한다.
+saves/ folder of  CPCGRL training text(.npz)  (game, reward_enum) by text
+text text (env_map[t], env_map[t+1])   text,
+duplicate remove  after  **text .npz file** in  dict form to  savetext.
 
-출력:
+text:
     dataset/cpcgrl_buffer/cpcgrl_pair_dataset.npz
-        키 구조:
+        text structure:
             {game}_re{rn}       : (N, 2, 16, 16) int32  — env_map pairs
             {game}_re{rn}_ts    : (N,) int64             — timesteps
             _metadata           : JSON string (0-d array)
@@ -36,8 +36,8 @@ import numpy as np
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def parse_game_and_re(dirname: str) -> tuple[str | None, int | None]:
-    """디렉토리 이름에서 game 이름과 reward_enum 번호 추출.
-    예: 'buffer-exp-cb_game-doom_re-3_vec_ro_s-0' → ('doom', 3)
+    """directory name in  game name and  reward_enum text extract.
+    text: 'buffer-exp-cb_game-doom_re-3_vec_ro_s-0' → ('doom', 3)
     """
     gm = re.search(r"_game-(\w+)_", dirname)
     rm = re.search(r"_re-(\d+)-?_", dirname)
@@ -47,7 +47,7 @@ def parse_game_and_re(dirname: str) -> tuple[str | None, int | None]:
 
 
 def load_buffer_dir(buffer_dir: str):
-    """버퍼 디렉토리의 모든 .npz 를 읽어 (env_maps, dones, timesteps) 를 반환."""
+    """text directory of  text .npz   text (env_maps, dones, timesteps)   return."""
     npz_files = sorted(glob.glob(os.path.join(buffer_dir, "*.npz")))
     maps, dones, ts = [], [], []
     for f in npz_files:
@@ -65,7 +65,7 @@ def load_buffer_dir(buffer_dir: str):
 
 
 def make_pairs(env_maps, dones, timesteps):
-    """연속 2-step 쌍 생성. done 경계 및 timestep 점프 제거."""
+    """text 2-step text create. done text text timestep text remove."""
     n = env_maps.shape[0]
     if n < 2:
         empty = np.empty((0, 2, *env_maps.shape[1:]), dtype=env_maps.dtype)
@@ -81,7 +81,7 @@ def make_pairs(env_maps, dones, timesteps):
 
 
 def deduplicate_pairs(pairs: np.ndarray) -> np.ndarray:
-    """env_map 쌍 단위로 완전 동일한 행 제거. 반환: 고유 행 인덱스."""
+    """env_map text textabove to  text before  sametext row remove. return: text row index."""
     flat = pairs.reshape(pairs.shape[0], -1)
     _, unique_idx = np.unique(flat, axis=0, return_index=True)
     unique_idx.sort()
@@ -96,7 +96,7 @@ def main():
     )
     parser.add_argument("--saves_dir", default="saves")
     parser.add_argument("--pairs_per_group", type=int, default=50000,
-                        help="(game, re) 그룹 당 최대 추출 쌍 수")
+                        help="(game, re) text text maximum extract text text")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -104,7 +104,7 @@ def main():
     out_dir = os.path.join("dataset", "cpcgrl_buffer")
     os.makedirs(out_dir, exist_ok=True)
 
-    # 1. (game, reward_enum) 별 버퍼 탐색
+    # 1. (game, reward_enum) text text text
     exp_dirs = sorted(glob.glob(os.path.join(args.saves_dir, "*_vec_ro_s-*")))
     group_bufs: dict[tuple[str, int], str] = {}
     for ed in exp_dirs:
@@ -123,7 +123,7 @@ def main():
     print(f"  reward_enums: {res_found}")
     assert found, "No buffer dirs found!"
 
-    # 2. 그룹별 쌍 추출 → dict 에 모으기
+    # 2. text text extract → dict  in  text
     arrays: dict[str, np.ndarray] = {}
     group_info = []
     total_pairs = 0
@@ -144,7 +144,7 @@ def main():
             print(f"  WARNING: skip {key}")
             continue
 
-        # 샘플링
+        # sampletext
         n_sample = min(args.pairs_per_group, pairs.shape[0])
         idx = rng.choice(pairs.shape[0], size=n_sample, replace=False)
         idx.sort()
@@ -152,19 +152,19 @@ def main():
         pts = pts[idx]
         print(f"  sampled: {n_sample}")
 
-        # 중복 제거
+        # duplicate remove
         n_before = pairs.shape[0]
         uniq_idx = deduplicate_pairs(pairs)
         pairs = pairs[uniq_idx]
         pts = pts[uniq_idx]
         print(f"  after dedup: {pairs.shape[0]} (removed {n_before - pairs.shape[0]})")
 
-        # 셔플
+        # text
         perm = rng.permutation(pairs.shape[0])
         pairs = pairs[perm]
         pts = pts[perm]
 
-        # dict 에 추가
+        # dict  in  text
         arrays[key] = pairs            # (N, 2, H, W)
         arrays[f"{key}_ts"] = pts      # (N,)
 
@@ -180,7 +180,7 @@ def main():
         total_pairs += pairs.shape[0]
         total_before_dedup += n_before
 
-    # 3. 메타데이터를 JSON 문자열로 저장
+    # 3. metadata  JSON string to  save
     metadata = {
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "hostname": socket.gethostname(),
@@ -196,13 +196,13 @@ def main():
     }
     arrays["_metadata"] = np.array(json.dumps(metadata, ensure_ascii=False))
 
-    # 4. 단일 파일 저장
+    # 4. text file save
     out_path = os.path.join(out_dir, "cpcgrl_pair_dataset.npz")
     np.savez_compressed(out_path, **arrays)
 
     fsize = os.path.getsize(out_path)
 
-    # 5. 요약 출력
+    # 5. summary text
     print(f"\n{'=' * 64}")
     print(f"  CPCGRL Pair Dataset")
     print(f"{'=' * 64}")

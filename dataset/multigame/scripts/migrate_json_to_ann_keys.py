@@ -3,14 +3,14 @@
 
 dataset/multigame/scripts/migrate_json_to_ann_keys.py
 ======================================================
-기존 {key}.json 캐시를 신규 포맷으로 변환하는 임시 마이그레이션 스크립트.
+existing {key}.json cache  text text as  converttext  text text text text script.
 
-구 포맷: game, source_id, instruction, order, meta (instruction/meta 포함)
-신규 포맷: game, source_id, order, ann_keys (ann.json 키만)
+text text: game, source_id, instruction, order, meta (instruction/meta text)
+text text: game, source_id, order, ann_keys (ann.json text)
 
-변환 조건:
-  - ann.json이 존재하는 경우에만 ann_keys를 계산하여 추가
-  - ann.json이 없으면 instruction/meta를 제거만 하고 ann_keys는 비워둠
+convert condition:
+  - ann.json  text  text in text ann_keys  computetext text
+  - ann.json  if missing instruction/meta  removetext text ann_keys  text
 
 Usage:
   python dataset/multigame/scripts/migrate_json_to_ann_keys.py
@@ -41,12 +41,12 @@ _DEFAULT_CACHE_DIR = _HERE.parent / "cache" / "artifacts"
 
 
 def _is_old_format(entry: dict) -> bool:
-    """구 포맷 여부: instruction 또는 meta 필드가 있으면 구 포맷."""
+    """text text text: instruction text  meta text  text text text."""
     return "instruction" in entry or "meta" in entry
 
 
 def migrate_game(cache_dir: Path, game: str, dry_run: bool = False) -> int:
-    """한 게임의 .json을 신규 포맷으로 변환한다. 변환된 파일 수를 반환."""
+    """text game of  .json  text text as  converttext. converttext file text  return."""
     game_dir = cache_dir / game
     if not game_dir.exists():
         return 0
@@ -66,20 +66,20 @@ def migrate_game(cache_dir: Path, game: str, dry_run: bool = False) -> int:
         if not entries:
             continue
 
-        # 이미 신규 포맷이면 ann_keys만 채워지지 않은 경우 보완
+        #  text text text text ann_keystext text text  text text
         already_new = not _is_old_format(entries[0])
 
-        # ann.json에서 ann_keys 계산
+        # ann.json in  ann_keys compute
         ann_data = load_game_annotations_from_cache(cache_dir, game, key)
 
         if already_new and ann_data is None:
-            logger.info(f"  [{game}] {key[:12]}….json: 이미 신규 포맷, ann.json 없음 — 건너뜀")
+            logger.info(f"  [{game}] {key[:12]}….json:  text text text, ann.json none — text")
             continue
         if already_new and "ann_keys" in entries[0]:
-            logger.info(f"  [{game}] {key[:12]}….json: 이미 신규 포맷 + ann_keys 있음 — 건너뜀")
+            logger.info(f"  [{game}] {key[:12]}….json:  text text text + ann_keys text — text")
             continue
 
-        # 신규 포맷 변환
+        # text text convert
         new_entries = []
         for e in entries:
             new_entry: dict = {
@@ -90,18 +90,18 @@ def migrate_game(cache_dir: Path, game: str, dry_run: bool = False) -> int:
             new_entries.append(new_entry)
 
         n_samples = len(new_entries)
-        logger.info(f"  [{game}] {key[:12]}….json: {n_samples}개 샘플 변환"
+        logger.info(f"  [{game}] {key[:12]}….json: {n_samples}text sample convert"
                     + (" (dry-run)" if dry_run else ""))
 
         if not dry_run:
             meta_path.write_text(_stable_json(new_entries), encoding="utf-8")
             converted += 1
-            # ann_keys 추가
+            # ann_keys text
             if ann_data is not None:
                 update_json_with_ann_keys(cache_dir, game, key, ann_data)
-                logger.info(f"  [{game}] {key[:12]}….json: ann_keys 추가 완료")
+                logger.info(f"  [{game}] {key[:12]}….json: ann_keys text  finish")
             else:
-                logger.warning(f"  [{game}] ann.json 없음 — ann_keys 없이 저장 (annotate.py 실행 후 재로드 시 자동 추가)")
+                logger.warning(f"  [{game}] ann.json none — ann_keys text  save (annotate.py Usage  after  textload text automatic text )")
         else:
             converted += 1
 
@@ -110,27 +110,27 @@ def migrate_game(cache_dir: Path, game: str, dry_run: bool = False) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="{key}.json을 신규 포맷(game/source_id/order/ann_keys)으로 마이그레이션"
+        description="{key}.json  text text(game/source_id/order/ann_keys) as  text text text"
     )
     parser.add_argument("--cache-dir", type=Path, default=_DEFAULT_CACHE_DIR)
     parser.add_argument("--games", nargs="+",
                         default=["doom", "dungeon", "zelda", "pokemon", "sokoban"])
     parser.add_argument("--dry-run", action="store_true",
-                        help="실제로 쓰지 않고 변환 대상만 출력")
+                        help="text to  text text convert targettext text")
     args = parser.parse_args()
 
-    logger.info(f"캐시 디렉토리: {args.cache_dir}")
+    logger.info(f"cache directory: {args.cache_dir}")
     if args.dry_run:
-        logger.info("(dry-run 모드: 실제 변경 없음)")
+        logger.info("(dry-run mode: text text none)")
 
     total = 0
     for game in args.games:
         n = migrate_game(args.cache_dir, game, dry_run=args.dry_run)
         if n:
-            logger.info(f"[{game}] {n}개 파일 변환 완료")
+            logger.info(f"[{game}] {n}text file convert finish")
         total += n
 
-    logger.info(f"\n완료: 총 {total}개 파일 변환")
+    logger.info(f"\nfinish: total {total}text file convert")
 
 
 if __name__ == "__main__":

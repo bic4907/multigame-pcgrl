@@ -1,9 +1,9 @@
 """
 dataset/multigame/handlers/vglc_games/doom.py
 ==============================================
-Doom (TheVGLC) 전처리 핸들러.
+Doom (TheVGLC) preprocessing handler.
 
-타일 매핑
+tile text
 ---------
 0  : empty   (-)
 1  : wall    (X)
@@ -97,7 +97,7 @@ def make_legend() -> TileLegend:
 class DoomPreprocessor(BasePreprocessor):
     def char_to_int(self, char: str) -> int:
         return _CHAR_MAP.get(char, DoomTile.UNKNOWN)
-    
+
     def discover_and_process(
         self,
         files: List[Path],
@@ -107,10 +107,10 @@ class DoomPreprocessor(BasePreprocessor):
         cache: Dict[str, Any]
     ) -> List[str]:
         """
-        Doom 전용 파일 처리 및 슬라이싱 로직.
-        VGLCGameHandler._discover()에서 호출됨.
+        Doom  before  for  file process text text text  to text.
+        VGLCGameHandler._discover() in  calltext.
         """
-        # 설정 체크
+        # config text
         if not hasattr(config, 'doom') or not config.doom.enabled:
             return [str(p) for p in files]
 
@@ -121,29 +121,29 @@ class DoomPreprocessor(BasePreprocessor):
 
         entries = []
         for txt_path in files:
-            # max_samples 도달 확인
+            # max_samples reach check
             if len(entries) >= max_samples:
                 break
-            
+
             text = txt_path.read_text(encoding='utf-8', errors='replace')
             char_grid = self.parse_txt(text)
-            
+
             sliced = self.slice_large_map(
                 char_grid,
                 empty_max=empty_max,
                 floor_empty_max=floor_empty_max,
                 event_count_min=event_count_min,
             )
-            
+
             for idx, sliced_data in enumerate(sliced):
-                # max_samples 도달 확인
+                # max_samples reach check
                 if len(entries) >= max_samples:
                     break
-                
+
                 source_id = f"{str(txt_path)}|{idx}"
                 entries.append(source_id)
 
-                # 캐시 저장
+                # cache save
                 array = self.transform(sliced_data['map'])
                 array = enforce_top_left_16x16(
                     array,
@@ -179,79 +179,79 @@ class DoomPreprocessor(BasePreprocessor):
         event_count_min: int = 1,
     ) -> List[Dict[str, Any]]:
         """
-        큰 맵을 16x16 작은 맵들로 슬라이싱
-        
-        규칙:
-        1. 세로: 16줄씩 탐색
-        2. 가로: 16칸씩 이동하며 유효성 체크. 유효한 맵만 추가
-        3. 유효성: empty("-") <= empty_max AND floor+empty <= floor_empty_max AND event_count >= event_count_min 인 경우만 추가
-        
+        text map  16x16 text  maptext to  text text
+
+        rule:
+        1. text to : 16text text
+        2.   to : 16text movetext validtext text. validtext maptext text
+        3. validtext: empty("-") <= empty_max AND floor+empty <= floor_empty_max AND event_count >= event_count_min text text text
+
         Parameters
         ----------
         char_grid : List[List[str]]
-            2D 문자 그리드
+            2D character text
         empty_max : int
-            유효한 맵의 최대 empty 타일 개수
+            validtext map of  maximum empty tile count
         floor_empty_max : int
-            유효한 맵의 floor+empty 합의 최대값
+            validtext map of  floor+empty text of  maximumtext
         event_count_min : int
-            유효한 맵의 enemy+object 합의 최솟값 (기본값: 1)
-        
+            validtext map of  enemy+object text of  minimum (default value: 1)
+
         Returns
         -------
         List[Dict]
-            각 dict: {
+            each dict: {
                 'map': 16x16 char_grid,
-                'row_start': 시작 행,
-                'col_start': 시작 열,
-                'empty_count': empty 타일 개수,
-                'floor_count': floor 타일 개수,
-                'event_count': enemy+object 타일 개수,
+                'row_start': start row,
+                'col_start': start column,
+                'empty_count': empty tile count,
+                'floor_count': floor tile count,
+                'event_count': enemy+object tile count,
             }
         """
         if not char_grid:
             return []
-        
+
         height = len(char_grid)
         width = max(len(row) for row in char_grid) if char_grid else 0
-        
+
         sliced_maps = []
-        
-        # 세로로 16줄씩 탐색
+
+        # text to  to  16text text
         row = 0
         while row < height:
             row_end = min(row + 16, height)
             row_slice = char_grid[row:row_end]
-            
-            # 가로로 16칸씩 이동하며 탐색
+
+            #   to  to  16text movetext text
             col = 0
             while col < width:
                 col_end = min(col + 16, width)
-                # 16x16 맵 추출
+                # 16x16 map extract
                 map_16x16 = []
                 for r in row_slice:
                     if col < len(r):
                         row_data = list(r[col:col_end])
                     else:
                         row_data = []
-                    
-                    # 가로 패딩 (empty '-'로)
+
+                    #   to  padding (empty '-' to )
                     while len(row_data) < 16:
                         row_data.append('-')
-                    
+
                     map_16x16.append(row_data)
-                
-                # 세로 패딩 (empty '-'로)
+
+                # text to  padding (empty '-' to )
                 while len(map_16x16) < 16:
                     map_16x16.append(['-'] * 16)
-                
-                # 유효성 체크 (empty_max, floor+empty, event_count 확인)
+
+                # validtext text (empty_max, floor+empty, event_count check)
                 empty_count = sum(1 for r in map_16x16 for cell in r if cell == '-')
                 floor_count = sum(1 for r in map_16x16 for cell in r if cell in '.,:')
-                # event_count: enemy(E) + object(W,A,H,B,K) 합산
+                # event_count: enemy(E) + object(W,A,H,B,K) sum
                 event_count = sum(1 for r in map_16x16 for cell in r if cell in 'EWAHBK')
-                
-                if (empty_count <= empty_max and 
+
+                if (empty_count <= empty_max and
                     floor_count + empty_count <= floor_empty_max and
                     event_count >= event_count_min):
                     sliced_maps.append({
@@ -262,11 +262,11 @@ class DoomPreprocessor(BasePreprocessor):
                         'floor_count': floor_count,
                         'event_count': event_count,
                     })
-                
-                # 다음 위치: 16칸 뛰어넘기
+
+                # next abovetext: 16text text
                 col += 16
-            
-            # 다음 위치: 16줄 뛰어넘기
+
+            # next abovetext: 16text text
             row += 16
-        
+
         return sliced_maps

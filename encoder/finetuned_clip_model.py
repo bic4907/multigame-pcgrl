@@ -1,15 +1,15 @@
 """
 encoder/finetuned_clip_model.py
 ================================
-HuggingFace pretrained CLIP을 사용자의 (image, text) 데이터로 파인튜닝하기 위한
-trainable 변종. `encoder.pretrained_clip_model` 와 파라미터 트리(이름/구조)가
-완벽히 동일하도록 작성되어, fine-tune 결과 체크포인트를 그대로 기존 RL 학습
-파이프라인(`apply_encoder_params`)으로 inject 할 수 있다.
+HuggingFace pretrained CLIP  text for text of  (image, text) data to  text abovetext
+trainable text. `encoder.pretrained_clip_model`  and  parameter text(name/structure)
+textwalltext sametext also text text, fine-tune result checkpoint  as-is existing RL training
+pipeline(`apply_encoder_params`) as  inject text text text.
 
-차이점
+text text
 ------
-- `jax.lax.stop_gradient` 제거 → 모든 CLIP 파라미터에 그래디언트 흐름
-- 그 외 모듈 이름·shape 모두 `pretrained_clip_model` 과 동일
+- `jax.lax.stop_gradient` remove → text CLIP parameter in  text text
+- text text text name·shape text `pretrained_clip_model`  and  same
 """
 from typing import Dict
 
@@ -19,11 +19,11 @@ from flax import linen as nn
 from transformers import FlaxCLIPModel
 
 from conf.config import EncoderConfig
-from encoder.pretrained_clip_model import ContrastiveModule  # 그대로 재사용
+from encoder.pretrained_clip_model import ContrastiveModule  # as-is reuse
 
 
 class TrainablePretrainedTextEncoder(nn.Module):
-    """`PretrainedTextEncoder` 와 동일 구조이되 stop_gradient 없음."""
+    """`PretrainedTextEncoder`  and  same structure text stop_gradient none."""
     pretrained_text_encoder: nn.Module
 
     @nn.compact
@@ -38,7 +38,7 @@ class TrainablePretrainedTextEncoder(nn.Module):
 
 
 class TrainablePretrainedImageEncoder(nn.Module):
-    """`PretrainedImageEncoder` 와 동일 구조이되 stop_gradient 없음."""
+    """`PretrainedImageEncoder`  and  same structure text stop_gradient none."""
     pretrained_state_encoder: nn.Module
 
     @nn.compact
@@ -49,10 +49,10 @@ class TrainablePretrainedImageEncoder(nn.Module):
 
 
 def get_finetuned_clip_encoder(config: EncoderConfig):
-    """학습용 ContrastiveModule + HF pretrained 초기 파라미터 dict를 반환.
+    """training for  ContrastiveModule + HF pretrained initial parameter dict  return.
 
-    반환 형식 (·구조)은 `get_pretrained_clip_encoder` 와 동일하므로
-    `train_clip.py:get_train_state` 의 `replace_params` 로직을 그대로 사용할 수 있다.
+    return text (·structure)  `get_pretrained_clip_encoder`  and  sametext to
+    `train_clip.py:get_train_state`  of  `replace_params`  to text  as-is text for text text text.
     """
     pretrained_params = {}
 

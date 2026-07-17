@@ -1,9 +1,9 @@
 """
 instruct_rl/utils/train_utils.py
 =================================
-CPCGRL / IPCGRL 공통 학습 유틸.
-각 train_*.py 에서 모드별 obs 주입 함수만 정의하고,
-나머지 PPO 학습 루프·체크포인트·로깅은 여기서 재사용한다.
+CPCGRL / IPCGRL common training utility.
+each train_*.py  in  modetext obs inject functiontext text of text,
+remaining PPO training text·checkpoint· to text  text reusetext.
 """
 from __future__ import annotations
 
@@ -60,20 +60,20 @@ from purejaxrl.structures import LossInfo, ReturnInfo, RunnerState, Transition
 logger = get_logger(__file__)
 
 
-# ── 공통 유틸 ──────────────────────────────────────────────────────────────────
+# ── common utility ──────────────────────────────────────────────────────────────────
 
 def _cosine_similarity(x: jnp.ndarray, y: jnp.ndarray, eps: float = 1e-8) -> jnp.ndarray:
-    """배치 코사인 유사도. x, y: (..., D) → scalar per batch item."""
+    """batch text text also . x, y: (..., D) → scalar per batch item."""
     dot = jnp.sum(x * y, axis=-1)
     norm = jnp.linalg.norm(x, axis=-1) * jnp.linalg.norm(y, axis=-1) + eps
     return dot / norm
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  ObsInjectFn 타입:
+#  ObsInjectFn text:
 #    (last_obs, env_state, instruct_sample, config, env) -> last_obs
-#  학습/평가에서 obs 에 condition 정보를 주입하는 콜백.
-#  각 train_*.py 에서 정의하여 make_train 에 전달한다.
+#  training/evaluation in  obs  in  condition info  injecttext  callback.
+#  each train_*.py  in  text of text make_train  in   before text.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
@@ -89,16 +89,16 @@ def make_train(
     inject_reward_fn: Callable | None = None,
     map_size: Optional[int] = None,
 ):
-    """PPO 학습 함수를 생성한다.
+    """PPO training function  createtext.
 
     Parameters
     ----------
     inject_obs_fn : (last_obs, env_state, instruct_sample, config, env) -> last_obs
-        각 모드별 obs 주입 로직. None 이면 obs 를 그대로 사용한다.
+        each modetext obs inject  to text. None  text obs   as-is text for text.
     inject_reward_fn : (prev_env_state, curr_env_state, last_obs, curr_obs, instruct_sample, config, env)
         -> (reward_i, condition)
-        reward_i/condition 을 외부에서 동적으로 주입하는 콜백.
-        반환 shape은 get_reward_batch 입력과 동일해야 한다.
+        reward_i/condition   text in  dynamic as  injecttext  callback.
+        return shape  get_reward_batch text and  sametext text.
     """
     config.NUM_UPDATES = config.total_timesteps // config.num_steps // config.n_envs
     config.MINIBATCH_SIZE = config.n_envs * config.num_steps // config.NUM_MINIBATCHES
@@ -218,7 +218,7 @@ def make_train(
             config=config,
         )
 
-        # ── BufferCollector (collect_buffer 모드) ─────────────────────────
+        # ── BufferCollector (collect_buffer mode) ─────────────────────────
         _buffer_collector: BufferCollector | None = None
         if getattr(config, 'collect_env_map', False):
             _buf_dir = getattr(config, 'buffer_save_dir', None)
@@ -236,15 +236,15 @@ def make_train(
                 )
 
         def _buffer_collect_callback(update_steps, traj_batch, env_state):
-            """jax.debug.callback 으로 호출되는 버퍼 수집 콜백."""
+            """jax.debug.callback  as  calltext  text text callback."""
             if _buffer_collector is None:
                 return
             step_int = int(update_steps)
             if _buffer_collector.should_collect(step_int):
                 _buffer_collector.collect_and_save(step_int, traj_batch, env_state)
 
-        # ── sim_reward 헬퍼: env_map → state embedding ────────────────────────
-        # clip_input_channel에서 좌표 채널(2개)을 빼면 one-hot 클래스 수가 된다
+        # ── sim_reward text: env_map → state embedding ────────────────────────
+        # clip_input_channel in  coordinate text(2text)  text one-hot class text  text
         _num_tile_classes: int = max(1, config.clip_input_channel - 2)
 
         def _get_state_embed(env_map, ref_obs, params):
@@ -275,7 +275,7 @@ def make_train(
 
                 rng, _rng = jax.random.split(rng)
 
-                # ── obs 주입 (모드별 콜백) ──
+                # ── obs inject (modetext callback) ──
                 if inject_obs_fn is not None and train_inst is not None:
                     last_obs = inject_obs_fn(last_obs, env_state, instruct_sample, config, env)
 
@@ -299,7 +299,7 @@ def make_train(
                 )
 
                 if inject_reward_fn is not None:
-                    # inject_reward_fn이 내부에서 렌더링·임베딩을 직접 수행
+                    # inject_reward_fn  internal in  rendering·embedding  direct textrow
                     pred_clip_similarity_reward = inject_reward_fn(
                         prev_env_state,
                         env_state,
@@ -325,7 +325,7 @@ def make_train(
 
                     # ── sim_reward: demo level ↔ current map cosine similarity delta ──
                     if config.coef_human_sim > 0:
-                        # S_{t+1} / S_t 임베딩
+                        # S_{t+1} / S_t embedding
                         map_embed = _get_state_embed(
                             env_state.env_state.env_map, last_obs, train_state.params
                         )
@@ -333,7 +333,7 @@ def make_train(
                             prev_env_state.env_state.env_map, last_obs, train_state.params
                         )
 
-                        # anchor 임베딩: instruct_sample.level (demo level)
+                        # anchor embedding: instruct_sample.level (demo level)
                         anchor_embed = _get_state_embed(
                             instruct_sample.level, last_obs, train_state.params
                         )
@@ -344,7 +344,7 @@ def make_train(
                         )
                         reward_batch = cond_reward_batch + config.coef_human_sim * sim_reward
 
-                    # return_info는 sim_reward 유무와 관계없이 항상 추적
+                    # return_info  sim_reward text and  text  always text
                     return_info = ReturnInfo(
                         cond_return=return_info.cond_return * (1 - return_info.prev_done) + cond_reward_batch * (1 - done),
                         sim_return=return_info.sim_return * (1 - return_info.prev_done) + sim_reward * (1 - done),
@@ -549,7 +549,7 @@ def make_train(
 
                     if inject_reward_fn is not None:
 
-                        # inject_reward_fn이 내부에서 렌더링·임베딩을 직접 수행
+                        # inject_reward_fn  internal in  rendering·embedding  direct textrow
                         reward_batch = inject_reward_fn(
                             state,
                             next_state,
@@ -634,7 +634,7 @@ def make_train(
 
             return (runner_state, update_steps, instruct_sample, return_info), metric
 
-        # ── 학습 시작 ──────────────────────────────────────────────────────
+        # ── training start ──────────────────────────────────────────────────────
         jax.debug.callback(init_checkpoint, runner_state)
 
         if train_inst is not None:
@@ -668,12 +668,12 @@ def make_train(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  main_chunk / main_entry — 각 train_*.py 에서 재사용
+#  main_chunk / main_entry — each train_*.py  in  reuse
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None, inject_reward_fn=None):
-    """학습 1 chunk 실행."""
+    """training 1 chunk Usage."""
     checkpoint_manager, restored_ckpt, encoder_param = init_checkpointer(config)
 
     if restored_ckpt is None:
@@ -690,7 +690,7 @@ def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None, inject_reward_fn=Non
         "Config must specify dataset_game for loading instruction dataset."
 
     train_inst, test_inst, samples = load_dataset_instruct(config)
-    # level 데이터는 Instruct.level 필드에 포함되어 있으므로 별도 level_db 빌드 불필요
+    # level data  Instruct.level text in  text text to  separate level_db build text
 
     train_jit = jax.jit(
         make_train(
@@ -706,7 +706,7 @@ def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None, inject_reward_fn=Non
 
 
 def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
-    """Hydra @main 에서 호출하는 공통 엔트리포인트."""
+    """Hydra @main  in  calltext  common entry point."""
     from instruct_rl.utils.path_utils import init_config
 
     if config.initialize is None or config.initialize:

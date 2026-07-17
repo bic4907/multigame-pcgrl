@@ -1,11 +1,11 @@
 """
 dataset/multigame/base.py
 =========================
-공통 추상 인터페이스 정의.
-모든 게임 핸들러는 BaseGameHandler를 상속하고,
-모든 전처리기는 BasePreprocessor를 상속한다.
+common text interface text of .
+text game handler  BaseGameHandler  text,
+text preprocessingtext  BasePreprocessor  text.
 
-외부 패키지 의존 없음 (numpy만 사용).
+text text  of text none (numpytext text for ).
 """
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ import warnings
 import numpy as np
 
 
-# ── 공통 태그 상수 ──────────────────────────────────────────────────────────────
+# ── common text text ──────────────────────────────────────────────────────────────
 class GameTag:
-    """지원 게임 식별자 상수 모음."""
+    """text game text text text."""
     ZELDA       = "zelda"
     MARIO       = "mario"
     LODE_RUNNER = "lode_runner"
@@ -32,12 +32,12 @@ class GameTag:
     SOKOBAN     = "sokoban"
     POKEMON     = "pokemon"
 
-# ── 공통 데이터 구조 ────────────────────────────────────────────────────────────
+# ── common data structure ────────────────────────────────────────────────────────────
 
 @dataclass
 class TileLegend:
     """
-    타일 문자 → 의미 속성 매핑.
+    tile character →  of text text text.
     char_to_attrs: {'W': ['solid', 'wall'], '-': ['passable', 'empty'], ...}
     """
     char_to_attrs: Dict[str, List[str]] = field(default_factory=dict)
@@ -58,18 +58,18 @@ class TileLegend:
 @dataclass
 class GameSample:
     """
-    단일 레벨 샘플.
+    text level sample.
 
     Parameters
     ----------
-    game        : GameTag 상수 (e.g. GameTag.ZELDA)
-    source_id   : 원본 파일명 또는 npz 키 등 고유 식별자
-    array       : (H, W) int32 ndarray - 정수 인코딩된 타일 그리드
-    char_grid   : (H, W) 문자 그리드 (원본 txt 기반일 때 유지)
-    legend      : TileLegend (None 가능)
-    instruction : 자연어 명령 (dungeon 등에서 사용)
-    order       : 원본 데이터셋 내 순서(index)
-    meta        : 기타 부가 정보 dict
+    game        : GameTag text (e.g. GameTag.ZELDA)
+    source_id   : text filetext text  npz text text text text
+    array       : (H, W) int32 ndarray - integer text tile text
+    char_grid   : (H, W) character text (text txt basedtext text keep)
+    legend      : TileLegend (None available)
+    instruction : text text (dungeon text in  text for )
+    order       : text dataset  inside  order(index)
+    meta        : text text  info dict
     """
     game:        str
     source_id:   str
@@ -149,29 +149,29 @@ def enforce_char_grid_top_left_16x16(
     return [row[:16] for row in char_grid[:16]]
 
 
-# ── 추상 핸들러 ─────────────────────────────────────────────────────────────────
+# ── text handler ─────────────────────────────────────────────────────────────────
 
 class BaseGameHandler(ABC):
     """
-    단일 게임/데이터셋 소스에 대한 핸들러.
-    list_entries() 로 전체 ID를 열거하고,
-    load_sample()  로 GameSample을 반환한다.
+    text game/dataset text in  text handler.
+    list_entries()  to  all ID  columntext,
+    load_sample()   to  GameSample  returntext.
     """
 
     @property
     @abstractmethod
     def game_tag(self) -> str:
-        """GameTag 상수를 반환."""
+        """GameTag text  return."""
         ...
 
     @abstractmethod
     def list_entries(self) -> List[str]:
-        """로드 가능한 source_id 목록 반환."""
+        """load availabletext source_id list return."""
         ...
 
     @abstractmethod
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
-        """source_id에 해당하는 GameSample 반환."""
+        """source_id in  text  GameSample return."""
         ...
 
     def __iter__(self) -> Iterator[GameSample]:
@@ -185,21 +185,21 @@ class BaseGameHandler(ABC):
         return list(self)
 
 
-# ── 추상 전처리기 ───────────────────────────────────────────────────────────────
+# ── text preprocessingtext ───────────────────────────────────────────────────────────────
 
 class BasePreprocessor(ABC):
     """
-    문자 그리드 → 정수 ndarray 변환 및 기타 전처리.
-    각 게임마다 서브클래스를 정의한다.
+    character text → integer ndarray convert text text preprocessing.
+    each gametext textclass  text of text.
     """
 
     @abstractmethod
     def char_to_int(self, char: str) -> int:
-        """단일 문자를 정수 타일 ID로 변환."""
+        """text character  integer tile ID to  convert."""
         ...
 
     def transform(self, char_grid: List[List[str]]) -> np.ndarray:
-        """2D 문자 리스트 → (H, W) int32 ndarray."""
+        """2D character text → (H, W) int32 ndarray."""
         h = len(char_grid)
         w = max(len(row) for row in char_grid) if h > 0 else 0
         arr = np.zeros((h, w), dtype=np.int32)
@@ -209,8 +209,8 @@ class BasePreprocessor(ABC):
         return arr
 
     def parse_txt(self, text: str) -> List[List[str]]:
-        """텍스트 파일 내용 → 2D 문자 리스트."""
+        """text file content → 2D character text."""
         lines = text.splitlines()
-        # 빈 줄 제거
+        # text text remove
         lines = [l for l in lines if l.strip()]
         return [list(line) for line in lines]

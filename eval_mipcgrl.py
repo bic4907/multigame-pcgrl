@@ -1,8 +1,8 @@
 """
 eval_mipcgrl.py
 ===============
-MIPCGRL 평가 엔트리포인트. eval_ipcgrl 와 동일하지만 MIPCGRLEvalConfig 를
-사용해 exp_dir / wandb name 이 ``mipcgrl_...`` prefix 로 분리되도록 한다.
+MIPCGRL evaluation entry point. eval_ipcgrl  and  sametext MIPCGRLEvalConfig
+text for text exp_dir / wandb name   ``mipcgrl_...`` prefix  to  separatetext also text text.
 """
 import json
 import logging

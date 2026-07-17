@@ -6,14 +6,14 @@ from collections import defaultdict
 
 
 def _subsample_per_group(samples, n_per_group: int, seed: int = 0):
-    """(game, re) 그룹별로 최대 n_per_group 개를 서브샘플링한다.
+    """(game, re) textby maximum n_per_group text  textsampletext.
 
-    가용 샘플이 n_per_group 보다 적은 그룹은 전부 사용.
+      for  sample  n_per_group text text  text   before text text for .
 
     Returns
     -------
     subsampled : list
-    sampled_counts : dict  game -> sampled count  (re가 1개인 경우 game 기준)
+    sampled_counts : dict  game -> sampled count  (re  1text text game basis)
     """
     by_group: dict = defaultdict(list)
     for sample in samples:

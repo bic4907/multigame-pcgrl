@@ -1,9 +1,9 @@
 """envs/probs/multigame.py  (updated)
 
-tile_mapping.json 의 unified categories(_categories 섹션)를 tile_enum으로 삼는
-MultigameProblem 및 make_multigame_env() 팩토리.
+tile_mapping.json  of  unified categories(_categories text)  tile_enum as  text
+MultigameProblem text make_multigame_env() text.
 
-_categories (7개)
+_categories (7text)
 -----------------
   0  EMPTY   – background / void
   1  WALL    – solid, impassable obstacle
@@ -13,7 +13,7 @@ _categories (7개)
   5  SPAWN   – player start / exit / door
   6  HAZARD  – environmental damage / trap
 
-이 파일 하나만으로 "tile_mapping 스펙과 동일한 action 공간을 가진 env" 를 make할 수 있다.
+  file text as  "tile_mapping text and  sametext action text   text env"   maketext text text.
 
 Usage
 -----
@@ -26,7 +26,7 @@ Usage
         rf_shape=(31, 31),
     )
 
-    # n_editable_tiles 가 NUM_CATEGORIES(7) 와 일치함을 확인
+    # n_editable_tiles   NUM_CATEGORIES(7)  and  text  check
     assert env.rep.n_editable_tiles == 7
 """
 from __future__ import annotations
@@ -46,7 +46,7 @@ from PIL import Image
 
 from envs.probs.problem import Placeholder, Problem, ProblemState
 
-# ── tile_mapping.json 로드 ──────────────────────────────────────────────────────
+# ── tile_mapping.json load ──────────────────────────────────────────────────────
 _MAPPING_FILE = Path(__file__).parent.parent.parent / "dataset" / "multigame" / "tile_mapping.json"
 with _MAPPING_FILE.open("r", encoding="utf-8") as _f:
     _MAPPING_CONFIG: dict = json.load(_f)
@@ -59,9 +59,9 @@ _CATEGORY_COLORS: dict[int, tuple] = {
 }
 NUM_CATEGORIES: int = len(_CATEGORIES)   # 7
 
-# ── tile 이미지 파일 매핑: JSON _category_tile_images 에서 로드 ─────────────────
-# key "border" → BORDER 타일 (index 0)
-# key "0".."N"  → category 인덱스 (MultigameTiles index = cat+1)
+# ── tile image file text: JSON _category_tile_images  in  load ─────────────────
+# key "border" → BORDER tile (index 0)
+# key "0".."N"  → category index (MultigameTiles index = cat+1)
 _TILE_IMS_DIR = Path(__file__).parent / "tile_ims"
 
 _raw_tile_images: dict = _MAPPING_CONFIG.get("_category_tile_images", {})
@@ -76,26 +76,26 @@ _TILE_SIZE = 16
 
 
 def _make_color_tile(rgb: tuple, size: int = _TILE_SIZE) -> Image.Image:
-    """단색 RGBA 타일 이미지 생성."""
+    """text RGBA tile image create."""
     r, g, b = rgb
     arr = np.full((size, size, 4), [r, g, b, 255], dtype=np.uint8)
     return Image.fromarray(arr, mode="RGBA")
 
 
 def _load_tile_image(filename: str, size: int = _TILE_SIZE) -> Image.Image:
-    """envs/probs/tile_ims/<filename> 을 로드. 없으면 보라색 fallback."""
+    """envs/probs/tile_ims/<filename>   load. if missing text fallback."""
     path = _TILE_IMS_DIR / filename
     if path.exists():
         return Image.open(path).convert("RGBA").resize((size, size))
     import warnings
     warnings.warn(f"[multigame] tile image not found: {path}", stacklevel=2)
-    return _make_color_tile((200, 0, 200), size)   # 보라색 = 누락 표시
+    return _make_color_tile((200, 0, 200), size)   # text = missing tabletext
 
 
 def _load_or_color_tile(cat_idx: int, size: int = _TILE_SIZE) -> Image.Image:
-    """category index → 타일 이미지.
-    _CATEGORY_IMAGE_FILES(JSON)에 파일이 지정되어 있으면 그 파일 사용,
-    없으면 _CATEGORY_COLORS 로 단색 타일 생성."""
+    """category index → tile image.
+    _CATEGORY_IMAGE_FILES(JSON) in  file  text text text file text for ,
+    if missing _CATEGORY_COLORS  to  text tile create."""
     fname = _CATEGORY_IMAGE_FILES.get(cat_idx)
     if fname:
         return _load_tile_image(fname, size)
@@ -104,12 +104,12 @@ def _load_or_color_tile(cat_idx: int, size: int = _TILE_SIZE) -> Image.Image:
 
 
 # ── tile_mapping._categories → IntEnum ─────────────────────────────────────────
-# BORDER(0) 은 env 규약상 index 0 이어야 하므로, category index를 1-shift 해서
-# BORDER=0, categories=1..NUM_CATEGORIES 로 배치한다.
+# BORDER(0)   env text index 0  text text to , category index  1-shift text
+# BORDER=0, categories=1..NUM_CATEGORIES  to  batchtext.
 #
 #   MultigameTiles
 #   --------------
-#   BORDER = 0          (env 내부 경계 타일, action 불가)
+#   BORDER = 0          (env internal text tile, action text )
 #   EMPTY  = 1          (category 0)
 #   WALL   = 2          (category 1)
 #   INTERACTABLE = 3      (category 2)
@@ -120,14 +120,14 @@ MultigameTiles = IntEnum(
     "MultigameTiles",
     {"BORDER": 0, **{name.upper(): idx + 1 for idx, name in _CATEGORIES.items()}},
 )
-"""tile_mapping._categories 에서 자동 생성된 tile enum.
+"""tile_mapping._categories  in  automatic createtext tile enum.
 
-BORDER=0, EMPTY=1, WALL=2, ..., HAZARD=7  (총 8개)
-에서 BORDER 를 제외하면 editable = 7 = NUM_CATEGORIES.
+BORDER=0, EMPTY=1, WALL=2, ..., HAZARD=7  (total 8text)
+ in  BORDER   text editable = 7 = NUM_CATEGORIES.
 """
 
-# 길찾기/region/path-length 메트릭에서 "통과 가능"으로 간주할 타일.
-# 멀티게임 카테고리가 바뀌어도 이름이 존재하는 항목만 자동 포함한다.
+# text/region/path-length text in  "text and  available" as  text tile.
+# textgame text  text also  name  text  text automatic text.
 _PASSABLE_TILE_NAMES = (
     "EMPTY",
     "FLOOR",
@@ -146,41 +146,41 @@ MultigamePassable = jnp.array(_passable_tiles, dtype=jnp.int32)
 
 
 class MultigameMetrics(IntEnum):
-    """멀티게임 env 는 별도 통계 지표를 사용하지 않는다. dummy 1-element."""
+    """textgame env   separate text texttable  text for text text text. dummy 1-element."""
     DUMMY = 0
 
 
 @struct.dataclass
 class MultigameState(ProblemState):
-    """MultigameProblem 용 dummy state."""
+    """MultigameProblem  for  dummy state."""
     pass
 
 
 class MultigameProblem(Problem):
-    """tile_mapping.json 의 unified 7-category 를 그대로 action 공간으로 쓰는 Problem.
+    """tile_mapping.json  of  unified 7-category   as-is action text as  text  Problem.
 
-    - tile_enum  = MultigameTiles  (BORDER + 7 categories = 8개)
-    - editable   = 7 (= NUM_CATEGORIES, BORDER 제외)
-    - stat/reward 는 null (0) — reward shaping 이 필요하면 서브클래스에서 오버라이드.
+    - tile_enum  = MultigameTiles  (BORDER + 7 categories = 8text)
+    - editable   = 7 (= NUM_CATEGORIES, BORDER text)
+    - stat/reward   null (0) — reward shaping   text textclass in  text text.
     """
 
     tile_enum = MultigameTiles
     metrics_enum = MultigameMetrics
     region_metrics_enum = Placeholder
 
-    # tile 생성 확률: BORDER=0, EMPTY=0.30, WALL=0.40, 나머지 각 0.10 (정규화)
+    # tile create probability: BORDER=0, EMPTY=0.30, WALL=0.40, remaining each 0.10 (normalize)
     _p_norm = 0.30 + 0.40 + 0.10 * (NUM_CATEGORIES - 2)
     tile_probs = tuple(
         [0.0, 0.30 / _p_norm, 0.40 / _p_norm]
         + [0.10 / _p_norm] * (NUM_CATEGORIES - 2)
     )
 
-    # 고정 개수 없음 (모두 자유 배치)
+    # fixed count none (text text batch)
     tile_nums = tuple([0] * len(MultigameTiles))
 
     # stat weights / trgs / ctrl_threshes: shape (1,) — dummy, no reward
     stat_weights  = np.zeros(1)
-    stat_trgs     = jnp.zeros(1)   # jnp.array 여야 Problem.__init__ 에서 정상 작동
+    stat_trgs     = jnp.zeros(1)   # jnp.array text Problem.__init__  in  text text
     ctrl_threshes = np.zeros(1)
 
     tile_size = _TILE_SIZE
@@ -191,41 +191,41 @@ class MultigameProblem(Problem):
         super().__init__(map_shape, ctrl_metrics, pinpoints)
 
     def get_metric_bounds(self, map_shape: Tuple[int, int]):
-        """통계 지표 없음 → dummy (1, 2) array."""
+        """text texttable none → dummy (1, 2) array."""
         return np.zeros((1, 2), dtype=np.float32)
 
     def get_curr_stats(self, env_map: chex.Array) -> MultigameState:
-        """통계 지표 없음 → zeros stats."""
+        """text texttable none → zeros stats."""
         stats = jnp.zeros(len(MultigameMetrics))
         return MultigameState(stats=stats)
 
     def get_stats(self, env_map, prob_state: ProblemState):
-        """통계 지표 없음 → zeros (1,)."""
+        """text texttable none → zeros (1,)."""
         return np.zeros(1)
 
     def get_path_coords(self, env_map: chex.Array, prob_state: ProblemState):
-        """경로 없음 → empty tuple (render 호환)."""
+        """path none → empty tuple (render text)."""
         return ()
 
     def draw_path(self, lvl_img, env_map, border_size, path_coords_tpl, tile_size):
-        """경로 없음 → 이미지 그대로 반환."""
+        """path none → image as-is return."""
         return lvl_img
 
     @partial(jax.jit, static_argnums=(0, 3))
     def get_cont_obs(self, env_map, condition, raw_obs: bool = False) -> jnp.array:
-        """CPCGRL condition → observation 변환.
+        """CPCGRL condition → observation convert.
 
-        모든 condition 값이 수치이므로, -1(미사용)을 0으로 마스킹하여 그대로 반환.
-        총 output shape: (5,)  — vec_input_dim 과 동일.
+        text condition text  text text to , -1(text for )  0 as  text as-is return.
+        total output shape: (5,)  — vec_input_dim  and  same.
         """
         mask = jnp.not_equal(condition, -1).astype(jnp.float32)
         obs = jnp.where(mask == 1, condition, 0.0)
         return obs
 
     def init_graphics(self):
-        """tile_mapping.json 의 _category_tile_images 를 읽어 타일 이미지를 초기화한다.
+        """tile_mapping.json  of  _category_tile_images   text tile image  initializetext.
 
-        MultigameTiles 인덱스:
+        MultigameTiles index:
           BORDER = 0  → _category_tile_images["border"]
           EMPTY  = 1  → _category_tile_images["0"]
           WALL   = 2  → _category_tile_images["1"]
@@ -236,7 +236,7 @@ class MultigameProblem(Problem):
 
         graphics: dict = {}
 
-        # BORDER (index 0): JSON "border" 키에서 로드
+        # BORDER (index 0): JSON "border" text in  load
         graphics[0] = _load_tile_image(_BORDER_IMAGE)
 
         # category tiles: MultigameTiles index = cat_idx + 1
@@ -248,12 +248,12 @@ class MultigameProblem(Problem):
 
 
 def render_multigame_map(env_map: np.ndarray, tile_size: int = _TILE_SIZE) -> Image.Image:
-    """tile_mapping._category_tile_images 에 따라 env_map (H×W int32) 을 PIL Image 로 렌더링한다.
+    """tile_mapping._category_tile_images  in  text env_map (H×W int32)   PIL Image  to  renderingtext.
 
     Parameters
     ----------
-    env_map  : (H, W) numpy array, 값은 MultigameTiles 정수
-    tile_size: 타일 픽셀 크기 (기본 16)
+    env_map  : (H, W) numpy array, text  MultigameTiles integer
+    tile_size: tile textcell size (default 16)
 
     Returns
     -------
@@ -263,12 +263,12 @@ def render_multigame_map(env_map: np.ndarray, tile_size: int = _TILE_SIZE) -> Im
     return Image.fromarray(arr, mode="RGB")
 
 
-# ── 타일 배열 캐시 ─────────────────────────────────────────────────────────────
+# ── tile array cache ─────────────────────────────────────────────────────────────
 _tile_array_cache: dict[int, np.ndarray] = {}
 
 
 def _get_tile_array(tile_size: int = _TILE_SIZE) -> np.ndarray:
-    """타일 인덱스별 RGBA numpy 배열을 반환. tile_size별로 캐싱.
+    """tile indextext RGBA numpy array  return. tile_sizeby text.
 
     Returns
     -------
@@ -293,15 +293,15 @@ def _get_tile_array(tile_size: int = _TILE_SIZE) -> np.ndarray:
 
 
 def render_multigame_map_np(env_map: np.ndarray, tile_size: int = _TILE_SIZE) -> np.ndarray:
-    """env_map (H, W) → numpy RGB 배열 (H*ts, W*ts, 3).
+    """env_map (H, W) → numpy RGB array (H*ts, W*ts, 3).
 
-    PIL paste 루프 대신 numpy fancy-indexing 으로 O(1) 조립.
-    타일 배열은 tile_size별로 캐싱되어 반복 호출 시 로딩 비용 없음.
+    PIL paste text text numpy fancy-indexing  as  O(1) text.
+    tile array  tile_sizeby text repetition call text  to text text for  none.
     """
     tile_arr = _get_tile_array(tile_size)  # (T, ts, ts, 4)
 
     H, W = env_map.shape
-    # 범위 밖 인덱스는 fallback (보라색 = index 0으로 clamp, 실제로는 존재하는 인덱스)
+    # range outside index  fallback (text = index 0 as  clamp, text to   text  index)
     idx = np.clip(env_map.astype(np.int32), 0, len(tile_arr) - 1)  # (H, W)
 
     # fancy indexing: (H, W, ts, ts, 4) → transpose → (H*ts, W*ts, 4)
@@ -316,23 +316,23 @@ def render_multigame_maps_batch(
     env_maps: np.ndarray,
     tile_size: int = _TILE_SIZE,
 ) -> np.ndarray:
-    """(N, H, W) 배열을 한 번에 렌더링 → (N, H*ts, W*ts, 3) uint8.
+    """(N, H, W) array  text text in  rendering → (N, H*ts, W*ts, 3) uint8.
 
-    numpy fancy-indexing + reshape 만 사용하므로 for 루프 없음.
+    numpy fancy-indexing + reshape text text for text to  for text none.
     """
     tile_arr = _get_tile_array(tile_size)  # (T, ts, ts, 4)
 
     N, H, W = env_maps.shape
     idx = np.clip(env_maps.astype(np.int32), 0, len(tile_arr) - 1)  # (N, H, W)
 
-    canvas = tile_arr[idx]                           # (N, H, W, ts, ts, 4) — 큰 경우 메모리 주의
+    canvas = tile_arr[idx]                           # (N, H, W, ts, ts, 4) — text text text warning
     canvas = canvas.transpose(0, 1, 3, 2, 4, 5)    # (N, H, ts, W, ts, 4)
     canvas = canvas.reshape(N, H * tile_size, W * tile_size, 4)
 
     return canvas[:, :, :, :3]  # RGB, (N, H*ts, W*ts, 3)
 
 
-# ── 팩토리 함수 ─────────────────────────────────────────────────────────────────
+# ── text function ─────────────────────────────────────────────────────────────────
 
 def make_multigame_env(
     representation: str = "narrow",
@@ -341,15 +341,15 @@ def make_multigame_env(
     act_shape: Tuple[int, int] = (1, 1),
     max_board_scans: float = 3.0,
 ):
-    """tile_mapping._categories 스펙과 동일한 action 공간을 가진 PCGRLEnv 를 반환한다.
+    """tile_mapping._categories text and  sametext action text   text PCGRLEnv   returntext.
 
     Parameters
     ----------
     representation  : "narrow" | "wide" | "turtle" | "nca"
-    map_shape       : (H, W) 맵 크기 (기본 16x16)
-    rf_shape        : receptive field 크기. None 이면 2*map_width-1 로 자동 설정.
-    act_shape       : action patch 크기 (narrow/turtle 의 경우 (1,1))
-    max_board_scans : 보드를 최대 몇 번 스캔할지
+    map_shape       : (H, W) map size (default 16x16)
+    rf_shape        : receptive field size. None  text 2*map_width-1  to  automatic config.
+    act_shape       : action patch size (narrow/turtle  of  text (1,1))
+    max_board_scans : text  maximum text text text
 
     Returns
     -------
@@ -361,11 +361,11 @@ def make_multigame_env(
     """
     from envs.pcgrl_env import PCGRLEnv, PCGRLEnvParams, ProbEnum, RepEnum, PROB_CLASSES
 
-    # MultigameProblem 을 PROB_CLASSES 에 등록 (항상 최신 상태로 갱신)
+    # MultigameProblem   PROB_CLASSES  in  text (always latest text to  text)
     _MULTIGAME_KEY = max(ProbEnum) + 1
     PROB_CLASSES[_MULTIGAME_KEY] = MultigameProblem
 
-    # rf_shape 자동 계산
+    # rf_shape automatic compute
     if rf_shape is None:
         rf_size = 2 * map_shape[0] - 1
         rf_shape = (rf_size, rf_size)

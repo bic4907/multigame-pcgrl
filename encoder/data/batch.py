@@ -75,7 +75,7 @@ def create_batches(dataset: Dataset, batch_size: int):
 def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTrainConfig):
     dataset_samples = dataset._samples
 
-    # ── max_samples: dry-run용 — BERT 임베딩 계산 전에 샘플 수를 제한 ──
+    # ── max_samples: dry-run for  — BERT embedding compute  before  in  sample text  text ──
     max_samples = getattr(config, 'max_samples', None)
     if max_samples is not None and len(dataset_samples) > max_samples:
         logger.info(f"[dry-run] max_samples={max_samples}: "
@@ -96,7 +96,7 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
     for s in dataset_samples:
         reward_e = int(s.meta.get("reward_enum", 0))
 
-        # reward_enum → digit 배열 (e.g. 2 → [2], 12 → [1, 2])
+        # reward_enum → digit array (e.g. 2 → [2], 12 → [1, 2])
         whole_reward_enum_digits.append([int(d) for d in str(reward_e)])
 
     max_re_len = max(len(x) for x in whole_reward_enum_digits)
@@ -104,7 +104,7 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
         [x + [0] * (max_re_len - len(x)) for x in whole_reward_enum_digits]
     )  # (n_samples, max_re_len)
 
-    # 단일 npz 를 한 번만 로드 (키: {game}_re{rn} 형태)
+    # text npz   text text load (text: {game}_re{rn} form)
     import re as _re
     npz_path = os.path.join(buffer_dir, 'cpcgrl_buffer', 'cpcgrl_pair_dataset.npz')
     _npz_data = np.load(npz_path, allow_pickle=True)
@@ -117,10 +117,10 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
 
     dataset = None
     for game in unique_games:
-        # 현재 게임에 해당하는 키들의 pairs 를 합침
+        # current game in  text  text of  pairs   text
         game_keys = sorted(_npz_game_keys.get(game, []))
         if not game_keys:
-            # 게임 키가 없으면 전체 키 사용 (backward compat)
+            # game text  if missing all text text for  (backward compat)
             game_keys = sorted(k for ks in _npz_game_keys.values() for k in ks)
             logger.warning(f"No buffer keys for game={game!r}, using all {len(game_keys)} keys")
 

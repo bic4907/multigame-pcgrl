@@ -1,6 +1,6 @@
 """evaluator/losses/multigame_amount_loss.py
 
-Multigame 타일(INTERACTIVE, HAZARD, COLLECTABLE) 개수 기반 loss.
+Multigame tile(INTERACTIVE, HAZARD, COLLECTABLE) count based loss.
 """
 import chex
 import jax
@@ -19,18 +19,18 @@ def multigame_amount_loss(
     cond: chex.Array,
     absolute: bool = True,
 ) -> chex.Array:
-    """특정 multigame 타일의 개수와 목표 조건 사이의 loss.
+    """text multigame tile of  count and  texttable condition text  of  loss.
 
     Parameters
     ----------
     env_map : chex.Array
-        (H, W) 정수 맵.
+        (H, W) integer map.
     tile_name : str
-        "interactive", "hazard", "collectable" 중 하나.
+        "interactive", "hazard", "collectable"  during  text.
     cond : chex.Array
-        목표 타일 개수 (scalar).
+        texttable tile count (scalar).
     absolute : bool
-        True 면 절댓값 loss, False 면 부호 유지.
+        True text text loss, False text text keep.
 
     Returns
     -------

@@ -1,11 +1,11 @@
 """
 instruct_rl/utils/csv_instruct_loader.py
 =========================================
-CSV 파일 기반 Instruct 빌더.
-train_cpcgrl.py 의 make_train/train 내부에 있던 CSV → Instruct 변환 로직을 분리.
+CSV file based Instruct text.
+train_cpcgrl.py  of  make_train/train internal in  text CSV → Instruct convert  to text  separate.
 
-encoder model (clip / cnnclip) 사용 시 네트워크 forward 가 필요하므로,
-network 관련 인자를 외부에서 주입받는다.
+encoder model (clip / cnnclip) text for  text network forward   text to ,
+network text text  text in  injecttext text.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from instruct_rl.utils.log_utils import get_logger
 
 logger = get_logger(__file__)
 
-# CSV 파일 기준 경로 (train_cpcgrl.py 와 동일한 위치를 가정)
+# CSV file basis path (train_cpcgrl.py  and  sametext abovetext   text)
 _PROJECT_ROOT = dirname(dirname(dirname(abspath(__file__))))
 
 
@@ -33,18 +33,18 @@ def load_csv_instruct(
     network_params=None,
     init_x=None,
 ):
-    """CSV 파일에서 train/test Instruct 를 빌드한다.
+    """CSV file in  train/test Instruct   buildtext.
 
     Parameters
     ----------
     config : CPCGRLConfig / TrainConfig
-        instruct_csv, nlp_input_dim, encoder.model, multimodal_condition 등 필요.
+        instruct_csv, nlp_input_dim, encoder.model, multimodal_condition text text.
     network : flax Module, optional
-        encoder model 이 clip / cnnclip 일 때 임베딩 생성에 필요.
+        encoder model   clip / cnnclip text text embedding create in  text.
     network_params : dict, optional
-        network.apply 에 넘길 파라미터.
+        network.apply  in  text parameter.
     init_x : PCGRLObs, optional
-        dummy observation (repeat 용).
+        dummy observation (repeat  for ).
 
     Returns
     -------
@@ -82,7 +82,7 @@ def load_csv_instruct(
     return train_inst, test_inst
 
 
-# ── 내부 헬퍼 ──────────────────────────────────────────────────────────────
+# ── internal text ──────────────────────────────────────────────────────────────
 
 
 def _build_instruct_from_df(
@@ -94,13 +94,13 @@ def _build_instruct_from_df(
     network_params,
     init_x,
 ):
-    """DataFrame 의 train/test 파티션에서 Instruct 를 만든다."""
+    """DataFrame  of  train/test text in  Instruct   text."""
     split_df = df[df["train"] == is_train].copy()
     split_name = "train" if is_train else "test"
 
     cond_id = jnp.array(split_df["cond_id"].to_list()).reshape(-1, 1)
 
-    # ── embedding (CSV 에 embed_* 컬럼이 있으면 사용) ─────────────────────
+    # ── embedding (CSV  in  embed_* text  text text for ) ─────────────────────
     embedding_df = split_df.filter(regex="embed_*")
     embedding_df = embedding_df.reindex(
         sorted(embedding_df.columns, key=lambda x: int(x.split("_")[-1])),
@@ -133,7 +133,7 @@ def _build_instruct_from_df(
         [x + [0] * (max_len - len(x)) for x in reward_enum_list]
     )
 
-    # ── encoder-based embedding 재생성 (clip / cnnclip) ───────────────────
+    # ── encoder-based embedding textcreate (clip / cnnclip) ───────────────────
     if config.encoder.model == "clip" and processor is not None:
         embedding = _generate_clip_embedding(
             split_df, config, processor, network, network_params, init_x, split_name,
@@ -152,7 +152,7 @@ def _build_instruct_from_df(
 
 
 def _generate_clip_embedding(df, config, processor, network, network_params, init_x, split_name):
-    """CLIP text encoder 로 임베딩을 생성한다."""
+    """CLIP text encoder  to  embedding  createtext."""
     assert network is not None, "network is required for clip embedding generation"
 
     language_instr_list = df["instruction"].to_list()
@@ -192,7 +192,7 @@ def _generate_clip_embedding(df, config, processor, network, network_params, ini
 
 
 def _generate_cnnclip_embedding(df, config, processor, network, network_params, init_x, split_name):
-    """CNN-CLIP encoder 로 임베딩을 생성한다."""
+    """CNN-CLIP encoder  to  embedding  createtext."""
     assert network is not None, "network is required for cnnclip embedding generation"
 
     language_instr_list = df["instruction"].to_list()

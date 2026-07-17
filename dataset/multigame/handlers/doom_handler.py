@@ -1,11 +1,11 @@
 """
 dataset/multigame/handlers/doom_handler.py
 ==========================================
-DOOM 레벨 데이터셋 핸들러 (TheVGLC 기반).
-Doom 맵을 처리하기 위한 핸들러.
-- 파일 자동 탐색
-- 대형 맵 슬라이싱 (16x16 단위)
-- 타일 매핑 및 변환
+DOOM level dataset handler (TheVGLC based).
+Doom map  processtext abovetext handler.
+- file automatic text
+- text map text text (16x16 textabove)
+- tile text text convert
 """
 from __future__ import annotations
 from pathlib import Path
@@ -24,14 +24,14 @@ _DEFAULT_DOOM_ROOT = _DEFAULT_VGLC_ROOT / "Doom"
 _DEFAULT_DOOM2_ROOT = _DEFAULT_VGLC_ROOT / "Doom2"
 class DoomHandler(BaseGameHandler):
     """
-    Doom 레벨 핸들러.
-    TheVGLC Doom 데이터셋에서 레벨을 자동 탐색, 슬라이싱, 변환합니다.
+    Doom level handler.
+    TheVGLC Doom dataset in  level  automatic text, text text, converttext.
     Parameters
     ----------
     root : Path | str
-        Doom 레벨 디렉토리 (*.txt 파일 포함)
+        Doom level directory (*.txt file text)
     handler_config : Optional[Any]
-        HandlerConfig 객체 (doom_slicing 설정)
+        HandlerConfig text (doom_slicing config)
     """
     def __init__(
         self,
@@ -51,17 +51,17 @@ class DoomHandler(BaseGameHandler):
     def game_dir(self) -> Path:
         return self._root
     def _discover(self) -> List[str]:
-        """Doom 레벨 파일 탐색 및 슬라이싱."""
+        """Doom level file text text text text."""
         if not self._root.exists():
             return []
-        # VGLC 구조: Processed 폴더 우선, 없으면 루트
+        # VGLC structure: Processed folder text, if missing text
         processed = self._root / "Processed"
         if processed.exists():
             txt_files = sorted(processed.glob("*.txt"))
         else:
             txt_files = sorted(self._root.glob("*.txt"))
         txt_files = [p for p in txt_files if not p.name.lower().startswith("readme")]
-        # Doom 전용: discover_and_process 호출
+        # Doom  before  for : discover_and_process call
         if hasattr(self._preprocessor, "discover_and_process"):
             return self._preprocessor.discover_and_process(
                 files=txt_files,
@@ -76,14 +76,14 @@ class DoomHandler(BaseGameHandler):
             self._entries = self._discover()
         return self._entries
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
-        # 캐시에 있으면 반환 (슬라이싱된 데이터 등)
+        # cache in  text return (text text data text)
         if source_id in self._sliced_cache:
             sample = self._sliced_cache[source_id]
             if order is not None:
                 sample.order = order
             return sample
-        # 캐시에 없는 경우: source_id 파싱
-        # source_id는 "path/to/file.txt|slice_idx" 형식
+        # cache in  without text: source_id parsing
+        # source_id  "path/to/file.txt|slice_idx" text
         if "|" in source_id:
             file_path, slice_idx_str = source_id.rsplit("|", 1)
             try:
@@ -101,7 +101,7 @@ class DoomHandler(BaseGameHandler):
             raise FileNotFoundError(f"Doom level file not found: {file_path}")
         text = path.read_text(encoding="utf-8", errors="replace")
         char_grid = self._preprocessor.parse_txt(text)
-        # 슬라이싱 (설정이 있으면 적용, 없으면 전체)
+        # text text (config  text apply, if missing all)
         if self._handler_config and hasattr(self._handler_config, "doom"):
             sliced_maps = self._preprocessor.slice_large_map(
                 char_grid,
@@ -116,7 +116,7 @@ class DoomHandler(BaseGameHandler):
             sliced_data = sliced_maps[slice_idx]
             char_grid = sliced_data["map"]
         else:
-            # 슬라이싱 설정 없음: 전체 맵을 16x16으로 패딩/잘라냄
+            # text text config none: all map  16x16 as  padding/text
             if slice_idx != 0:
                 raise IndexError(f"slice_idx {slice_idx} invalid without slicing config")
         array = self._preprocessor.transform(char_grid)
@@ -134,7 +134,7 @@ class DoomHandler(BaseGameHandler):
             order=order,
             meta={"file": str(path.name), "game_dir": str(self._root)},
         )
-        # 캐시에 저장
+        # cache in  save
         self._sliced_cache[source_id] = sample
         return sample
     def __repr__(self) -> str:

@@ -1,9 +1,9 @@
 """
 dataset/multigame/handlers/vglc_games/lode_runner.py
 ======================================================
-Lode Runner (TheVGLC) 전처리 핸들러.
+Lode Runner (TheVGLC) preprocessing handler.
 
-타일 매핑
+tile text
 ---------
 0  : empty     (.)
 1  : solid     (B)

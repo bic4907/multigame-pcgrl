@@ -10,8 +10,8 @@ n_envs: 600
 
 encoder:
   model: clip
-  # 파인튜닝된 CLIP 체크포인트 디렉토리명 (pretrained_encoders/<ckpt_name>/ckpts)
-  # 예: "finetuned-clip-game-all_exp-def_0" 또는 절대경로 ckpt_path
+  # text CLIP checkpoint directorytext (pretrained_encoders/<ckpt_name>/ckpts)
+  # text: "finetuned-clip-game-all_exp-def_0" text  textpath ckpt_path
   ckpt_dir: pretrained_encoders
   ckpt_name: null
   ckpt_path: null

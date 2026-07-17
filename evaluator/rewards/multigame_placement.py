@@ -1,29 +1,29 @@
 """evaluator/rewards/multigame_placement.py
 
-Multigame 아이템 배치 품질 기반 reward.
+Multigame text text batch quality based reward.
 
-아이템(INTERACTIVE, HAZARD, COLLECTABLE)을 맵에 배치할 때,
-단순 개수가 아니라 **배치 패턴**까지 고려하여 보상을 준다.
+text text(INTERACTIVE, HAZARD, COLLECTABLE)  map in  batchtext text,
+text count  text **batch text**text text reward  text.
 
-세 가지 시그널
+text  text signal
 -----------
-1. **반복 배치 패널티 (cluster penalty)**
-   4방향 이웃 중 같은 타일이 있으면 패널티.
-   → 일직선/뭉침 방지.
+1. **repetition batch penalty (cluster penalty)**
+   4text  text  during  same tile  text penalty.
+   → text/text text.
 
-2. **접근성 보상 (accessibility bonus)**
-   아이템 인접 4방향 중 통행 가능 타일(EMPTY, HAZARD, COLLECTABLE)
-   이 1개 이상이면 보상. 사방이 WALL/BORDER/INTERACTIVE 로 막힌 곳은 보상 0.
-   → 도달 불가능한 곳에 아이템 배치 방지.
+2. **accessibility reward (accessibility bonus)**
+   text text adjacent 4text  during  passage available tile(EMPTY, HAZARD, COLLECTABLE)
+     1text or more text reward. text  WALL/BORDER/INTERACTIVE  to  text text  reward 0.
+   → reach unavailabletext text in  text text batch text.
 
-3. **분산 보상 (spread bonus)**
-   아이템 타일 좌표의 쌍별 L1 거리 평균.
-   거리가 클수록 골고루 퍼져 있다는 뜻.
-   → 한 곳에 몰리지 않도록 유도.
+3. **spread reward (spread bonus)**
+   text text tile coordinate of  text L1 distance mean.
+   distance  text text text text  text.
+   → text text in  text text also text text also .
 
-최종 reward = w_spread * spread_reward
+text reward = w_spread * spread_reward
 
-모두 JAX jit/vmap 호환.
+text JAX jit/vmap text.
 """
 import chex
 import jax
@@ -32,14 +32,14 @@ from functools import partial
 
 from envs.probs.multigame import MultigameTiles
 
-# 아이템 타일 값
+# text text tile text
 _ITEM_TILES = jnp.array([
     MultigameTiles.INTERACTIVE,
     MultigameTiles.HAZARD,
     MultigameTiles.COLLECTABLE,
 ], dtype=jnp.int32)
 
-# 통행 가능 타일: EMPTY + HAZARD + COLLECTABLE (INTERACTIVE 제외)
+# passage available tile: EMPTY + HAZARD + COLLECTABLE (INTERACTIVE text)
 _PASSABLE_TILES = jnp.array([
     MultigameTiles.EMPTY,
     MultigameTiles.HAZARD,
@@ -47,17 +47,17 @@ _PASSABLE_TILES = jnp.array([
 ], dtype=jnp.int32)
 
 
-# ── 1. 반복 배치 패널티 ────────────────────────────────────────────────────────
+# ── 1. repetition batch penalty ────────────────────────────────────────────────────────
 
 def _cluster_penalty(env_map: chex.Array) -> jnp.ndarray:
-    """아이템 타일의 4방향 이웃 중 같은 타일 수의 합.
+    """text text tile of  4text  text  during  same tile text of  text.
 
-    값이 클수록 뭉침이 심하다. 0이면 모든 아이템이 고립 배치.
+    text  text text  text. 0 text text text text  text batch.
     """
     H, W = env_map.shape
     is_item = jnp.isin(env_map, _ITEM_TILES)  # (H, W) bool
 
-    # 상하좌우 시프트 — 경계 밖은 -1(매칭 불가)
+    # text text — text outside  -1(text text )
     up    = jnp.pad(env_map[:-1, :], ((1, 0), (0, 0)), constant_values=-1)
     down  = jnp.pad(env_map[1:, :],  ((0, 1), (0, 0)), constant_values=-1)
     left  = jnp.pad(env_map[:, :-1], ((0, 0), (1, 0)), constant_values=-1)
@@ -68,26 +68,26 @@ def _cluster_penalty(env_map: chex.Array) -> jnp.ndarray:
         (env_map == down).astype(jnp.int32) +
         (env_map == left).astype(jnp.int32) +
         (env_map == right).astype(jnp.int32)
-    )  # (H, W) — 각 셀의 동일 이웃 수 (0~4)
+    )  # (H, W) — each cell of  same  text text (0~4)
 
-    # 아이템 위치에서만 합산
+    # text text abovetext in text sum
     penalty = jnp.sum(same_neighbor * is_item).astype(float)
     return penalty
 
 
-# ── 2. 접근성 보상 ─────────────────────────────────────────────────────────────
+# ── 2. accessibility reward ─────────────────────────────────────────────────────────────
 
 def _accessibility_bonus(env_map: chex.Array) -> jnp.ndarray:
-    """아이템 타일 중 4방향에 통행 가능 타일이 1개 이상인 비율.
+    """text text tile  during  4text in  passage available tile  1text or moretext ratio.
 
-    1.0 = 모든 아이템 접근 가능, 0.0 = 모든 아이템 사방 막힘.
-    아이템이 0개면 1.0 반환.
+    1.0 = text text text text available, 0.0 = text text text text text.
+    text text  0text 1.0 return.
     """
     H, W = env_map.shape
     is_item = jnp.isin(env_map, _ITEM_TILES)
     n_items = jnp.sum(is_item).astype(float)
 
-    # 통행 가능 마스크
+    # passage available text
     passable = jnp.isin(env_map, _PASSABLE_TILES)
 
     up    = jnp.pad(passable[:-1, :], ((1, 0), (0, 0)), constant_values=False)
@@ -95,50 +95,50 @@ def _accessibility_bonus(env_map: chex.Array) -> jnp.ndarray:
     left  = jnp.pad(passable[:, :-1], ((0, 0), (1, 0)), constant_values=False)
     right = jnp.pad(passable[:, 1:],  ((0, 0), (0, 1)), constant_values=False)
 
-    # 이웃 중 통행 가능한 타일 수 (자기 자신은 제외해야 하므로
-    # "이웃"만 카운트 — 이미 shift 했으므로 자기 자신 포함 안 됨)
+    #  text  during  passage availabletext tile text (text text  text text to
+    # " text"text text —  text shift text to  text text text text text)
     n_passable_neighbors = (
         up.astype(jnp.int32) + down.astype(jnp.int32) +
         left.astype(jnp.int32) + right.astype(jnp.int32)
     )
 
-    # 아이템 위치에서 이웃 통행 가능 수 ≥ 1 이면 접근 가능
+    # text text abovetext in   text passage available text ≥ 1  text text available
     accessible = ((n_passable_neighbors >= 1) & is_item).astype(float)
     n_accessible = jnp.sum(accessible)
 
-    # 아이템 0개 → 1.0 (패널티 없음)
+    # text text 0text → 1.0 (penalty none)
     bonus = jnp.where(n_items > 0, n_accessible / n_items, 1.0)
     return bonus
 
 
-# ── 3. 분산 보상 ───────────────────────────────────────────────────────────────
+# ── 3. spread reward ───────────────────────────────────────────────────────────────
 
 def _spread_bonus(env_map: chex.Array, max_items: int = 32) -> jnp.ndarray:
-    """아이템 좌표 간 평균 L1 거리 (맵 크기로 정규화).
+    """text text coordinate text mean L1 distance (map size to  normalize).
 
-    1에 가까울수록 골고루 퍼져 있고, 0에 가까울수록 뭉쳐 있다.
-    아이템 ≤ 1개면 0.0 (분산 측정 불가).
+    1 in   text text text text, 0 in   text text text.
+    text text ≤ 1text 0.0 (spread measure text ).
 
-    max_items : 고정 크기 배열을 위한 최대 아이템 수.
+    max_items : fixed size array  abovetext maximum text text text.
     """
     H, W = env_map.shape
-    max_dist = (H - 1.0) + (W - 1.0)  # 맵 대각선 L1 거리
+    max_dist = (H - 1.0) + (W - 1.0)  # map texteachtext L1 distance
 
     is_item = jnp.isin(env_map, _ITEM_TILES)
     n_items = jnp.sum(is_item).astype(jnp.int32)
 
-    # 아이템 좌표 추출 — 고정 크기 배열 (max_items, 2)
+    # text text coordinate extract — fixed size array (max_items, 2)
     rows, cols = jnp.where(is_item, size=max_items, fill_value=-1)
     coords = jnp.stack([rows, cols], axis=-1)  # (max_items, 2)
 
-    # valid mask: -1이 아닌 좌표
+    # valid mask: -1  text coordinate
     valid = (coords[:, 0] >= 0)  # (max_items,)
 
-    # 쌍별 L1 거리 — (max_items, max_items)
+    # text L1 distance — (max_items, max_items)
     diff = jnp.abs(coords[:, None, :] - coords[None, :, :])  # (M, M, 2)
     pairwise_l1 = jnp.sum(diff, axis=-1)  # (M, M)
 
-    # valid 쌍만 (i != j)
+    # valid text (i != j)
     valid_pair = valid[:, None] & valid[None, :]  # (M, M)
     diag_mask = ~jnp.eye(max_items, dtype=bool)
     valid_pair = valid_pair & diag_mask
@@ -147,15 +147,15 @@ def _spread_bonus(env_map: chex.Array, max_items: int = 32) -> jnp.ndarray:
     total_dist = jnp.sum(pairwise_l1 * valid_pair).astype(float)
 
     mean_dist = jnp.where(n_pairs > 0, total_dist / n_pairs, 0.0)
-    # 정규화: max_dist로 나누어 0~1 범위
+    # normalize: max_dist to  text 0~1 range
     bonus = jnp.where(max_dist > 0, mean_dist / max_dist, 0.0)
 
-    # 아이템 ≤ 1개면 분산 측정 불가
+    # text text ≤ 1text spread measure text
     bonus = jnp.where(n_items > 1, bonus, 0.0)
     return bonus
 
 
-# ── 통합 보상 함수 ─────────────────────────────────────────────────────────────
+# ── text reward function ─────────────────────────────────────────────────────────────
 
 @partial(jax.jit, static_argnames=("max_items",))
 def get_multigame_placement_reward(
@@ -164,35 +164,35 @@ def get_multigame_placement_reward(
     w_spread: float = 1.0,
     max_items: int = 32,
 ) -> chex.Array:
-    """이전 맵 대비 아이템 배치 품질 개선량.
+    """previous map text text text batch quality improvement.
 
     Parameters
     ----------
     prev_env_map, curr_env_map : chex.Array
-        (H, W) 정수 맵.
+        (H, W) integer map.
     w_spread : float
-        분산 보상 가중치. 클수록 쏠림에 민감.
+        spread reward weight. text text in  text.
     max_items : int
-        spread 계산 시 고정 배열 크기 (맵 내 최대 아이템 수).
+        spread compute text fixed array size (map  inside  maximum text text text).
 
     Returns
     -------
-    chex.Array : scalar reward (양수 = 개선).
+    chex.Array : scalar reward (text = text).
     """
-    # ── prev 점수 ──
+    # ── prev text ──
     prev_spread  = _spread_bonus(prev_env_map, max_items)
 
-    # ── curr 점수 ──
+    # ── curr text ──
     curr_spread  = _spread_bonus(curr_env_map, max_items)
 
-    # spread: 높을수록 좋음 → curr - prev
+    # spread: text text text → curr - prev
     spread_reward = (curr_spread - prev_spread)
 
     reward = w_spread * spread_reward
     return reward.astype(float)
 
 
-# ── 개별 measure 도 export ────────────────────────────────────────────────────
+# ── text measure  also  export ────────────────────────────────────────────────────
 
 cluster_penalty = jax.jit(_cluster_penalty)
 accessibility_bonus = jax.jit(_accessibility_bonus)
@@ -200,9 +200,9 @@ spread_bonus = jax.jit(partial(_spread_bonus, max_items=32), static_argnames=("m
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  타일별(tile-specific) placement reward
-#  — interactive / hazard / collectable 각각에 대해
-#    개수(amount) + 배치품질(cluster/access/spread) 를 한번에 평가
+#  tiletext(tile-specific) placement reward
+#  — interactive / hazard / collectable eacheach in  text
+#    count(amount) + batchquality(cluster/access/spread)   text in  evaluation
 # ══════════════════════════════════════════════════════════════════════════════
 
 _TILE_VALUE = {
@@ -213,7 +213,7 @@ _TILE_VALUE = {
 
 
 def _cluster_penalty_tile(env_map: chex.Array, tile_val: int) -> jnp.ndarray:
-    """특정 타일의 4방향 이웃 중 같은 타일 수 합산."""
+    """text tile of  4text  text  during  same tile text sum."""
     is_target = (env_map == tile_val)
 
     up    = jnp.pad(env_map[:-1, :], ((1, 0), (0, 0)), constant_values=-1)
@@ -231,7 +231,7 @@ def _cluster_penalty_tile(env_map: chex.Array, tile_val: int) -> jnp.ndarray:
 
 
 def _accessibility_bonus_tile(env_map: chex.Array, tile_val: int) -> jnp.ndarray:
-    """특정 타일 중 4방향에 통행 가능 타일이 1개 이상인 비율."""
+    """text tile  during  4text in  passage available tile  1text or moretext ratio."""
     is_target = (env_map == tile_val)
     n_targets = jnp.sum(is_target).astype(float)
 
@@ -253,7 +253,7 @@ def _accessibility_bonus_tile(env_map: chex.Array, tile_val: int) -> jnp.ndarray
 
 
 def _spread_bonus_tile(env_map: chex.Array, tile_val: int, max_items: int = 32) -> jnp.ndarray:
-    """특정 타일 좌표 간 평균 L1 거리 (맵 크기로 정규화)."""
+    """text tile coordinate text mean L1 distance (map size to  normalize)."""
     H, W = env_map.shape
     max_dist = (H - 1.0) + (W - 1.0)
 
@@ -278,7 +278,7 @@ def _spread_bonus_tile(env_map: chex.Array, tile_val: int, max_items: int = 32) 
 
 def _tile_amount_diff(prev_env_map: chex.Array, curr_env_map: chex.Array,
                       tile_val: int, cond: chex.Array) -> jnp.ndarray:
-    """타일 개수 조건 달성 개선량 (prev_loss − curr_loss)."""
+    """tile count condition text improvement (prev_loss − curr_loss)."""
     prev_count = jnp.sum(prev_env_map == tile_val).astype(float)
     curr_count = jnp.sum(curr_env_map == tile_val).astype(float)
     prev_loss = jnp.abs(prev_count - cond)
@@ -296,27 +296,27 @@ def get_multigame_tile_placement_reward(
     w_spread: float = 0.2,
     max_items: int = 32,
 ) -> chex.Array:
-    """특정 타일의 개수 + 배치 품질을 동시에 평가하는 통합 reward.
+    """text tile of  count + batch quality  text in  evaluationtext  text reward.
 
     Parameters
     ----------
-    prev_env_map, curr_env_map : (H, W) int 맵.
-    cond : scalar — 목표 타일 개수.
+    prev_env_map, curr_env_map : (H, W) int map.
+    cond : scalar — texttable tile count.
     tile_name : "interactive", "hazard", "collectable".
-    w_amount  : 개수 조건 달성 가중치.
-    w_spread  : 분산 보상 가중치.
-    max_items : spread 계산용 고정 배열 크기.
+    w_amount  : count condition text weight.
+    w_spread  : spread reward weight.
+    max_items : spread compute for  fixed array size.
 
     Returns
     -------
-    scalar reward (양수 = 개선).
+    scalar reward (text = text).
     """
     tile_val = _TILE_VALUE[tile_name]
 
     # ── amount ──
     amount_reward = _tile_amount_diff(prev_env_map, curr_env_map, tile_val, cond)
 
-    # ── spread (높을수록 좋음 → curr − prev) ──
+    # ── spread (text text text → curr − prev) ──
     spread_reward = (
         _spread_bonus_tile(curr_env_map, tile_val, max_items)
         - _spread_bonus_tile(prev_env_map, tile_val, max_items)

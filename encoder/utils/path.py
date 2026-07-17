@@ -42,7 +42,7 @@ def get_exp_group(config):
 
         text_ratio_str = 't' if config.text_ratio==1.0 else f"t.{str(config.text_ratio).split('.')[1]}"
         modality = [text_ratio_str]
-        
+
         if config.encoder.state:
             state_ratio_str = 's' if config.state_ratio==1.0 else f"s.{str(config.state_ratio).split('.')[1]}"
             modality.append(state_ratio_str)
@@ -63,13 +63,13 @@ def get_exp_group(config):
         config_dict.update({
             'exp': config.exp_name,
         })
-        
+
         # delta_weight suffix (if non-zero)
         delta_w = getattr(config, 'delta_weight', 0.0)
         if delta_w != 0.0:
             dw_str = f"{delta_w:g}".replace('.', 'p')
             config_dict['dw'] = dw_str
-            
+
     elif config.encoder.model == 'mlp':
         config_dict = {
             'game': getattr(config, 'game', 'dg'),
@@ -145,11 +145,11 @@ def init_config(config: Config):
         config.instruct_csv = f'{config.aug_type}/{config.embed_type}/{config.instruct}'
 
     config.text_ratio = min([0.25,0.5,0.75,1.0], key=lambda x: abs(x - config.text_ratio))
-    
+
     # For coord Channel(x,y)
     config.clip_input_channel = config.clip_input_channel + 2
 
-    # ── game 약어 → include_* 자동 동기화 ──
+    # ── game abbreviation → include_* automatic sync ──
     if hasattr(config, 'game') and config.game:
         includes = parse_game_str(config.game)
         for key, val in includes.items():
@@ -181,7 +181,7 @@ def init_clip_config(config: Config):
     if config.aug_type is not None and config.embed_type is not None and config.instruct is not None:
         config.instruct_csv = f'{config.aug_type}/{config.embed_type}/{config.instruct}'
 
-    # ── game 약어 → include_* 자동 동기화 ──
+    # ── game abbreviation → include_* automatic sync ──
     if hasattr(config, 'game') and config.game:
         includes = parse_game_str(config.game)
         for key, val in includes.items():

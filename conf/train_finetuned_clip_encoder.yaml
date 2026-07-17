@@ -6,11 +6,11 @@ hydra:
   sweeper:
     params: {}
 
-# 인코더 모델 식별
+# text text text
 encoder:
   model: clip
   state: true
   token_max_len: 77
 
-# 기본 데이터 옵션
+# default data text
 game: all

@@ -1,18 +1,18 @@
 """
 dataset/multigame/handlers/vglc_games/mega_man.py
 ==================================================
-Mega Man (TheVGLC) 전처리 핸들러.
+Mega Man (TheVGLC) preprocessing handler.
 
-타일 매핑
+tile text
 ---------
 0  : null    (@)
 1  : ground  (#)
 2  : break   (B)
 3  : hazard  (H)
-4  : ladder  (클라이밍 빈칸)
+4  : ladder  (climbing empty cell)
 5  : pickup  (L, l, W, w, +, *, U)
 6  : moving  (M)
-7  : enemy   (E, C - 보스 checkpoint)
+7  : enemy   (E, C - boss checkpoint)
 99 : unknown
 """
 from __future__ import annotations

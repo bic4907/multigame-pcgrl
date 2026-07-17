@@ -1,4 +1,4 @@
-/* ── DOM 참조 ───────────────────────────────────────────────────────────── */
+/* ── DOM text ───────────────────────────────────────────────────────────── */
 const gameSelect  = document.getElementById('gameSelect');
 const indexInput  = document.getElementById('indexInput');
 const prevBtn     = document.getElementById('prevBtn');
@@ -20,20 +20,20 @@ const viewRow = document.getElementById('view-row');
 const albumWrap = document.getElementById('album-wrap');
 const albumGrid = document.getElementById('album-grid');
 
-/* ── 상태 ───────────────────────────────────────────────────────────────── */
+/* ── text ───────────────────────────────────────────────────────────────── */
 let gameCounts  = {};
 let currentGame = null;
 let currentIndex= 0;
 let renderMode  = 'raw-color';   // 'raw-color' | 'raw-image' | 'unified-color' | 'unified-image'
-let lastSample  = null;    // 마지막으로 받은 payload 캐시
-let currentMapping = null; // 현재 게임 mapping.json 메타
+let lastSample  = null;    // text as  text  payload cache
+let currentMapping = null; // current game mapping.json meta
 const mappingCache = {};   // game -> mapping payload
 
 let viewMode = 'album';   // 'single' | 'album'
 let albumPageSize = 30;
 let albumAutoSize = true;
 let albumStart = 0;
-let isInitialized = false; // init() 완료 여부
+let isInitialized = false; // init() finish text
 const sampleCache = {};    // `${game}:${idx}` -> sample payload
 const tileImageCache = new Map(); // url -> HTMLImageElement | null(failed)
 
@@ -46,7 +46,7 @@ function getPrimaryGame() {
   return gameSelect ? gameSelect.value : null;
 }
 
-/* ── 유틸 ───────────────────────────────────────────────────────────────── */
+/* ── utility ───────────────────────────────────────────────────────────────── */
 function clearError()    { errorBox.textContent = ''; }
 function setError(msg)   { errorBox.textContent = msg || ''; }
 
@@ -76,20 +76,20 @@ function buildTileImageUrl(name) {
 }
 
 /**
- * 이미지를 캐시에서 가져오거나 로드를 시작합니다.
- * onReady 콜백을 등록하면 로드 완료 시 호출됩니다.
+ * image  cache in   text load  starttext.
+ * onReady callback  text load finish text calltext.
  * @param {string} url
- * @param {function} [onReady] - 로드 완료 시 콜백
- * @returns {HTMLImageElement|null} 이미 로드된 경우 img 반환, 로딩 중이면 null
+ * @param {function} [onReady] - load finish text callback
+ * @returns {HTMLImageElement|null}  text loadtext text img return,  to text  during  text null
  */
 function getTileImage(url, onReady) {
   if (!url) return null;
 
   const cached = tileImageCache.get(url);
-  if (cached === null) return null;  // 404 등 실패
+  if (cached === null) return null;  // 404 text failure
   if (cached && cached.complete && cached.naturalWidth > 0) return cached;
 
-  // 로딩 중이거나 처음 요청
+  //  to text  during  text text request
   if (!tileImageCache.has(url)) {
     const img = new Image();
     img.onload = () => {
@@ -99,10 +99,10 @@ function getTileImage(url, onReady) {
     img.onerror = () => {
       tileImageCache.set(url, null);
     };
-    tileImageCache.set(url, img);  // 로딩 중 표시
+    tileImageCache.set(url, img);  //  to text  during  tabletext
     img.src = url;
   } else {
-    // 로딩 중인 img에 onReady 연결
+    //  to text  during text img in  onReady text
     const img = tileImageCache.get(url);
     if (img && onReady) {
       const prevOnload = img.onload;
@@ -116,10 +116,10 @@ function getTileImage(url, onReady) {
 }
 
 /**
- * 특정 게임의 모든 타일 이미지를 미리 로드합니다.
+ * text game of  text tile image  text loadtext.
  * @param {object} mappingInfo
  * @param {string} mode
- * @param {function} onAllReady - 모두 로드 완료 시 콜백
+ * @param {function} onAllReady - text load finish text callback
  */
 function preloadTileImages(mappingInfo, mode, onAllReady) {
   if (!mappingInfo) { if (onAllReady) onAllReady(); return; }
@@ -135,8 +135,8 @@ function preloadTileImages(mappingInfo, mode, onAllReady) {
   let remaining = 0;
   uniqueUrls.forEach((url) => {
     const cached = tileImageCache.get(url);
-    if (cached === null) return; // 실패한 것은 스킵
-    if (cached && cached.complete && cached.naturalWidth > 0) return; // 이미 로드됨
+    if (cached === null) return; // failuretext text  text
+    if (cached && cached.complete && cached.naturalWidth > 0) return; //  text loadtext
     remaining++;
   });
 
@@ -166,7 +166,7 @@ function tileImageNameForId(id, mode, mappingInfo) {
   return (mappingInfo.raw_tile_images || {})[key] || null;
 }
 
-/* ── 렌더링 ─────────────────────────────────────────────────────────────── */
+/* ── rendering ─────────────────────────────────────────────────────────────── */
 const TILE_SIZE_MIN = 4;
 const GRID_LINE_COLOR = 'rgba(255,255,255,0.08)';
 
@@ -185,7 +185,7 @@ function drawLevel(sample, mode) {
   const palette = normPalette(cfg.unified ? sample.unified_palette : sample.palette);
 
   if (!array2d || !Array.isArray(array2d)) {
-    setError(`렌더링 실패: ${mode} 모드 데이터 누락`);
+    setError(`rendering failure: ${mode} mode data missing`);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     return;
   }
@@ -250,7 +250,7 @@ function buildLegend(sample, mode) {
   const array2d = cfg.unified ? sample.unified_array : sample.array;
 
   if (!array2d || !Array.isArray(array2d)) {
-    legendEl.innerHTML = '<h4 style="color:#fda4af">데이터 로드 오류</h4>';
+    legendEl.innerHTML = '<h4 style="color:#fda4af">data load error</h4>';
     return;
   }
 
@@ -259,8 +259,8 @@ function buildLegend(sample, mode) {
 
   const h4 = document.createElement('h4');
   h4.textContent = cfg.unified
-    ? (cfg.image ? 'Unified 이미지' : 'Unified 컬러')
-    : (cfg.image ? 'Raw 이미지' : 'Raw 컬러');
+    ? (cfg.image ? 'Unified image' : 'Unified color')
+    : (cfg.image ? 'Raw image' : 'Raw color');
   legendEl.appendChild(h4);
 
   [...present].sort((a, b) => a - b).forEach((tid) => {
@@ -380,7 +380,7 @@ function computeAutoAlbumPageSize() {
   const gap = 8;
   const cols = Math.max(1, Math.floor((gridWidth + gap) / (minItem + gap)));
 
-  // 카드 높이는 거의 정사각형이므로 폭 기준으로 계산.
+  // text text   text of  texteachtext text to  text basis as  compute.
   const itemSize = Math.floor((gridWidth - gap * (cols - 1)) / cols);
   const rows = Math.max(1, Math.floor((gridHeight + gap) / (itemSize + gap)));
 
@@ -445,7 +445,7 @@ async function renderAlbum(startIdx) {
       viewMode = 'single';
       if (viewModeSelect) viewModeSelect.value = 'single';
 
-      // 클릭한 게임을 싱글 보기 기본 선택으로 만든다.
+      // text game  text text default select as  text.
       Array.from(gameSelect.options).forEach((o) => {
         o.selected = (o.value === game);
       });
@@ -462,7 +462,7 @@ async function renderAlbum(startIdx) {
   meta.textContent = `games: ${selectedGames.join(', ')}\nalbum: ${albumStart} ~ ${albumStart + (entries.filter(Boolean).length - 1)} / ${total - 1}\nsize: ${sizeLabel}`;
 }
 
-/* ── 렌더 전체 파이프라인 ───────────────────────────────────────────────── */
+/* ── render all pipeline ───────────────────────────────────────────────── */
 function renderCurrent() {
   if (viewMode === 'album') {
     renderAlbum(albumStart).catch((err) => setError(String(err.message || err)));
@@ -549,7 +549,7 @@ async function loadAndRender(game, idx) {
   }
 }
 
-/* ── 이벤트 바인딩 ─────────────────────────────────────────────────────── */
+/* ──  text text ─────────────────────────────────────────────────────── */
 function bindControls() {
   gameSelect.addEventListener('change', () => {
     if (viewMode === 'album') {
@@ -656,19 +656,19 @@ function bindControls() {
   if (reloadBtn) {
     reloadBtn.addEventListener('click', async () => {
       reloadBtn.disabled = true;
-      if (reloadStatus) reloadStatus.textContent = '⏳ 로딩 중...';
+      if (reloadStatus) reloadStatus.textContent = '⏳  to text  during ...';
       try {
         const res = await fetch('/api/reload', { method: 'POST' });
         const data = await res.json();
         if (data.status === 'ok') {
-          // 캐시 초기화
+          // cache initialize
           Object.keys(sampleCache).forEach((k) => delete sampleCache[k]);
           Object.keys(mappingCache).forEach((k) => delete mappingCache[k]);
           tileImageCache.clear();
           currentMapping = null;
           lastSample = null;
 
-          // 게임 목록 갱신
+          // game list text
           gameSelect.innerHTML = '';
           gameCounts = {};
           (data.games || []).forEach((row, i) => {
@@ -684,14 +684,14 @@ function bindControls() {
             reloadStatus.textContent = `✅ ${data.elapsed_sec}s — ${(data.games || []).map((r) => `${r.game}(${r.count})`).join(', ')}`;
           }
 
-          // 첫 번째 게임 첫 샘플로 이동
+          // text text game text sample to  move
           const g = getPrimaryGame();
           if (g) {
             albumStart = 0;
             await loadAndRender(g, 0);
           }
         } else {
-          if (reloadStatus) reloadStatus.textContent = `❌ ${data.error || '알 수 없는 오류'}`;
+          if (reloadStatus) reloadStatus.textContent = `❌ ${data.error || 'text text without error'}`;
         }
       } catch (err) {
         if (reloadStatus) reloadStatus.textContent = `❌ ${err.message}`;
@@ -702,7 +702,7 @@ function bindControls() {
   }
 }
 
-/* ── 초기화 ─────────────────────────────────────────────────────────────── */
+/* ── initialize ─────────────────────────────────────────────────────────────── */
 async function init() {
   bindControls();
   setViewModeUI();
@@ -710,7 +710,7 @@ async function init() {
   try {
     const games = await fetchGames();
     if (!games.length) {
-      setError('로드 가능한 데이터셋이 없습니다. 경로를 확인해주세요.');
+      setError('load availabletext dataset  text. path  checktext.');
       return;
     }
 
@@ -725,7 +725,7 @@ async function init() {
       gameSelect.appendChild(opt);
     });
 
-    // albumAutoSize일 때는 일단 기본값으로, renderAlbum에서 다시 계산됨
+    // albumAutoSizetext text  text default value as , renderAlbum in  text computetext
     if (!albumAutoSize && albumSizeSelect) {
       albumPageSize = Math.max(1, Number(albumSizeSelect.value || '30'));
     }
@@ -733,11 +733,11 @@ async function init() {
     const g = getPrimaryGame();
     if (g) {
       currentGame = g;
-      // 초기 로드 전: albumAutoSize일 때 올바른 크기 계산
+      // initial load  before : albumAutoSizetext text text size compute
       if (albumAutoSize) {
         albumPageSize = computeAutoAlbumPageSize();
       }
-      // 초기 로드: album 모드로 빠르게 시작
+      // initial load: album mode to  text start
       viewMode = 'album';
       if (viewModeSelect) viewModeSelect.value = 'album';
       await loadAndRender(g, 0);
@@ -749,7 +749,7 @@ async function init() {
 }
 
 
-/* ── API 호출 ───────────────────────────────────────────────────────────── */
+/* ── API call ───────────────────────────────────────────────────────────── */
 async function fetchJsonOrThrow(url, fallbackLabel) {
   const res = await fetch(url);
   const contentType = (res.headers.get('content-type') || '').toLowerCase();
@@ -760,11 +760,11 @@ async function fetchJsonOrThrow(url, fallbackLabel) {
     try {
       data = JSON.parse(bodyText);
     } catch {
-      throw new Error(`${fallbackLabel}: JSON 파싱 실패 (${url})`);
+      throw new Error(`${fallbackLabel}: JSON parsing failure (${url})`);
     }
   } else {
     const preview = bodyText.slice(0, 80).replace(/\s+/g, ' ');
-    throw new Error(`${fallbackLabel}: JSON 응답이 아님 (${res.status}) ${preview}`);
+    throw new Error(`${fallbackLabel}: JSON response  text (${res.status}) ${preview}`);
   }
 
   if (!res.ok) {
@@ -774,14 +774,14 @@ async function fetchJsonOrThrow(url, fallbackLabel) {
 }
 
 async function fetchGames() {
-  const data = await fetchJsonOrThrow('/api/games', '게임 목록 요청 실패');
+  const data = await fetchJsonOrThrow('/api/games', 'game list request failure');
   return data.games || [];
 }
 
 async function fetchSample(game, idx) {
   return fetchJsonOrThrow(
     `/api/sample?game=${encodeURIComponent(game)}&index=${idx}`,
-    '샘플 요청 실패',
+    'sample request failure',
   );
 }
 
@@ -797,7 +797,7 @@ async function fetchMapping(game) {
   if (mappingCache[game]) return mappingCache[game];
   const data = await fetchJsonOrThrow(
     `/api/mapping?game=${encodeURIComponent(game)}`,
-    '매핑 요청 실패',
+    'text request failure',
   );
   mappingCache[game] = data;
   return data;

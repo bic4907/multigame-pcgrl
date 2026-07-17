@@ -1,12 +1,12 @@
 """
 train_mg_pcgrl.py
 =================
-MGPCGRL (MultiGame PCGRL) — pretrained CLIP 임베딩을 입력 피처로 사용.
+MGPCGRL (MultiGame PCGRL) — pretrained CLIP embedding  text text to  text for .
 
-기존 VIPCGRL 파이프라인을 기반으로 하되,
-실험 엔트리/설정을 mgpcgrl 이름으로 분리한 실행 스크립트.
+existing VIPCGRL pipeline  based as  text,
+experiment text/config  mgpcgrl name as  separatetext execution script.
 
-실행:
+Usage:
     python -m train_mg_pcgrl [overrides]
     python -m train_mg_pcgrl dataset_game=dungeon dataset_reward_enum=1 SIM_COEF=3.5
 """
@@ -27,10 +27,10 @@ logger = logging.getLogger(__name__)
 suppress_jax_debug_logs()
 
 
-# ── VIPCGRL obs 주입: CLIP embedding → nlp_obs ───────────────────────────────
+# ── VIPCGRL obs inject: CLIP embedding → nlp_obs ───────────────────────────────
 
 def inject_vipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """pretrained CLIP 인코더로 계산된 임베딩을 nlp_obs 에 주입."""
+    """pretrained CLIP text to  computetext embedding  nlp_obs  in  inject."""
     return last_obs.replace(nlp_obs=instruct_sample.embedding)
 
 
@@ -42,29 +42,29 @@ def main(config: MGPCGRLConfig):
     if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
         raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
-    # ── encoder_config.json에서 delta_weight 읽어서 config에 주입 (wandb 로깅용) ──
+    # ── encoder_config.json in  delta_weight text config in  inject (wandb  to text for ) ──
     encoder_config_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "encoder_config.json")
-    encoder_config_src = None  # local variable로 저장 (config에 넣지 않음)
-    
+    encoder_config_src = None  # local variable to  save (config in  text text)
+
     if os.path.exists(encoder_config_path):
         with open(encoder_config_path, "r") as f:
             encoder_training_config = json.load(f)
-        # delta_weight만 config에 저장
+        # delta_weighttext config in  save
         config.encoder_delta_weight = encoder_training_config.get('delta_weight', 0.0)
-        logger.info("Loaded encoder delta_weight=%.4f from: %s", 
+        logger.info("Loaded encoder delta_weight=%.4f from: %s",
                     config.encoder_delta_weight, encoder_config_path)
-        encoder_config_src = encoder_config_path  # 복사를 위해 경로 저장
+        encoder_config_src = encoder_config_path  # copy  abovetext path save
     else:
         logger.warning("encoder_config.json not found at %s", encoder_config_path)
         config.encoder_delta_weight = 0.0
 
-    # ── encoder의 dataset_setting.json에서 seen_ratio / seen_games 주입 ──
+    # ── encoder of  dataset_setting.json in  seen_ratio / seen_games inject ──
     dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
     if os.path.exists(dataset_setting_path):
         with open(dataset_setting_path, "r") as f:
             dataset_setting = json.load(f)
 
-        # ── seen_ratio 주입: encoder 학습 때 쓴 seen 게임 데이터 비율을 그대로 사용 ──
+        # ── seen_ratio inject: encoder training text text seen game data ratio  as-is text for  ──
         seen_ratio = dataset_setting.get("seen_ratio", 1.0)
         if seen_ratio != config.dataset_seen_ratio:
             logger.info(
@@ -73,16 +73,16 @@ def main(config: MGPCGRLConfig):
             )
             config.dataset_seen_ratio = seen_ratio
 
-        # ── unseen_ratio 주입 ──────────────────────────────────────────────────
-        # dataset_unseen_ratio 기본값은 1.0 (MGPCGRLConfig에서 고정).
-        # CLI로 다른 값을 지정한 경우 그대로 사용한다.
-        # reward_unseen_ratio는 encoder 학습 때의 unseen_ratio에서 별도 주입.
+        # ── unseen_ratio inject ──────────────────────────────────────────────────
+        # dataset_unseen_ratio default value  1.0 (MGPCGRLConfig in  fixed).
+        # CLI to  different text  text text as-is text for text.
+        # reward_unseen_ratio  encoder training text of  unseen_ratio in  separate inject.
         unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
 
-        # ── reward_unseen_ratio: unseen 샘플 내 metadata/decoder 경계 ──────────
-        # 각 unseen 게임의 샘플을 순서 기준으로 분할:
-        #   앞쪽 (reward_unseen_ratio 비율) → metadata (GT, encoder 학습분)
-        #   나머지                          → reward decoder 로 condition 예측
+        # ── reward_unseen_ratio: unseen sample  inside  metadata/decoder text ──────────
+        # each unseen game of  sample  order basis as  split:
+        #   front (reward_unseen_ratio ratio) → metadata (GT, encoder training subset)
+        #   remaining                          → reward decoder  to  condition text
         if unseen_ratio != config.reward_unseen_ratio:
             logger.info(
                 "Auto-setting reward_unseen_ratio=%.4f from encoder dataset_setting.json",
@@ -90,7 +90,7 @@ def main(config: MGPCGRLConfig):
             )
             config.reward_unseen_ratio = unseen_ratio
 
-        # ── game_setting_mode=encoder_seen: seen 게임만 학습 대상으로 설정 ──
+        # ── game_setting_mode=encoder_seen: seen gametext training target as  config ──
         if config.game_setting_mode == "encoder_seen":
             seen_games = dataset_setting.get("seen_games", [])
             if seen_games:
@@ -136,9 +136,9 @@ def main(config: MGPCGRLConfig):
         config,
         inject_obs_fn=inject_vipcgrl_obs,
     )
-    
-    # ── encoder_config.json을 PCGRL 학습 폴더로 복사 (참조용) ──
-    # main_entry() 호출 후 exp_dir가 생성되었으므로 encoder ckpt 경로에서 복사
+
+    # ── encoder_config.json  PCGRL training folder to  copy (text for ) ──
+    # main_entry() call  after  exp_dir  createtext to  encoder ckpt path in  copy
     if encoder_config_src and hasattr(config, 'exp_dir') and config.exp_dir:
         dst_path = os.path.join(config.exp_dir, "encoder_config.json")
         try:

@@ -1,14 +1,14 @@
 """
 progress.py
 ===========
-Progress 측정 유틸리티.
+Progress measure utility.
 
 progress = 1 - |condition - feat_final| / (|condition - feat_s0| + ε)
-  - condition : 목표값 (cont_value)
-  - feat_final: 최종 상태에서 측정된 feature 값
-  - feat_s0   : 초기 상태(s0)에서 측정된 feature 값
-  - 값은 [0, 100] 으로 클리핑됨.
-  - condition == -1(null 센티널)인 행은 NaN 반환.
+  - condition : texttabletext (cont_value)
+  - feat_final: text text in  measuretext feature text
+  - feat_s0   : initial text(s0) in  measuretext feature text
+  - text  [0, 100]  as  text.
+  - condition == -1(null text)text row  NaN return.
 """
 
 import numpy as np
@@ -18,7 +18,7 @@ EPS = 1e-7
 
 
 def calculate_progress(condition: float, feat: float, feat_s0: float) -> float:
-    """스칼라 단위 progress 계산 (0~100, NaN 반환 가능)."""
+    """scalar textabove progress compute (0~100, NaN return available)."""
     if np.isnan(condition) or condition == -1:
         return float("nan")
     raw = 1.0 - abs(condition - feat) / (abs(condition - feat_s0) + EPS)
@@ -26,20 +26,20 @@ def calculate_progress(condition: float, feat: float, feat_s0: float) -> float:
 
 
 class ProgressWrapper:
-    """df_ctrl_sim DataFrame에 progress_* 컬럼을 추가한다.
+    """df_ctrl_sim DataFrame in  progress_* text  text text.
 
     Parameters
     ----------
     n_cond : int
-        condition_* / feat_* 컬럼의 개수.
+        condition_* / feat_* text of  count.
     """
 
     def __init__(self, n_cond: int):
         self.n_cond = n_cond
 
     def run(self, df: pd.DataFrame) -> pd.DataFrame:
-        """reward_enum에 해당하는 인덱스의 condition/feat/feat_s0를 읽어
-        단일 'progress' 컬럼을 추가한 복사본을 반환."""
+        """reward_enum in  text  index of  condition/feat/feat_s0  text
+        text 'progress' text  text text copytext  return."""
         df = df.copy()
 
         def _row_progress(row):

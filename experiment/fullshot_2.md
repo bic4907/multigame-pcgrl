@@ -1,6 +1,6 @@
 ### IPCGRL (Fullshot 2)
 
-게임 2개 조합 3가지: dgpk (dungeon+pokemon), skzd (sokoban+zelda), pkdm (pokemon+doom)
+Three two-game combinations: dgpk (dungeon+pokemon), skzd (sokoban+zelda), pkdm (pokemon+doom)
 
 ---
 
@@ -22,7 +22,7 @@ wandb sweep --project eval_ipcgrl_fullshot_2 --entity <wandb-entity> ../sweep/wa
 
 ### MIPCGRL (Fullshot 2)
 
-게임 2개 조합 3가지: dgpk (dungeon+pokemon), skzd (sokoban+zelda), pkdm (pokemon+doom)
+Three two-game combinations: dgpk (dungeon+pokemon), skzd (sokoban+zelda), pkdm (pokemon+doom)
 
 ---
 
@@ -44,7 +44,7 @@ wandb sweep --project eval_mipcgrl_fullshot_2 --entity <wandb-entity> ../sweep/w
 
 ### VIPCGRL (Fullshot 2)
 
-게임 2개 조합 3가지: dgpk (dungeon+pokemon), skzd (sokoban+zelda), pkdm (pokemon+doom)
+Three two-game combinations: dgpk (dungeon+pokemon), skzd (sokoban+zelda), pkdm (pokemon+doom)
 
 ---
 

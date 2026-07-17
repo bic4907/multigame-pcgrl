@@ -2,9 +2,9 @@
 """
 dataset/scripts/generate_dungeon_reward_annotations.py
 ======================================================
-dungeon_level_dataset 메타데이터의 instruction을 scenario_prompt.json 기준으로
-reward annotation(reward_enum, condition values, sub_condition, 실제 measure)을 계산하여
-dataset/reward_annotations/dungeon_reward_annotations.csv 로 저장한다.
+dungeon_level_dataset metadata of  instruction  scenario_prompt.json basis as
+reward annotation(reward_enum, condition values, sub_condition, text measure)  computetext
+dataset/reward_annotations/dungeon_reward_annotations.csv  to  savetext.
 
 Usage:
     python -m dataset.scripts.generate_dungeon_reward_annotations
@@ -17,14 +17,14 @@ import sys
 from pathlib import Path
 
 
-# ── 경로 설정 ────────────────────────────────────────────────────────────────
+# ── path config ────────────────────────────────────────────────────────────────
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _INSTRUCT_DIR = _PROJECT_ROOT / "instruct"
 _DUNGEON_ROOT = _PROJECT_ROOT / "dataset" / "dungeon_level_dataset"
 _OUTPUT_DIR = _PROJECT_ROOT / "dataset" / "reward_annotations"
 
-# reward_enum 매핑 (scenario_prompt.json의 scenarios 키 기준)
-# condition 컬럼 인덱스도 동일하게 1-based (condition_1 ~ condition_5)
+# reward_enum text (scenario_prompt.json of  scenarios text basis)
+# condition text index also  sametext 1-based (condition_1 ~ condition_5)
 _FEATURE_TO_ENUM = {
     "region": 1,
     "path_length": 2,
@@ -37,8 +37,8 @@ _FEATURE_TO_ENUM = {
 
 def _build_instruction_mapping(scenario_path: Path) -> dict:
     """
-    scenario_prompt.json에서 instruction(소문자) →
-    (feature_name, reward_enum, cond_value, sub_condition) 매핑을 생성한다.
+    scenario_prompt.json in  instruction(textcharacter) →
+    (feature_name, reward_enum, cond_value, sub_condition) text  createtext.
     """
     with open(scenario_path, "r", encoding="utf-8") as f:
         sp = json.load(f)
@@ -55,7 +55,7 @@ def _build_instruction_mapping(scenario_path: Path) -> dict:
             sub_cond = entry.get("sub_condition", "")
             info = (feature_name, enum_val, value, sub_cond)
 
-            # 대표 instruction
+            # texttable instruction
             mapping[key.lower()] = info
             # similar instructions
             for sim in entry.get("similar", []):
@@ -75,11 +75,11 @@ def main():
         print(f"Error: metadata CSV not found at {meta_path}")
         sys.exit(1)
 
-    # ── instruction 매핑 빌드 ────────────────────────────────────────────────
+    # ── instruction text build ────────────────────────────────────────────────
     instr_mapping = _build_instruction_mapping(scenario_path)
     print(f"[1/3] Built instruction mapping: {len(instr_mapping)} entries")
 
-    # ── 메타데이터 로드 ──────────────────────────────────────────────────────
+    # ── metadata load ──────────────────────────────────────────────────────
     metas = []
     with open(meta_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -87,7 +87,7 @@ def main():
             metas.append(row)
     print(f"[2/3] Loaded metadata: {len(metas)} rows")
 
-    # ── reward annotation 생성 ───────────────────────────────────────────────
+    # ── reward annotation create ───────────────────────────────────────────────
     _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     output_path = _OUTPUT_DIR / "dungeon_reward_annotations.csv"
 
@@ -99,7 +99,7 @@ def main():
         "reward_enum",
         "feature_name",
         "sub_condition",
-        # condition 배열 (5개 컬럼, reward_enum과 1:1 매칭, 해당 feature만 값 설정, 나머지 빈값)
+        # condition array (5text text, reward_enum and  1:1 text, text featuretext text config, remaining text)
         "condition_1",  # region
         "condition_2",  # path_length
         "condition_3",  # block (wall)
@@ -117,15 +117,15 @@ def main():
             instruction = meta["instruction"]
             instr_lower = instruction.lower()
 
-            # instruction → reward 매핑
+            # instruction → reward text
             if instr_lower not in instr_mapping:
                 unmapped_count += 1
                 continue
 
             feature_name, reward_enum, cond_value, sub_cond = instr_mapping[instr_lower]
 
-            # condition 배열 생성 (해당 feature만 값 설정, 나머지 빈값)
-            # condition_1~5는 reward_enum 1~5에 대응
+            # condition array create (text featuretext text config, remaining text)
+            # condition_1~5  reward_enum 1~5 in  text
             conditions = {f"condition_{i}": "" for i in range(1, 6)}
             conditions[f"condition_{reward_enum}"] = cond_value
 

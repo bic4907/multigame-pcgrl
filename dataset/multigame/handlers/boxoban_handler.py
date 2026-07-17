@@ -1,20 +1,20 @@
 """
 dataset/multigame/handlers/boxoban_handler.py
 =============================================
-Google DeepMind Boxoban 데이터셋 핸들러.
+Google DeepMind Boxoban dataset handler.
 
-출처: https://github.com/google-deepmind/boxoban-levels
-폴더 구조:
+text: https://github.com/google-deepmind/boxoban-levels
+folder structure:
     boxoban_levels/
         hard/           000.txt … 003.txt
         medium/train/   000.txt … 449.txt
         medium/valid/   000.txt … 009.txt
 
-레벨 파일 형식
+level file text
 --------------
-- 레벨은 `;` 주석 줄로 구분
-- 레벨 크기: 10×10 고정
-- 문자 의미:
+- level  `;` text text to  text
+- level size: 10×10 fixed
+- character  of text:
     '#' : wall
     ' ' : floor/empty
     '.' : target (goal square)
@@ -23,23 +23,23 @@ Google DeepMind Boxoban 데이터셋 핸들러.
     '*' : box on target
     '+' : player on target
 
-타일 ID (tile_mapping.json 의 통합 카테고리로 매핑 가능)
+tile ID (tile_mapping.json  of  text text to  text available)
 ---------------------------------------------------------
 0  EMPTY  – floor/empty (' ', '.')
 1  WALL   – wall ('#')
-2  FLOOR  – floor (같은 empty 계열, 구분용)
-3  ENEMY  – (없음, 사용 안 함)
+2  FLOOR  – floor (same empty textcolumn, text for )
+3  ENEMY  – (none, text for  text text)
 4  OBJECT – box ('$', '*')
 5  SPAWN  – player ('@', '+')
 
-16×16 정규화
+16×16 normalize
 ------------
-10×10 레벨을 중앙(top-left)에 배치하고 나머지는 WALL(1)로 패딩.
+10×10 level  center(top-left) in  batchtext remaining  WALL(1) to  padding.
 
-Diversity 필터링
+Diversity filtering
 ----------------
-- 타일 히스토그램(floor/wall/box/player 비율)을 feature vector 로 삼음
-- 전체 레벨을 feature space에서 greedy max-min sampling 으로 다양성 확보
+- tile text(floor/wall/box/player ratio)  feature vector  to  text
+- all level  feature space in  greedy max-min sampling  as  text text
 """
 from __future__ import annotations
 
@@ -53,21 +53,21 @@ import numpy as np
 
 from ..base import BaseGameHandler, GameSample, GameTag, TileLegend
 
-# ── 경로 기본값 ─────────────────────────────────────────────────────────────────
+# ── path default value ─────────────────────────────────────────────────────────────────
 _DEFAULT_BOXOBAN_ROOT = Path(__file__).parent.parent.parent / "boxoban_levels"
 
-# ── 타일 상수 ────────────────────────────────────────────────────────────────────
+# ── tile text ────────────────────────────────────────────────────────────────────
 class BoxobanTile:
-    EMPTY  = 0   # floor / empty (  '.' 포함)
+    EMPTY  = 0   # floor / empty (  '.' text)
     WALL   = 1   # wall  ('#')
     OBJECT = 4   # box   ('$', '*')
     SPAWN  = 5   # player('@', '+')
 
 
-# 문자 → 정수 타일 ID
+# character → integer tile ID
 _CHAR_MAP: dict[str, int] = {
     " ": BoxobanTile.EMPTY,
-    ".": BoxobanTile.EMPTY,   # target square → empty (구조 상 floor)
+    ".": BoxobanTile.EMPTY,   # target square → empty (structure text floor)
     "#": BoxobanTile.WALL,
     "$": BoxobanTile.OBJECT,  # box
     "*": BoxobanTile.OBJECT,  # box on target
@@ -82,7 +82,7 @@ BOXOBAN_PALETTE: dict[int, Tuple[int, int, int]] = {
     BoxobanTile.SPAWN:  (0,   200, 0),
 }
 
-# Boxoban 원본 크기
+# Boxoban text size
 _LEVEL_SIZE = 10
 _TARGET_SIZE = 16
 
@@ -99,12 +99,12 @@ def _make_legend() -> TileLegend:
     })
 
 
-# ── 레벨 파싱 ────────────────────────────────────────────────────────────────────
+# ── level parsing ────────────────────────────────────────────────────────────────────
 
 def _parse_levels_from_file(path: Path) -> List[List[str]]:
     """
-    txt 파일 하나에서 레벨 목록을 파싱한다.
-    반환값: 각 레벨 = 원본 문자열 행의 리스트
+    txt file text in  level list  parsingtext.
+    returntext: each level = text string row of  text
     """
     levels: List[List[str]] = []
     current: List[str] = []
@@ -112,12 +112,12 @@ def _parse_levels_from_file(path: Path) -> List[List[str]]:
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.rstrip()
         if line.startswith(";"):
-            # 구분자 → 이전 레벨 저장
+            # text → previous level save
             if current:
                 levels.append(current)
                 current = []
         elif line == "" and current:
-            # 빈 줄이 레벨 뒤에 오는 경우
+            # text text  level text in  text  text
             levels.append(current)
             current = []
         else:
@@ -131,9 +131,9 @@ def _parse_levels_from_file(path: Path) -> List[List[str]]:
 
 def _lines_to_array(lines: List[str]) -> Optional[np.ndarray]:
     """
-    문자열 행 목록 → (H, W) int32 ndarray.
-    행 길이가 다르면 ' '(EMPTY)로 오른쪽 패딩.
-    10×10 이 아닌 레벨은 None 반환.
+    string row list → (H, W) int32 ndarray.
+    row text   text ' '(EMPTY) to  right padding.
+    10×10   text level  None return.
     """
     if not lines:
         return None
@@ -142,7 +142,7 @@ def _lines_to_array(lines: List[str]) -> Optional[np.ndarray]:
     W = max(len(l) for l in lines)
 
     if H != _LEVEL_SIZE or W != _LEVEL_SIZE:
-        return None          # 비정형 레벨 제외
+        return None          # text level text
 
     grid = np.zeros((H, W), dtype=np.int32)
     for r, line in enumerate(lines):
@@ -155,17 +155,17 @@ def _lines_to_array(lines: List[str]) -> Optional[np.ndarray]:
 
 def _strip_wall_border(arr: np.ndarray) -> np.ndarray:
     """
-    가장자리에서 WALL(1) 로만 이루어진 행/열을 제거해 유효 영역을 반환한다.
+     text in  WALL(1)  to text  text row/column  removetext valid text  returntext.
 
-    예) 10×10 레벨에서 첫/마지막 행이 전부 WALL이고
-        첫/마지막 열이 전부 WALL이면 → 8×8 반환.
-    non-WALL 셀이 하나도 없으면 원본 그대로 반환.
+    text) 10×10 level in  text/text row   before text WALL text
+        text/text column   before text WALL text → 8×8 return.
+    non-WALL cell  text also  if missing text as-is return.
     """
     non_wall = (arr != BoxobanTile.WALL)
     rows = np.where(non_wall.any(axis=1))[0]
     cols = np.where(non_wall.any(axis=0))[0]
     if rows.size == 0 or cols.size == 0:
-        return arr  # 전부 WALL인 경우 원본 반환
+        return arr  #  before text WALLtext text text return
     r0, r1 = int(rows[0]), int(rows[-1]) + 1
     c0, c1 = int(cols[0]), int(cols[-1]) + 1
     return arr[r0:r1, c0:c1]
@@ -173,25 +173,25 @@ def _strip_wall_border(arr: np.ndarray) -> np.ndarray:
 
 def _fit_to_target(arr: np.ndarray, target: int = _TARGET_SIZE) -> np.ndarray:
     """
-    원본 레벨을 target×target 크기로 변환한다.
+    text level  target×target size to  converttext.
 
-    전처리 방식
+    preprocessing text
     -----------
-    1. 구조(WALL / EMPTY) 레이어를 target×target 으로 nearest-neighbor 보간 → 꽉 채움
-    2. 오브젝트(BOX / PLAYER) 는 원본 (r, c) 위치 비율을 target 좌표로 환산해 재배치
-       - 개수는 원본 동일하게 유지 (늘리지 않음)
-    3. 결과는 target×target 로 정확히 반환
+    1. structure(WALL / EMPTY) text text  target×target  as  nearest-neighbor text → text text
+    2. text(BOX / PLAYER)   text (r, c) abovetext ratio  target coordinate to  text textbatch
+       - count  text sametext keep (text text)
+    3. result  target×target  to  text return
     """
     src_h, src_w = arr.shape
 
-    # ── 1. 구조 레이어 nearest-neighbor 리사이즈 ──────────────────────────────
+    # ── 1. structure text text nearest-neighbor text text ──────────────────────────────
     structure = np.where(arr == BoxobanTile.WALL,
                          BoxobanTile.WALL, BoxobanTile.EMPTY).astype(np.int32)
     row_idx = (np.arange(target) * src_h / target).astype(np.int32)
     col_idx = (np.arange(target) * src_w / target).astype(np.int32)
     out = structure[np.ix_(row_idx, col_idx)]   # (target, target)
 
-    # ── 2. 오브젝트 재배치 ────────────────────────────────────────────────────
+    # ── 2. text textbatch ────────────────────────────────────────────────────
     object_tiles = {BoxobanTile.OBJECT, BoxobanTile.SPAWN}
     for r in range(src_h):
         for c in range(src_w):
@@ -206,28 +206,28 @@ def _fit_to_target(arr: np.ndarray, target: int = _TARGET_SIZE) -> np.ndarray:
 
     return out.astype(np.int32)
 
-# 하위 호환 alias
+# sub text alias
 _scale2x_to_16x16 = _fit_to_target
 
 
-# ── Diversity 필터링 ─────────────────────────────────────────────────────────────
+# ── Diversity filtering ─────────────────────────────────────────────────────────────
 
 def _feature_vector(arr: np.ndarray) -> np.ndarray:
     """
-    레벨 배열 → 다양성 측정용 특징 벡터. (16×16 기준)
+    level array → text measure for  text text. (16×16 basis)
 
-    특징:
-      0  : wall 비율
-      1  : empty/floor 비율
-      2  : object(box) 수
-      3  : spawn(player) 수
-      4  : 상위 절반 wall 비율
-      5  : 하위 절반 wall 비율
-      6  : 좌측 절반 wall 비율
-      7  : 우측 절반 wall 비율
+    text:
+      0  : wall ratio
+      1  : empty/floor ratio
+      2  : object(box) text
+      3  : spawn(player) text
+      4  : textabove text wall ratio
+      5  : sub text wall ratio
+      6  : text text wall ratio
+      7  : text text wall ratio
     """
     total  = arr.size
-    region = arr   # 전체 16×16 사용
+    region = arr   # all 16×16 text for
 
     wall_r  = (region == BoxobanTile.WALL).sum()  / total
     empty_r = (region == BoxobanTile.EMPTY).sum() / total
@@ -257,7 +257,7 @@ def _diversity_sample(
 ) -> List[int]:
     """
     Greedy max-min distance sampling (farthest point sampling).
-    특징 공간에서 서로 가장 먼 n 개의 인덱스를 반환.
+    text text in  text to   text text n text of  index  return.
     """
     if len(arrays) <= n:
         return list(range(len(arrays)))
@@ -265,7 +265,7 @@ def _diversity_sample(
     rng = np.random.default_rng(seed)
     features = np.stack([_feature_vector(a) for a in arrays])   # (N, D)
 
-    # 정규화
+    # normalize
     std = features.std(axis=0) + 1e-8
     features = features / std
 
@@ -281,13 +281,13 @@ def _diversity_sample(
     return chosen
 
 
-# ── 오브젝트 증강 ────────────────────────────────────────────────────────────────
+# ── text augmentation ────────────────────────────────────────────────────────────────
 
 def _is_corner(array: np.ndarray, r: int, c: int) -> bool:
     """
-    (r, c)가 구석인지 판단한다.
-    구석 = EMPTY 타일이면서 상하좌우 중 수직으로 인접한 두 방향이 모두 WALL인 경우.
-    경계 밖은 WALL로 간주한다.
+    (r, c)  text text.
+    text = EMPTY tile text text  during  text as  adjacenttext text text  text WALLtext text.
+    text outside  WALL to  text.
     """
     H, W = array.shape
 
@@ -306,8 +306,8 @@ def _is_corner(array: np.ndarray, r: int, c: int) -> bool:
 
 def _placeable_positions(array: np.ndarray) -> np.ndarray:
     """
-    OBJECT를 놓을 수 있는 위치를 반환한다.
-    조건: EMPTY 타일이고 구석이 아닌 위치.
+    OBJECT  text  text with abovetext  returntext.
+    condition: EMPTY tile text text  text abovetext.
     """
     candidates = []
     for r, c in np.argwhere(array == BoxobanTile.EMPTY):
@@ -318,16 +318,16 @@ def _placeable_positions(array: np.ndarray) -> np.ndarray:
 
 def _augment_objects(array: np.ndarray) -> np.ndarray:
     """
-    Sokoban 맵의 오브젝트(box) 수를 1~12개 범위로 조정한다.
+    Sokoban map of  text(box) text  1~12text range to  text.
 
-    목표 개수를 1~12에서 균등 샘플링한 뒤, 현재 박스를 추가/제거해 목표에 맞춘다.
-    시드는 배열 내용의 MD5 해시 → 동일 입력이면 항상 동일 결과.
+    texttable count  1~12 in  text sampletext text, current text  text /removetext texttable in  text.
+    seed  array content of  MD5 text → same text text always same result.
     """
     digest = hashlib.md5(array.tobytes()).digest()
     seed   = int.from_bytes(digest[:4], byteorder='big')
     rng    = np.random.default_rng(seed)
 
-    # 128비트 전체로 모듈로 매핑 → 4바이트 앞 부분의 편향 제거
+    # 128text all to  text to  text → 4text text text text of  text remove
     full_hash = int.from_bytes(digest, byteorder='big')
     target = (full_hash % 12) + 1  # 1~12 uniform
     result = array.copy()
@@ -355,19 +355,19 @@ def _augment_objects(array: np.ndarray) -> np.ndarray:
     return result
 
 
-# ── 핸들러 클래스 ────────────────────────────────────────────────────────────────
+# ── handler class ────────────────────────────────────────────────────────────────
 
 class BoxobanHandler(BaseGameHandler):
     """
-    Google DeepMind Boxoban 핸들러.
+    Google DeepMind Boxoban handler.
 
     Parameters
     ----------
-    root        : boxoban_levels 폴더 경로
+    root        : boxoban_levels folder path
     difficulty  : "hard" | "medium" | "both"
-    split       : medium 전용 - "train" | "valid" | "all"
-    n_sample    : diversity sampling 으로 추출할 수 (None = 전체)
-    seed        : diversity sampling 시드
+    split       : medium  before  for  - "train" | "valid" | "all"
+    n_sample    : diversity sampling  as  extracttext text (None = all)
+    seed        : diversity sampling seed
 
     Example
     -------
@@ -399,7 +399,7 @@ class BoxobanHandler(BaseGameHandler):
     def game_tag(self) -> str:
         return GameTag.SOKOBAN
 
-    # ── 파일 목록 수집 ────────────────────────────────────────────────────────────
+    # ── file list text ────────────────────────────────────────────────────────────
 
     def _collect_files(self) -> List[Path]:
         files: List[Path] = []
@@ -410,7 +410,7 @@ class BoxobanHandler(BaseGameHandler):
             if hard_dir.exists():
                 files += sorted(hard_dir.glob("*.txt"))
             else:
-                warnings.warn(f"[boxoban] hard 폴더 없음: {hard_dir}")
+                warnings.warn(f"[boxoban] hard folder none: {hard_dir}")
 
         if d in ("medium", "both"):
             splits = ["train", "valid"] if self._split == "all" else [self._split]
@@ -419,17 +419,17 @@ class BoxobanHandler(BaseGameHandler):
                 if med_dir.exists():
                     files += sorted(med_dir.glob("*.txt"))
                 else:
-                    warnings.warn(f"[boxoban] medium/{sp} 폴더 없음: {med_dir}")
+                    warnings.warn(f"[boxoban] medium/{sp} folder none: {med_dir}")
 
         return files
 
-    # ── 전체 레벨 로드 ────────────────────────────────────────────────────────────
+    # ── all level load ────────────────────────────────────────────────────────────
 
     def _load_all(self) -> List[GameSample]:
         files = self._collect_files()
         if not files:
             raise FileNotFoundError(
-                f"[boxoban] 레벨 파일을 찾을 수 없습니다: {self._root}"
+                f"[boxoban] level file  text  text text: {self._root}"
             )
 
         legend = _make_legend()
@@ -449,16 +449,16 @@ class BoxobanHandler(BaseGameHandler):
                 all_ids.append(source_id)
 
         if not all_arrays:
-            raise ValueError("[boxoban] 파싱 가능한 레벨이 없습니다.")
+            raise ValueError("[boxoban] parsing availabletext level  text.")
 
-        # ── Diversity sampling (augmentation 전 원본 구조 기준) ───────────────
+        # ── Diversity sampling (augmentation  before  text structure basis) ───────────────
         n = self._n_sample
         if n is not None and n < len(all_arrays):
             chosen_idxs = _diversity_sample(all_arrays, n, seed=self._seed)
         else:
             chosen_idxs = list(range(len(all_arrays)))
 
-        # ── Augmentation (diversity sampling 이후 적용) ───────────────────────
+        # ── Augmentation (diversity sampling   after  apply) ───────────────────────
         samples: List[GameSample] = []
         for order, idx in enumerate(chosen_idxs):
             augmented = _augment_objects(all_arrays[idx])
@@ -479,7 +479,7 @@ class BoxobanHandler(BaseGameHandler):
 
         return samples
 
-    # ── BaseGameHandler 인터페이스 ────────────────────────────────────────────────
+    # ── BaseGameHandler interface ────────────────────────────────────────────────
 
     def _ensure_loaded(self) -> None:
         if self._samples is None:
@@ -505,7 +505,7 @@ class BoxobanHandler(BaseGameHandler):
         yield from self._samples
 
     def sample(self, n: int, seed: int = 0) -> List[GameSample]:
-        """전체 로드된 샘플 중 n 개를 랜덤 추출."""
+        """all loadtext sample  during  n text  random extract."""
         self._ensure_loaded()
         rng = np.random.default_rng(seed)
         idxs = rng.choice(len(self._samples), size=min(n, len(self._samples)), replace=False)
@@ -516,7 +516,7 @@ class BoxobanHandler(BaseGameHandler):
         return [s for s in self._samples if s.meta.get("difficulty") == difficulty]
 
     def stats(self) -> dict:
-        """로드된 샘플에 대한 간단한 통계."""
+        """loadtext sample in  text text text."""
         self._ensure_loaded()
         arrays = [s.array for s in self._samples]
         wall_ratios = [(a == BoxobanTile.WALL).mean() for a in arrays]

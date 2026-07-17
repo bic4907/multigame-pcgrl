@@ -3,10 +3,10 @@ instruct_rl/eval/wrappers/tpkldiv.py
 ======================================
 TPKLWrapper — Tile-Pattern KL divergence across seeds per instruction.
 
-책임 분리
+text separate
 ---------
-- TPKLWrapper  : 데이터 파이프라인 전담 (HDF5 로드 후 TPKLEvaluator 위임)
-- TPKLEvaluator: 순수 알고리즘 (GT 분포 구축 + JSD 계산)
+- TPKLWrapper  : data pipeline  before text (HDF5 load  after  TPKLEvaluator abovetext)
+- TPKLEvaluator: text text (GT distribution text + JSD compute)
 """
 from __future__ import annotations
 
@@ -68,15 +68,15 @@ class TPKLWrapper:
         """
         Parameters
         ----------
-        instruct_df : 평가 대상 DataFrame (game, reward_enum, feature_name, condition_value)
-        gt_levels   : (M, H, W) int — 호출자(metrics.py)가 이미 필터링해서 전달
-        n_eps       : 시드(에피소드) 수
+        instruct_df : evaluation target DataFrame (game, reward_enum, feature_name, condition_value)
+        gt_levels   : (M, H, W) int — calltext(metrics.py)   text filteringtext  before text
+        n_eps       : seed( in text) text
 
         Returns
         -------
         scores : np.ndarray, shape (N*n_eps,)
         """
-        # ① Predicted levels 로드 (HDF5) → (N*n_eps, H, W)
+        # ① Predicted levels load (HDF5) → (N*n_eps, H, W)
         with open_eval_store(self.config.eval_dir, mode="r") as h5:
             pred_levels = np.array(
                 [

@@ -65,14 +65,14 @@ class _ViewerHandler(BaseHTTPRequestHandler):
         return
 
     def _handle_reload_api(self) -> None:
-        """데이터셋 + tile_mapping.json 을 프로세스 재시작 없이 다시 로드한다."""
+        """dataset + tile_mapping.json   process textstart text  text loadtext."""
         import time
         t0 = time.time()
         try:
             result = self.backend.reload()
             elapsed = round(time.time() - t0, 2)
             self._send_json({**result, "elapsed_sec": elapsed})
-            # 서버 콘솔에도 출력
+            # server text in  also  text
             print(f"[viewer] reloaded in {elapsed}s — games: "
                   + ", ".join(f"{r['game']}({r['count']})" for r in result["games"]))
         except Exception as exc:  # noqa: BLE001
@@ -133,7 +133,7 @@ class _ViewerHandler(BaseHTTPRequestHandler):
             return
 
         path = (_TILE_IMS_DIR / name).resolve()
-        # path traversal 방지: tile_ims 디렉토리 밖으로 나가는 경로 차단
+        # path traversal text: tile_ims directory outside as  text   path text
         if not str(path).startswith(str(_TILE_IMS_DIR.resolve())):
             self.send_error(HTTPStatus.BAD_REQUEST, "Invalid tile image path")
             return

@@ -1,8 +1,8 @@
 """
 instruct_rl/utils/dataset_loader.py
 ====================================
-MultiGameDataset 기반 Instruct 빌더.
-jax.jit 바깥에서 호출하여 데이터셋을 로드하고 Instruct 객체를 빌드한다.
+MultiGameDataset based Instruct text.
+jax.jit text in  calltext dataset  loadtext Instruct text  buildtext.
 """
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ logger = get_logger(__file__)
 
 
 def load_dataset_instruct(config):
-    """MultiGameDataset에서 Instruct 객체를 빌드한다."""
+    """MultiGameDataset in  Instruct text  buildtext."""
     eval_games_str = getattr(config, "eval_games", None)
     load_game = eval_games_str if eval_games_str is not None else config.dataset_game
 
@@ -123,11 +123,11 @@ def load_dataset_instruct(config):
         f"Check that reward annotations exist."
     )
 
-    # ── per-game ratio 필터링 ──────────────────────────────────────────────────
-    # dataset_unseen_ratio 가 명시된 경우: seen/unseen 게임별 다른 비율 적용
-    #   seen  게임 → dataset_seen_ratio
-    #   unseen 게임 → dataset_unseen_ratio  (0.0 이면 해당 게임 제외)
-    # dataset_unseen_ratio 가 None(미설정)인 경우: 기존 동작 (dataset_seen_ratio 만 사용)
+    # ── per-game ratio filtering ──────────────────────────────────────────────────
+    # dataset_unseen_ratio   text text: seen/unseen gametext different ratio apply
+    #   seen  game → dataset_seen_ratio
+    #   unseen game → dataset_unseen_ratio  (0.0  text text game text)
+    # dataset_unseen_ratio   None(textconfig)text text: existing text (dataset_seen_ratio text text for )
     dataset_seen_ratio = getattr(config, "dataset_seen_ratio", 1.0)
     dataset_unseen_ratio = getattr(config, "dataset_unseen_ratio", None)
 
@@ -137,7 +137,7 @@ def load_dataset_instruct(config):
         _reward_seen_raw = getattr(config, "reward_seen_games", None) or []
         _seen_set, _ = _cu_split(_reward_seen_raw)
         reward_seen_set: set = set(_seen_set)
-        # doom / doom2 alias: encoder 가 한쪽을 seen 으로 기록하면 양쪽 모두 seen 으로 처리
+        # doom / doom2 alias: encoder   text  seen  as  writetext text text seen  as  process
         if "doom" in reward_seen_set or "doom2" in reward_seen_set:
             reward_seen_set.update({"doom", "doom2"})
 
@@ -165,7 +165,7 @@ def load_dataset_instruct(config):
             "per-game ratio filtering done: total %d samples", len(samples),
         )
     elif dataset_seen_ratio < 1.0:
-        # 기존 동작: 모든 게임에 동일한 seen_ratio 적용
+        # existing text: text game in  sametext seen_ratio apply
         from collections import defaultdict
         game_buckets = defaultdict(list)
         for s in samples:

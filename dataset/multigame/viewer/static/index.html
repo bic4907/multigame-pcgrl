@@ -34,7 +34,7 @@
     button { cursor: pointer; }
     button:hover { background: #374151; }
 
-    /* ── 렌더링 모드 탭 ── */
+    /* ── rendering mode text ── */
     .mode-tabs {
       display: flex;
       gap: 6px;
@@ -95,7 +95,7 @@
       padding: 10px;
       flex-shrink: 0;
     }
-    /* ── 범례 패널 ── */
+    /* ── legend text ── */
     #legend {
       min-width: 180px;
       font-size: 13px;
@@ -117,7 +117,7 @@
     .legend-label { color: #e5e7eb; }
     .legend-id { color: #6b7280; font-size: 11px; margin-left: auto; }
 
-    /* ── 타일 맵핑 패널 ── */
+    /* ── tile maptext text ── */
     #mapping-panel {
       min-width: 280px;
       max-width: 400px;
@@ -171,7 +171,7 @@
       margin-top: 8px;
     }
 
-    /* ── 앨범 뷰 그리드 ── */
+    /* ── text text text ── */
     #album-wrap {
       margin-top: 12px;
     }
@@ -229,31 +229,31 @@
   <div class="container">
     <h2>MultiGame Dataset Viewer</h2>
 
-    <!-- 게임 선택 + 이동 -->
+    <!-- game select + move -->
     <div class="row">
-      <label for="gameSelect">게임</label>
+      <label for="gameSelect">game</label>
       <select id="gameSelect"></select>
       <button id="prevBtn">Prev (←)</button>
       <button id="nextBtn">Next (→)</button>
       <label for="indexInput">Index</label>
       <input id="indexInput" type="number" min="0" step="1" value="0" />
       <button id="goBtn">Go</button>
-      <label for="viewModeSelect">보기</label>
+      <label for="viewModeSelect">text</label>
       <select id="viewModeSelect">
         <option value="single">Single</option>
         <option value="album" selected>Album</option>
       </select>
-      <label for="albumSizeSelect">앨범크기</label>
+      <label for="albumSizeSelect">textsize</label>
       <select id="albumSizeSelect">
         <option value="auto" selected>Auto</option>
         <option value="30">30</option>
         <option value="60">60</option>
       </select>
-      <button id="reloadBtn" title="데이터셋 + tile_mapping.json 재로드 (서버 재시작 불필요)">⟳ Reload</button>
+      <button id="reloadBtn" title="dataset + tile_mapping.json textload (server textstart text)">⟳ Reload</button>
       <span id="reloadStatus" style="font-size:12px; color:#6b7280;"></span>
     </div>
 
-    <!-- 렌더링 모드 탭 -->
+    <!-- rendering mode text -->
     <div class="mode-tabs">
       <button class="mode-tab active" data-mode="raw-color">🎨 Raw Color</button>
       <button class="mode-tab" data-mode="raw-image">🧩 Raw Image</button>
@@ -271,7 +271,7 @@
       </div>
       <div id="legend"></div>
       <div id="mapping-panel" style="display:none;">
-        <h4>🔀 타일 맵핑 (원본 → Unified)</h4>
+        <h4>🔀 tile maptext (text → Unified)</h4>
         <div id="mapping-content"></div>
       </div>
     </div>
@@ -280,7 +280,7 @@
       <div id="album-grid"></div>
     </div>
 
-    <div class="hint">키보드: ← / → 이동, Album은 Auto면 브라우저 크기에 맞춰 개수 자동 조절</div>
+    <div class="hint">text: ← / → move, Album  Autotext browser size in  text count automatic text</div>
   </div>
 
   <script src="/static/app.js"></script>

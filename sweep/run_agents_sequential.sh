@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────────
-# run_agents_sequential.sh  —  여러 sweep을 순차적으로 실행
+# run_agents_sequential.sh  —  Run multiple sweeps sequentially
 #
-# 사용법:
+# Usage:
 #   GPUS="0 1 2 3" bash sweep/run_agents_sequential.sh \
 #       entity/project/SWEEP_ID_1 \
 #       entity/project/SWEEP_ID_2 \
 #       entity/project/SWEEP_ID_3
 #
-# - 각 sweep의 run이 소진되면 agent가 자동 종료 (wandb grid sweep 기준)
-# - 앞 sweep 완료 → 뒤 sweep 자동 시작
-# - GPUS 미지정 시 GPU 0번만 사용
+# - The agent exits automatically after each sweep is exhausted (for W&B grid sweeps)
+# - previous sweep finished → next sweep starts automatically
+# - Uses GPU 0 when GPUS is not set
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -47,7 +47,7 @@ done
 
 log "All sweeps completed."
 
-# RunPod 환경에서만 자동 정지
+# Auto-shutdown only in RunPod environments
 if [ -n "${RUNPOD_POD_ID:-}" ]; then
     log "RunPod detected (POD_ID=$RUNPOD_POD_ID). Stopping pod..."
     runpodctl stop pod "$RUNPOD_POD_ID"

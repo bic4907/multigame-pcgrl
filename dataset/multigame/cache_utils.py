@@ -1,9 +1,9 @@
 """Cache helpers for MultiGameDataset.
 
-v1 (legacy): 단일 캐시 — hash(모든 init args + 전체 코드) → 하나의 npz/json
-v2 (현재):   게임별 캐시 — artifacts/{game}/{key}.npz|json|info.json
-             각 게임의 캐시 키는 해당 게임의 root, handler_config, 핸들러 코드만으로 결정.
-             원본 데이터셋 없이 artifact만으로도 로드 가능.
+v1 (legacy): text cache — hash(text init args + all text) → text of  npz/json
+v2 (current):   gametext cache — artifacts/{game}/{key}.npz|json|info.json
+             each game of  cache text  text game of  root, handler_config, handler text as  text.
+             text dataset text  artifacttext as  also  load available.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ ANN_SCHEMA_VERSION = 1
 _HERE = Path(__file__).parent
 _PROJECT_ROOT: Path = _HERE.parent.parent
 
-# ── 게임별 핸들러 파일 매핑 ──────────────────────────────────────────────────
+# ── gametext handler file text ──────────────────────────────────────────────────
 GAME_HANDLER_FILES: Dict[str, List[str]] = {
     "dungeon": ["handlers/dungeon_handler.py"],
     "sokoban": ["handlers/boxoban_handler.py"],
@@ -54,7 +54,7 @@ def _cache_log(msg: str, level: str = "info") -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  공통 유틸
+#  common utility
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _sha256_bytes(data: bytes) -> str:
@@ -74,11 +74,11 @@ def _normalize_path(raw: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Per-game 캐시 (v2)
+#  Per-game cache (v2)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def hash_handler_files(game: str) -> str:
-    """게임별 핸들러 파일만 해싱한다."""
+    """gametext handler filetext text."""
     handler_paths = GAME_HANDLER_FILES.get(game, [])
     common_files = ["base.py", "tile_utils.py", "handlers/handler_config.py"]
     all_files = sorted(set(handler_paths + common_files))
@@ -101,7 +101,7 @@ def build_per_game_cache_key(
     game_root: str,
     handler_config_dict: Dict[str, Any],
 ) -> str:
-    """게임별 캐시 키를 생성한다."""
+    """gametext cache text  createtext."""
     payload = {
         "schema": CACHE_SCHEMA_VERSION,
         "game": game,
@@ -119,7 +119,7 @@ def build_combined_doom_cache_key(
     include_doom2: bool,
     handler_config_dict: Dict[str, Any],
 ) -> str:
-    """doom + doom2 통합 캐시 키를 생성한다."""
+    """doom + doom2 text cache text  createtext."""
     payload = {
         "schema": CACHE_SCHEMA_VERSION,
         "game": "doom",
@@ -142,12 +142,12 @@ def _game_cache_paths(cache_dir: Path, game: str, key: str):
 
 
 def _game_ann_path(cache_dir: Path, game: str, key: str) -> Path:
-    """게임별 annotation 캐시 파일 경로."""
+    """gametext annotation cache file path."""
     return _game_cache_dir(cache_dir, game) / f"{key}.ann.json"
 
 
 def _purge_old_game_caches(game_dir: Path, keep_key: str) -> None:
-    """게임별 캐시 디렉토리에서 keep_key 외 파일 삭제."""
+    """gametext cache directory in  keep_key text file delete."""
     if not game_dir.exists():
         return
     removed: List[Path] = []
@@ -155,7 +155,7 @@ def _purge_old_game_caches(game_dir: Path, keep_key: str) -> None:
         if not f.is_file():
             continue
         stem = f.name
-        # 긴 확장자를 먼저 체크해야 한다: .ann.json/.info.json이 .json보다 먼저
+        # text expandtext  text text text: .ann.json/.info.json  .jsontext text
         for ext in (".ann.json", ".info.json", ".npz", ".json"):
             if stem.endswith(ext):
                 candidate_key = stem[: -len(ext)]
@@ -190,7 +190,7 @@ def _collect_info(samples: List[GameSample], game: str = "") -> Dict[str, Any]:
 def save_game_samples_to_cache(
     cache_dir: Path, game: str, key: str, samples: List[GameSample]
 ) -> None:
-    """게임별 캐시 저장."""
+    """gametext cache save."""
     game_dir = _game_cache_dir(cache_dir, game)
     game_dir.mkdir(parents=True, exist_ok=True)
 
@@ -205,7 +205,7 @@ def save_game_samples_to_cache(
 
     np.savez_compressed(npz_path, arrays=arrays)
 
-    # 맵 정보 + ann_keys만 저장 (instruction/meta는 ann.json에서 관리)
+    # map info + ann_keystext save (instruction/meta  ann.json in  text)
     meta: List[Dict[str, Any]] = []
     for s in samples:
         entry: Dict[str, Any] = {
@@ -230,7 +230,7 @@ def save_game_samples_to_cache(
 def load_game_samples_from_cache(
     cache_dir: Path, game: str, key: str
 ) -> Optional[List[GameSample]]:
-    """게임별 캐시 로드. 없으면 None 반환."""
+    """gametext cache load. if missing None return."""
     npz_path, meta_path, info_path = _game_cache_paths(cache_dir, game, key)
     if not npz_path.exists() or not meta_path.exists():
         return None
@@ -260,8 +260,8 @@ def load_game_samples_from_cache(
 
     samples: List[GameSample] = []
     for i, m in enumerate(meta):
-        # 신규 포맷: game/source_id/order/ann_keys만 저장
-        # 구 포맷(instruction/meta 포함)도 읽을 수 있도록 호환 처리
+        # text text: game/source_id/order/ann_keystext save
+        # text text(instruction/meta text) also  text  text text also text text process
         sample_meta: Dict[str, Any] = {}
         if "ann_keys" in m:
             sample_meta["ann_keys"] = m["ann_keys"]
@@ -277,7 +277,7 @@ def load_game_samples_from_cache(
                 array=arrays[i].astype(np.int32),
                 char_grid=None,
                 legend=None,
-                instruction=None,      # instruction은 ann.json에서 로드
+                instruction=None,      # instruction  ann.json in  load
                 order=m.get("order"),
                 meta=sample_meta,
             )
@@ -286,7 +286,7 @@ def load_game_samples_from_cache(
 
 
 def list_cached_games(cache_dir: Path) -> List[str]:
-    """캐시 디렉토리에서 사용 가능한 게임 목록을 반환한다."""
+    """cache directory in  text for  availabletext game list  returntext."""
     if not cache_dir.exists():
         return []
     games = []
@@ -297,10 +297,10 @@ def list_cached_games(cache_dir: Path) -> List[str]:
 
 
 def load_any_game_cache(cache_dir: Path, game: str) -> Optional[List[GameSample]]:
-    """게임 디렉토리에 있는 아무 캐시나 로드한다 (키를 모를 때).
+    """game directory in  with text cachetext loadtext (text  text  text).
 
-    artifact-only 모드: 원본 데이터도 없고 현재 키로 매칭되는 캐시도 없지만,
-    해당 게임 디렉토리에 npz 파일이 존재하면 그것을 로드한다.
+    artifact-only mode: text data also  text current text to  text  cache also  text,
+    text game directory in  npz file  text text  loadtext.
     """
     game_dir = _game_cache_dir(cache_dir, game)
     if not game_dir.exists():
@@ -308,7 +308,7 @@ def load_any_game_cache(cache_dir: Path, game: str) -> Optional[List[GameSample]
     npz_files = sorted(game_dir.glob("*.npz"))
     if not npz_files:
         return None
-    # 가장 최근 npz 사용
+    #  text text npz text for
     npz_path = npz_files[-1]
     key = npz_path.stem
     return load_game_samples_from_cache(cache_dir, game, key)
@@ -327,13 +327,13 @@ def save_game_annotations_to_cache(
     n_samples: int = 0,
     batch_id: Optional[str] = None,
 ) -> None:
-    """게임별 annotation을 {key}.ann.json에 저장.
+    """gametext annotation  {key}.ann.json in  save.
 
-    annotations: _make_rows()가 반환하는 dict 리스트.
-                 각 dict: key, source_id, reward_enum, feature_name,
+    annotations: _make_rows()  returntext  dict text.
+                 each dict: key, source_id, reward_enum, feature_name,
                            sub_condition, condition_0..4,
                            instruction_raw, instruction_uni
-    batch_id: OpenAI 배치 제출 시 기록. None이면 필드 생략.
+    batch_id: OpenAI batch text text write. None text text text.
     """
     game_dir = _game_cache_dir(cache_dir, game)
     game_dir.mkdir(parents=True, exist_ok=True)
@@ -359,9 +359,9 @@ def load_game_annotations_from_cache(
     game: str,
     key: str,
 ) -> Optional[Dict[str, Any]]:
-    """게임별 annotation 로드. 없거나 파싱 실패 시 None 반환.
+    """gametext annotation load. text parsing failure text None return.
 
-    반환값 구조:
+    returntext structure:
       {"schema": 1, "game": ..., "n_samples": ...,
        "has_instructions": bool, "annotations": List[dict]}
     """
@@ -385,10 +385,10 @@ def load_game_annotations_from_cache(
 def update_json_with_ann_keys(
     cache_dir: Path, game: str, key: str, ann_data: Dict[str, Any]
 ) -> None:
-    """ann.json의 키 정보를 {key}.json 메타데이터에 ann_keys로 기록한다.
+    """ann.json of  text info  {key}.json metadata in  ann_keys to  writetext.
 
-    각 샘플의 ann_keys = [key_r0, key_r1, ..., key_r{n_rewards-1}]
-    ann.json 행 순서: reward_enum 0 전체 → 1 전체 → … → 4 전체
+    each sample of  ann_keys = [key_r0, key_r1, ..., key_r{n_rewards-1}]
+    ann.json row order: reward_enum 0 all → 1 all → … → 4 all
     sample i, reward_enum r → ann row r * n_samples + i
     """
     _, meta_path, _ = _game_cache_paths(cache_dir, game, key)
@@ -418,7 +418,7 @@ def update_json_with_ann_keys(
     for i, entry in enumerate(meta):
         if i in sample_ann_keys:
             entry["ann_keys"] = sample_ann_keys[i]
-            # 구 포맷 필드 제거
+            # text text text remove
             entry.pop("instruction", None)
             entry.pop("meta", None)
             updated += 1
@@ -432,7 +432,7 @@ def update_json_with_ann_keys(
 
 
 def update_ann_batch_id(cache_dir: Path, game: str, key: str, batch_id: str) -> None:
-    """ann.json에 batch_id 필드를 기록한다 (instruction 배치 제출 추적용)."""
+    """ann.json in  batch_id text  writetext (instruction batch text textapply)."""
     ann_path = _game_ann_path(cache_dir, game, key)
     if not ann_path.exists():
         return
@@ -449,7 +449,7 @@ def update_ann_batch_id(cache_dir: Path, game: str, key: str, batch_id: str) -> 
 
 
 def find_game_cache_key(cache_dir: Path, game: str) -> Optional[str]:
-    """게임 캐시 디렉토리에서 npz 파일 이름으로 캐시 키를 찾는다."""
+    """game cache directory in  npz file name as  cache text  text text."""
     game_dir = _game_cache_dir(cache_dir, game)
     if not game_dir.exists():
         return None
@@ -460,7 +460,7 @@ def find_game_cache_key(cache_dir: Path, game: str) -> Optional[str]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Legacy (v1) — 하위 호환용
+#  Legacy (v1) — sub text for
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _normalize_args(args_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -475,7 +475,7 @@ def _normalize_args(args_dict: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def hash_code_files(code_root: Path) -> str:
-    """[Legacy] 전체 코드 해싱."""
+    """[Legacy] all text text."""
     py_files = sorted(
         p for p in code_root.rglob("*.py")
         if "tests" not in p.parts and "__pycache__" not in p.parts
@@ -489,7 +489,7 @@ def hash_code_files(code_root: Path) -> str:
 
 
 def build_cache_key(args_dict: Dict[str, Any], *, code_root: Path) -> str:
-    """[Legacy] 단일 캐시 키 — 하위 호환용."""
+    """[Legacy] text cache text — sub text for ."""
     payload = {
         "schema": 1,
         "args": _normalize_args(args_dict),
@@ -504,7 +504,7 @@ def _cache_paths(cache_dir: Path, key: str):
 
 
 def _purge_old_caches(cache_dir: Path, keep_key: str) -> None:
-    """[Legacy] cache_dir 안의 캐시 파일 중 keep_key에 해당하지 않는 것을 모두 삭제."""
+    """[Legacy] cache_dir text of  cache file  during  keep_key in  text text  text  text delete."""
     removed: List[Path] = []
     for f in cache_dir.iterdir():
         if not f.is_file():
@@ -524,7 +524,7 @@ def _purge_old_caches(cache_dir: Path, keep_key: str) -> None:
 
 
 def save_samples_to_cache(cache_dir: Path, key: str, samples: List[GameSample]) -> None:
-    """[Legacy] 단일 캐시 저장."""
+    """[Legacy] text cache save."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     npz_path, meta_path, info_path = _cache_paths(cache_dir, key)
     _purge_old_caches(cache_dir, keep_key=key)
@@ -552,7 +552,7 @@ def save_samples_to_cache(cache_dir: Path, key: str, samples: List[GameSample]) 
 
 
 def load_samples_from_cache(cache_dir: Path, key: str) -> Optional[List[GameSample]]:
-    """[Legacy] 단일 캐시 로드."""
+    """[Legacy] text cache load."""
     npz_path, meta_path, info_path = _cache_paths(cache_dir, key)
     if not npz_path.exists() or not meta_path.exists():
         return None

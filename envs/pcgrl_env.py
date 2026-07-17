@@ -93,7 +93,7 @@ class PCGRLEnvState:
 
 @struct.dataclass
 class PCGRLObs:
-    map_obs: chex.Array         #Current t map observation 
+    map_obs: chex.Array         #Current t map observation
     past_map_obs: chex.Array    #Past t-10 map observation for pixel values
     flat_obs: chex.Array
     nlp_obs: chex.Array
@@ -430,7 +430,7 @@ class PCGRLEnv(Environment):
 
 
         if self.nlp_input_dim > 0 and self.clip_input_channel > 0:
-            # cnnclipconv/clipconv: nlp_obs + CLIP inputs 모두 필요
+            # cnnclipconv/clipconv: nlp_obs + CLIP inputs text text
             nlp_obs = jnp.zeros(self.nlp_input_dim)
             clip_input_ids = jnp.zeros((77), dtype=jnp.int32)
             clip_attention_mask = jnp.zeros((77), dtype=jnp.int32)
@@ -460,8 +460,8 @@ class PCGRLEnv(Environment):
                 nlp_obs=jnp.zeros(
                     1,
                 ),
-                input_ids=None, 
-                attention_mask=None, 
+                input_ids=None,
+                attention_mask=None,
                 pixel_values=None,
             )
         return obs
@@ -570,7 +570,7 @@ class PCGRLEnv(Environment):
         ctrl_x = jnp.zeros((1, len(env_params.ctrl_metrics)))
 
         if env_params.nlp_input_dim > 0 and env_params.clip_input_channel > 0:
-            # cnnclipconv/clipconv: nlp_obs + CLIP input_ids/attention_mask/pixel_values 모두 필요
+            # cnnclipconv/clipconv: nlp_obs + CLIP input_ids/attention_mask/pixel_values text text
             nlp_obs = jnp.zeros((1, env_params.nlp_input_dim))
             clip_input_ids = jnp.zeros((1, 77), dtype=jnp.int32)
             clip_attention_mask = jnp.zeros((1, 77), dtype=jnp.int32)

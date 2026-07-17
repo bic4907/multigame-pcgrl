@@ -1,13 +1,13 @@
 """
 train_finetuned_clip.py
 =======================
-Fine-tuned CLIP 기반 PCGRL 학습 entrypoint.
+Fine-tuned CLIP based PCGRL training entrypoint.
 
-`train_pretrained_clip.py` 와 obs/reward 주입 로직이 동일하지만, RL 인코더의
-파라미터를 `encoder.ckpt_name` (또는 ckpt_path) 으로 지정된 fine-tuned CLIP
-체크포인트로 덮어쓴다 (기존 `apply_encoder_params` 메커니즘 그대로 활용).
+`train_pretrained_clip.py`  and  obs/reward inject  to text  sametext, RL text of
+parameter  `encoder.ckpt_name` (text  ckpt_path)  as  text fine-tuned CLIP
+checkpoint to  text (existing `apply_encoder_params` text as-is text for ).
 
-실행:
+Usage:
     python -m train_finetuned_clip encoder.ckpt_name=finetuned-clip-...
 """
 import json
@@ -34,13 +34,13 @@ def main(config: FinetunedCLIPPCGRLConfig):
     if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
         raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
-    # ── encoder의 dataset_setting.json에서 seen_ratio / seen_games 주입 ──
+    # ── encoder of  dataset_setting.json in  seen_ratio / seen_games inject ──
     dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
     if os.path.exists(dataset_setting_path):
         with open(dataset_setting_path, "r") as f:
             dataset_setting = json.load(f)
 
-        # ── seen_ratio 주입: encoder 학습 때 쓴 seen 게임 데이터 비율을 그대로 사용 ──
+        # ── seen_ratio inject: encoder training text text seen game data ratio  as-is text for  ──
         seen_ratio = dataset_setting.get("seen_ratio", 1.0)
         if seen_ratio != config.dataset_seen_ratio:
             logger.info(
@@ -49,7 +49,7 @@ def main(config: FinetunedCLIPPCGRLConfig):
             )
             config.dataset_seen_ratio = seen_ratio
 
-        # ── game_setting_mode=encoder_seen: seen 게임만 학습 대상으로 설정 ──
+        # ── game_setting_mode=encoder_seen: seen gametext training target as  config ──
         game_setting_mode = getattr(config, "game_setting_mode", "all")
         dataset_unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
         if hasattr(config, "dataset_unseen_ratio") and dataset_unseen_ratio != config.dataset_unseen_ratio:

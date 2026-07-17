@@ -2,28 +2,28 @@
 """
 dataset/reward_annotations/generate_instructions.py
 =====================================================
-OpenAI Batch API (gpt-4o-2024-08-06)를 사용하여
-reward annotation CSV의 instruction_raw / instruction_uni 필드를 채운다.
+OpenAI Batch API (gpt-4o-2024-08-06)  text for text
+reward annotation CSV of  instruction_raw / instruction_uni text  text.
 
-설정 상수: instruction_config.py
-시스템 프롬프트: system_prompt.txt
-배치 추적: batches/batch_log.csv  (단일 CSV)
+config text: instruction_config.py
+text text: system_prompt.txt
+batch text: batches/batch_log.csv  (text CSV)
 
 Usage:
-  # JSONL 생성 + 배치 제출
+  # JSONL create + batch text
   python dataset/reward_annotations/generate_instructions.py --submit
 
-  # 특정 게임/enum만 처리
+  # text game/enumtext process
   python dataset/reward_annotations/generate_instructions.py --submit \\
       --games doom zelda --enums 0 1
 
-  # 결과 조회 + CSV 업데이트
+  # result text + CSV update
   python dataset/reward_annotations/generate_instructions.py --retrieve BATCH_ID
 
-  # 배치 상태 확인
+  # batch text check
   python dataset/reward_annotations/generate_instructions.py --status BATCH_ID
 
-  # 제출 후 완료까지 대기 → 자동 CSV 업데이트
+  # text  after  finishtext text → automatic CSV update
   python dataset/reward_annotations/generate_instructions.py --run
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# ── 프로젝트 루트 ─────────────────────────────────────────────────────────────────
+# ── text to text text ─────────────────────────────────────────────────────────────────
 _HERE = Path(__file__).parent
 sys.path.insert(0, str(_HERE.parent.parent))
 
@@ -63,13 +63,13 @@ from instruction_config import (
 )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-logging.getLogger("httpx").setLevel(logging.WARNING)   # openai SDK HTTP 요청 로그 숨김
+logging.getLogger("httpx").setLevel(logging.WARNING)   # openai SDK HTTP request  to text text
 logger = logging.getLogger(__name__)
 
-# ── 경로 ─────────────────────────────────────────────────────────────────────────
+# ── path ─────────────────────────────────────────────────────────────────────────
 _CACHE_DIR   = _HERE.parent / "multigame" / "cache" / "artifacts"
 _BATCH_DIR   = _HERE / "batches"
-_BATCH_LOG   = _BATCH_DIR / "batch_log.csv"          # 단일 배치 추적 CSV
+_BATCH_LOG   = _BATCH_DIR / "batch_log.csv"          # text batch text CSV
 _SYSTEM_PROMPT_FILE = _HERE / "system_prompt.txt"
 
 from dataset.multigame.cache_utils import (
@@ -78,16 +78,16 @@ from dataset.multigame.cache_utils import (
     find_game_cache_key,
 )
 
-# ── 모델 설정 ─────────────────────────────────────────────────────────────────────
+# ── text config ─────────────────────────────────────────────────────────────────────
 MODEL       = "gpt-5.4-mini"
 MAX_TOKENS  = 300
 TEMPERATURE = 2.0
 
-# ── 배치 로그 CSV 헤더 ────────────────────────────────────────────────────────────
+# ── batch  to text CSV text ────────────────────────────────────────────────────────────
 _LOG_HEADER = ["batch_id", "jsonl_file", "games", "enums",
                "n_requests", "status", "submitted_at", "completed_at"]
 
-# ── reward_enum → condition 컬럼 ─────────────────────────────────────────────────
+# ── reward_enum → condition text ─────────────────────────────────────────────────
 _ENUM_TO_COND_COL = {
     0: "condition_0", 1: "condition_1", 2: "condition_2",
     3: "condition_3", 4: "condition_4",
@@ -98,14 +98,14 @@ _MAX_SAMPLES: Dict[str, int] = {
 }
 
 
-# ── 시스템 프롬프트 로드 ──────────────────────────────────────────────────────────
+# ── text text load ──────────────────────────────────────────────────────────
 
 def load_system_prompt() -> str:
-    """system_prompt.txt 에서 시스템 프롬프트를 읽는다."""
+    """system_prompt.txt  in  text text  text text."""
     return _SYSTEM_PROMPT_FILE.read_text(encoding="utf-8").strip()
 
 
-# ── Zone 계산 ─────────────────────────────────────────────────────────────────────
+# ── Zone compute ─────────────────────────────────────────────────────────────────────
 
 def get_zone_label(value: float, feature: str, thresholds: Optional[List[float]]) -> str:
     if thresholds is None:
@@ -121,7 +121,7 @@ def get_zone_label(value: float, feature: str, thresholds: Optional[List[float]]
     return labels[min(idx, len(labels) - 1)]
 
 
-# ── 렌더링 ────────────────────────────────────────────────────────────────────────
+# ── rendering ────────────────────────────────────────────────────────────────────────
 
 def _render_png(
     array: np.ndarray,
@@ -151,7 +151,7 @@ def render_unified_png(array: np.ndarray, game: str, tile_size: int = 16) -> byt
     return _render_png(unified, color_map, tile_size)
 
 
-# ── 유저 프롬프트 빌더 ────────────────────────────────────────────────────────────
+# ── text text text ────────────────────────────────────────────────────────────
 
 _COUNT_FEATURES = {"interactable_count", "hazard_count", "collectable_count"}
 
@@ -172,7 +172,7 @@ def build_user_prompt(
     zone_idx_0: Optional[int] = None
     zone_display: Optional[str] = None
     feat_zones = FEATURE_ZONE_LABELS.get(feature_name, [])
-    n_bins = len(feat_zones) if feat_zones else 8   # 동적으로 bin 수 결정 (현재 8)
+    n_bins = len(feat_zones) if feat_zones else 8   # dynamic as  bin text text (current 8)
     if thresholds is not None:
         try:
             zone_idx_0 = feat_zones.index(zone_label)        # 0-based
@@ -203,7 +203,7 @@ def build_user_prompt(
     tile_descs  = RAW_TILE_DESCS.get(game, {})
     tile_colors = RAW_TILE_COLORS.get(game, {})
     if feature_name == "region":
-        # region은 passable/wall 구분만 표시 — 특정 타일 이름이 instruction에 유입되지 않도록
+        # region  passable/wall text tabletext — text tile name  instruction in  text text also text
         game_mapping = {int(k): int(v) for k, v in
                         __import__('json').loads(
                             (__import__('pathlib').Path(__file__).parent.parent /
@@ -264,7 +264,7 @@ def build_user_prompt(
         lines.append(f"Count basis: {uni_desc}")
     lines.append("")
 
-    # 어휘 세트: feature × level
+    # text text: feature × level
     vocab_hint = ""
     if zone_idx_0 is not None:
         vocab_list = VOCAB_SETS.get(feature_name, [])
@@ -354,7 +354,7 @@ def build_user_prompt(
     return "\n".join(lines)
 
 
-# ── 배치 요청 빌더 ────────────────────────────────────────────────────────────────
+# ── batch request text ────────────────────────────────────────────────────────────────
 
 def build_batch_request(
     custom_id: str,
@@ -423,7 +423,7 @@ def build_batch_request(
         }
     }
 
-# ── 캐시 로드 ─────────────────────────────────────────────────────────────────────
+# ── cache load ─────────────────────────────────────────────────────────────────────
 
 def _load_cache(cache_dir: Path) -> Optional[List[dict]]:
     json_files = sorted(f for f in cache_dir.glob("*.json") if not f.name.endswith(".info.json"))
@@ -454,7 +454,7 @@ def _shorten_source_id(source_id: str, game: str) -> str:
 
 
 def load_cache_by_game(cache_dir: Path) -> Dict[str, Dict[str, np.ndarray]]:
-    """캐시를 {game: {sample_id: array}} 로 반환한다."""
+    """cache  {game: {sample_id: array}}  to  returntext."""
     by_game: Dict[str, List[dict]] = {}
     if cache_dir.is_dir():
         for sub in sorted(cache_dir.iterdir()):
@@ -485,10 +485,10 @@ def load_cache_by_game(cache_dir: Path) -> Dict[str, Dict[str, np.ndarray]]:
     return result
 
 
-# ── JSONL 생성 (단일 파일) ────────────────────────────────────────────────────────
+# ── JSONL create (text file) ────────────────────────────────────────────────────────
 
 def _is_none_threshold(game: str, feature_name: str) -> bool:
-    """CUSTOM_THRESHOLDS 가 None 인 (game, feature) 조합 여부."""
+    """CUSTOM_THRESHOLDS   None text (game, feature) text text."""
     return CUSTOM_THRESHOLDS.get(f"{game}_{feature_name}") is None
 
 
@@ -499,9 +499,9 @@ def fill_none_instructions(
     force: bool = False,
 ) -> int:
     """
-    CUSTOM_THRESHOLDS 가 None 인 행은 GPT 없이 instruction_raw / instruction_uni 를
-    "None" 으로 직접 채운다. 업데이트된 행 수를 반환한다.
-    ann.json에서 읽고 결과를 다시 ann.json에 저장한다.
+    CUSTOM_THRESHOLDS   None text row  GPT text  instruction_raw / instruction_uni
+    "None"  as  direct text. updatetext row text  returntext.
+    ann.json in  text result  text ann.json in  savetext.
     """
     none_results: Dict[str, dict] = {}
 
@@ -526,7 +526,7 @@ def fill_none_instructions(
 
     if none_results:
         n = update_caches(none_results, cache_dir, games)
-        logger.info(f"threshold=None 행 {n}개 → 'None' 으로 직접 채움")
+        logger.info(f"threshold=None row {n}text → 'None'  as  direct text")
         return n
     return 0
 
@@ -541,9 +541,9 @@ def build_jsonl(
     limit: Optional[int] = None,
 ) -> Optional[Path]:
     """
-    처리 대상 행에 대한 JSONL 파일을 단일 파일로 생성하여 경로를 반환한다.
-    ann.json에서 읽는다. threshold=None 인 행은 제외.
-    생성할 행이 없으면 None을 반환한다.
+    process target row in  text JSONL file  text file to  createtext path  returntext.
+    ann.json in  text text. threshold=None text row  text.
+    createtext row  if missing None  returntext.
     """
     _BATCH_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -554,16 +554,16 @@ def build_jsonl(
     for game in games:
         key = find_game_cache_key(cache_dir, game)
         if key is None:
-            logger.warning(f"{game}: 캐시 키 없음, 건너뜀")
+            logger.warning(f"{game}: cache text none, text")
             continue
         ann_data = load_game_annotations_from_cache(cache_dir, game, key)
         if ann_data is None:
-            logger.warning(f"{game}: ann.json 없음, 건너뜀")
+            logger.warning(f"{game}: ann.json none, text")
             continue
 
         sid_map = cache_by_game.get(game, {})
         if not sid_map:
-            logger.warning(f"{game}: 배열 캐시 없음, 건너뜀")
+            logger.warning(f"{game}: array cache none, text")
             continue
 
         for row in ann_data.get("annotations", []):
@@ -574,7 +574,7 @@ def build_jsonl(
                 n_skip += 1
                 continue
 
-            # threshold=None → 별도 처리 (GPT 호출 안 함)
+            # threshold=None → separate process (GPT call text text)
             if _is_none_threshold(game, row["feature_name"]):
                 n_none += 1
                 continue
@@ -605,22 +605,22 @@ def build_jsonl(
             break
 
     if n_skip:
-        logger.info(f"이미 채워진 행 {n_skip}개 건너뜀 (--force 로 재생성 가능)")
+        logger.info(f" text text row {n_skip}text text (--force  to  textcreate available)")
     if n_none:
-        logger.info(f"threshold=None 행 {n_none}개 제외 (--submit 전 자동 처리됨)")
+        logger.info(f"threshold=None row {n_none}text text (--submit  before  automatic processtext)")
 
     if not lines:
-        logger.info("생성할 요청이 없습니다.")
+        logger.info("createtext request  text.")
         return None
 
     ts       = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out_path = _BATCH_DIR / f"batch_{ts}.jsonl"
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    logger.info(f"JSONL 생성: {out_path.name}  ({len(lines)} requests)")
+    logger.info(f"JSONL create: {out_path.name}  ({len(lines)} requests)")
     return out_path
 
 
-# ── 배치 로그 CSV 관리 ────────────────────────────────────────────────────────────
+# ── batch  to text CSV text ────────────────────────────────────────────────────────────
 
 def _read_batch_log() -> List[dict]:
     if not _BATCH_LOG.exists():
@@ -657,7 +657,7 @@ def submit_batch(jsonl_path: Path, games: List[str], enums: List[int], n: int) -
     from openai import OpenAI
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-    logger.info(f"파일 업로드: {jsonl_path.name}")
+    logger.info(f"file upload: {jsonl_path.name}")
     with jsonl_path.open("rb") as f:
         file_obj = client.files.create(file=f, purpose="batch")
     logger.info(f"  file_id: {file_obj.id}")
@@ -723,15 +723,15 @@ def _extract_text_from_response_body(body: dict) -> Optional[str]:
 
 
 def retrieve_batch_results(batch_id: str) -> Dict[str, dict]:
-    """완료된 배치 결과를 {custom_id: {instruction_raw, instruction_uni}} 로 반환."""
+    """finishtext batch result  {custom_id: {instruction_raw, instruction_uni}}  to  return."""
     from openai import OpenAI
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
     b = client.batches.retrieve(batch_id)
     if b.status != "completed":
-        raise RuntimeError(f"배치가 아직 완료되지 않았습니다. 상태: {b.status}")
+        raise RuntimeError(f"batch  text finishtext text. text: {b.status}")
     if not b.output_file_id:
-        raise RuntimeError("output_file_id 없음")
+        raise RuntimeError("output_file_id none")
 
     content = client.files.content(b.output_file_id).content
     results: Dict[str, dict] = {}
@@ -750,14 +750,14 @@ def retrieve_batch_results(batch_id: str) -> Dict[str, dict]:
             if status_code != 200:
                 err = body.get("error", {})
                 logger.warning(
-                    f"요청 실패 ({cid}): status={status_code}, "
+                    f"request failure ({cid}): status={status_code}, "
                     f"code={err.get('code')}, message={err.get('message')}"
                 )
                 continue
 
             msg = _extract_text_from_response_body(body)
             if not msg:
-                logger.warning(f"응답 텍스트 없음 ({cid})")
+                logger.warning(f"response text none ({cid})")
                 continue
 
             parsed = json.loads(msg)
@@ -767,9 +767,9 @@ def retrieve_batch_results(batch_id: str) -> Dict[str, dict]:
             }
 
         except Exception as e:
-            logger.warning(f"파싱 실패 ({line[:60]}…): {e}")
+            logger.warning(f"parsing failure ({line[:60]}…): {e}")
 
-    logger.info(f"결과 파싱: {len(results)}개 성공")
+    logger.info(f"result parsing: {len(results)}text success")
     _update_batch_log(
         batch_id,
         status="completed",
@@ -777,11 +777,11 @@ def retrieve_batch_results(batch_id: str) -> Dict[str, dict]:
     )
     return results
 
-# ── ann.json 업데이트 ─────────────────────────────────────────────────────────────
+# ── ann.json update ─────────────────────────────────────────────────────────────
 
 def update_caches(results: Dict[str, dict], cache_dir: Path, games: List[str]) -> int:
-    """배치 결과(results: {key → {instruction_raw, instruction_uni}})를
-    각 게임의 ann.json에 반영하고 저장한다. 업데이트된 행 수를 반환한다."""
+    """batch result(results: {key → {instruction_raw, instruction_uni}})
+    each game of  ann.json in  applytext savetext. updatetext row text  returntext."""
     total = 0
     for game in games:
         key = find_game_cache_key(cache_dir, game)
@@ -799,12 +799,12 @@ def update_caches(results: Dict[str, dict], cache_dir: Path, games: List[str]) -
                 updated += 1
 
         if updated > 0:
-            # has_instructions: 모든 행에 instruction이 채워졌는지 확인
+            # has_instructions: text row in  instruction  text text check
             all_filled = all(
                 r.get("instruction_raw") and r.get("instruction_uni")
                 for r in ann_data.get("annotations", [])
             )
-            # 완료 시 batch_id 제거, 미완료 시 유지 (재제출 방지)
+            # finish text batch_id remove, textfinish text keep (text text)
             existing_batch_id = ann_data.get("batch_id") if not all_filled else None
             save_game_annotations_to_cache(
                 cache_dir, game, key,
@@ -813,7 +813,7 @@ def update_caches(results: Dict[str, dict], cache_dir: Path, games: List[str]) -
                 n_samples=ann_data.get("n_samples", 0),
                 batch_id=existing_batch_id,
             )
-            logger.info(f"  {game}/{key[:12]}….ann.json: {updated}개 업데이트"
+            logger.info(f"  {game}/{key[:12]}….ann.json: {updated}text update"
                         + (f" (has_instructions={all_filled})" if all_filled else ""))
         total += updated
     return total
@@ -823,19 +823,19 @@ def update_caches(results: Dict[str, dict], cache_dir: Path, games: List[str]) -
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="OpenAI Batch API로 instruction_raw / instruction_uni 생성 (ann.json 저장)"
+        description="OpenAI Batch API to  instruction_raw / instruction_uni create (ann.json save)"
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--submit",   action="store_true",
-                      help="JSONL 생성 + Batch API 제출")
+                      help="JSONL create + Batch API text")
     mode.add_argument("--retrieve", metavar="BATCH_ID",
-                      help="결과 조회 + ann.json 업데이트")
+                      help="result text + ann.json update")
     mode.add_argument("--status",   metavar="BATCH_ID",
-                      help="배치 상태 확인")
+                      help="batch text check")
     mode.add_argument("--run",      action="store_true",
-                      help="제출 → 대기 → ann.json 업데이트 (소규모 테스트)")
+                      help="text → text → ann.json update (text text)")
     mode.add_argument("--log",      action="store_true",
-                      help="제출된 배치 로그 출력 (batch_log.csv)")
+                      help="text batch  to text text (batch_log.csv)")
 
     parser.add_argument("--games", nargs="+",
                         default=["doom", "zelda", "sokoban", "pokemon", "dungeon"],
@@ -845,9 +845,9 @@ def main() -> None:
                         help="0=region 1=path_length 2=interactable 3=hazard 4=collectable")
     parser.add_argument("--cache-dir",    type=Path, default=_CACHE_DIR)
     parser.add_argument("--limit",        type=int,  default=None,
-                        help="처리할 최대 행 수 (테스트용)")
+                        help="processtext maximum row text (text for )")
     parser.add_argument("--force",        action="store_true",
-                        help="이미 채워진 instruction도 재생성")
+                        help=" text text instruction also  textcreate")
     parser.add_argument("--poll-interval",type=int,  default=10)
     args = parser.parse_args()
 
@@ -855,7 +855,7 @@ def main() -> None:
     if args.log:
         rows = _read_batch_log()
         if not rows:
-            print("(배치 로그 없음)")
+            print("(batch  to text none)")
         else:
             for r in rows:
                 print(r)
@@ -871,20 +871,20 @@ def main() -> None:
     if args.retrieve:
         results = retrieve_batch_results(args.retrieve)
         n = update_caches(results, args.cache_dir, args.games)
-        logger.info(f"총 {n}개 행 업데이트 완료")
+        logger.info(f"total {n}text row update finish")
         return
 
     # ── submit / run ──
     system_prompt = load_system_prompt()
 
-    logger.info(f"캐시 로드: {args.cache_dir}")
+    logger.info(f"cache load: {args.cache_dir}")
     cache_by_game = load_cache_by_game(args.cache_dir)
     if not cache_by_game:
-        logger.error("캐시 없음")
+        logger.error("cache none")
         return
-    logger.info("캐시: " + ", ".join(f"{g}={len(v)}" for g, v in sorted(cache_by_game.items())))
+    logger.info("cache: " + ", ".join(f"{g}={len(v)}" for g, v in sorted(cache_by_game.items())))
 
-    # threshold=None 행은 GPT 없이 "None" 으로 직접 채움
+    # threshold=None row  GPT text  "None"  as  direct text
     fill_none_instructions(
         games=args.games, enums=args.enums,
         cache_dir=args.cache_dir, force=args.force,
@@ -903,24 +903,24 @@ def main() -> None:
                 limit=args.limit,
             )
             if jsonl_path is None:
-                logger.info(f"  {game}: 생성할 요청 없음, 건너뜀")
+                logger.info(f"  {game}: createtext request none, text")
                 continue
 
             n_requests = sum(1 for _ in jsonl_path.open(encoding="utf-8"))
             batch_id = submit_batch(jsonl_path, [game], args.enums, n_requests)
             submitted_batches.append((batch_id, game))
         except Exception as e:
-            logger.error(f"  {game}: 제출 실패 → {e}, 건너뜀")
+            logger.error(f"  {game}: text failure → {e}, text")
 
     if not submitted_batches:
-        logger.info("제출된 배치 없음")
+        logger.info("text batch none")
         return
 
     if args.run:
-        logger.info(f"완료 대기 중 (interval={args.poll_interval}s) …")
-        all_batches   = list(submitted_batches)           # 고정 순서
-        n_block       = len(all_batches) + 1              # header + 배치당 1줄 (고정)
-        bst: Dict[str, dict] = {                          # 배치별 상태 캐시
+        logger.info(f"finish text  during  (interval={args.poll_interval}s) …")
+        all_batches   = list(submitted_batches)           # fixed order
+        n_block       = len(all_batches) + 1              # header + batchtext 1text (fixed)
+        bst: Dict[str, dict] = {                          # batchtext text cache
             bid: {"game": game, "status": "submitted", "completed": 0, "total": 0}
             for bid, game in all_batches
         }
@@ -942,7 +942,7 @@ def main() -> None:
                     "total":     info["request_counts"]["total"],
                 })
 
-            # 직전 블록 덮어쓰기
+            # text before  text overwrite
             if not first:
                 sys.stdout.write(f"\033[{n_block}A")
             first = False
@@ -956,7 +956,7 @@ def main() -> None:
                 sys.stdout.write(f"\r\033[K  [{game:8s}] {bs['status']:15s}  {bar}\n")
             sys.stdout.flush()
 
-            # 완료/실패 처리 (logger 출력은 블록 아래에 쌓임)
+            # finish/failure process (logger text  text below in  text)
             for batch_id in list(pending_ids):
                 status = bst[batch_id]["status"]
                 game   = bst[batch_id]["game"]
@@ -966,17 +966,17 @@ def main() -> None:
                         results = retrieve_batch_results(batch_id)
                         n = update_caches(results, args.cache_dir, [game])
                         total_updated += n
-                        logger.info(f"  [{game}] 완료 → {n}개 업데이트")
+                        logger.info(f"  [{game}] finish → {n}text update")
                     except Exception as e:
-                        logger.error(f"  [{game}] 결과 조회/업데이트 실패 → {e}")
+                        logger.error(f"  [{game}] result text/update failure → {e}")
                 elif status in ("failed", "expired", "cancelled"):
                     pending_ids.discard(batch_id)
-                    logger.error(f"  [{game}] 배치 실패/만료/취소: {status}")
+                    logger.error(f"  [{game}] batch failure/text/text: {status}")
 
         print()
-        logger.info(f"총 {total_updated}개 행 업데이트 완료")
+        logger.info(f"total {total_updated}text row update finish")
     else:
-        logger.info("\n배치 제출 완료. 결과 조회:")
+        logger.info("\nbatch text finish. result text:")
         for batch_id, game in submitted_batches:
             logger.info(
                 f"  [{game}] "

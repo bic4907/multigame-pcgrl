@@ -1,8 +1,8 @@
 """
 instruct_rl/utils/callbacks.py
 ==============================
-학습/평가 로그 콜백 함수 모음.
-train_cpcgrl.py 에서 분리.
+training/evaluation  to text callback function text.
+train_cpcgrl.py  in  separate.
 """
 from timeit import default_timer as timer
 
@@ -152,13 +152,13 @@ def loss_callback(metric, loss, config, writer):
 
 
 def create_log_handler(config, handler_classes, train_start_time, steps_prev_complete):
-    """MultipleLoggingHandler 를 생성·초기화하고 반환한다.
+    """MultipleLoggingHandler   create·initializetext returntext.
 
     Parameters
     ----------
     config : Config
     handler_classes : list[type]
-        TensorBoardLoggingHandler, WandbLoggingHandler, CSVLoggingHandler 등.
+        TensorBoardLoggingHandler, WandbLoggingHandler, CSVLoggingHandler text.
     train_start_time : float
     steps_prev_complete : int
 

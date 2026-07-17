@@ -1,12 +1,12 @@
 """
 train_clip_decoder_unseen.py
 ============================
-Seen/Unseen 게임 분리 + Few-shot Ratio Sweep 실험 스크립트.
+Seen/Unseen game separate + Few-shot Ratio Sweep experiment script.
 
-Seen 게임의 전체 학습 데이터 + Unseen 게임의 가변 비율 학습 데이터로
-CLIP Decoder 모델을 학습하고, **고정된** 테스트셋에서 게임별 reward_accuracy를 측정한다.
+Seen game of  all training data + Unseen game of   text ratio training data to
+CLIP Decoder text  trainingtext, **fixedtext** text in  gametext reward_accuracy  measuretext.
 
-최종 출력: few-shot ratio (x) vs. per-game reward accuracy (y) 그래프
+text text: few-shot ratio (x) vs. per-game reward accuracy (y) text
 
 Usage
 -----
@@ -72,9 +72,9 @@ logging.getLogger("absl").setLevel(logging.ERROR)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def parse_unseen_game_names(unseen_str: Optional[str]) -> Set[str]:
-    """2글자 약어 문자열 → full game name set.
+    """2text abbreviation string → full game name set.
 
-    None 또는 빈 문자열이면 빈 set을 반환한다.
+    None text  text string text text set  returntext.
 
     Examples
     --------
@@ -115,7 +115,7 @@ def _canonical_game_counts(game_counts: Dict[str, int]) -> Dict[str, int]:
 
 
 def subset_clip_dataset(dataset: CLIPDataset, indices: np.ndarray) -> CLIPDataset:
-    """CLIPDataset에서 주어진 인덱스의 서브셋을 추출한다."""
+    """CLIPDataset in  text index of  text  extracttext."""
     idx = np.asarray(indices, dtype=int)
     return CLIPDataset(
         class_ids=dataset.class_ids[idx],
@@ -141,17 +141,17 @@ def split_dataset_by_game(
     Dict[str, np.ndarray],  # game → test indices
     np.ndarray,             # all game names (per sample)
 ]:
-    """전체 데이터셋을 게임별로 train pool / test 로 분할한다.
+    """all dataset  gameby train pool / test  to  splittext.
 
-    - 모든 게임(seen + unseen)에서 ``test_ratio`` 만큼 테스트 세트로 분리
-    - 분할은 ``test_seed`` 로 결정 → 동일한 시드에서 항상 같은 테스트셋
-    - train pool 내 unseen 게임 데이터의 실제 사용량은 sweep ratio 에 의해 결정
+    - text game(seen + unseen) in  ``test_ratio`` text text text to  separate
+    - split  ``test_seed``  to  text → sametext seed in  always same text
+    - train pool  inside  unseen game data of  text text for text  sweep ratio  in   of text text
 
     Returns
     -------
     game_train_pool : {game_name: ndarray of indices}
     game_test       : {game_name: ndarray of indices}
-    all_game_names  : ndarray of str  (길이 = len(full_dataset.class_ids))
+    all_game_names  : ndarray of str  (text  = len(full_dataset.class_ids))
     """
     all_game_names = np.array(
         [rc["game_name"] for rc in full_dataset.reward_cond]
@@ -168,7 +168,7 @@ def split_dataset_by_game(
         perm = rng.permutation(game_indices)
         n_test = max(1, int(len(perm) * test_ratio))
         game_test[game] = perm[:n_test]
-        game_train_pool[game] = perm[n_test:]  # 고정 순서 (ratio 서브셋은 prefix)
+        game_train_pool[game] = perm[n_test:]  # fixed order (ratio text  prefix)
         tag = "(unseen)" if game in unseen_game_names else "(seen)"
         logger.debug(
             "split_dataset_by_game [%s] %s: total=%d, train_pool=%d, test=%d",
@@ -184,12 +184,12 @@ def build_train_indices_for_ratio(
     ratio: float,
     seen_ratio: float = 1.0,
 ) -> np.ndarray:
-    """주어진 few-shot ``ratio`` 에 대해 학습 인덱스를 구성한다.
+    """text few-shot ``ratio``  in  text training index  text.
 
-    - Seen 게임: train pool 중 seen_ratio 비율만큼 (prefix) 사용
-    - Unseen 게임: train pool 중 ratio 비율만큼 (prefix) 사용
-    - ratio=0.0 이면 unseen 게임의 학습 데이터 = 0
-    - seen_ratio=0.0 이면 seen 게임의 학습 데이터 = 0
+    - Seen game: train pool  during  seen_ratio ratiotext (prefix) text for
+    - Unseen game: train pool  during  ratio ratiotext (prefix) text for
+    - ratio=0.0  text unseen game of  training data = 0
+    - seen_ratio=0.0  text seen game of  training data = 0
     """
     train_indices: List[np.ndarray] = []
     for game, pool in sorted(game_train_pool.items()):
@@ -207,7 +207,7 @@ def build_train_indices_for_ratio(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Train Step (JIT) — reward_pred 추가
+#  Train Step (JIT) — reward_pred text
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17, 18))
@@ -280,10 +280,10 @@ def train_step(
         )
 
     def safe_l2_normalize(x, axis=-1, eps=1e-6):
-        """0-vector 근처에서도 gradient가 NaN으로 터지지 않는 L2 normalize.
+        """0-vector text in  also  gradient  NaN as  text text  L2 normalize.
 
-        jnp.linalg.norm()은 zero-vector에서 gradient가 NaN이 되므로,
-        sum-of-squares + jax.lax.rsqrt(maximum(...)) 형태로 우회한다.
+        jnp.linalg.norm()  zero-vector in  gradient  NaN  text to ,
+        sum-of-squares + jax.lax.rsqrt(maximum(...)) form to  text.
         """
         sq_norm = jnp.sum(x * x, axis=axis, keepdims=True)
         inv_norm = jax.lax.rsqrt(jnp.maximum(sq_norm, eps * eps))
@@ -292,13 +292,13 @@ def train_step(
     def continuous_direction_alignment(text_embed, game_id, reward_target, condition_target):
         """Continuous Task-wise Cross-game Direction Alignment Loss.
 
-        각 (game, task) 그룹에서 condition 값과 (L2-normalized) text embedding 사이의
-        slope vector를 OLS-style centered regression 으로 추정한 후, 같은 task 안의
-        서로 다른 game 간 방향 벡터를 cosine distance 로 정렬한다.
+        each (game, task) text in  condition text and  (L2-normalized) text embedding text  of
+        slope vector  OLS-style centered regression  as  text  after , same task text of
+        text to  different game text text text  cosine distance  to  sorttext.
 
-        주의: invalid (game, task) 그룹은 normalize **이전에** slope를 0으로 차단해야
-        한다. slope=0 인 그룹에 normalize gradient가 흐르면 NaN이 발생하고, 이후
-        mask를 곱해도 (NaN * 0 = NaN) 으로 parameter 전체가 오염된다.
+        warning: invalid (game, task) text  normalize **previous in ** slope  0 as  text
+        text. slope=0 text text in  normalize gradient  text NaN  text,   after
+        mask  text also  (NaN * 0 = NaN)  as  parameter all  text.
 
         Returns: (loss, valid_pair_count)
         """
@@ -327,27 +327,27 @@ def train_step(
         slope_num = (m_dc[..., None] * dz).sum(-2)                         # (G, T, D)
         slope_den = (m_dc * dc).sum(-1)                                    # (G, T) = sum m*dc^2
 
-        # ── valid group 판정 (slope 계산 전) ──
+        # ── valid group text (slope compute  before ) ──
         c_var = slope_den / safe_n                                         # (G, T)
         valid = (n_gt >= float(delta_min_count)) & (c_var > delta_var_eps) # (G, T)
 
-        # ── slope_den이 매우 작은 invalid group에서 slope 폭주 방지 ──
+        # ── slope_den  text text  invalid group in  slope text text ──
         safe_slope_den = jnp.where(valid, slope_den, 1.0)                  # (G, T)
         slope = slope_num / safe_slope_den[..., None]                      # (G, T, D)
-        # invalid group은 normalize 이전에 완전히 0으로 차단
+        # invalid group  normalize previous in  text before text 0 as  text
         slope = jnp.where(valid[..., None], slope, 0.0)                    # (G, T, D)
 
-        # ── NaN-safe normalize + invalid 방향 재차단 ──
+        # ── NaN-safe normalize + invalid text text ──
         d_dir = safe_l2_normalize(slope, axis=-1, eps=1e-6)               # (G, T, D)
         d_dir = jnp.where(valid[..., None], d_dir, 0.0)                    # (G, T, D)
 
-        # task별 cross-game cosine: (G, G, T)
+        # tasktext cross-game cosine: (G, G, T)
         cos_mat = jnp.einsum('gtd,htd->ght', d_dir, d_dir)
         pair_valid = valid[:, None, :] & valid[None, :, :]                 # (G, G, T)
         tri = jnp.triu(jnp.ones((G, G), dtype=bool), k=1)                  # (G, G)
         pair_valid = pair_valid & tri[:, :, None]
 
-        # NaN * 0 방지: multiply mask 대신 where 사용
+        # NaN * 0 text: multiply mask text where text for
         pair_loss = jnp.where(pair_valid, 1.0 - cos_mat, 0.0)
         total_pairs = pair_valid.astype(jnp.float32).sum()
         delta_loss = pair_loss.sum() / jnp.maximum(total_pairs, 1.0)
@@ -397,14 +397,14 @@ def train_step(
         reward_accuracy = jnp.mean(reward_pred == reward_target)
 
         # ── (3) Decoder: condition regression loss (huber or mae) ──
-        condition_pred = outputs["condition_pred"]    # (B, num_classes) — [0,1] 정규화
-        condition_target = batch.condition_target      # (B,) — [0,1] 정규화
-        # 각 샘플의 predicted condition을 gt reward_enum 인덱스로 gather
+        condition_pred = outputs["condition_pred"]    # (B, num_classes) — [0,1] normalize
+        condition_target = batch.condition_target      # (B,) — [0,1] normalize
+        # each sample of  predicted condition  gt reward_enum index to  gather
         per_sample_cond = condition_pred[jnp.arange(condition_pred.shape[0]), reward_target]
         abs_diff = jnp.abs(per_sample_cond - condition_target)
 
-        # 원본 스케일로 변환한 값/타깃 및 오차 (로깅용)
-        condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes) — 원래 linear 스케일
+        # text text to  converttext text/text text error ( to text for )
+        condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes) — text linear text
         per_sample_cond_raw = condition_pred_raw[jnp.arange(condition_pred_raw.shape[0]), reward_target]
         target_log = condition_target * (norm_max_arr[reward_target] - norm_min_arr[reward_target]) + norm_min_arr[reward_target]
         target_raw = jnp.expm1(jnp.maximum(target_log, 0.0))
@@ -418,14 +418,14 @@ def train_step(
             reg_per_sample_raw = abs_diff_raw
         reg_loss = jnp.mean(reg_per_sample)
         reg_loss_raw = jnp.mean(reg_per_sample_raw)
-        # linear 공간 normalized [0,1] MAE (모니터링용 — gradient 계산에 불포함)
-        # norm_min/max는 log1p 공간이므로 expm1로 linear 스케일로 복원 후 정규화
+        # linear text normalized [0,1] MAE (text for  — gradient compute in  text)
+        # norm_min/max  log1p text text to  expm1 to  linear text to  text  after  normalize
         linear_min = jnp.expm1(norm_min_arr[reward_target])
         linear_max = jnp.expm1(norm_max_arr[reward_target])
         linear_range = linear_max - linear_min + 1e-8
         condition_mae_normalized = jnp.mean(jnp.abs(per_sample_cond_raw - target_raw) / linear_range)
 
-        # ── Per-reward_enum regression 메트릭 ──
+        # ── Per-reward_enum regression text ──
         per_enum_huber = jnp.zeros(num_reward_classes)
         per_enum_mae = jnp.zeros(num_reward_classes)
         per_enum_huber_raw = jnp.zeros(num_reward_classes)
@@ -434,7 +434,7 @@ def train_step(
 
         for eidx in range(num_reward_classes):
             mask = (reward_target == eidx).astype(jnp.float32)        # (B,)
-            count = jnp.sum(mask) + 1e-8                               # 0-div 방지
+            count = jnp.sum(mask) + 1e-8                               # 0-div text
             per_enum_huber = per_enum_huber.at[eidx].set(jnp.sum(reg_per_sample * mask) / count)
             per_enum_mae = per_enum_mae.at[eidx].set(jnp.sum(abs_diff * mask) / count)
             per_enum_huber_raw = per_enum_huber_raw.at[eidx].set(jnp.sum(reg_per_sample_raw * mask) / count)
@@ -442,8 +442,8 @@ def train_step(
             per_enum_count = per_enum_count.at[eidx].set(jnp.sum(mask))
 
         # ── Continuous Task-wise Cross-game Direction Alignment ──
-        # 기본값은 delta_weight=0.0이어도 alignment metric을 모니터링한다.
-        # compute_delta_when_zero=False일 때만 baseline/eval의 불필요한 계산을 건너뛴다.
+        # default value  delta_weight=0.0 text also  alignment metric  text.
+        # compute_delta_when_zero=Falsetext text baseline/eval of  text compute  text.
         if delta_weight != 0.0 or compute_delta_when_zero:
             delta_loss, delta_valid_pairs = continuous_direction_alignment(
                 text_embed, batch.game_id, reward_target, condition_target
@@ -481,14 +481,14 @@ def train_step(
             "per_enum_reg_loss_raw": per_enum_huber_raw,
             "per_enum_reg_loss_raw_mae": per_enum_mae_raw,
             "per_enum_count": per_enum_count,
-            # ── per-sample scatter / per-enum 통계 용 ──
+            # ── per-sample scatter / per-enum text  for  ──
             "per_sample_cond_norm": per_sample_cond,           # (B,) normalized [0,1] pred
             "per_sample_cond_target_norm": condition_target,   # (B,) normalized [0,1] target
             "per_sample_cond_raw": per_sample_cond_raw,        # (B,) linear-scale pred
             "per_sample_cond_target_raw": target_raw,      # (B,) linear-scale target
             # ── Continuous direction alignment ──
-            "continuous_delta_loss": delta_loss,                          # raw alignment loss (weight 미적용, 항상 모니터링)
-            "continuous_delta_loss_weighted": delta_weight * delta_loss,  # objective에 실제 반영된 값
+            "continuous_delta_loss": delta_loss,                          # raw alignment loss (weight textapply, always text)
+            "continuous_delta_loss_weighted": delta_weight * delta_loss,  # objective in  text applytext text
             "valid_direction_pair_count": delta_valid_pairs
         }
         if include_retrieval_ranks:
@@ -511,10 +511,10 @@ def train_step(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Sequential evaluation (테스트셋 순서 보존)
+#  Sequential evaluation (text order preserve)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# reward_enum 이름 매핑 (0-based: CSV reward_enum은 0-indexed)
+# reward_enum name text (0-based: CSV reward_enum  0-indexed)
 _REWARD_ENUM_NAMES = {
     0: "region",
     1: "path_length",
@@ -525,12 +525,12 @@ _REWARD_ENUM_NAMES = {
 
 
 def _log_reward_condition_summary(dataset: MultiGameDataset):
-    """학습 시작 전에 reward_enum별 condition 범위를 출력한다 (게임 구분 없이 enum 기준)."""
+    """training start  before  in  reward_enumtext condition range  text (game text text  enum basis)."""
     from collections import defaultdict
 
     # reward_enum → [(game, condition_value)]
     enum_stats: dict = defaultdict(list)
-    # game → reward_enum → [condition_values]  (게임별 분해용)
+    # game → reward_enum → [condition_values]  (gametext text for )
     game_enum_stats: dict = defaultdict(lambda: defaultdict(list))
 
     for s in dataset._samples:
@@ -548,7 +548,7 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
     logger.info("  Reward Enum & Condition Range Summary  (raw, before normalization)")
     logger.info("=" * 80)
 
-    # ── reward_enum별 전체 통계 ──
+    # ── reward_enumtext all text ──
     logger.info(f"  {'enum':>5}  {'name':<22} {'count':>6}  {'min':>10}  {'max':>10}  {'mean':>10}  {'std':>10}")
     logger.info(f"  {'-'*5}  {'-'*22} {'-'*6}  {'-'*10}  {'-'*10}  {'-'*10}  {'-'*10}")
 
@@ -569,7 +569,7 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
 
     logger.info("")
 
-    # ── 게임별 분해 ──
+    # ── gametext text ──
     for game in sorted(game_enum_stats.keys()):
         enum_dict = game_enum_stats[game]
         n_total = sum(len(v) for v in enum_dict.values())
@@ -587,7 +587,7 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
                 logger.info(f"    enum {re_id} ({name}): n={len(vals)}, range=N/A")
     logger.info("")
 
-    # 전체 요약
+    # all summary
     all_enums = set(enum_stats.keys())
     logger.info(f"  Total games: {len(game_enum_stats)},  "
                 f"Unique reward_enums (0-based): {sorted(all_enums)},  "
@@ -601,7 +601,7 @@ def make_train(config: CLIPDecoderTrainConfig):
         rng_key, subkey = jax.random.split(rng_key)
         dataset = build_multigame_dataset(config)
 
-        # ── 학습 전 reward_enum / condition 범위 요약 출력 ──
+        # ── training  before  reward_enum / condition range summary text ──
         _log_reward_condition_summary(dataset)
 
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
@@ -623,13 +623,13 @@ def make_train(config: CLIPDecoderTrainConfig):
         # ── Save norm stats to ckpt directory (used for denorm during inference) ──
         save_norm_stats(config, cond_norm_min, cond_norm_max)
 
-        # scatter plot용 class_id → game_name 매핑
+        # scatter plot for  class_id → game_name text
         class_id2game_name = {}
         full_ds = dataset_builder.get_dataset()
         for cid, rc in zip(full_ds.class_ids, full_ds.reward_cond):
             class_id2game_name[int(cid)] = rc.get("game_name", "unknown")
 
-        # ── 정규화 파라미터 출력 ──
+        # ── normalize parameter text ──
         logger.info("  Per-reward_enum condition normalization applied:")
         logger.info(f"  {'enum(0idx)':>10}  {'name':<22} {'raw_min':>10}  {'raw_max':>10}  {'→ normalized':>12}")
         for eidx in sorted(cond_norm_min.keys()):
@@ -652,7 +652,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             mode += "_state"
         config.encoder.mode = mode
 
-        # ── norm stats를 jnp 배열로 변환 (모델 내 역변환용) ──
+        # ── norm stats  jnp array to  convert (text  inside  textconvert for ) ──
         num_cls = config.decoder.num_reward_classes
         norm_min_arr = jnp.array([cond_norm_min.get(i, 0.0) for i in range(num_cls)], dtype=jnp.float32)
         norm_max_arr = jnp.array([cond_norm_max.get(i, 1.0) for i in range(num_cls)], dtype=jnp.float32)
@@ -693,7 +693,7 @@ def evaluate_per_game(
     Dict[int, float],
     List[Dict[str, object]],
 ]:
-    """고정된 테스트셋에서 **게임별** reward accuracy 와 reg_loss를 계산한다.
+    """fixedtext text in  **gametext** reward accuracy  and  reg_loss  computetext.
 
     Returns
     -------
@@ -737,7 +737,7 @@ def evaluate_per_game(
         indices = np.arange(start_idx, end_idx)
         actual_size = len(indices)
 
-        # 마지막 배치 패딩
+        # text batch padding
         if actual_size < batch_size:
             pad = np.arange(batch_size - actual_size) % n_test
             indices = np.concatenate([indices, pad])
@@ -803,7 +803,7 @@ def evaluate_per_game(
             all_class_ids.extend(np.asarray(class_ids).reshape(-1)[:actual_size].astype(int).tolist())
         all_preds.extend(preds[:actual_size].tolist())
         all_targets.extend(targets[:actual_size].tolist())
-        # batch-level reg_loss를 actual_size만큼 복제 (batch 평균이므로)
+        # batch-level reg_loss  actual_sizetext text (batch mean text to )
         all_reg_losses.extend([batch_reg] * actual_size)
         all_abs_diffs.extend(batch_abs_diff[:actual_size].tolist())
         all_abs_diffs_raw.extend(batch_abs_diff_raw[:actual_size].tolist())
@@ -818,7 +818,7 @@ def evaluate_per_game(
             all_state2text_rank.extend(batch_state2text_rank[:actual_size].astype(int).tolist())
             all_text2state_rank.extend(batch_text2state_rank[:actual_size].astype(int).tolist())
 
-    # ── Per-game accuracy 집계 ──
+    # ── Per-game accuracy text ──
     all_preds_arr = np.array(all_preds[:n_test])
     all_targets_arr = np.array(all_targets[:n_test])
     all_class_ids_arr = np.array(all_class_ids[:n_test]) if include_prediction_rows else np.array([])
@@ -860,7 +860,7 @@ def evaluate_per_game(
         per_game_acc["unseen_overall"] = float(correct[unseen_mask].mean())
         per_game_reg["unseen_overall"] = float(all_reg_arr[unseen_mask].mean())
 
-    # ── Per reward_enum 통계 (전체 테스트셋 기준) ──
+    # ── Per reward_enum text (all text basis) ──
     all_pred_norm_arr = np.array(all_pred_norm[:n_test])
     all_target_norm_arr = np.array(all_target_norm[:n_test])
     all_pred_raw_arr = np.array(all_pred_raw[:n_test])
@@ -982,7 +982,7 @@ def _build_scatter_data_from_arrays(
     target_raw: np.ndarray,
     game_names: Optional[np.ndarray] = None,
 ) -> Dict[int, Dict[str, np.ndarray]]:
-    """훈련 중 수집한 per-sample 예측/타깃으로 enum별 scatter dict 생성."""
+    """text  during  text per-sample text/text as  enumtext scatter dict create."""
     if len(reward_enums) == 0:
         return {}
 
@@ -1026,7 +1026,7 @@ def _compute_train_set_metrics_from_arrays(
     train_game_names: np.ndarray,
     unseen_game_names: Set[str],
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, float]]:
-    """학습 중 수집한 per-sample 값으로 train-set 지표를 재구성한다."""
+    """training  during  text per-sample text as  train-set texttable  text."""
     reward_pred_arr = np.asarray(reward_pred, dtype=np.int64)
     reward_target_arr = np.asarray(reward_target, dtype=np.int64)
     reg_loss_arr = np.asarray(reg_loss, dtype=np.float32)
@@ -1154,7 +1154,7 @@ def get_train_state(config, rng_key, cond_norm_min=None, cond_norm_max=None):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Single-ratio 학습 + 평가
+#  Single-ratio training + evaluation
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def train_and_evaluate_ratio(
@@ -1172,20 +1172,20 @@ def train_and_evaluate_ratio(
     unseen_eval_sample_ids: Optional[np.ndarray] = None,
     num_games: int = 1,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, Dict[str, np.ndarray]], Dict[int, float]]:
-    """하나의 few-shot ratio에 대해 모델을 처음부터 학습하고 평가한다.
+    """text of  few-shot ratio in  text text  text trainingtext evaluationtext.
 
     Returns
     -------
     per_game_acc, per_game_reg_loss, per_game_enum_diff, scatter_data, per_enum_reg_loss
 
-    NOTE: 성능은 **train set** 기준으로 리포트한다.
+    NOTE: text  **train set** basis as  text.
     """
 
     n_train = len(train_ds.class_ids)
     n_train_batch = max(1, math.ceil(n_train / config.batch_size))
     num_cls = config.decoder.num_reward_classes
 
-    # steps_per_epoch 업데이트
+    # steps_per_epoch update
     config.steps_per_epoch = n_train_batch
 
     mode = "text"
@@ -1207,7 +1207,7 @@ def train_and_evaluate_ratio(
     )
 
 
-    # ── train_ds 기준 평가용 game_names ──
+    # ── train_ds basis evaluation for  game_names ──
     train_game_names = np.array(
         [rc["game_name"] for rc in train_ds.reward_cond]
     )
@@ -1225,12 +1225,12 @@ def train_and_evaluate_ratio(
 
     # ── Training Loop ──
     n_train_batch = math.ceil(len(train_ds.class_ids) / config.batch_size)
-    scatter_freq: int = int(getattr(config, "scatter_freq", 1000))  # scatter plot 업로드 주기
+    scatter_freq: int = int(getattr(config, "scatter_freq", 1000))  # scatter plot upload text
     max_pts: int = int(getattr(config, "n_max_points", 1000))
 
-    # ── Unseen game 평가 서브셋 ──
-    # unseen_eval_ds가 주입된 경우(전체 unseen pool 기반): 그대로 사용
-    # 아닌 경우: test set에서 unseen 샘플만 필터링 (fallback)
+    # ── Unseen game evaluation text ──
+    # unseen_eval_ds  injecttext text(all unseen pool based): as-is text for
+    # text text: test set in  unseen sampletext filtering (fallback)
     if unseen_eval_ds is not None and unseen_eval_game_names is not None and len(unseen_eval_ds.class_ids) > 0:
         unseen_test_ds = unseen_eval_ds
         unseen_test_game_names_arr = unseen_eval_game_names
@@ -1369,7 +1369,7 @@ def train_and_evaluate_ratio(
                 wandb.log(unseen_imgs)
                 logger.info("  Unseen scatter plot uploaded to wandb (epoch %d)", epoch_value)
 
-    # ── W&B Unseen baseline 평가 (학습 전, epoch 0) ──
+    # ── W&B Unseen baseline evaluation (training  before , epoch 0) ──
     _unseen_eval_freq: int = int(getattr(config, "unseen_eval_freq", 100))
     _unseen_scatter_freq: int = int(getattr(config, "unseen_scatter_freq", 500))
     _run_unseen_eval(
@@ -1379,7 +1379,7 @@ def train_and_evaluate_ratio(
         do_prediction_export=export_unseen_predictions and _unseen_eval_freq > 0,
     )
 
-    # ── 초기 Checkpoint 저장 (학습 전, epoch 0) ──
+    # ── initial Checkpoint save (training  before , epoch 0) ──
     if hasattr(config, 'ckpt_freq') and config.ckpt_freq > 0:
         save_encoder_checkpoint(config, train_state, step=0)
 
@@ -1462,7 +1462,7 @@ def train_and_evaluate_ratio(
                 epoch_delta_pair_count += float(metrics["valid_direction_pair_count"])
                 epoch_delta_loss_weighted += float(metrics["continuous_delta_loss_weighted"])
 
-                # ── Scatter / per-sample 집계 (실제 train 샘플만) ──
+                # ── Scatter / per-sample text (text train sampletext) ──
                 actual_size = min(config.batch_size, max(0, n_train - batch_idx * config.batch_size))
                 if actual_size > 0:
                     batch_reward_target = np.array(jax.device_get(batch.reward_enum_target))[:actual_size].astype(int).tolist()
@@ -1513,7 +1513,7 @@ def train_and_evaluate_ratio(
             epoch_delta_pair_count /= n_batches
             epoch_delta_loss_weighted /= n_batches
 
-        # ── 에폭 단위 scatter + epoch 기반 train-set 지표 ──
+        # ──  in text textabove scatter + epoch based train-set texttable ──
         epoch_scatter_data = _build_scatter_data_from_arrays(
             np.array(epoch_reward_enums, dtype=np.int64),
             np.array(epoch_pred_norm, dtype=np.float32),
@@ -1546,7 +1546,7 @@ def train_and_evaluate_ratio(
                 epoch_reg_loss_raw, epoch_cls_loss, epoch_contrastive_loss,
             )
 
-        # ── W&B 스칼라 로깅 (매 에폭) ──
+        # ── W&B scalar  to text (text  in text) ──
         if wandb.run is not None:
             selected_reg_per_enum = {}
             total_reg_cnt = 0.0
@@ -1591,7 +1591,7 @@ def train_and_evaluate_ratio(
                 }
             )
 
-        # ── W&B Scatter plot 업로드 (scatter_freq 에폭마다, raw 공간만) ──
+        # ── W&B Scatter plot upload (scatter_freq  in text, raw text) ──
         if wandb.run is not None and scatter_freq > 0 and (epoch + 1) % scatter_freq == 0:
             scatter_data_mid = epoch_scatter_data
             regression_scatter_paths = create_regression_scatter_plots_per_enum(
@@ -1609,8 +1609,8 @@ def train_and_evaluate_ratio(
                 wandb.log(epoch_imgs)
                 logger.info("  Scatter plot uploaded to wandb (epoch %d)", epoch + 1)
 
-        # ── W&B Unseen 평가 (unseen_eval_freq / unseen_scatter_freq 에폭마다, test set 기반) ──
-        # test set 기반이므로 unseen_ratio 설정과 무관하게 동작
+        # ── W&B Unseen evaluation (unseen_eval_freq / unseen_scatter_freq  in text, test set based) ──
+        # test set based text to  unseen_ratio config and  text text
         _unseen_eval_freq: int = int(getattr(config, "unseen_eval_freq", 100))
         _unseen_scatter_freq: int = int(getattr(config, "unseen_scatter_freq", 500))
         _do_unseen_eval = _unseen_eval_freq > 0 and (epoch + 1) % _unseen_eval_freq == 0
@@ -1623,7 +1623,7 @@ def train_and_evaluate_ratio(
             do_prediction_export=_do_unseen_prediction_export,
         )
 
-        # ── Checkpoint 저장 ──
+        # ── Checkpoint save ──
         if hasattr(config, 'ckpt_freq') and config.ckpt_freq > 0:
             if (epoch + 1) % config.ckpt_freq == 0:
                 save_encoder_checkpoint(config, train_state, step=epoch + 1)
@@ -1662,7 +1662,7 @@ def train_and_evaluate_ratio(
 #  Visualization: Few-shot Ratio vs. Per-game Reward Accuracy
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# ── 고정 게임별 색상 팔레트 (visualizer/plots.py와 동일) ─────────────────────
+# ── fixed gametext color palette (visualizer/plots.py and  same) ─────────────────────
 _GAME_SCATTER_COLORS = {
     "dungeon": "#4C72B0",
     "sokoban": "#DD8452",
@@ -1673,13 +1673,13 @@ _GAME_SCATTER_COLORS = {
 
 
 def _get_game_color(game: str, color_map: Optional[Dict[str, str]] = None, fallback_seed: int = 0) -> str:
-    """게임별 고정 색상을 반환한다."""
+    """gametext fixed color  returntext."""
     if color_map is None:
         color_map = _GAME_SCATTER_COLORS
     if game in color_map:
         return color_map[game]
 
-    # 새 게임 이름은 순환 팔레트로 fallback
+    # text game name  text palette to  fallback
     fallback_colors = [
         "#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3",
         "#393b79", "#637939", "#8c6d31", "#843c39", "#8c564b",
@@ -1720,9 +1720,9 @@ def create_fewshot_plot(
     unseen_game_names: Set[str],
     out_dir: str,
 ) -> str:
-    """Few-shot ratio sweep 결과를 reg_loss 단일 패널로 시각화한다.
+    """Few-shot ratio sweep result  reg_loss text text to  texteachtext.
 
-    Reward Accuracy는 wandb 스칼라로만 기록하고 이미지에는 포함하지 않는다.
+    Reward Accuracy  wandb scalar to text writetext image in   text text text.
     """
     os.makedirs(out_dir, exist_ok=True)
 
@@ -1736,7 +1736,7 @@ def create_fewshot_plot(
 
     fig, ax = plt.subplots(figsize=(3.8, 2.6))
 
-    # ── Seen / Unseen (굵은 선, legend) ──
+    # ── Seen / Unseen (text  text, legend) ──
     seen_ov = [reg_results[r].get("seen_overall", float("nan")) for r in ratios]
     unseen_ov = [reg_results[r].get("unseen_overall", float("nan")) for r in ratios]
     ax.plot(ratios, seen_ov, marker="s", markersize=4, linewidth=2.4,
@@ -1772,9 +1772,9 @@ def create_scatter_plots(
 
     Parameters
     ----------
-    scatter_data : evaluate_per_game()의 반환값
-    max_points   : 서브플롯별 최대 점 개수 (초과 시 random sampling)
-    space        : "norm" (정규화된 [0,1] 공간) or "raw" (linear 스케일)
+    scatter_data : evaluate_per_game() of  returntext
+    max_points   : text maximum text count (exceed text random sampling)
+    space        : "norm" (normalizetext [0,1] text) or "raw" (linear text)
     """
     if not scatter_data:
         logger.warning("create_scatter_plots: empty scatter_data — skipping")
@@ -1833,7 +1833,7 @@ def create_scatter_plots(
         else:
             ax.scatter(target, pred, s=6, alpha=0.45, edgecolors="none", color="#2166ac")
 
-        # y=x 기준선
+        # y=x basistext
         lo = float(min(target.min(), pred.min())) if len(pred) else 0.0
         hi = float(max(target.max(), pred.max())) if len(pred) else 1.0
         ax.plot([lo, hi], [lo, hi], linestyle="--", color="#888", linewidth=1)
@@ -1856,7 +1856,7 @@ def create_scatter_plots(
         ax.tick_params(labelsize=6)
         ax.grid(alpha=0.25)
 
-    # 빈 subplot 숨김
+    # text subplot text
     for j in range(n, nrows * ncols):
         axes[j // ncols][j % ncols].set_visible(False)
 
@@ -1877,7 +1877,7 @@ def create_regression_scatter_plots_per_enum(
     space: str = "raw",
     game_colors: Optional[Dict[str, str]] = None,
 ) -> Dict[int, str]:
-    """Enum별 regression scatter (pred vs target) 이미지를 개별 저장해 경로를 반환한다.
+    """Enumtext regression scatter (pred vs target) image  text savetext path  returntext.
 
     Returns
     -------
@@ -1977,7 +1977,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
     def train(rng_key):
         rng_key, subkey = jax.random.split(rng_key)
 
-        # ── 1. 전체 데이터셋 빌드 (한 번만) ──
+        # ── 1. all dataset build (text text) ──
         dataset = build_multigame_dataset(config)
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
@@ -1986,7 +1986,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             paired_data=dataset,
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
-            train_ratio=1.0,  # 자체 split 수행 → 빌더의 split 사용 안 함
+            train_ratio=1.0,  # text split textrow → text of  split text for  text text
             max_samples=config.max_samples,
             instruction_prefix=config.instruction_prefix,
             longtail_cut=config.longtail_cut,
@@ -1998,7 +1998,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         # ── Save norm stats to ckpt directory (used for denorm during inference) ──
         save_norm_stats(config, cond_norm_min, cond_norm_max)
 
-        # ── 2. Seen/Unseen 게임 파싱 ──
+        # ── 2. Seen/Unseen game parsing ──
         unseen_game_set = parse_unseen_game_names(config.unseen_games)
         all_game_names = np.array(
             [rc["game_name"] for rc in full_dataset.reward_cond]
@@ -2015,7 +2015,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         logger.info("  Total samples: %d", len(full_dataset.class_ids))
         logger.info("=" * 70)
 
-        # ── N_SEEN_GAMES / N_UNSEEN_GAMES를 wandb.config에 기록 ──
+        # ── N_SEEN_GAMES / N_UNSEEN_GAMES  wandb.config in  write ──
         if wandb.run is not None:
             wandb.config.update(
                 {
@@ -2025,7 +2025,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
                 allow_val_change=True,
             )
 
-        # ── 데이터셋 설정 JSON 저장 ──
+        # ── dataset config JSON save ──
         os.makedirs(config.exp_dir, exist_ok=True)
         dataset_setting = {
             "all_games": unique_games,
@@ -2041,7 +2041,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             json.dump(dataset_setting, f, indent=2, ensure_ascii=False)
         logger.info("Dataset setting saved: %s", dataset_setting_path)
 
-        # ── Encoder 학습 설정 JSON 저장 (pcgrl train/eval에서 참조용) ──
+        # ── Encoder training config JSON save (pcgrl train/eval in  text for ) ──
         encoder_config = {
             "delta_weight": config.delta_weight,
             "delta_min_group_samples": config.delta_min_group_samples,
@@ -2066,7 +2066,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             logger.warning("No unseen games found in dataset — treating all games as seen.")
             unseen_game_set = set()
 
-        # ── 3. 게임별 train pool / test 분할 (seed 고정) ──
+        # ── 3. gametext train pool / test split (seed fixed) ──
         game_train_pool, game_test, _ = split_dataset_by_game(
             full_dataset,
             unseen_game_set,
@@ -2074,7 +2074,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             test_seed=config.split_seed,
         )
 
-        # 고정 테스트 인덱스 (모든 게임)
+        # fixed text index (text game)
         test_indices = np.concatenate(
             [game_test[g] for g in sorted(game_test.keys())]
         )
@@ -2083,7 +2083,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             [rc["game_name"] for rc in test_ds.reward_cond]
         )
 
-        # 로깅: 분할 요약
+        #  to text: split summary
         logger.info("  Test set (fixed, seed=%d):", config.split_seed)
         for g in sorted(game_test.keys()):
             tag = "(unseen)" if g in unseen_game_set else "(seen)"
@@ -2093,8 +2093,8 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             )
         logger.info("  Total test: %d", len(test_indices))
 
-        # ── Unseen 평가 풀: 전체 unseen game 데이터에서 eval_unseen_ratio만큼 샘플링 ──
-        # unseen_ratio(학습)와 완전히 독립 — 전체 full_dataset에서 직접 샘플링
+        # ── Unseen evaluation text: all unseen game data in  eval_unseen_ratiotext sampletext ──
+        # unseen_ratio(training) and  text before text text — all full_dataset in  direct sampletext
         _eval_unseen_ratio = float(getattr(config, "eval_unseen_ratio", 1.0))
         if unseen_game_set and _eval_unseen_ratio > 0.0:
             _all_unseen_mask = np.array([g in unseen_game_set for g in all_game_names], dtype=bool)
@@ -2118,7 +2118,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             unseen_eval_game_names_arr = np.array([])
             _unseen_eval_indices = None
 
-        # ── 4. 단일 unseen_ratio 학습 ──
+        # ── 4. text unseen_ratio training ──
         ratio = config.unseen_ratio
 
         train_indices = build_train_indices_for_ratio(
@@ -2158,9 +2158,9 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             unseen_eval_sample_ids=_unseen_eval_indices,
         )
 
-        # W&B 로깅 (unseen 로그 제거)
+        # W&B  to text (unseen  to text remove)
 
-        # ── Scatter plots (최대 포인트 개수 제한) ──
+        # ── Scatter plots (maximum text count text) ──
         max_pts = int(getattr(config, "n_max_points", 1000))
         regression_scatter_paths = create_regression_scatter_plots_per_enum(
             scatter_data, out_dir=config.exp_dir,
@@ -2173,7 +2173,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             if wb_imgs:
                 wandb.log(wb_imgs)
 
-        # ── 5. 결과 저장 ──
+        # ── 5. result save ──
         save_data = {
             str(ratio): {
                 "accuracy": per_game_acc,
@@ -2188,7 +2188,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         results_path = os.path.join(config.exp_dir, "fewshot_results.json")
         with open(results_path, "w") as f:
             json.dump(save_data, f, indent=2, ensure_ascii=False)
-        # ── 최종 요약 테이블 ──
+        # ── text summary text text ──
         summary_games = [g for g in sorted(unique_games)] + ["overall", "seen_overall", "unseen_overall"]
         rows = [
             (g, f"{per_game_acc.get(g, float('nan')):.4f}", f"{per_game_reg.get(g, float('nan')):.4f}")
@@ -2216,7 +2216,7 @@ def main(config: CLIPDecoderTrainConfig):
 
     config = init_config(config)
 
-    # decoder_nograd 실험은 exp 이름에 _nograd 표기
+    # decoder_nograd experiment  exp name in  _nograd tabletext
     if getattr(config, "decoder_nograd", False):
         config.exp_dir = config.exp_dir + "_nograd"
 

@@ -1,14 +1,14 @@
 """
 instruct_rl/utils/buffer_collector.py
 =====================================
-학습 중 RL 에이전트의 trajectory 버퍼를 수집하는 유틸리티.
+training  during  RL  in previoustext of  trajectory text  text  utility.
 
-학습 50% ~ 100% 구간에서 일정 간격으로
-(obs, action, reward, done, env_map) 데이터를 수집하여
-실험 폴더에 .npz 파일로 저장한다.
+training 50% ~ 100% bin in  text text as
+(obs, action, reward, done, env_map) data  text
+experiment folder in  .npz file to  savetext.
 
-수집 환경 수(n_collect_envs)는 max_samples를 반드시 채울 수 있도록
-자동으로 결정된다.
+text text text(n_collect_envs)  max_samples  text text text text also text
+automatic as  text.
 """
 from __future__ import annotations
 
@@ -23,24 +23,24 @@ logger = get_logger(__file__)
 
 
 class BufferCollector:
-    """학습 중 trajectory 를 수집하여 npz 파일로 저장하는 콜백 객체.
+    """training  during  trajectory   text npz file to  savetext  callback text.
 
     Parameters
     ----------
     save_dir : str
-        버퍼 파일을 저장할 디렉토리 경로.
+        text file  savetext directory path.
     total_updates : int
-        전체 학습 update step 수 (NUM_UPDATES).
+        all training update step text (NUM_UPDATES).
     max_samples : int
-        수집할 최대 transition 수.
+        text maximum transition text.
     num_steps : int
-        한 update step 당 env step 수 (config.num_steps).
+        text update step text env step text (config.num_steps).
     n_envs : int
-        병렬 환경 수 (config.n_envs). timestep 계산 및 동적 환경 수 결정에 사용.
+        parallel text text (config.n_envs). timestep compute text dynamic text text text in  text for .
     collect_start_ratio : float
-        수집 시작 시점 (0.0~1.0, 기본 0.5 = 50%).
+        text start text (0.0~1.0, default 0.5 = 50%).
     collect_end_ratio : float
-        수집 종료 시점 (0.0~1.0, 기본 1.0 = 100%).
+        text text text (0.0~1.0, default 1.0 = 100%).
     """
 
     def __init__(
@@ -63,32 +63,32 @@ class BufferCollector:
         self.collect_start_ratio = collect_start_ratio
         self.collect_end_ratio = collect_end_ratio
 
-        # ── 수집 구간 계산 ───────────────────────────────────────
+        # ── text bin compute ───────────────────────────────────────
         self.start_step = int(total_updates * collect_start_ratio)
         self.end_step = int(total_updates * collect_end_ratio)
         collect_window = max(1, self.end_step - self.start_step)
 
-        # ── 동적 환경 수 결정 ────────────────────────────────────
-        # n_collect_envs=1 부터 시작, 수집 가능 총량이 max_samples 이상이 될 때까지 증가
-        # 수집 가능 총량 = n_collections * num_steps * n_collect_envs
+        # ── dynamic text text text ────────────────────────────────────
+        # n_collect_envs=1 text start, text available totaltext  max_samples or more  text text text
+        # text available totaltext = n_collections * num_steps * n_collect_envs
         # n_collections = collect_window // collect_interval
         # collect_interval = collect_window // ceil(max_samples / (num_steps * n_collect_envs))
         self.n_collect_envs = self._compute_n_collect_envs(
             max_samples, num_steps, n_envs, collect_window
         )
 
-        # ── interval 재계산 (확정된 n_collect_envs 기준) ─────────
+        # ── interval textcompute (text n_collect_envs basis) ─────────
         transitions_per_collect = num_steps * self.n_collect_envs
         n_collections_needed = max(1, math.ceil(max_samples / transitions_per_collect))
         self.collect_interval = max(1, collect_window // n_collections_needed)
 
-        # 실제 수집 횟수
+        # text text text
         self.n_collections = min(
             n_collections_needed,
             collect_window // self.collect_interval,
         )
 
-        # timestep 변환 계수: update_step → total_timesteps
+        # timestep convert text: update_step → total_timesteps
         self._timestep_per_update = num_steps * n_envs
 
         self._collected = 0
@@ -114,9 +114,9 @@ class BufferCollector:
         n_envs: int,
         collect_window: int,
     ) -> int:
-        """max_samples 를 반드시 채울 수 있도록 n_collect_envs 를 결정.
+        """max_samples   text text text text also text n_collect_envs   text.
 
-        env 1개로 충분하면 1, 아니면 필요한 만큼 늘린다 (최대 n_envs).
+        env 1text to  text 1, text text text text (maximum n_envs).
         """
         for k in range(1, n_envs + 1):
             per_collect = num_steps * k
@@ -131,11 +131,11 @@ class BufferCollector:
     # ── public API ──────────────────────────────────────────────────
 
     def _update_to_timestep(self, update_step: int) -> int:
-        """update_step 을 total_timesteps 기준 스텝으로 변환."""
+        """update_step   total_timesteps basis text as  convert."""
         return update_step * self._timestep_per_update
 
     def should_collect(self, update_step: int) -> bool:
-        """현재 update step 에서 수집해야 하는지 판단."""
+        """current update step  in  text text text text."""
         if self._total_transitions >= self.max_samples:
             return False
         if update_step < self.start_step:
@@ -151,16 +151,16 @@ class BufferCollector:
         traj_batch,
         env_state,
     ):
-        """traj_batch 에서 env_idx=0..n_collect_envs-1 의 데이터를 추출하여 npz 로 저장.
+        """traj_batch  in  env_idx=0..n_collect_envs-1  of  data  extracttext npz  to  save.
 
         Parameters
         ----------
         update_step : int
-            현재 update step 번호.
+            current update step text.
         traj_batch : Transition
-            shape (num_steps, n_envs, ...) 의 trajectory 배치.
+            shape (num_steps, n_envs, ...)  of  trajectory batch.
         env_state :
-            현재 환경 상태.
+            current text text.
         """
         if not self.should_collect(update_step):
             return
@@ -169,9 +169,9 @@ class BufferCollector:
         if remaining <= 0:
             return
 
-        k = self.n_collect_envs  # 수집할 환경 수
+        k = self.n_collect_envs  # text text text
 
-        # ── env_idx=0..k-1 추출 후 (num_steps, k, ...) → (num_steps*k, ...) ──
+        # ── env_idx=0..k-1 extract  after  (num_steps, k, ...) → (num_steps*k, ...) ──
         done = np.asarray(traj_batch.done[:, :k]).reshape(-1)
         action = np.asarray(traj_batch.action[:, :k]).reshape(-1, *traj_batch.action.shape[2:])
         value = np.asarray(traj_batch.value[:, :k]).reshape(-1)
@@ -190,7 +190,7 @@ class BufferCollector:
                 -1, *env_state.env_state.env_map.shape[1:]
             )
 
-        # 최대 수집량 제한
+        # maximum text text
         n_take = min(done.shape[0], remaining)
         done = done[:n_take]
         action = action[:n_take]
@@ -200,7 +200,7 @@ class BufferCollector:
         map_obs = map_obs[:n_take]
         env_map = env_map[:n_take]
 
-        # ── 파일명은 total_timesteps 기준 스텝 ──
+        # ── filetext  total_timesteps basis text ──
         timestep = self._update_to_timestep(update_step)
         save_path = os.path.join(
             self.save_dir,

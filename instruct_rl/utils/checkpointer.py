@@ -1,8 +1,8 @@
 """
 instruct_rl/utils/checkpointer.py
 ==================================
-체크포인트 초기화 및 로딩 유틸.
-train_cpcgrl.py 에서 분리.
+checkpoint initialize text  to text utility.
+train_cpcgrl.py  in  separate.
 """
 import os
 from glob import glob
@@ -34,7 +34,7 @@ logger = get_logger(__file__)
 
 
 def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
-    """체크포인트 매니저를 초기화하고 기존 체크포인트를 복원한다.
+    """checkpoint text  initializetext existing checkpoint  text.
 
     Returns
     -------
@@ -91,13 +91,13 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
             mgr = checkpoint_manager
         runner_state = target["runner_state"]
         try:
-            # orbax 최신 버전: strict 지원
+            # orbax latest text before : strict text
             restored_ckpt = mgr.restore(
                 steps_prev_complete,
                 args=ocp.args.StandardRestore(target, strict=False),
             )
         except TypeError:
-            # 구버전 orbax: strict 파라미터 미지원 → 없이 재시도
+            # text before  orbax: strict parameter text → text  text also
             try:
                 restored_ckpt = mgr.restore(
                     steps_prev_complete,
@@ -156,8 +156,8 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
 
         return restored_ckpt
 
-    # init_ckpt_path: 다른 실험의 체크포인트에서 시작할 때 사용.
-    # exp_dir/ckpts에 기존 체크포인트가 없을 때만 적용 (resume이 우선).
+    # init_ckpt_path: different experiment of  checkpoint in  starttext text text for .
+    # exp_dir/ckpts in  existing checkpoint  text  text apply (resume  text).
     _init_ckpt_path = getattr(config, 'init_ckpt_path', None)
 
     if checkpoint_manager.latest_step() is None:
@@ -165,7 +165,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
 
         if _init_ckpt_path is not None:
             init_ckpt_dir = os.path.abspath(_init_ckpt_path)
-            logger.info(f"init_ckpt_path 지정됨 — {init_ckpt_dir} 에서 초기 체크포인트 로드")
+            logger.info(f"init_ckpt_path text — {init_ckpt_dir}  in  initial checkpoint load")
             init_ckpt_manager = ocp.CheckpointManager(
                 init_ckpt_dir,
                 options=ocp.CheckpointManagerOptions(max_to_keep=2, create=False),
@@ -179,7 +179,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                     restored_ckpt = try_load_ckpt(steps_prev_complete, target, mgr=init_ckpt_manager)
                     if restored_ckpt is None:
                         raise TypeError("Restored checkpoint is None")
-                    restored_ckpt["steps_prev_complete"] = 0  # 새 실험이므로 step 카운트는 0부터
+                    restored_ckpt["steps_prev_complete"] = 0  # text experiment text to  step text  0text
                     logger.info(f"  ✅ init checkpoint loaded (source step={steps_prev_complete}, training restarts from 0)")
                     break
                 except (TypeError, ValueError) as e:
@@ -250,7 +250,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                     enc_param = get_encoder_params_recursive(enc_param, "encoder")
                     assert enc_param is not None, "Encoder not found in checkpoint"
 
-                # ── 로딩 성공 로그 ──
+                # ──  to text success  to text ──
                 log_encoder_ckpt_loaded(enc_param, ckpt_dir, steps_prev_complete)
                 break
 
@@ -268,11 +268,11 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
     return checkpoint_manager, restored_ckpt, enc_param
 
 
-# ── train_cpcgrl.py 에서 분리한 체크포인트 유틸 ─────────────────────────────
+# ── train_cpcgrl.py  in  separatetext checkpoint utility ─────────────────────────────
 
 
 def init_checkpoint_step(runner_state, checkpoint_manager):
-    """학습 시작 시 step=0 체크포인트를 저장한다. (jax.debug.callback 용)"""
+    """training start text step=0 checkpoint  savetext. (jax.debug.callback  for )"""
     ckpt = {"runner_state": runner_state, "step_i": 0}
     ckpt = jax.device_get(ckpt)
     try:
@@ -284,7 +284,7 @@ def init_checkpoint_step(runner_state, checkpoint_manager):
 
 def save_checkpoint_step(runner_state, info, steps_prev_complete,
                          checkpoint_manager, config):
-    """에피소드 완료 시점 기준으로 체크포인트를 저장한다. (jax.debug.callback 용)"""
+    """ in text finish text basis as  checkpoint  savetext. (jax.debug.callback  for )"""
     timesteps = info["timestep"][info["returned_episode"]] * config.n_envs
 
     if len(timesteps) > 0:
@@ -302,7 +302,7 @@ def save_checkpoint_step(runner_state, info, steps_prev_complete,
 
 
 def apply_encoder_params(runner_state, encoder_params, config):
-    """인코더 체크포인트 파라미터를 runner_state 에 적용하고 메모리 사용량을 로깅한다.
+    """text checkpoint parameter  runner_state  in  applytext text text for text   to text.
 
     Parameters
     ----------
@@ -312,7 +312,7 @@ def apply_encoder_params(runner_state, encoder_params, config):
 
     Returns
     -------
-    runner_state : RunnerState (파라미터 주입 완료)
+    runner_state : RunnerState (parameter inject finish)
     """
     from flax.traverse_util import flatten_dict
 
@@ -343,11 +343,11 @@ def apply_encoder_params(runner_state, encoder_params, config):
     return runner_state
 
 
-# ── 인코더 체크포인트 로깅 유틸 ──────────────────────────────────────────────
+# ── text checkpoint  to text utility ──────────────────────────────────────────────
 
 
 def log_encoder_ckpt_loaded(enc_param, ckpt_dir: str, step: int):
-    """인코더 체크포인트 로딩 성공 시 요약 로그를 출력한다."""
+    """text checkpoint  to text success text summary  to text  text."""
     logger.info(f"  ✅ Encoder checkpoint loaded successfully (step={step})")
     logger.info(f"     ckpt_dir: {ckpt_dir}")
     if isinstance(enc_param, dict):
@@ -365,7 +365,7 @@ def log_encoder_ckpt_loaded(enc_param, ckpt_dir: str, step: int):
 
 
 def log_encoder_params_summary(encoder_params, config):
-    """encoder_params 존재 여부와 내용물 상세 정보를 로그로 출력한다."""
+    """encoder_params text text and  contentwater detail info   to text to  text."""
     if encoder_params is not None:
         from flax.traverse_util import flatten_dict
         logger.info("=" * 80)

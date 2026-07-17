@@ -1,11 +1,11 @@
 """
 evaluator/metrics/base.py
 ==========================
-레벨 유사도 지표 공통 인터페이스.
+level text also  texttable common interface.
 
-LevelBundle  — 단일 레벨의 모든 표현을 묶는 컨테이너
-MetricResult — 평가 결과 dataclass
-BaseMetricEvaluator — 모든 지표 클래스가 상속할 ABC
+LevelBundle  — text level of  text tabletext  text  text text
+MetricResult — evaluation results dataclass
+BaseMetricEvaluator — text texttable class  text ABC
 """
 from __future__ import annotations
 
@@ -17,15 +17,15 @@ import numpy as np
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 공통 데이터 타입
+# common data text
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class LevelBundle:
     """
-    단일 게임 레벨의 모든 표현을 묶는 컨테이너.
+    text game level of  text tabletext  text  text text.
 
-    각 MetricEvaluator는 자신에게 필요한 필드만 사용한다.
+    each MetricEvaluator  text in text text text text for text.
       - TPKL  → array
       - SSIM / LPIPS → image
       - CLIPScore    → text + image
@@ -33,15 +33,15 @@ class LevelBundle:
     Parameters
     ----------
     array : (H, W) int32 ndarray
-        unified 5-category 타일 배열 (use_tile_mapping=True 기준).
+        unified 5-category tile array (use_tile_mapping=True basis).
     image : (H, W, 3) uint8 ndarray
-        렌더링된 RGB 이미지.
+        renderingtext RGB image.
     text : str
-        자연어 instruction.
+        text instruction.
     game : str
-        게임 태그 (e.g. "dungeon", "doom").
+        game text (e.g. "dungeon", "doom").
     meta : dict
-        reward_enum, conditions 등 부가 정보.
+        reward_enum, conditions text text  info.
     """
     array: np.ndarray
     image: np.ndarray
@@ -55,7 +55,7 @@ class LevelBundle:
         sample,                        # dataset.multigame.base.GameSample
         image_np: np.ndarray,
     ) -> "LevelBundle":
-        """GameSample + 렌더링된 이미지 → LevelBundle."""
+        """GameSample + renderingtext image → LevelBundle."""
         return cls(
             array = sample.array,
             image = image_np,
@@ -68,26 +68,26 @@ class LevelBundle:
 @dataclass
 class MetricResult:
     """
-    단일 지표의 평가 결과.
+    text texttable of  evaluation results.
 
     Attributes
     ----------
     name : str
-        지표 이름.
+        texttable name.
     same_mean : float
-        same-group 쌍 평균 유사도.
+        same-group text mean text also .
     diff_mean : float
-        diff-group 쌍 평균 유사도.
+        diff-group text mean text also .
     delta : float
-        same_mean − diff_mean.  양수 = same-group 더 유사 (가설 지지).
+        same_mean − diff_mean.  text = same-group text text ( text text).
     auc : float
         AUC-ROC ∈ [0, 1].  0.5 = random, 1.0 = perfect.
     same_scores : list[float]
-        same-group 개별 점수 목록.
+        same-group text text list.
     diff_scores : list[float]
-        diff-group 개별 점수 목록.
+        diff-group text text list.
     matrix : np.ndarray | None
-        (N, N) 유사도 행렬 (keep_matrix=True 로 evaluate() 호출 시에만 보존).
+        (N, N) text also  rowtext (keep_matrix=True  to  evaluate() call text in text preserve).
     """
     name:        str
     same_mean:   float
@@ -100,7 +100,7 @@ class MetricResult:
 
     @property
     def is_supported(self) -> bool:
-        """가설 지지 여부 (Δ > 0 AND AUC > 0.5)."""
+        """ text text text (Δ > 0 AND AUC > 0.5)."""
         return self.delta > 0 and self.auc > 0.5
 
     def __repr__(self) -> str:
@@ -120,7 +120,7 @@ class MetricResult:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 공통 통계 유틸
+# common text utility
 # ─────────────────────────────────────────────────────────────────────────────
 
 def extract_pair_scores(
@@ -130,10 +130,10 @@ def extract_pair_scores(
     symmetric: bool = True,
 ) -> Tuple[List[float], List[float]]:
     """
-    유사도 행렬에서 same / diff 점수 리스트 추출.
+    text also  rowtext in  same / diff text text extract.
 
-    symmetric=True  : (i,j) 와 (j,i) 를 모두 포함 (image-image 비교).
-    symmetric=False : (i,j) 만 포함 (text-image 비교).
+    symmetric=True  : (i,j)  and  (j,i)   text text (image-image text).
+    symmetric=False : (i,j) text text (text-image text).
     """
     def _collect(pairs: List[Tuple[int, int]]) -> List[float]:
         out: List[float] = []
@@ -151,7 +151,7 @@ def auc_roc_score(
     diff_scores: List[float],
 ) -> float:
     """
-    AUC-ROC (U-통계량 기반).  0.5 = random, 1.0 = perfect.
+    AUC-ROC (U-text based).  0.5 = random, 1.0 = perfect.
     """
     s = np.array(same_scores, dtype=np.float64)
     d = np.array(diff_scores, dtype=np.float64)
@@ -167,7 +167,7 @@ def roc_curve_points(
     diff_scores: List[float],
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    ROC 곡선 점 (fpr, tpr) 반환.
+    ROC text text (fpr, tpr) return.
     """
     labels = np.concatenate([np.ones(len(same_scores)), np.zeros(len(diff_scores))])
     scores = np.concatenate([same_scores, diff_scores])
@@ -188,41 +188,41 @@ def roc_curve_points(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 추상 기반 클래스
+# text based class
 # ─────────────────────────────────────────────────────────────────────────────
 
 class BaseMetricEvaluator(ABC):
     """
-    모든 레벨 유사도 지표의 공통 추상 기반 클래스.
+    text level text also  texttable of  common text based class.
 
-    서브클래스 구현 필수:
+    textclass text text:
         name              : str property
         similarity_matrix : List[LevelBundle] → (N, N) ndarray
 
-    상속 후 자동 제공:
-        score_pair : 단일 쌍 유사도
-        evaluate   : 전체 통계 계산 → MetricResult
+    text  after  automatic text:
+        score_pair : text text text also
+        evaluate   : all text compute → MetricResult
     """
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """지표 고유 이름."""
+        """texttable text name."""
         ...
 
     @abstractmethod
     def similarity_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
-        (N, N) pairwise 유사도 행렬.
-        - 값이 높을수록 더 유사.
-        - 대각선 = 1.0 (자기 자신과의 유사도).
+        (N, N) pairwise text also  rowtext.
+        - text  text text text text.
+        - texteachtext = 1.0 (text text and  of  text also ).
         """
         ...
 
-    # ── 상속 후 자동 제공 ─────────────────────────────────────────────────────
+    # ── text  after  automatic text ─────────────────────────────────────────────────────
 
     def score_pair(self, a: LevelBundle, b: LevelBundle) -> float:
-        """단일 쌍 (a, b) 의 유사도 점수."""
+        """text text (a, b)  of  text also  text."""
         return float(self.similarity_matrix([a, b])[0, 1])
 
     def evaluate(
@@ -234,15 +234,15 @@ class BaseMetricEvaluator(ABC):
         symmetric: bool = True,
     ) -> MetricResult:
         """
-        전체 평가 실행.
+        all evaluation Usage.
 
         Parameters
         ----------
-        bundles : list of LevelBundle (N개)
-        same_pairs : (i, j) — 같은 (game, reward_enum) 그룹 쌍 인덱스
-        diff_pairs : (i, j) — 다른 그룹 쌍 인덱스
-        keep_matrix : True 이면 MetricResult.matrix 에 행렬 저장
-        symmetric : extract_pair_scores 에 전달 (image-image=True, text-image=False)
+        bundles : list of LevelBundle (Ntext)
+        same_pairs : (i, j) — same (game, reward_enum) text text index
+        diff_pairs : (i, j) — different text text index
+        keep_matrix : True  text MetricResult.matrix  in  rowtext save
+        symmetric : extract_pair_scores  in   before text (image-image=True, text-image=False)
 
         Returns
         -------

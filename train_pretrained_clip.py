@@ -1,12 +1,12 @@
 """
 train_pretrained_clip.py
 ========================
-Pretrained CLIP 기반 PCGRL 학습.
+Pretrained CLIP based PCGRL training.
 
-맵 이미지와 텍스트 지시어(instruct_sample.embedding) 간의
-코사인 유사도 delta를 보상으로 사용한다.
+map image and  text instruction(instruct_sample.embedding) text of
+text text also  delta  reward as  text for text.
 
-실행:
+Usage:
     python -m train_pretrained_clip [overrides]
     python -m train_pretrained_clip dataset_game=dungeon dataset_reward_enum=1
 """
@@ -22,14 +22,14 @@ from instruct_rl.utils.img_preprocess import render_level_from_arr, clip_batch_p
 suppress_jax_debug_logs()
 
 
-# ── obs 주입: 사전 계산된 CLIP 텍스트 임베딩 → nlp_obs ──────────────────────
+# ── obs inject: precomputed CLIP text embedding → nlp_obs ──────────────────────
 
 def inject_pretrained_clip_pcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """pretrained CLIP 으로 사전 계산된 텍스트 임베딩을 nlp_obs 에 주입."""
+    """pretrained CLIP  as  precomputed text embedding  nlp_obs  in  inject."""
     return last_obs.replace(nlp_obs=instruct_sample.embedding)
 
 
-# ── 보상 주입: 맵 이미지 ↔ 텍스트 임베딩 코사인 유사도 delta ─────────────────
+# ── reward inject: map image ↔ text embedding text text also  delta ─────────────────
 
 def inject_pretrained_clip_reward(
     prev_env_state,
@@ -39,31 +39,31 @@ def inject_pretrained_clip_reward(
     params,
     last_obs,
 ) -> jnp.ndarray:
-    """Pretrained CLIP 코사인 유사도 delta 보상.
+    """Pretrained CLIP text text also  delta reward.
 
-    맵 이미지를 직접 렌더링 → CLIP 전처리 → 비전 인코더로 state embedding 계산 후
-    텍스트 임베딩과의 코사인 유사도 delta를 보상으로 반환한다.
+    map image  direct rendering → CLIP preprocessing → vision text to  state embedding compute  after
+    text embedding and  of  text text also  delta  reward as  returntext.
 
     Parameters
     ----------
-    prev_env_state : LogWrapper state (이전 스텝)
-    curr_env_state : LogWrapper state (현재 스텝)
+    prev_env_state : LogWrapper state (previous text)
+    curr_env_state : LogWrapper state (current text)
     instruct_sample : Instruct
-        ``instruct_sample.embedding`` — 사전 계산된 CLIP 텍스트 임베딩 (B, D).
+        ``instruct_sample.embedding`` — precomputed CLIP text embedding (B, D).
     network_apply_fn : Callable
-        ``network.apply`` — CLIP 네트워크의 apply 함수.
+        ``network.apply`` — CLIP network of  apply function.
     params : PyTree
-        네트워크 파라미터 (train_state.params).
+        network parameter (train_state.params).
     last_obs : Observation
-        현재 관측 (pixel_values 슬롯을 임시로 대체하는 데 사용).
+        current observation (pixel_values slot  text to  text  text text for ).
 
     Returns
     -------
     reward : jnp.ndarray (B,)
         cos_sim(text, curr_map) - cos_sim(text, prev_map)
-        → 텍스트 지시에 가까워질수록 양수 보상.
+        → text text in   text text reward.
     """
-    # ── 렌더링: env_map → 타일 픽셀 이미지 ──────────────────────────────────
+    # ── rendering: env_map → tile textcell image ──────────────────────────────────
     curr_rendered = jax.vmap(render_level_from_arr)(
         curr_env_state.env_state.env_map
     )  # (B, H_px, W_px, C)
@@ -71,11 +71,11 @@ def inject_pretrained_clip_reward(
         prev_env_state.env_state.env_map
     )
 
-    # ── CLIP 전처리: float32 변환 + 224×224 리사이즈 + 정규화 ─────────────────
+    # ── CLIP preprocessing: float32 convert + 224×224 text text + normalize ─────────────────
     curr_clip_pixels = clip_batch_preprocess(curr_rendered.astype(jnp.float32))
     prev_clip_pixels = clip_batch_preprocess(prev_rendered.astype(jnp.float32))
 
-    # ── Pretrained CLIP 비전 인코더로 state embedding 획득 ───────────────────
+    # ── Pretrained CLIP vision text to  state embedding text ───────────────────
     _, _, _, _, curr_state_embed = network_apply_fn(
         params,
         last_obs.replace(pixel_values=curr_clip_pixels),
@@ -89,14 +89,14 @@ def inject_pretrained_clip_reward(
         return_state_embed=True,
     )
 
-    # ── 코사인 유사도 delta 보상 ──────────────────────────────────────────────
-    # 사전 계산된 텍스트 임베딩 (B, D) — 학습 전 CSV 로더가 생성
+    # ── text text also  delta reward ──────────────────────────────────────────────
+    # precomputed text embedding (B, D) — training  before  CSV  to text  create
     text_embed = instruct_sample.embedding  # already L2-normalized
 
     curr_sim = _cosine_similarity(text_embed, curr_state_embed)  # (B,)
     prev_sim = _cosine_similarity(text_embed, prev_state_embed)  # (B,)
 
-    # 유사도가 증가한 만큼 보상
+    # text also   text text text reward
     return curr_sim - prev_sim
 
 

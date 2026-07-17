@@ -1,12 +1,12 @@
 """
 eval_finetuned_clip.py
 ======================
-Fine-tuned CLIP PCGRL 평가 entrypoint.
+Fine-tuned CLIP PCGRL evaluation entrypoint.
 
-`train_finetuned_clip.py` 로 학습한 체크포인트를 평가한다. inject_obs_fn 은
-`train_pretrained_clip.py` 의 것을 그대로 재사용한다.
+`train_finetuned_clip.py`  to  trainingtext checkpoint  evaluationtext. inject_obs_fn
+`train_pretrained_clip.py`  of  text  as-is reusetext.
 
-실행:
+Usage:
     python -m eval_finetuned_clip encoder.ckpt_name=finetuned-clip-...
 """
 import hydra

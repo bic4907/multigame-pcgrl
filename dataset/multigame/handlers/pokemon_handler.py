@@ -1,9 +1,9 @@
 """
 dataset/multigame/handlers/pokemon_handler.py
 ==============================================
-POKEMON 데이터셋 핸들러.
+POKEMON dataset handler.
 
-POKEMON은 싱글 NPY 파일에 모든 맵과 레이블이 저장되어 있다.
+POKEMON  text NPY file in  text map and  text text  savetext text.
 """
 from __future__ import annotations
 
@@ -21,12 +21,12 @@ _DEFAULT_POKEMON_ROOT = Path(__file__).parent.parent.parent / "five-dollar-model
 
 class POKEMONHandler(BaseGameHandler):
     """
-    POKEMON 핸들러.
-    
+    POKEMON handler.
+
     Parameters
     ----------
-    root : POKEMON 데이터셋 루트 경로 (기본: dataset/five-dollar-model)
-    npy_name : NPY 파일명 (기본: datasets/maps_noaug.npy)
+    root : POKEMON dataset text path (default: dataset/five-dollar-model)
+    npy_name : NPY filetext (default: datasets/maps_noaug.npy)
     """
 
     def __init__(
@@ -42,7 +42,7 @@ class POKEMONHandler(BaseGameHandler):
         if not npy_path.exists():
             raise FileNotFoundError(f"POKEMON NPY not found: {npy_path}")
 
-        # NPY 파일 로드
+        # NPY file load
         data = np.load(npy_path, allow_pickle=True)
         if data.ndim == 0:
             data = data.item()
@@ -69,7 +69,7 @@ class POKEMONHandler(BaseGameHandler):
         return self._root
 
     def list_entries(self) -> List[str]:
-        """NPY 인덱스를 source_id로 반환. 최대 1000개만."""
+        """NPY index  source_id to  return. maximum 1000text."""
         max_samples = 1000
         total = len(self._images)
         limit = min(total, max_samples)
@@ -77,9 +77,9 @@ class POKEMONHandler(BaseGameHandler):
 
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
         """
-        source_id (예: "pokemon_0000") -> GameSample 반환.
+        source_id (text: "pokemon_0000") -> GameSample return.
         """
-        # source_id에서 인덱스 추출
+        # source_id in  index extract
         try:
             idx = int(source_id.split("_")[1])
         except (ValueError, IndexError):
@@ -103,56 +103,56 @@ class POKEMONHandler(BaseGameHandler):
 
     def list_entries_with_filtering(self, max_tile_ratio: Optional[float] = None, max_tile_count: Optional[int] = None) -> tuple[List[str], int, int]:
         """
-        필터링을 적용하여 유효한 엔트리만 반환.
-        
+        filtering  applytext validtext text return.
+
         Parameters
         ----------
         max_tile_ratio : Optional[float]
-            한 타일이 차지할 수 있는 최대 비율 (패딩 전 10x10)
-            None이면 config에서 가져옴
+            text tile  text text with maximum ratio (padding  before  10x10)
+            None text config in   text
         max_tile_count : Optional[int]
-            패딩 후 16x16에서 한 타일이 차지할 수 있는 최대 개수
-            None이면 config에서 가져옴
-        
+            padding  after  16x16 in  text tile  text text with maximum count
+            None text config in   text
+
         Returns
         -------
         tuple[List[str], int, int]
-            (유효한 source_id 목록, max_tile_ratio로 제거된 개수, max_tile_count로 제거된 개수)
+            (validtext source_id list, max_tile_ratio to  removetext count, max_tile_count to  removetext count)
         """
-        # config에서 기본값 가져오기
+        # config in  default value  text
         if max_tile_ratio is None:
             max_tile_ratio = self._handler_config.pokemon.max_tile_ratio if self._handler_config else 1.0
         if max_tile_count is None:
             max_tile_count = self._handler_config.pokemon.max_tile_count if self._handler_config else 256
-        
+
         valid_ids = []
         filtered_by_ratio = 0
         filtered_by_count = 0
-        max_samples = 1000  # 최대 1000개 제한
-        
-        # "house on the beach" 중복 제거: 마지막 7개 제외 (874-880 인덱스)
+        max_samples = 1000  # maximum 1000text text
+
+        # "house on the beach" duplicate remove: text 7text text (874-880 index)
         excluded_duplicates = set(range(874, 881))
-        
+
         for i in range(len(self._images)):
-            # max_samples 도달 확인
+            # max_samples reach check
             if len(valid_ids) >= max_samples:
                 break
-            
+
             if i in excluded_duplicates:
                 continue
-            
+
             onehot_map = self._images[i]
-            
-            # 1단계: max_tile_ratio 필터링 (패딩 전 10x10 기반)
+
+            # 1text: max_tile_ratio filtering (padding  before  10x10 based)
             if not self._preprocessor.is_valid_pokemon_map(onehot_map, max_tile_ratio):
                 filtered_by_ratio += 1
                 continue
-            
-            # 2단계: 패딩 후 tileset 필터링 (16x16 기반)
+
+            # 2text: padding  after  tileset filtering (16x16 based)
             map_10x10 = self._preprocessor.transform_pokemon_onehot(onehot_map)
             padded_map = self._preprocessor.pad_to_16x16(map_10x10)
-            
-            # 패딩된 맵에서 타일 개수 확인
+
+            # paddingtext map in  tile count check
             tile_counts = {}
             for val in padded_map.flatten():
                 tile_counts[val] = tile_counts.get(val, 0) + 1
@@ -160,16 +160,16 @@ class POKEMONHandler(BaseGameHandler):
             if max_count >= max_tile_count:
                 filtered_by_count += 1
                 continue
-            
+
             valid_ids.append(f"pokemon_{i:04d}")
-            # max_samples 도달 확인
+            # max_samples reach check
             if len(valid_ids) >= max_samples:
                 break
-        
+
         return valid_ids, filtered_by_ratio, filtered_by_count
 
     def __iter__(self):
-        """모든 샘플 반복."""
+        """text sample repetition."""
         for i, source_id in enumerate(self.list_entries()):
             yield self.load_sample(source_id, order=i)
 

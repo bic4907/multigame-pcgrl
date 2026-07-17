@@ -1,20 +1,20 @@
 """
 train_ipcgrl_encoder_mg.py
 ===========================
-Annotation 형식 멀티게임 데이터 기반 IPCGRL MLP 인코더 사전학습.
+Annotation text textgame data based IPCGRL MLP text pretraining.
 
-기존 train_ipcgrl_encoder.py 와의 차이점:
-  - 데이터 소스: npz 버퍼(구형) → Annotation CSV(MultiGameDataset, 신형)
-  - 멀티게임 통합 인코더: 단일 MLP가 모든 게임의 instruction → condition 회귀
-  - unseen_games: 학습에서 제외할 게임을 지정해 zero-shot 평가 가능
+existing train_ipcgrl_encoder.py  and  of  text text:
+  - data text: npz text(text) → Annotation CSV(MultiGameDataset, text)
+  - textgame text text: text MLP  text game of  instruction → condition text
+  - unseen_games: training in  text game  text zero-shot evaluation available
 
-데이터 파이프라인:
-    MultiGameDataset (annotation 형식)
+data pipeline:
+    MultiGameDataset (annotation text)
         ↓ BERTDatasetBuilder
-            - instruction 유효성 필터, longtail cut
-            - BERT CLS 임베딩 계산 (bert-base-uncased)
-            - log1p + per-enum min-max condition 정규화
-            - stratified train/val split (unseen 게임은 train 제외)
+            - instruction validtext filter, longtail cut
+            - BERT CLS embedding compute (bert-base-uncased)
+            - log1p + per-enum min-max condition normalize
+            - stratified train/val split (unseen game  train text)
         ↓ create_mlp_batches
     apply_model (MLP encoder + MLP decoder)
         - encoder: BERT_embed (768) → latent z (output_dim)
@@ -67,12 +67,12 @@ logging.getLogger("absl").setLevel(logging.ERROR)
 # ── Train State ───────────────────────────────────────────────────────────────
 
 def get_train_state(config: IPCGRLEncoderMGConfig, rng: jax.random.PRNGKey):
-    """apply_model (MLP encoder + decoder) TrainState 초기화."""
+    """apply_model (MLP encoder + decoder) TrainState initialize."""
     lr_fn = create_learning_rate_fn(config, config.lr, config.steps_per_epoch)
 
     model = apply_model(config=config)
 
-    # sampled_buffer=None: 레벨 맵 없이 BERT 임베딩만 사용
+    # sampled_buffer=None: level map text  BERT embeddingtext text for
     dummy_embed = jnp.ones((1, config.nlp_input_dim), dtype=jnp.float32)
     params = model.init(rng, dummy_embed, rng, None)
 
@@ -94,7 +94,7 @@ def train_step(
     def loss_fn(params):
         outputs = state.apply_fn(
             params, bert_embeds, rng,
-            None,       # sampled_buffer=None (레벨 맵 미사용)
+            None,       # sampled_buffer=None (level map text for )
             is_train,
             rngs={"dropout": rng},
         )
@@ -110,20 +110,20 @@ def train_step(
     return state, loss, preds
 
 
-# ── 메인 학습 루프 ─────────────────────────────────────────────────────────────
+# ── text training text ─────────────────────────────────────────────────────────────
 
 def make_train(config: IPCGRLEncoderMGConfig):
     def train(rng: jax.random.PRNGKey):
-        # 1. MultiGameDataset 로드
+        # 1. MultiGameDataset load
         multigame_ds = build_multigame_dataset(config)
 
-        # 2. Unseen 게임 파싱
+        # 2. Unseen game parsing
         unseen_game_set = parse_unseen_game_names(config.unseen_games) if config.unseen_games else set()
         logger.info("Unseen games (excluded from training): %s", unseen_game_set or "none")
 
-        # 3. BERTDataset 빌드
-        #    CLIPProcessor: CLIPDatasetBuilder 내부 tokenizer (전처리용, BERT와 무관)
-        #    BERT 임베딩은 _compute_bert_embeddings 가 별도로 계산한다.
+        # 3. BERTDataset build
+        #    CLIPProcessor: CLIPDatasetBuilder internal tokenizer (preprocessing for , BERT and  text)
+        #    BERT embedding  _compute_bert_embeddings   separate to  computetext.
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         rng, ds_key = jax.random.split(rng)
         builder = MLPDatasetBuilder(
@@ -144,11 +144,11 @@ def make_train(config: IPCGRLEncoderMGConfig):
         mlp_ds = builder.get_dataset()
         cond_norm_min, cond_norm_max = builder.get_condition_norm_stats()
 
-        # ── dataset_setting.json 저장 (train_ipcgrl.py에서 자동 주입에 사용됨) ──
+        # ── dataset_setting.json save (train_ipcgrl.py in  automatic inject in  text for text) ──
         all_games = sorted(multigame_ds.count_by_game().keys())
         seen_games = [g for g in all_games if g not in unseen_game_set]
         unseen_games = [g for g in all_games if g in unseen_game_set]
-        
+
         logger.info("=" * 70)
         logger.info("  Seen/Unseen Split (train_ipcgrl_encoder_mg)")
         logger.info("  Seen games   : %s", seen_games)
@@ -156,7 +156,7 @@ def make_train(config: IPCGRLEncoderMGConfig):
         logger.info("  Seen ratio   : %.4f", config.seen_ratio)
         logger.info("  Unseen ratio : %.4f", config.unseen_ratio)
         logger.info("=" * 70)
-        
+
         os.makedirs(config.exp_dir, exist_ok=True)
         dataset_setting = {
             "all_games": all_games,
@@ -182,11 +182,11 @@ def make_train(config: IPCGRLEncoderMGConfig):
         n_val_batch = max(1, math.ceil(n_val / config.batch_size)) if n_val > 0 else 0
         config.steps_per_epoch = n_train_batch
 
-        # 4. Train state 초기화
+        # 4. Train state initialize
         rng, init_key = jax.random.split(rng)
         state, lr_fn = get_train_state(config, init_key)
 
-        # 5. 학습 루프
+        # 5. training text
         for epoch in range(config.n_epochs):
             rng, epoch_key = jax.random.split(rng)
             train_key, val_key = jax.random.split(epoch_key)
@@ -239,11 +239,11 @@ def make_train(config: IPCGRLEncoderMGConfig):
                 val_games_all.append(g_names)
                 val_enums_all.append(re_t)
 
-            # ── 집계 ──
+            # ── text ──
             train_loss = float(np.mean(train_losses)) if train_losses else 0.0
             val_loss = float(np.mean(val_losses)) if val_losses else float("nan")
 
-            # 게임별 val MSE
+            # gametext val MSE
             per_game_val_mse = _per_game_mse(
                 val_preds_all, val_targets_all, val_games_all
             )
@@ -251,7 +251,7 @@ def make_train(config: IPCGRLEncoderMGConfig):
                 per_game_val_mse, unseen_game_set
             )
 
-            # 로그 출력
+            #  to text text
             if (epoch + 1) % 10 == 0 or epoch == 0:
                 logger.info(
                     "Epoch %3d/%d | train_mse=%.4f | val_mse=%.4f | lr=%.2e",
@@ -263,7 +263,7 @@ def make_train(config: IPCGRLEncoderMGConfig):
                     tag = "(unseen)" if g in unseen_game_set else "(seen)"
                     logger.info("  %-12s %s  val_mse=%.4f", g, tag, mse)
 
-            # W&B 로깅
+            # W&B  to text
             if wandb.run is not None:
                 log_dict = {
                     "train/mse": train_loss,
@@ -279,25 +279,25 @@ def make_train(config: IPCGRLEncoderMGConfig):
                     log_dict["val/mse_unseen_overall"] = float(np.mean(list(per_game_unseen_mse.values())))
                 wandb.log(log_dict)
 
-            # 체크포인트 저장
+            # checkpoint save
             if (epoch + 1) % config.ckpt_freq == 0:
                 save_encoder_checkpoint(config, state, step=epoch + 1)
 
-        # 학습 완료 후 최종 체크포인트
+        # training finish  after  text checkpoint
         save_encoder_checkpoint(config, state, step=config.n_epochs)
         logger.info("Training complete. Checkpoint saved.")
 
     return lambda rng: train(rng)
 
 
-# ── 보조 함수 ─────────────────────────────────────────────────────────────────
+# ── text function ─────────────────────────────────────────────────────────────────
 
 def _per_game_mse(
     preds_list: list[np.ndarray],
     targets_list: list[np.ndarray],
     games_list: list[np.ndarray],
 ) -> dict[str, float]:
-    """배치 단위 prediction/target/game_name 리스트 → 게임별 MSE dict."""
+    """batch textabove prediction/target/game_name text → gametext MSE dict."""
     if not preds_list:
         return {}
     all_preds = np.concatenate(preds_list)

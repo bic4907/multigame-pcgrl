@@ -1,9 +1,9 @@
 """
 dataset/multigame/handlers/vglc_games/kid_icarus.py
 ====================================================
-Kid Icarus (TheVGLC) 전처리 핸들러.
+Kid Icarus (TheVGLC) preprocessing handler.
 
-타일 매핑
+tile text
 ---------
 0  : empty    (-)
 1  : solid    (#)

@@ -1,7 +1,5 @@
 # MultiGame Dataset (Minimal)
 
-[![dataset validation](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml/badge.svg)](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml)
-
 This module helps you extract **(game, level, text)** tuples from `TheVGLC` and `dungeon_level_dataset`.
 
 Most users only need:
@@ -222,4 +220,3 @@ python -m dataset.multigame.scripts.render_before_after --game boxoban --index 0
 - `pokemon` has instruction text but only placeholder reward annotation.
 - For strict level-text pairs, use `ds.with_instruction()`.
 - For reward-annotated samples only, use `ds.with_reward_annotation()`.
-

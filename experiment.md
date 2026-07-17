@@ -3,11 +3,11 @@
 ---
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_cpcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/cpcgrl/train_pcgrl.yaml
+wandb sweep --project train_cpcgrl --entity <wandb-entity> sweep/wandb_sweep/cpcgrl/train_pcgrl.yaml
 ```
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_cpcgrl --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/cpcgrl/eval_pcgrl.yaml
+wandb sweep --project eval_cpcgrl --entity <wandb-entity> sweep/wandb_sweep/cpcgrl/eval_pcgrl.yaml
 ```
 
 ### MGPCGRL (Seen Ratios)
@@ -16,17 +16,17 @@ wandb sweep --project aaai27_eval_cpcgrl --entity st4889ha-gwangju-institute-of-
 
 **Train Encoder**
 ```bash
-wandb sweep --project aaai27_encoder_mgpcgrl_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl_unseen_ratios/train_encoder.yaml
+wandb sweep --project encoder_mgpcgrl_unseen_ratios --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl_unseen_ratios/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project aaai27_train_mgpcgrl_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl_unseen_ratios/train_pcgrl.yaml
+wandb sweep --project train_mgpcgrl_unseen_ratios --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl_unseen_ratios/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project aaai27_eval_mgpcgrl_unseen_ratios --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/mgpcgrl_unseen_ratios/eval_pcgrl.yaml
+wandb sweep --project eval_mgpcgrl_unseen_ratios --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl_unseen_ratios/eval_pcgrl.yaml
 ```
 
 
@@ -35,7 +35,7 @@ wandb sweep --project aaai27_eval_mgpcgrl_unseen_ratios --entity st4889ha-gwangj
 ---
 
 ```bash
-wandb sweep --project aaai27_eval_random --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/random/eval.yaml
+wandb sweep --project eval_random --entity <wandb-entity> sweep/wandb_sweep/random/eval.yaml
 ```
 
 
@@ -44,9 +44,9 @@ wandb sweep --project aaai27_eval_random --entity st4889ha-gwangju-institute-of-
 ---
 
 ```bash
-wandb sweep --project aaai27_train_pretrained_clip --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/pretrained_clip/train_pretrained_clip.yaml
+wandb sweep --project train_pretrained_clip --entity <wandb-entity> sweep/wandb_sweep/pretrained_clip/train_pretrained_clip.yaml
 ```
 
 ```bash
-wandb sweep --project aaai27_eval_pretrained_clip --entity st4889ha-gwangju-institute-of-science-and-technology sweep/wandb_sweep/pretrained_clip/eval_pretrained_clip.yaml
+wandb sweep --project eval_pretrained_clip --entity <wandb-entity> sweep/wandb_sweep/pretrained_clip/eval_pretrained_clip.yaml
 ```

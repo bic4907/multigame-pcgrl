@@ -11,19 +11,19 @@ Hyperparameter optimization using Weights & Biases sweeps with Bayesian Optimiza
 ### 1. Initialize Sweep
 
 ```bash
-wandb sweep --project multigame_train --entity st4889ha-gwangju-institute-of-science-and-technology sweep/e2e_single.yaml
+wandb sweep --project multigame_train --entity <wandb-entity> sweep/e2e_single.yaml
 ```
 
 Output example:
 ```
 Created sweep with ID: abc123xyz
-Run sweep agent with: wandb agent st4889ha-gwangju-institute-of-science-and-technology/multigame_train/abc123xyz
+Run sweep agent with: wandb agent <wandb-entity>/multigame_train/abc123xyz
 ```
 
 ### 2. Run Agent
 
 ```bash
-GPU=0 ./run_docker.sh wandb agent st4889ha-gwangju-institute-of-science-and-technology/multigame_train/SWEEP_ID
+GPU=0 ./run_docker.sh wandb agent <wandb-entity>/multigame_train/SWEEP_ID
 ```
 
 Replace `SWEEP_ID` with the actual ID from step 1.
@@ -32,20 +32,20 @@ Replace `SWEEP_ID` with the actual ID from step 1.
 
 ```bash
 # Terminal 1
-GPU=0 ./run_docker.sh wandb agent st4889ha-gwangju-institute-of-science-and-technology/multigame_train/SWEEP_ID
+GPU=0 ./run_docker.sh wandb agent <wandb-entity>/multigame_train/SWEEP_ID
 
 # Terminal 2
-GPU=1 ./run_docker.sh wandb agent st4889ha-gwangju-institute-of-science-and-technology/multigame_train/SWEEP_ID
+GPU=1 ./run_docker.sh wandb agent <wandb-entity>/multigame_train/SWEEP_ID
 
 # Terminal 3
-GPU=2 ./run_docker.sh wandb agent st4889ha-gwangju-institute-of-science-and-technology/multigame_train/SWEEP_ID
+GPU=2 ./run_docker.sh wandb agent <wandb-entity>/multigame_train/SWEEP_ID
 ```
 
 ## Monitoring
 
 View sweep progress at:
 ```
-https://wandb.ai/st4889ha-gwangju-institute-of-science-and-technology/multigame_train/sweeps/{SWEEP_ID}
+https://wandb.ai/<wandb-entity>/multigame_train/sweeps/{SWEEP_ID}
 ```
 
 Check running containers:

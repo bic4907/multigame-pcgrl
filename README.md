@@ -1,122 +1,174 @@
-# MGPCGRL: Multi-Game Procedural Content Generation via Representation Learning
+# MGPCGRL: Cross-Domain Reward Transfer for Multi-Game Procedural Content Generation Reinforcement Learning
 
-[![dataset validation](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml/badge.svg)](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml)
+This repository contains the code for **MGPCGRL (Multi-Game PCGRL)**, a
+multi-domain reinforcement learning framework for instruction-conditioned
+procedural content generation.
 
-This repository provides a **multi-game dataset pipeline** for level-text representation learning and controllable level generation.
+MGPCGRL targets a practical gap in PCGRL: rewards and instruction meanings are
+usually hand-defined for one game at a time. The framework instead learns shared
+representations between design instructions and game levels, then transfers
+reward signals across game domains.
 
-![Teasure](docs/teaser.png)
+![MGPCGRL teaser](docs/teaser.png)
 
-- **Multiverse** enables one model to generate levels across multiple game domains by learning representations that align level and text features in a **shared embedding space**.
-- In this shared space, **text composition and embedding interpolation** can mix characteristics from different games, while instruction structure can control each domain's contribution.
-- This shared representation can also serve as a conditioning signal for RL generators such as **PCGRL**, extending to natural-language-driven control of level goals and style.
-
----
-
-## What Is Included
-
-- Multi-game dataset loader: `dataset/multigame`
-- External datasets:
-  - `dataset/TheVGLC` (VGLC levels)
-  - `dataset/dungeon_level_dataset` (instruction-level pairs)
-
----
-[train_cpcgrl.py](train_cpcgrl.py)
-## Installation
+## Setup
 
 ```bash
 conda create -n mgpcgrl python=3.11
 conda activate mgpcgrl
 pip install -r requirements.txt
-```[train_cpcgrl.py](train_cpcgrl.py)
-
----
-
-## Dataset Setup
-
-### Initialize Git Submodules
-
-**Option 1: Clone with all submodules**
-
-```bash
-# Clone each submodule
-git clone --recursive https://github.com/TheVGLC/TheVGLC dataset/TheVGLC
-git clone --recursive https://github.com/bic4907/dungeon-level-dataset dataset/dungeon_level_dataset
-git clone --recursive https://github.com/google-deepmind/boxoban-levels dataset/boxoban_levels
-git clone --recursive https://github.com/TimMerino1710/five-dollar-model dataset/five-dollar-model
 ```
 
-**Option 2: Initialize in existing repository**
+Initialize external level datasets:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-**Option 3: Update submodules (if already cloned)**
+## MGPCGRL Reproduction
+
+The MGPCGRL reproduction has three stages:
+
+1. Train the multi-game CLIP encoder and reward decoder.
+2. Train PCGRL policies with the trained encoder checkpoint.
+3. Evaluate the trained PCGRL policies.
+
+The sweep files use `/mnt/nas/mgpcgrl/...` as the default checkpoint and result
+root. Change `saves_dir` and `encoder.ckpt_dir` in the YAML files if your
+machine uses a different path.
+
+Each `wandb sweep ...` command prints a sweep id. Start workers with the printed
+`wandb agent <entity>/<project>/<sweep-id>` command.
+Replace `<wandb-entity>` with your own W&B entity before running the commands.
+
+### Few-Shot Commands
+
+Train MGPCGRL encoder:
 
 ```bash
-git -C dataset/TheVGLC pull --ff-only
-git -C dataset/dungeon_level_dataset pull --ff-only
-git -C dataset/boxoban_levels pull --ff-only
-git -C dataset/five-dollar-model pull --ff-only
-
-git submodule update --init --recursive
+wandb sweep --project encoder_mgpcgrl_fewshot --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl/fewshot/train_encoder.yaml
 ```
 
-**Verify:**
+Train MGPCGRL PCGRL policies:
 
 ```bash
-git submodule status
+wandb sweep --project train_mgpcgrl_fewshot --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl/fewshot/train_pcgrl.yaml
 ```
 
-**Expected submodules** (from `.gitmodules`):
-- `dataset/TheVGLC` - VGLC games (Doom, Zelda etc.)
-- `dataset/dungeon_level_dataset` - Dungeon with text
-- `dataset/boxoban_levels` - Boxoban/Sokoban levels
-- `dataset/five-dollar-model` - Pokemon levels
+Evaluate MGPCGRL:
 
----
-
-## Multi-Game Dataset Quick Start
-
-### 1) Load all available games
-
-```python
-from dataset.multigame import MultiGameDataset
-
-ds = MultiGameDataset(include_dungeon=True)
-print(len(ds))
-print(ds.available_games())
-
-sample = ds[0]
-print(sample.game, sample.array.shape, sample.instruction)
+```bash
+wandb sweep --project eval_mgpcgrl_fewshot --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl/fewshot/eval_pcgrl.yaml
 ```
 
-### 2) Dungeon-only (level-text pairs)
+### Experiment Table
+
+The linked files list the exact WandB sweep commands for encoder training,
+PCGRL training, and evaluation. They also include the baseline methods used for
+the same setting.
+
+| Setting | Description | Commands |
+| --- | --- | --- |
+| Zero-shot | Hold out one game domain from encoder training, then evaluate transfer to the unseen game. | [Experiment](experiment/zeroshot.md) |
+| Few-shot | Train with a small fraction of the held-out game and compare against zero-shot behavior. Includes the `delta_weight=0.0` ablation. | [Experiment](experiment/fewshot.md) |
+| Full-shot | Train with all available data for the target setting. Includes the `delta_weight=0.0` ablation. | [Experiment](experiment/fullshot.md) |
+| Full-shot 2 | Full-shot experiments over two-game combinations. | [Experiment](experiment/fullshot_2.md) |
+| Full-shot 3 | Full-shot experiments over three-game combinations. | [Experiment](experiment/fullshot_3.md) |
+
+## Domain-Cross Loss
+
+MGPCGRL uses a continuous task-wise cross-game direction alignment loss during
+encoder training. For each `(game, reward_enum)` group, it estimates the
+direction in text-embedding space induced by increasing the normalized condition
+value. For the same `reward_enum`, directions from different games are aligned
+with cosine distance.
+
+The full implementation is in `train_clip_decoder.py` inside
+`continuous_direction_alignment`.
 
 ```python
-from pathlib import Path
-from dataset.multigame import MultiGameDataset
+import jax
+import jax.numpy as jnp
 
-ds = MultiGameDataset(
-    vglc_games=[],
-    vglc_root=Path("__disable_vglc__"),
-    include_dungeon=True,
+
+def safe_l2_normalize(x, axis=-1, eps=1e-6):
+    sq_norm = jnp.sum(x * x, axis=axis, keepdims=True)
+    return x * jax.lax.rsqrt(jnp.maximum(sq_norm, eps * eps))
+
+
+def domain_cross_loss(z_text, game_id, reward_enum, condition, *,
+                      num_games, num_tasks, min_count=2, var_eps=1e-4):
+    """Continuous task-wise cross-game direction alignment loss."""
+    z = safe_l2_normalize(z_text)
+    c = condition.astype(jnp.float32)
+
+    game_mask = game_id[None, :] == jnp.arange(num_games)[:, None]
+    task_mask = reward_enum[None, :] == jnp.arange(num_tasks)[:, None]
+    mask = (game_mask[:, None, :] & task_mask[None, :, :]).astype(jnp.float32)
+
+    n = mask.sum(axis=-1)
+    safe_n = jnp.maximum(n, 1.0)
+
+    c_mean = (mask * c[None, None, :]).sum(-1) / safe_n
+    z_mean = (mask[..., None] * z[None, None, :, :]).sum(-2) / safe_n[..., None]
+
+    dc = c[None, None, :] - c_mean[..., None]
+    dz = z[None, None, :, :] - z_mean[:, :, None, :]
+
+    slope_num = ((mask * dc)[..., None] * dz).sum(-2)
+    slope_den = (mask * dc * dc).sum(-1)
+
+    valid = (n >= min_count) & ((slope_den / safe_n) > var_eps)
+    slope = slope_num / jnp.where(valid, slope_den, 1.0)[..., None]
+    slope = jnp.where(valid[..., None], slope, 0.0)
+
+    direction = safe_l2_normalize(slope)
+    direction = jnp.where(valid[..., None], direction, 0.0)
+
+    cosine = jnp.einsum("gtd,htd->ght", direction, direction)
+    pair_valid = valid[:, None, :] & valid[None, :, :]
+    upper_tri = jnp.triu(jnp.ones((num_games, num_games), dtype=bool), k=1)
+    pair_valid = pair_valid & upper_tri[:, :, None]
+
+    pair_loss = jnp.where(pair_valid, 1.0 - cosine, 0.0)
+    return pair_loss.sum() / jnp.maximum(pair_valid.astype(jnp.float32).sum(), 1.0)
+```
+
+The encoder objective combines this term with contrastive, reward
+classification, and condition regression losses:
+
+```python
+loss = (
+    contrastive_weight * contrastive_loss
+    + cls_weight * reward_enum_ce_loss
+    + reg_weight * condition_regression_loss
+    + delta_weight * domain_cross_loss
 )
-
-pairs = [(s.game, s.array, s.instruction) for s in ds.with_instruction()]
-print(len(pairs))
 ```
 
-### 3) Filter by game
+In the provided MGPCGRL sweeps, `delta_weight=0.03` is the default direction
+alignment setting. Use the `mgpcgrl_dw0` sweep files to reproduce the ablation
+with `delta_weight=0.0`.
 
-```python
-from dataset.multigame import MultiGameDataset, GameTag
+## Key Entry Points
 
-ds = MultiGameDataset(include_dungeon=True)
-zelda_samples = ds.by_game(GameTag.ZELDA)
-dungeon_samples = ds.by_game(GameTag.DUNGEON)
-print(len(zelda_samples), len(dungeon_samples))
-```
+- `train_clip_decoder.py`: train the CLIP-style encoder and reward decoder.
+- `train_mgpcgrl.py`: train MGPCGRL PCGRL policies from an encoder checkpoint.
+- `eval_mgpcgrl.py`: evaluate trained MGPCGRL policies.
+- `conf/train_mgpcgrl.yaml`: MGPCGRL training defaults.
+- `conf/eval_mgpcgrl.yaml`: MGPCGRL evaluation defaults.
+- `sweep/wandb_sweep/mgpcgrl`: MGPCGRL reproduction sweeps.
+- `sweep/wandb_sweep/mgpcgrl_dw0`: domain-cross loss ablation sweeps.
 
-For more dataset details:
-- `dataset/multigame/README.md`
+## Dataset Roots
+
+MGPCGRL uses five canonical game domains: Dungeon, Pokemon, Sokoban, Doom, and
+Zelda. Doom and Doom2 are loaded separately in code, but reported as one Doom
+domain in the seen/unseen split.
+
+| Dataset root | Games used | Source |
+| --- | --- | --- |
+| `dataset/TheVGLC` | Zelda, Doom, Doom2 | [Repo](https://github.com/TheVGLC/TheVGLC) |
+| `dataset/dungeon_level_dataset` | Dungeon | [Repo](https://github.com/anonymous-user/dungeon-level-dataset) |
+| `dataset/boxoban_levels` | Sokoban | [Repo](https://github.com/google-deepmind/boxoban-levels) |
+| `dataset/five-dollar-model` | Pokemon | [Repo](https://github.com/TimMerino1710/five-dollar-model) |

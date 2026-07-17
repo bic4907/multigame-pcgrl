@@ -100,7 +100,6 @@ dependencies = [
     "pynacl==1.5.0",
     "pyopenssl==25.0.0",
     "pyparsing==3.2.1",
-    "pytest==8.3.4",
     "python-dateutil==2.9.0.post0",
     "pytz==2024.2",
     "pyyaml==6.0.2",
@@ -139,7 +138,7 @@ dependencies = [
     "zope-interface==7.2",
 ]
 readme = "README.md"
-requires-python = ">= 3.8"
+requires-python = ">= 3.11"
 
 [build-system]
 requires = ["hatchling"]
@@ -154,6 +153,3 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/instructed_pcg"]
-
-[tool.pytest.ini_options]
-testpaths = ["dataset/multigame/tests", "tests"]

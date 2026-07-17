@@ -127,10 +127,10 @@ class Config:
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     initialize: Optional[bool] = None
 
-    # Wandb (WANDB_API_KEY 는 .env 파일 또는 환경변수로 설정)
+    # Wandb (set WANDB_API_KEY in .env or as an environment variable)
     wandb_key: Optional[str] = None
     wandb_project: Optional[str] = 'instruct_pcgrl'
-    wandb_entity: Optional[str] = 'st4889ha-gwangju-institute-of-science-and-technology'
+    wandb_entity: Optional[str] = None
     wandb_resume: str = 'allow'
     evaluator: str = 'hr'  # 'vit', 'hr' (heuristic)
     

@@ -1,11 +1,11 @@
-"""W&B 다운로더에서 사용하는 설정 상수들."""
+"""Configuration constants used by the W&B downloader."""
 
 import os
 
-# config에서 중첩 딕셔너리를 펼칠 키 목록
+# Keys whose nested dictionaries are flattened from config.
 FLATTEN_KEYS = ["encoder"]
 
-# config에서 제거할 키 목록
+# Keys removed from config.
 REMOVE_KEYS = [
     "lr", "GAMMA", "is_3d", "n_eps", "agents", "n_bins", "n_gpus",
     "VF_COEF", "encoder", "CLIP_EPS", "ENT_COEF", "_img_dir", "_vid_dir",
@@ -24,12 +24,11 @@ REMOVE_KEYS = [
     "DEBUG", "eval_randomize_map_shape",
 ]
 
-# W&B 엔티티 기본값 (.env 의 WANDB_ENTITY 우선)
-DEFAULT_ENTITY = os.getenv("WANDB_ENTITY", "st4889ha-gwangju-institute-of-science-and-technology")
+# Default W&B entity. Prefer WANDB_ENTITY from the environment.
+DEFAULT_ENTITY = os.getenv("WANDB_ENTITY", "<wandb-entity>")
 
-# W&B API 타임아웃 (초)
+# W&B API timeout in seconds.
 API_TIMEOUT = 600
 
-# 병렬 처리 기본 워커 수
+# Default number of parallel workers.
 DEFAULT_NUM_WORKERS = 8
-

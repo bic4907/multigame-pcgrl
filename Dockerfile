@@ -1,13 +1,27 @@
-FROM bic4907/pcgrl:cu12
+FROM python:3.11-slim
 
-RUN pip install timm
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1
 
-ENV OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
-RUN apt-get update && apt-get install -y build-essential
-
-# update latest wandb
-RUN pip install --upgrade wandb
+WORKDIR /workspace/mgpcgrl
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends nano git tmux rsync htop && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        htop \
+        nano \
+        rsync \
+        tmux && \
     rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN python -m pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir timm
+
+COPY . .
+
+CMD ["bash"]

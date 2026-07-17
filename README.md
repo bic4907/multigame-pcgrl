@@ -75,6 +75,27 @@ the same setting.
 | Full-shot 2 | Full-shot experiments over two-game combinations. | [Experiment](experiment/fullshot_2.md) |
 | Full-shot 3 | Full-shot experiments over three-game combinations. | [Experiment](experiment/fullshot_3.md) |
 
+## Reward Prediction
+
+The reward decoder predicts the reward type and target condition from an
+instruction embedding. See
+[`reward_decode`](encoder/utils/decoder_reward.py#L118) and
+[`predict_reward_condition`](encoder/utils/decoder_reward.py#L212).
+
+```python
+def predict_reward(text_embedding, decoder_apply_fn, decoder_variables):
+    reward_logits, condition_pred, condition_pred_raw = decoder_apply_fn(
+        decoder_variables,
+        text_embedding,
+        training=False,
+        method=lambda m, embed, training=False: m.decoder(embed, training=training),
+    )
+
+    reward_enum = jnp.argmax(reward_logits, axis=-1)
+    condition = condition_pred_raw[jnp.arange(condition_pred_raw.shape[0]), reward_enum]
+    return reward_enum, condition
+```
+
 ## Domain-Cross Loss
 
 MGPCGRL uses a continuous task-wise cross-game direction alignment loss during
@@ -83,8 +104,9 @@ direction in text-embedding space induced by increasing the normalized condition
 value. For the same `reward_enum`, directions from different games are aligned
 with cosine distance.
 
-The full implementation is in `train_clip_decoder.py` inside
-`continuous_direction_alignment`.
+See
+[`continuous_direction_alignment`](train_clip_decoder.py#L292) in
+`train_clip_decoder.py`.
 
 ```python
 import jax
@@ -153,6 +175,7 @@ with `delta_weight=0.0`.
 ## Key Entry Points
 
 - `train_clip_decoder.py`: train the CLIP-style encoder and reward decoder.
+- `encoder/utils/decoder_reward.py`: predict `reward_enum` and `condition` from instruction embeddings.
 - `train_mgpcgrl.py`: train MGPCGRL PCGRL policies from an encoder checkpoint.
 - `eval_mgpcgrl.py`: evaluate trained MGPCGRL policies.
 - `conf/train_mgpcgrl.yaml`: MGPCGRL training defaults.

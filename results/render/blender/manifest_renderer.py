@@ -44,6 +44,9 @@ def to_blender_unified(level: np.ndarray, game: str) -> np.ndarray:
     arr = np.asarray(level)
     if arr.ndim != 2:
         raise ValueError(f"Expected a 2D level array for Blender rendering, got shape {arr.shape}")
+    values = set(np.unique(arr.astype(np.int32, copy=False)).tolist())
+    if values.issubset({1, 2, 3, 4, 5}):
+        return (arr.astype(np.int32, copy=False) - 1).astype(np.int32, copy=False)
     unified = to_unified(arr.astype(np.int32, copy=False), game, warn_unmapped=False)
     return np.clip(unified, 0, 4).astype(np.int32, copy=False)
 
@@ -115,10 +118,15 @@ def render_levels(
     blender: str | None = None,
     resolution: tuple[int, int] = (640, 520),
 ) -> Path:
+    request_list = list(requests)
     manifest = build_manifest(
-        list(requests),
+        request_list,
         manifest_path,
         resolution=resolution,
     )
     render_manifest(manifest, blender=blender)
+    missing_outputs = [request.output for request in request_list if not request.output.exists()]
+    if missing_outputs:
+        missing_text = ", ".join(str(path) for path in missing_outputs)
+        raise RuntimeError(f"Blender completed but did not create expected render output(s): {missing_text}")
     return manifest

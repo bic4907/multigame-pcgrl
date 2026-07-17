@@ -52,7 +52,9 @@ def _build_latex(
     features: list[str],
     games: list[str],
     output_dir: Path,
+    methods: list[str] | None = None,
 ) -> str:
+    methods = methods or METHOD_ORDER
     game_headers = [GAME_LABEL.get(game, _latex_escape(game.title())) for game in games]
     game_col_width = max(0.15, min(0.295, 0.885 / max(1, len(games))))
     colspec = (
@@ -80,7 +82,7 @@ def _build_latex(
     for feature_i, feature in enumerate(features):
         transition = TRANSITION_LABELS.get(feature, _latex_escape(feature))
         lines.append(rf"\multicolumn{{{len(games) + 1}}}{{@{{}}l}}{{\textbf{{{transition}}}}} \\[-0.15em]")
-        for method_i, method in enumerate(METHOD_ORDER):
+        for method_i, method in enumerate(methods):
             game_cells = []
             for game in games:
                 cell = cells.get((method, game, feature))
@@ -111,7 +113,9 @@ def _make_preview_png_pdf(
     features: list[str],
     games: list[str],
     output_dir: Path,
+    methods: list[str] | None = None,
 ) -> tuple[Path, Path]:
+    methods = methods or METHOD_ORDER
     cell_w = 660 if len(games) > 2 else 760
     left_w = 230
     method_w = 110
@@ -119,7 +123,7 @@ def _make_preview_png_pdf(
     row_h = 280
     image_h = 220
     width = left_w + method_w + len(games) * cell_w + 36
-    height = header_h + len(features) * 2 * row_h + 40
+    height = header_h + len(features) * len(methods) * row_h + 40
     canvas = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(canvas)
     font_h = _load_font(30, bold=True)
@@ -142,11 +146,12 @@ def _make_preview_png_pdf(
         transition = TRANSITION_LABELS.get(feature, feature).replace("$", "").replace("\\rightarrow", "->")
         transition = transition.replace("\\", "")
         block_top = y
-        block_mid = y + row_h
-        block_bottom = y + 2 * row_h
+        block_bottom = y + len(methods) * row_h
         draw.rectangle((18, block_top, width - 18, block_bottom - 1), outline=(220, 224, 230), width=1)
-        _draw_text(draw, (x_transition, block_top + 106), transition, font_b)
-        for method_i, method in enumerate(METHOD_ORDER):
+        transition_bbox = draw.multiline_textbbox((0, 0), transition, font=font_b, spacing=4)
+        transition_h = transition_bbox[3] - transition_bbox[1]
+        _draw_text(draw, (x_transition, block_top + max(18, (block_bottom - block_top - transition_h) // 2)), transition, font_b)
+        for method_i, method in enumerate(methods):
             row_top = y + method_i * row_h
             draw.line((x_method - 10, row_top, width - 18, row_top), fill=(232, 235, 240), width=1)
             draw.text((x_method, row_top + 118), method, font=font_b, fill=(20, 24, 30))
@@ -160,8 +165,10 @@ def _make_preview_png_pdf(
                 scale = min((cell_w - 48) / img.width, image_h / img.height)
                 img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
                 canvas.paste(img, (x0 + (cell_w - img.width) // 2, row_top + 30))
-        draw.line((18, block_mid, width - 18, block_mid), fill=(232, 235, 240), width=1)
-        y += 2 * row_h
+        for method_i in range(1, len(methods)):
+            row_y = block_top + method_i * row_h
+            draw.line((18, row_y, width - 18, row_y), fill=(232, 235, 240), width=1)
+        y += len(methods) * row_h
 
     png_path = output_dir / "table2_semantic_transition_crop.png"
     pdf_path = output_dir / "table2_semantic_transition_crop.pdf"

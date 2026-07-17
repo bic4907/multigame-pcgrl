@@ -53,7 +53,7 @@ ASSET_SETS = {
         1: {"pack": "mapped_blender_objects/pokemon/wall", "file": "wall.glb", "scale": (0.62, 0.62, 0.62), "z": 0.02},
         2: {"pack": "mapped_blender_objects/pokemon/interactable", "file": "interactable.glb", "scale": (0.9, 0.9, 0.9), "z": 0.02},
         3: {"pack": "__procedural__", "file": "monster-blue", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "mapped_blender_objects/pokemon/collectable", "file": "collectable.glb", "scale": (0.65, 0.65, 0.65), "z": 0.12},
+        4: {"pack": "mapped_blender_objects/pokemon/collectable", "file": "collectable.glb", "scale": (0.104, 0.104, 0.104), "z": 0.50},
     },
     "zelda": {
         0: {"pack": "mapped_blender_objects/zelda/empty", "file": "empty.glb", "scale": (0.95, 0.95, 0.22), "z": -0.04},
@@ -166,7 +166,49 @@ def load_asset_collection(name: str, path: Path) -> bpy.types.Collection:
         for existing in list(obj.users_collection):
             existing.objects.unlink(obj)
         collection.objects.link(obj)
+    if "pokemon_empty" in name:
+        brighten_collection_materials(collection, amount=0.14)
     return collection
+
+
+def brighten_collection_materials(collection: bpy.types.Collection, amount: float) -> None:
+    seen: set[str] = set()
+    for obj in collection.objects:
+        data = getattr(obj, "data", None)
+        materials = getattr(data, "materials", None)
+        if not materials:
+            continue
+        for mat in materials:
+            if mat is None or mat.name in seen:
+                continue
+            seen.add(mat.name)
+            mat.diffuse_color = tuple(min(1.0, channel * 1.16 + amount * 0.25) for channel in mat.diffuse_color[:3]) + (mat.diffuse_color[3],)
+            if not mat.use_nodes or not mat.node_tree:
+                continue
+            bsdf = mat.node_tree.nodes.get("Principled BSDF")
+            if bsdf is None:
+                continue
+            base_color = bsdf.inputs.get("Base Color")
+            if base_color is None:
+                continue
+            if base_color.links:
+                old_link = base_color.links[0]
+                source_socket = old_link.from_socket
+                mat.node_tree.links.remove(old_link)
+                bright = mat.node_tree.nodes.new("ShaderNodeBrightContrast")
+                bright.name = "pokemon_empty_brightness"
+                bright.inputs["Bright"].default_value = amount
+                bright.inputs["Contrast"].default_value = 0.02
+                mat.node_tree.links.new(source_socket, bright.inputs["Color"])
+                mat.node_tree.links.new(bright.outputs["Color"], base_color)
+            else:
+                color = base_color.default_value
+                base_color.default_value = (
+                    min(1.0, color[0] * 1.16 + amount * 0.25),
+                    min(1.0, color[1] * 1.16 + amount * 0.25),
+                    min(1.0, color[2] * 1.16 + amount * 0.25),
+                    color[3],
+                )
 
 
 def link_to_collection_only(obj: bpy.types.Object, collection: bpy.types.Collection) -> None:
@@ -343,7 +385,9 @@ def stable_signed_float(*parts: object) -> float:
 
 
 def object_jitter(game: str, category: int, row: int, col: int) -> tuple[float, float, float]:
-    if category == 1:
+    if game == "pokemon" and category == 1:
+        amount = 0.11
+    elif category == 1:
         amount = 0.06
     elif category in (2, 3, 4):
         amount = 0.22
@@ -351,11 +395,28 @@ def object_jitter(game: str, category: int, row: int, col: int) -> tuple[float, 
         amount = 0.0
     dx = stable_signed_float(game, category, row, col, "x") * amount
     dy = stable_signed_float(game, category, row, col, "y") * amount
-    rot_amount = math.radians(45 if category in (2, 3, 4) else 14)
+    if game == "pokemon" and category == 1:
+        rot_amount = math.radians(180)
+    else:
+        rot_amount = math.radians(45 if category in (2, 3, 4) else 14)
     rot = stable_signed_float(game, category, row, col, "rot") * rot_amount
-    if category == 1:
+    if category == 1 and game != "pokemon":
         rot *= 0.35
     return dx, dy, rot
+
+
+def object_scale(
+    game: str,
+    category: int,
+    row: int,
+    col: int,
+    base_scale: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    if game != "pokemon" or category != 1:
+        return base_scale
+    uniform = 0.90 + stable_unit_float(game, category, row, col, "scale") * 0.22
+    height = 0.95 + stable_unit_float(game, category, row, col, "height") * 0.18
+    return (base_scale[0] * uniform, base_scale[1] * uniform, base_scale[2] * uniform * height)
 
 
 def add_text(text: str, loc: tuple[float, float, float], size: float, mat: bpy.types.Material) -> None:
@@ -475,11 +536,12 @@ def add_stage(
                 if category != 0:
                     cfg = asset_set[category]
                     dx, dy, rotation_z = object_jitter(game, category, row, col)
+                    scale = object_scale(game, category, row, col, cfg["scale"])
                     add_asset_instance(
                         asset_collections[asset_key(cfg)],
                         f"category_{category}",
                         (x + 0.5 + dx, y + 0.5 + dy, cfg["z"]),
-                        cfg["scale"],
+                        scale,
                         rotation_z,
                     )
             else:

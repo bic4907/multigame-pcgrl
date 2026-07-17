@@ -164,7 +164,7 @@
     },
     "pokemon": {
       "empty": {
-        "tile_id": 0,
+        "tile_id": 1,
         "semantic": "empty",
         "scale": [
           1.0,
@@ -180,7 +180,7 @@
         "textures": "results/render/assets/mapped_blender_objects/pokemon/empty/Textures"
       },
       "wall": {
-        "tile_id": 1,
+        "tile_id": 2,
         "semantic": "wall",
         "scale": [
           0.62,
@@ -196,7 +196,7 @@
         "textures": "results/render/assets/mapped_blender_objects/pokemon/wall/Textures"
       },
       "interactable": {
-        "tile_id": 2,
+        "tile_id": 3,
         "semantic": "interactable",
         "scale": [
           0.9,
@@ -212,7 +212,7 @@
         "textures": "results/render/assets/mapped_blender_objects/pokemon/interactable/Textures"
       },
       "hazard": {
-        "tile_id": 3,
+        "tile_id": 4,
         "semantic": "hazard",
         "scale": [
           0.75,
@@ -225,14 +225,14 @@
         "status": "procedural_no_source_glb"
       },
       "collectable": {
-        "tile_id": 4,
+        "tile_id": 5,
         "semantic": "collectable",
         "scale": [
-          0.65,
-          0.65,
-          0.65
+          0.104,
+          0.104,
+          0.104
         ],
-        "z": 0.12,
+        "z": 0.18,
         "pack": "kenney_platformer",
         "file": "coin-gold.glb",
         "status": "copied",

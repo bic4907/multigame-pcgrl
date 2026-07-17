@@ -39,7 +39,6 @@ from table_export.semantic.config import (  # noqa: E402
 from table_export.semantic.constants import (  # noqa: E402
     DEFAULT_FEATURES,
     DEFAULT_GAMES,
-    DEFAULT_LATEX_GAMES,
     DEFAULT_PROJECTS,
     DEFAULT_TILE_SIZE,
     ENTITY,
@@ -105,6 +104,30 @@ def _scope_list(scope: dict[str, Any], key: str, default: list[str], override: s
     if isinstance(raw, str) and raw.strip():
         return _split_csv(raw)
     return list(default)
+
+
+def _scope_methods(projects: dict[str, str], model_override: str | None, models_override: str | None) -> list[str]:
+    override = models_override or model_override
+    if not override:
+        return [method for method in METHOD_ORDER if method in projects]
+
+    by_lower = {method.lower(): method for method in projects}
+    methods: list[str] = []
+    unknown: list[str] = []
+    for raw_method in _split_csv(override):
+        method = by_lower.get(raw_method.lower())
+        if method is None:
+            unknown.append(raw_method)
+            continue
+        if method not in methods:
+            methods.append(method)
+
+    if unknown:
+        available = ", ".join(sorted(projects))
+        raise ValueError(f"Unknown model(s): {', '.join(unknown)}. Available: {available}")
+    if not methods:
+        raise ValueError("At least one model must be selected.")
+    return methods
 
 
 def _copy_script_snapshot(output_dir: Path) -> Path:
@@ -244,6 +267,19 @@ def _path_coords_for_blender(state: Any, reward_enum: int) -> list[list[int]] | 
     return [[int(row), int(col)] for row, col in coords]
 
 
+def _show_matplot_image(image_path: Path, dpi: int) -> None:
+    from PIL import Image
+    import matplotlib.pyplot as plt
+
+    img = Image.open(image_path).convert("RGB")
+    dpi = max(100, int(dpi))
+    fig, ax = plt.subplots(figsize=(img.width / dpi, img.height / dpi), dpi=dpi)
+    ax.imshow(img, interpolation="none")
+    ax.axis("off")
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+    plt.show()
+
+
 def render_table(args: argparse.Namespace) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = Path(args.output_dir) if args.output_dir else SCRIPT_DIR / "outputs" / f"table2_semantic_render_{timestamp}"
@@ -256,13 +292,10 @@ def render_table(args: argparse.Namespace) -> Path:
 
     scope = meta.get("scope", {})
     games = _scope_list(scope, "games", DEFAULT_GAMES, args.games)
-    latex_games = _scope_list(scope, "latex_games", DEFAULT_LATEX_GAMES, args.latex_games)
     features = _scope_list(scope, "features", DEFAULT_FEATURES, args.features)
-    projects = dict(scope.get("projects") or DEFAULT_PROJECTS)
-
-    missing_latex_games = [game for game in latex_games if game not in games]
-    if missing_latex_games:
-        raise ValueError("latex_games must be a subset of games: " + ",".join(missing_latex_games))
+    configured_projects = dict(scope.get("projects") or DEFAULT_PROJECTS)
+    methods = _scope_methods(configured_projects, args.model, args.models)
+    projects = {method: configured_projects[method] for method in methods}
 
     reward_enums = sorted({
         _reward_enum_for_feature_game(feature, game)
@@ -308,7 +341,7 @@ def render_table(args: argparse.Namespace) -> Path:
         side_labels = _side_labels_for_feature(feature)
         for game in games:
             reward_enum = _reward_enum_for_feature_game(feature, game)
-            for method in METHOD_ORDER:
+            for method in methods:
                 run = runs.get((method, reward_enum))
                 method_candidates = candidates_by_method_re.get((method, reward_enum), {})
                 if run is None or run.h5_path is None:
@@ -419,9 +452,9 @@ def render_table(args: argparse.Namespace) -> Path:
                     triplet_overlay=triplet_overlay,
                 )
 
-    latex = _build_latex(cells, features, latex_games, output_dir)
+    latex = _build_latex(cells, features, games, output_dir, methods)
     (output_dir / "tbl_qualitative.tex").write_text(latex, encoding="utf-8")
-    _make_preview_png_pdf(cells, features, games, output_dir)
+    preview_png, _preview_pdf = _make_preview_png_pdf(cells, features, games, output_dir, methods)
     _write_manifest(cells, output_dir)
     overleaf_dir = _make_overleaf_bundle(cells, output_dir)
     _copy_script_snapshot(output_dir)
@@ -431,8 +464,8 @@ def render_table(args: argparse.Namespace) -> Path:
         "source_render_config": str(render_config_path),
         "entity": args.entity,
         "projects": projects,
+        "models": methods,
         "games": games,
-        "latex_games": latex_games,
         "features": features,
         "tile_size": args.tile_size,
         "render_mode": args.render_mode,
@@ -448,6 +481,8 @@ def render_table(args: argparse.Namespace) -> Path:
         json.dumps(used_config, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    if args.show_matplot:
+        _show_matplot_image(preview_png, args.matplot_dpi)
     print(output_dir)
     return output_dir
 
@@ -456,9 +491,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--render-config", default=str(DEFAULT_RENDER_CONFIG))
     parser.add_argument("--entity", default=ENTITY)
+    parser.add_argument("--model", default="", help="Single model/method override, e.g. mgpcgrl.")
+    parser.add_argument("--models", default="", help="Comma-separated model/method override, e.g. vipcgrl,mgpcgrl.")
     parser.add_argument("--games", default="", help="Optional comma-separated override. Defaults to render_config scope.")
-    parser.add_argument("--latex-games", default="", help="Optional comma-separated override. Defaults to render_config scope.")
     parser.add_argument("--features", default="", help="Optional comma-separated override. Defaults to render_config scope.")
+    parser.add_argument("--show-matplot", action="store_true", help="Open the final preview image with matplotlib.pyplot.show().")
+    parser.add_argument("--matplot-dpi", type=int, default=300, help="DPI for --show-matplot. The image is shown at native pixels by default.")
     parser.add_argument("--tile-size", type=int, default=DEFAULT_TILE_SIZE)
     parser.add_argument("--render-mode", choices=("2d", "blender"), default="2d")
     parser.add_argument("--blender", default="", help="Optional path to Blender executable.")

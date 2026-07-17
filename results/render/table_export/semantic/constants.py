@@ -13,7 +13,6 @@ DEFAULT_PROJECTS = {
     "MGPCGRL": "aaai27_eval_mgpcgrl_renderre1",
 }
 DEFAULT_GAMES = ["doom", "dungeon", "pokemon"]
-DEFAULT_LATEX_GAMES = ["doom", "dungeon", "pokemon"]
 DEFAULT_FEATURES = ["path_length"]
 DEFAULT_TILE_SIZE = 32
 FEATURES = {

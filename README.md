@@ -9,7 +9,6 @@ usually hand-defined for one game at a time. The framework instead learns shared
 representations between design instructions and game levels, then transfers
 reward signals across game domains.
 
-![MGPCGRL teaser](docs/teaser.png)
 
 ## Setup
 

@@ -42,11 +42,11 @@ ASSET_SETS = {
         4: {"pack": "mapped_blender_objects/sokoban/collectable", "file": "collectable.glb", "scale": (0.7, 0.7, 0.7), "z": 0.02},
     },
     "doom": {
-        0: {"pack": "mapped_blender_objects/doom/empty", "file": "empty.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
-        1: {"pack": "mapped_blender_objects/doom/wall", "file": "wall.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
-        2: {"pack": "__procedural__", "file": "push-block", "scale": (0.78, 0.78, 0.78), "z": 0.02},
-        3: {"pack": "__procedural__", "file": "monster-red", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "mapped_blender_objects/doom/collectable", "file": "collectable.glb", "scale": (0.7, 0.7, 0.7), "z": 0.02},
+        0: {"pack": "__procedural__", "file": "doom-empty-textured-cube", "scale": (1.0, 1.0, 1.0), "z": 0.0},
+        1: {"pack": "__procedural__", "file": "doom-wall-textured-cube", "scale": (1.0, 1.0, 1.0), "z": 0.0},
+        2: {"pack": "mapped_blender_objects/doom/interactable", "file": "interactable.glb", "scale": (0.78, 0.78, 0.78), "z": 0.10},
+        3: {"pack": "mapped_blender_objects/doom/hazard", "file": "hazard.glb", "scale": (0.008, 0.008, 0.008), "z": 0.05},
+        4: {"pack": "mapped_blender_objects/doom/collectable", "file": "collectable.glb", "scale": (0.0021, 0.0021, 0.0021), "z": 0.32},
     },
     "pokemon": {
         0: {"pack": "mapped_blender_objects/pokemon/empty", "file": "empty.glb", "scale": (1.0, 1.0, 0.26), "z": -0.08},
@@ -356,6 +356,20 @@ def make_procedural_dungeon_wall_collection(name: str) -> bpy.types.Collection:
     return collection
 
 
+def make_procedural_doom_empty_collection(name: str) -> bpy.types.Collection:
+    collection = bpy.data.collections.new(f"asset_procedural_{name}")
+    empty_mat = image_texture_material("doom_empty_2d_texture", DEFAULT_ASSET_DIR / "mapped_blender_objects" / "doom" / "empty" / "empty.png")
+    add_collection_cube(collection, "doom_empty_textured_cube", (0, 0, 0.035), (0.98, 0.98, 0.07), empty_mat)
+    return collection
+
+
+def make_procedural_doom_wall_collection(name: str) -> bpy.types.Collection:
+    collection = bpy.data.collections.new(f"asset_procedural_{name}")
+    wall_mat = image_texture_material("doom_wall_2d_texture", DEFAULT_ASSET_DIR / "mapped_blender_objects" / "doom" / "wall" / "wall.png")
+    add_collection_cube(collection, "doom_wall_textured_cube", (0, 0, 0.58), (0.92, 0.92, 1.16), wall_mat)
+    return collection
+
+
 def make_procedural_push_block_collection(name: str) -> bpy.types.Collection:
     collection = bpy.data.collections.new(f"asset_procedural_{name}")
     body = material("push_block_body", (0.92, 0.66, 0.16, 1.0))
@@ -375,6 +389,10 @@ def make_procedural_collection(name: str) -> bpy.types.Collection:
         return make_procedural_floor_collection(name)
     if name == "dungeon-wall-textured-cube":
         return make_procedural_dungeon_wall_collection(name)
+    if name == "doom-empty-textured-cube":
+        return make_procedural_doom_empty_collection(name)
+    if name == "doom-wall-textured-cube":
+        return make_procedural_doom_wall_collection(name)
     if name == "push-block":
         return make_procedural_push_block_collection(name)
     raise ValueError(f"Unknown procedural asset: {name}")
@@ -433,6 +451,8 @@ def stable_signed_float(*parts: object) -> float:
 
 
 def object_jitter(game: str, category: int, row: int, col: int) -> tuple[float, float, float]:
+    if game == "doom" and category == 1:
+        return 0.0, 0.0, 0.0
     if game == "pokemon" and category in (2, 3):
         return 0.0, 0.0, 0.0
     if game == "pokemon" and category == 1:

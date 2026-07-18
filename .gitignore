@@ -51,6 +51,7 @@ human_trajectory_cache/
 tests/render_samples/
 results/render/.wandb_download/
 results/render/outputs/
+results/render/render_config.json
 pretrained_encoders/*
 !pretrained_encoders/vipcgrl_sample/
 pretrained_encoders/vipcgrl_sample/.DS_Store

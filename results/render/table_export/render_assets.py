@@ -11,6 +11,7 @@ from .csv_rows import (
     row_key,
 )
 from .models import RunResult
+from .semantic.tile_renderer import DEFAULT_MAPPED_TILE_DIR, SemanticTileRenderer
 from .utils import reward_enum_value, safe_slug, unique_methods
 
 
@@ -197,9 +198,7 @@ def render_image_table_assets(
     if not rows:
         return [], {}, {}
 
-    from dataset.multigame.render import GameLevelRenderer
-
-    renderer = GameLevelRenderer()
+    renderer = SemanticTileRenderer(DEFAULT_MAPPED_TILE_DIR)
     images_dir = output_dir / "images"
     method_images: dict[tuple[str, str], Path] = {}
     dataset_images: dict[str, Path] = {}

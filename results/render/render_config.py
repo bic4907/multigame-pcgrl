@@ -59,7 +59,7 @@ from table_export.semantic.render import (  # noqa: E402
     _draw_level_image,
     _overlay_metric,
 )
-from table_export.semantic.metrics import _path_metric_and_coords  # noqa: E402
+from table_export.semantic.metrics import _eval_path_metric_and_coords  # noqa: E402
 from table_export.semantic.tile_renderer import (  # noqa: E402
     DEFAULT_MAPPED_TILE_DIR,
     SemanticTileRenderer,
@@ -261,10 +261,17 @@ def _render_cell_images(
 def _path_coords_for_blender(state: Any, reward_enum: int) -> list[list[int]] | None:
     if reward_enum != 1:
         return None
-    _, coords = _path_metric_and_coords(state)
+    _, coords = _eval_path_metric_and_coords(state)
     if len(coords) < 2:
         return None
     return [[int(row), int(col)] for row, col in coords]
+
+
+def _metric_value_for_render(state: Any, reward_enum: int, csv_metric: float) -> float:
+    if reward_enum == 1:
+        metric, _ = _eval_path_metric_and_coords(state)
+        return metric
+    return csv_metric
 
 
 def _show_matplot_image(image_path: Path, dpi: int) -> None:
@@ -359,6 +366,13 @@ def render_table(args: argparse.Namespace) -> Path:
                 if low_state is None or mid_state is None or high_state is None:
                     raise RuntimeError(f"Missing H5 state for {method}/{game}/{feature}")
 
+                low_metric = _metric_value_for_render(low_state, reward_enum, low.seed_metrics[low_seed])
+                mid_metric = _metric_value_for_render(mid_state, reward_enum, mid.seed_metrics[mid_seed])
+                high_metric = _metric_value_for_render(high_state, reward_enum, high.seed_metrics[high_seed])
+                low.seed_metrics[low_seed] = low_metric
+                mid.seed_metrics[mid_seed] = mid_metric
+                high.seed_metrics[high_seed] = high_metric
+
                 stem = f"{method.lower()}_{game}_{feature}"
                 low_img, mid_img, high_img = _render_cell_images(
                     render_mode=args.render_mode,
@@ -377,21 +391,21 @@ def render_table(args: argparse.Namespace) -> Path:
                 if args.render_mode == "blender":
                     low_overlay = _overlay_metric_label(
                         low_img,
-                        low.seed_metrics[low_seed],
+                        low_metric,
                         low.target,
                         overlay_dir / f"{stem}_low_overlay.png",
                         args.tile_size,
                     )
                     mid_overlay = _overlay_metric_label(
                         mid_img,
-                        mid.seed_metrics[mid_seed],
+                        mid_metric,
                         mid.target,
                         overlay_dir / f"{stem}_mid_overlay.png",
                         args.tile_size,
                     )
                     high_overlay = _overlay_metric_label(
                         high_img,
-                        high.seed_metrics[high_seed],
+                        high_metric,
                         high.target,
                         overlay_dir / f"{stem}_high_overlay.png",
                         args.tile_size,
@@ -401,7 +415,7 @@ def render_table(args: argparse.Namespace) -> Path:
                         low_img,
                         low_state,
                         reward_enum,
-                        low.seed_metrics[low_seed],
+                        low_metric,
                         low.target,
                         overlay_dir / f"{stem}_low_overlay.png",
                         args.tile_size,
@@ -410,7 +424,7 @@ def render_table(args: argparse.Namespace) -> Path:
                         mid_img,
                         mid_state,
                         reward_enum,
-                        mid.seed_metrics[mid_seed],
+                        mid_metric,
                         mid.target,
                         overlay_dir / f"{stem}_mid_overlay.png",
                         args.tile_size,
@@ -419,7 +433,7 @@ def render_table(args: argparse.Namespace) -> Path:
                         high_img,
                         high_state,
                         reward_enum,
-                        high.seed_metrics[high_seed],
+                        high_metric,
                         high.target,
                         overlay_dir / f"{stem}_high_overlay.png",
                         args.tile_size,

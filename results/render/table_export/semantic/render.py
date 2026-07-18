@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from dataset.multigame.render import GameLevelRenderer
 from .constants import COUNT_TILE_ID_BY_REWARD_ENUM, PASSABLE_TILE_IDS, PROJECT_ROOT, _fmt_num
-from .metrics import _path_metric_and_coords
+from .metrics import _eval_path_metric_and_coords
 
 
 def _load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
@@ -70,7 +70,7 @@ def _overlay_metric(
     if reward_enum == 0:
         _draw_region_boundaries(draw, state, tile_size)
     elif reward_enum == 1:
-        _, coords = _path_metric_and_coords(state)
+        _, coords = _eval_path_metric_and_coords(state)
         if len(coords) >= 2:
             points = [(x * tile_size + tile_size // 2, y * tile_size + tile_size // 2) for y, x in coords]
             outer_width = max(5, tile_size // 2)

@@ -109,22 +109,21 @@
           1.0
         ],
         "z": 0.0,
-        "pack": "kenney_mini_dungeon",
-        "file": "wall.glb",
-        "status": "copied",
-        "source": "results/render/assets/blender/kenney_mini_dungeon/wall.glb",
-        "output": "results/render/assets/mapped_blender_objects/dungeon/wall/wall.glb",
-        "textures": "results/render/assets/mapped_blender_objects/dungeon/wall/Textures"
+        "pack": "__procedural__",
+        "file": "dungeon-wall-textured-cube",
+        "status": "procedural_textured_cube",
+        "source": "results/render/assets/mapped_tiles/dungeon/wall.png",
+        "output": "results/render/assets/mapped_blender_objects/dungeon/wall/wall.png"
       },
       "interactable": {
         "tile_id": 2,
         "semantic": "interactable",
         "scale": [
-          0.9,
-          0.9,
-          0.9
+          0.015,
+          0.015,
+          0.015
         ],
-        "z": 0.02,
+        "z": 0.2,
         "pack": "kenney_mini_dungeon",
         "file": "gate.glb",
         "status": "copied",
@@ -136,24 +135,26 @@
         "tile_id": 3,
         "semantic": "hazard",
         "scale": [
-          0.75,
-          0.75,
-          0.75
+          0.84,
+          0.84,
+          0.84
         ],
         "z": 0.08,
-        "pack": "__procedural__",
-        "file": "monster-purple",
-        "status": "procedural_no_source_glb"
+        "pack": "dungeon_hazard",
+        "file": "hazard.glb",
+        "status": "copied",
+        "source": "results/render/assets/mapped_blender_objects/dungeon/hazard/hazard.glb",
+        "output": "results/render/assets/mapped_blender_objects/dungeon/hazard/hazard.glb"
       },
       "collectable": {
         "tile_id": 4,
         "semantic": "collectable",
         "scale": [
-          0.72,
-          0.72,
-          0.72
+          0.42,
+          0.42,
+          0.42
         ],
-        "z": 0.02,
+        "z": 0.14,
         "pack": "kenney_mini_dungeon",
         "file": "chest.glb",
         "status": "copied",

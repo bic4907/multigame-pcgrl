@@ -29,10 +29,10 @@ DEFAULT_ASSET_DIR = REPO_ROOT / "assets"
 ASSET_SETS = {
     "dungeon": {
         0: {"pack": "__procedural__", "file": "floor-stone-tiles", "scale": (1.0, 1.0, 1.0), "z": 0.0},
-        1: {"pack": "mapped_blender_objects/dungeon/wall", "file": "wall.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
-        2: {"pack": "mapped_blender_objects/dungeon/interactable", "file": "interactable.glb", "scale": (0.9, 0.9, 0.9), "z": 0.02},
-        3: {"pack": "__procedural__", "file": "monster-purple", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "mapped_blender_objects/dungeon/collectable", "file": "collectable.glb", "scale": (0.72, 0.72, 0.72), "z": 0.02},
+        1: {"pack": "__procedural__", "file": "dungeon-wall-textured-cube", "scale": (1.0, 1.0, 1.0), "z": 0.0},
+        2: {"pack": "mapped_blender_objects/dungeon/interactable", "file": "interactable.glb", "scale": (0.015, 0.015, 0.015), "z": 0.20},
+        3: {"pack": "mapped_blender_objects/dungeon/hazard", "file": "hazard.glb", "scale": (0.84, 0.84, 0.84), "z": 0.08},
+        4: {"pack": "mapped_blender_objects/dungeon/collectable", "file": "collectable.glb", "scale": (0.42, 0.42, 0.42), "z": 0.14},
     },
     "sokoban": {
         0: {"pack": "mapped_blender_objects/sokoban/empty", "file": "empty.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
@@ -111,6 +111,30 @@ def material(name: str, color: tuple[float, float, float, float]) -> bpy.types.M
     return mat
 
 
+def image_texture_material(name: str, image_path: Path) -> bpy.types.Material:
+    existing = bpy.data.materials.get(name)
+    if existing:
+        return existing
+    if not image_path.exists():
+        raise FileNotFoundError(f"Missing texture image: {image_path}")
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    mat.diffuse_color = (0.88, 0.88, 0.88, 1.0)
+    nodes = mat.node_tree.nodes
+    bsdf = nodes.get("Principled BSDF")
+    if bsdf is None:
+        return mat
+    tex_coord = nodes.new("ShaderNodeTexCoord")
+    image_node = nodes.new("ShaderNodeTexImage")
+    image_node.image = bpy.data.images.load(str(image_path), check_existing=True)
+    image_node.interpolation = "Closest"
+    image_node.extension = "REPEAT"
+    mat.node_tree.links.new(tex_coord.outputs["UV"], image_node.inputs["Vector"])
+    mat.node_tree.links.new(image_node.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.72
+    return mat
+
+
 def clear_scene() -> None:
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete()
@@ -127,6 +151,17 @@ def add_cube(name: str, loc: tuple[float, float, float], scale: tuple[float, flo
     obj.name = name
     obj.dimensions = scale
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    try:
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.cube_project(cube_size=1.0)
+    except Exception:
+        pass
+    finally:
+        try:
+            bpy.ops.object.mode_set(mode="OBJECT")
+        except Exception:
+            pass
     return set_origin_mesh(obj, mat)
 
 
@@ -314,6 +349,13 @@ def make_procedural_floor_collection(name: str) -> bpy.types.Collection:
     return collection
 
 
+def make_procedural_dungeon_wall_collection(name: str) -> bpy.types.Collection:
+    collection = bpy.data.collections.new(f"asset_procedural_{name}")
+    wall_mat = image_texture_material("dungeon_wall_2d_texture", DEFAULT_ASSET_DIR / "mapped_blender_objects" / "dungeon" / "wall" / "wall.png")
+    add_collection_cube(collection, "dungeon_wall_textured_cube", (0, 0, 0.63), (0.98, 0.98, 1.26), wall_mat)
+    return collection
+
+
 def make_procedural_push_block_collection(name: str) -> bpy.types.Collection:
     collection = bpy.data.collections.new(f"asset_procedural_{name}")
     body = material("push_block_body", (0.92, 0.66, 0.16, 1.0))
@@ -331,6 +373,8 @@ def make_procedural_collection(name: str) -> bpy.types.Collection:
         return make_procedural_monster_collection(name)
     if name.startswith("floor-"):
         return make_procedural_floor_collection(name)
+    if name == "dungeon-wall-textured-cube":
+        return make_procedural_dungeon_wall_collection(name)
     if name == "push-block":
         return make_procedural_push_block_collection(name)
     raise ValueError(f"Unknown procedural asset: {name}")
@@ -426,6 +470,8 @@ def object_scale(
 
 
 def object_tilt(game: str, category: int) -> tuple[float, float]:
+    if game == "dungeon" and category == 2:
+        return math.radians(90), 0.0
     if game == "pokemon" and category == 4:
         return math.radians(-18), 0.0
     return 0.0, 0.0

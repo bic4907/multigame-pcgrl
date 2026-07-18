@@ -215,14 +215,17 @@
         "tile_id": 4,
         "semantic": "hazard",
         "scale": [
-          0.75,
-          0.75,
-          0.75
+          0.01,
+          0.01,
+          0.08
         ],
-        "z": 0.08,
-        "pack": "__procedural__",
-        "file": "monster-blue",
-        "status": "procedural_no_source_glb"
+        "z": 0.03,
+        "pack": "pokemon_hazard",
+        "file": "hazard.glb",
+        "status": "copied",
+        "source": "results/render/assets/mapped_blender_objects/pokemon/hazard/hazard.glb",
+        "output": "results/render/assets/mapped_blender_objects/pokemon/hazard/hazard.glb",
+        "textures": "results/render/assets/mapped_blender_objects/pokemon/hazard/Textures"
       },
       "collectable": {
         "tile_id": 5,

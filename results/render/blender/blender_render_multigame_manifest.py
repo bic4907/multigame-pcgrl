@@ -51,9 +51,9 @@ ASSET_SETS = {
     "pokemon": {
         0: {"pack": "mapped_blender_objects/pokemon/empty", "file": "empty.glb", "scale": (1.0, 1.0, 0.26), "z": -0.08},
         1: {"pack": "mapped_blender_objects/pokemon/wall", "file": "wall.glb", "scale": (0.62, 0.62, 0.62), "z": 0.02},
-        2: {"pack": "mapped_blender_objects/pokemon/interactable", "file": "interactable.glb", "scale": (0.9, 0.9, 0.9), "z": 0.02},
-        3: {"pack": "__procedural__", "file": "monster-blue", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "mapped_blender_objects/pokemon/collectable", "file": "collectable.glb", "scale": (0.104, 0.104, 0.104), "z": 0.50},
+        2: {"pack": "mapped_blender_objects/pokemon/interactable", "file": "interactable.glb", "scale": (0.01, 0.01, 0.08), "z": 0.03},
+        3: {"pack": "mapped_blender_objects/pokemon/hazard", "file": "hazard.glb", "scale": (0.22, 0.22, 0.22), "z": 0.1},
+        4: {"pack": "mapped_blender_objects/pokemon/collectable", "file": "collectable.glb", "scale": (0.09, 0.09, 0.09), "z": 0.50},
     },
     "zelda": {
         0: {"pack": "mapped_blender_objects/zelda/empty", "file": "empty.glb", "scale": (0.95, 0.95, 0.22), "z": -0.04},
@@ -363,12 +363,16 @@ def add_asset_instance(
     loc: tuple[float, float, float],
     scale: tuple[float, float, float],
     rotation_z: float = 0.0,
+    rotation_x: float = 0.0,
+    rotation_y: float = 0.0,
 ) -> bpy.types.Object:
     obj = bpy.data.objects.new(name, None)
     obj.instance_type = "COLLECTION"
     obj.instance_collection = collection
     obj.location = loc
     obj.scale = scale
+    obj.rotation_euler[0] = rotation_x
+    obj.rotation_euler[1] = rotation_y
     obj.rotation_euler[2] = rotation_z
     bpy.context.collection.objects.link(obj)
     return obj
@@ -385,6 +389,8 @@ def stable_signed_float(*parts: object) -> float:
 
 
 def object_jitter(game: str, category: int, row: int, col: int) -> tuple[float, float, float]:
+    if game == "pokemon" and category in (2, 3):
+        return 0.0, 0.0, 0.0
     if game == "pokemon" and category == 1:
         amount = 0.11
     elif category == 1:
@@ -417,6 +423,12 @@ def object_scale(
     uniform = 0.90 + stable_unit_float(game, category, row, col, "scale") * 0.22
     height = 0.95 + stable_unit_float(game, category, row, col, "height") * 0.18
     return (base_scale[0] * uniform, base_scale[1] * uniform, base_scale[2] * uniform * height)
+
+
+def object_tilt(game: str, category: int) -> tuple[float, float]:
+    if game == "pokemon" and category == 4:
+        return math.radians(-18), 0.0
+    return 0.0, 0.0
 
 
 def add_text(text: str, loc: tuple[float, float, float], size: float, mat: bpy.types.Material) -> None:
@@ -537,12 +549,15 @@ def add_stage(
                     cfg = asset_set[category]
                     dx, dy, rotation_z = object_jitter(game, category, row, col)
                     scale = object_scale(game, category, row, col, cfg["scale"])
+                    rotation_x, rotation_y = object_tilt(game, category)
                     add_asset_instance(
                         asset_collections[asset_key(cfg)],
                         f"category_{category}",
                         (x + 0.5 + dx, y + 0.5 + dy, cfg["z"]),
                         scale,
                         rotation_z,
+                        rotation_x,
+                        rotation_y,
                     )
             else:
                 add_cube("floor", (x + 0.5, y + 0.5, 0.025), (0.96, 0.96, 0.05), mats[0])

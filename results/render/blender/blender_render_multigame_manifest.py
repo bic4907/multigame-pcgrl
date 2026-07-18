@@ -71,10 +71,10 @@ COLORS = {
     3: (0.78, 0.18, 0.12, 1.0),  # hazard
     4: (0.95, 0.76, 0.12, 1.0),  # collectable
     "change_marker": (1.0, 0.82, 0.05, 1.0),
-    "path_route": (1.0, 0.96, 0.04, 1.0),
-    "path_start": (1.0, 0.96, 0.04, 1.0),
-    "path_end": (1.0, 0.96, 0.04, 1.0),
-    "path_shadow": (0.35, 0.26, 0.00, 1.0),
+    "path_route": (1.0, 0.92, 0.08, 1.0),
+    "path_start": (1.0, 0.92, 0.08, 1.0),
+    "path_end": (1.0, 0.92, 0.08, 1.0),
+    "path_shadow": (0.80, 0.68, 0.05, 0.28),
     "dark": (0.03, 0.035, 0.04, 1.0),
     "text": (0.9, 0.9, 0.88, 1.0),
 }
@@ -108,6 +108,13 @@ def material(name: str, color: tuple[float, float, float, float]) -> bpy.types.M
         bsdf.inputs["Base Color"].default_value = color
         bsdf.inputs["Alpha"].default_value = color[3]
         bsdf.inputs["Roughness"].default_value = 0.62
+        if name in {"mat_path_route", "mat_path_endpoint_0", "mat_path_endpoint_1"}:
+            emission_color = bsdf.inputs.get("Emission Color") or bsdf.inputs.get("Emission")
+            emission_strength = bsdf.inputs.get("Emission Strength")
+            if emission_color is not None:
+                emission_color.default_value = color
+            if emission_strength is not None:
+                emission_strength.default_value = 0.35
     return mat
 
 
@@ -662,10 +669,10 @@ def add_path_route(coords: list[list[int]], mats: dict) -> None:
         mathutils.Vector((float(col) + 0.5, 15.0 - float(row) + 0.5, 1.18))
         for row, col in coords
     ]
-    shadow_offset = mathutils.Vector((0.0, 0.0, -0.035))
+    shadow_offset = mathutils.Vector((0.0, 0.0, -0.055))
     for start, end in zip(points, points[1:]):
-        add_cylinder_between("path_shadow", start + shadow_offset, end + shadow_offset, 0.195, shadow_mat)
-        add_cylinder_between("path_route", start, end, 0.155, route_mat)
+        add_cylinder_between("path_shadow", start + shadow_offset, end + shadow_offset, 0.145, shadow_mat)
+        add_cylinder_between("path_route", start, end, 0.22, route_mat)
     for index, (point, color) in enumerate(((points[0], start_color), (points[-1], end_color))):
         endpoint_mat = material(f"mat_path_endpoint_{index}", color)
         bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=12, radius=0.42, location=point)

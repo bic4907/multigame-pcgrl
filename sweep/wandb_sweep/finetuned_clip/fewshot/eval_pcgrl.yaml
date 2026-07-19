@@ -18,7 +18,7 @@ parameters:
   overwrite:
     value: false
   upload_h5:
-    value: true
+    value: false
   saves_dir:
     value: '/mnt/nas/mgpcgrl/finetuned_clip_fewshot'
   encoder.ckpt_dir:

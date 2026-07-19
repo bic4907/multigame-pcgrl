@@ -61,15 +61,18 @@ from utils.experiment.benchmark import (
 
 _CFG = load_cfg()
 _MARKERS: list[str] = ["o", "s", "^", "D", "v", "P", "X", "*", "h", "+"]
+_VIPCGRL_LABEL = "VIPCGRL"
+_MGPCGRL_NO_DEC_LABEL = r"MGPCGRK ($-\mathcal{L}_{\mathrm{dec}}$)"
+_MGPCGRL_LABEL = "MGPCGRL"
 _GROUP_ORDER: dict[str, int] = {
-    "VIPCGRL": 0,
-    "MGPCGRL": 1,
-    "MGPCGRL-DA": 2,
+    _VIPCGRL_LABEL: 0,
+    _MGPCGRL_NO_DEC_LABEL: 1,
+    _MGPCGRL_LABEL: 2,
 }
 _GOOGLE_GROUP_COLORS: dict[str, str] = {
-    "VIPCGRL": "#DB4437",      # Google red
-    "MGPCGRL": "#0F9D58",      # Google green
-    "MGPCGRL-DA": "#4285F4",   # Google blue
+    _VIPCGRL_LABEL: "#DB4437",          # Google red
+    _MGPCGRL_NO_DEC_LABEL: "#0F9D58",   # Google green
+    _MGPCGRL_LABEL: "#4285F4",          # Google blue
 }
 _GOOGLE_FALLBACK_COLORS: list[str] = ["#F4B400", "#AB47BC", "#00ACC1", "#FF7043"]
 _PROJECT_RATIO_OVERRIDES: dict[str, float] = {
@@ -202,17 +205,17 @@ def _extract_dw_label(text: str) -> str | None:
         return None
     value = match.group(1).replace("p", ".")
     if value == "0.03":
-        return "MGPCGRL-DA"
+        return _MGPCGRL_LABEL
     return f"dw={value}"
 
 
 def _group_label(project: str, run_cfg: dict, run_name: str, group_by: str) -> str:
     if "vipcgrl" in project or "vipcgrl" in run_name:
-        return "VIPCGRL"
+        return _VIPCGRL_LABEL
     if project == "aaai27_eval_mgpcgrl_zeroshot_dw0":
-        return "MGPCGRL"
+        return _MGPCGRL_NO_DEC_LABEL
     if project == "aaai27_eval_mgpcgrl_fewshot_dw0":
-        return "MGPCGRL"
+        return _MGPCGRL_NO_DEC_LABEL
 
     if group_by == "none":
         return "All"
@@ -224,19 +227,19 @@ def _group_label(project: str, run_cfg: dict, run_name: str, group_by: str) -> s
         dw_label = _extract_dw_label(ckpt_name)
         if dw_label:
             return dw_label
-        return "MGPCGRL"
+        return _MGPCGRL_NO_DEC_LABEL
 
     if group_by == "encoder_ckpt":
         delta_weight = _to_float_token(run_cfg.get("encoder_delta_weight"))
         if delta_weight is not None:
             if abs(delta_weight - 0.03) < 1e-9:
-                return "MGPCGRL-DA"
+                return _MGPCGRL_LABEL
             return f"dw={delta_weight:g}"
         dw_label = _extract_dw_label(run_name)
         if dw_label:
             return dw_label
         if "zeroshot" in project or "zeroshot" in run_name:
-            return "MGPCGRL"
+            return _MGPCGRL_NO_DEC_LABEL
 
     return _project_display_name(project)
 
@@ -405,7 +408,7 @@ def write_line_plot(output_path: Path, rows: list[dict]) -> None:
             return ratio_01_x + (ratio - 0.1) / 0.9 * (ratio_max_x - ratio_01_x)
         return ratio
 
-    fig, ax = plt.subplots(1, 1, figsize=(3.0, 2.05))
+    fig, ax = plt.subplots(1, 1, figsize=(2.75, 2.05))
     for i, group in enumerate(group_vals):
         xs, means, stds = [], [], []
         for ratio in ratio_vals:
@@ -470,8 +473,8 @@ def write_line_plot(output_path: Path, rows: list[dict]) -> None:
     ax.set_xlim(x_left, x_right)
     ax.grid(axis="both", alpha=0.3)
 
-    baseline_stat = agg.get(("VIPCGRL", split_ratio))
-    target_stat = agg.get(("MGPCGRL", 1.0))
+    baseline_stat = agg.get((_VIPCGRL_LABEL, split_ratio))
+    target_stat = agg.get((_MGPCGRL_NO_DEC_LABEL, 1.0))
     if baseline_stat and target_stat:
         baseline_y = baseline_stat["mean"]
         target_y = target_stat["mean"]
@@ -524,8 +527,8 @@ def write_line_plot(output_path: Path, rows: list[dict]) -> None:
             zorder=6,
         )
 
-    mgpcgrl_stat = agg.get(("MGPCGRL", 0.4))
-    da_stat = agg.get(("MGPCGRL-DA", 0.4))
+    mgpcgrl_stat = agg.get((_MGPCGRL_NO_DEC_LABEL, 0.4))
+    da_stat = agg.get((_MGPCGRL_LABEL, 0.4))
     if mgpcgrl_stat and da_stat:
         baseline_y = mgpcgrl_stat["mean"]
         target_y = da_stat["mean"]
@@ -732,6 +735,14 @@ def parse_args() -> argparse.Namespace:
         help="line grouping 기준",
     )
     parser.add_argument(
+        "--use-global-norm",
+        action="store_true",
+        help=(
+            "PIPELINE_NORM_SCALE 이 있으면 전역 min-max scale 을 사용합니다. "
+            "기본값은 predictive_reward 플롯에 들어간 row만으로 local scale 을 계산합니다."
+        ),
+    )
+    parser.add_argument(
         "--experiment",
         choices=exp_names if exp_names else None,
         default="predictive_reward",
@@ -775,14 +786,14 @@ def main() -> None:
         raise SystemExit(msg)
 
     global_scale_path = os.environ.get("PIPELINE_NORM_SCALE")
-    if global_scale_path and Path(global_scale_path).is_file():
+    if args.use_global_norm and global_scale_path and Path(global_scale_path).is_file():
         norm_scale = load_normalization_scale(Path(global_scale_path))
         log.info("norm_scale (global): %s", global_scale_path)
     else:
         norm_scale = compute_normalization_scale(rows, ["progress"])
         scale_path = run_dir / "normalization_scale.json"
         save_normalization_scale(norm_scale, scale_path)
-        log.info("norm_scale (local) : %s", scale_path)
+        log.info("norm_scale (local, filtered rows): %s", scale_path)
 
     norm_rows = apply_normalization(rows, norm_scale, ["progress"])
 

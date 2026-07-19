@@ -212,6 +212,21 @@ _DEFAULT_NUM_WORKERS: int = _CFG.get("wandb", {}).get("num_workers", DEFAULT_NUM
 _DEFAULT_OUTPUT: str = "wandb_projects"
 _PROJECT_DISPLAY_NAMES: dict[str, str] = _CFG.get("project_display_names", {})
 
+
+def _resolve_output_dir(output_arg: str) -> str:
+    """Resolve the downloader cache root.
+
+    The rest of results/ reads the default ``wandb_projects`` relative to
+    results/, so keep downloader writes in that same cache directory regardless
+    of the process cwd.
+    """
+    raw = os.path.expanduser(output_arg)
+    if os.path.isabs(raw):
+        return os.path.abspath(raw)
+    if os.path.normpath(raw) == "wandb_projects":
+        return os.path.join(_RESULTS_DIR, "wandb_projects")
+    return os.path.abspath(raw)
+
 # ---------------------------------------------------------------------------
 # Download a single run
 # ---------------------------------------------------------------------------
@@ -233,12 +248,21 @@ def _download_run(
     """
     train_dir, eval_dir = run.name.split("--")
     run_dir = os.path.join(output_dir, train_dir, eval_dir)
+    ctrl_sim = os.path.join(run_dir, "ctrl_sim.csv")
+    results = os.path.join(run_dir, "results.csv")
+    h5_local = os.path.join(run_dir, "eval.h5")
+    config_path = os.path.join(run_dir, "run_config.json")
 
     # ── skip check ────────────────────────────────────────────────────────
     if skip_if_exists:
-        ctrl_sim = os.path.join(run_dir, "ctrl_sim.csv")
-        results  = os.path.join(run_dir, "results.csv")
-        if os.path.isfile(ctrl_sim) and os.path.isfile(results):
+        expected: list[str] = []
+        if download_csv:
+            expected.extend([ctrl_sim, results])
+        if download_h5:
+            expected.append(h5_local)
+        if download_run_config:
+            expected.append(config_path)
+        if expected and all(os.path.isfile(p) for p in expected):
             return _RunResult(run_name=run.name, status="skipped")
 
     os.makedirs(run_dir, exist_ok=True)
@@ -261,8 +285,11 @@ def _download_run(
     errors = []
 
     # ── download eval_csv ─────────────────────────────────────────────────
+    csv_complete = os.path.isfile(ctrl_sim) and os.path.isfile(results)
     if download_csv:
-        if csv_artifact is None:
+        if skip_if_exists and csv_complete:
+            pass
+        elif csv_artifact is None:
             errors.append("eval_csv artifact not found")
         else:
             try:
@@ -277,7 +304,6 @@ def _download_run(
     # ── download eval_h5 ──────────────────────────────────────────────────
     if download_h5 and h5_artifacts:
         latest_h5 = h5_artifacts[-1]
-        h5_local = os.path.join(run_dir, "eval.h5")
         if not (skip_if_exists and os.path.isfile(h5_local)):
             try:
                 for f in latest_h5.files():
@@ -287,7 +313,6 @@ def _download_run(
 
     # ── save run config ───────────────────────────────────────────────────
     if download_run_config:
-        config_path = os.path.join(run_dir, "run_config.json")
         if not (skip_if_exists and os.path.isfile(config_path)):
             try:
                 filtered = _filter_run_config(run.config)
@@ -410,7 +435,7 @@ available experiments: {_exp_choices_str}
     parser.add_argument(
         "--output",
         default=_DEFAULT_OUTPUT,
-        help="Local root path to save downloads (default: wandb_projects)",
+        help="Local root path to save downloads (default: results/wandb_projects)",
     )
     parser.add_argument(
         "--no-csv",
@@ -477,6 +502,8 @@ def _print_summary(summaries: list[_ProjectSummary]) -> None:
 
 def main():
     args = parse_args()
+    output_dir = _resolve_output_dir(args.output)
+    logger.info("output cache: %s", output_dir)
 
     # Resolve project list: --experiment > --projects > all experiments
     if args.experiment:
@@ -497,7 +524,7 @@ def main():
         summary = download_eval_project(
             project=project,
             entity=args.entity,
-            output_dir=args.output,
+            output_dir=output_dir,
             download_csv=not args.no_csv,
             download_h5=not args.no_h5,
             download_run_config=not args.no_run_config,

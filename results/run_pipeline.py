@@ -161,6 +161,10 @@ _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
 # fullshot 등 전용 실험이 아닌 일반 실험: 9, 10, 11, 12 생략
 _DEFAULT_SKIP: set[int] = {9, 10, 11, 12, 13, 14}
 
+# Steps that consume PIPELINE_NORM_SCALE by default. Step 14 intentionally uses
+# local normalization because predictive_reward compares only the filtered rows.
+_GLOBAL_NORM_STEP_IDS: set[int] = {3, 9, 10, 11, 12}
+
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
     _exp_names = _get_experiment_names()
@@ -367,6 +371,19 @@ def _step_extra_args_from_config(
     return extra
 
 
+def _needs_global_norm_scale(
+    experiments: list[str | None],
+    selected_steps: list[dict],
+) -> bool:
+    """Return True when any selected, non-skipped step consumes global norm."""
+    for experiment in experiments:
+        skip_ids = _EXPERIMENT_SKIP.get(experiment, _DEFAULT_SKIP)
+        for step in selected_steps:
+            if step["id"] in _GLOBAL_NORM_STEP_IDS and step["id"] not in skip_ids:
+                return True
+    return False
+
+
 def run_step(
     step: dict,
     extra_args: list[str],
@@ -476,13 +493,16 @@ def main(default_experiment: str | None = None) -> None:
     # 모든 실험 데이터를 합산하여 normalization scale 을 한 번만 계산하고
     # pipeline_run_dir/normalization_scale.json 에 저장한다.
     # 이후 각 step 은 PIPELINE_NORM_SCALE 환경변수를 통해 이 파일을 읽는다.
-    if not args.dry_run:
+    needs_global_norm = _needs_global_norm_scale(experiments_to_run, selected_steps)
+    if not args.dry_run and needs_global_norm:
         _norm_ok = _compute_global_norm_scale(pipeline_run_dir, base_extra, log)
         if _norm_ok:
             os.environ["PIPELINE_NORM_SCALE"] = str(pipeline_run_dir / "normalization_scale.json")
             log.info("PIPELINE_NORM_SCALE: %s", os.environ["PIPELINE_NORM_SCALE"])
         else:
             log.warning("전역 norm scale 계산 실패 — 각 실험이 개별 scale 을 사용합니다.")
+    elif not args.dry_run:
+        log.info("전역 norm scale 계산 생략 — 선택된 step이 global norm을 사용하지 않습니다.")
     # ────────────────────────────────────────────────────────────────────────
 
     all_ok = True

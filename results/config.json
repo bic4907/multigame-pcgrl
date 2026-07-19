@@ -143,7 +143,7 @@
         "aaai27_eval_predictive_reward"
       ],
       "dataset_unseen_ratio_progress": {
-        "unseen_game": "dm,sk,pk"
+        "unseen_game": "dm,dg,pk,sk,zd"
       }
     }
   },

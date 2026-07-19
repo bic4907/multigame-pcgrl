@@ -6,7 +6,6 @@ hydra:
   sweeper:
     params: {}
 
-n_envs: 500
 
 encoder:
   model: clip

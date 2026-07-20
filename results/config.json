@@ -104,6 +104,7 @@
         "aaai27_eval_ipcgrl_fewshot",
         "aaai27_eval_mipcgrl_fewshot",
         "aaai27_eval_vipcgrl_fewshot",
+        "aaai27_eval_finetuned_clip_fewshot",
         "aaai27_eval_mgpcgrl_fewshot_dw0",
         "aaai27_eval_mgpcgrl_fewshot"
       ],
@@ -187,6 +188,7 @@
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
     "aaai27_eval_mipcgrl_fewshot":            "MIPCGRL (fewshot)",
     "aaai27_eval_vipcgrl_fewshot":            "VIPCGRL (fewshot)",
+    "aaai27_eval_finetuned_clip_fewshot":      "CLIP (fewshot)",
     "aaai27_eval_mgpcgrl_fewshot":            "MGPCGRL (fewshot)",
     "aaai27_eval_mgpcgrl_fewshot_dw0":         "MGPCGRL (fewshot, dw=0)",
     "eval_mgpcgrl_fewshot_direction0625":     "MGPCGRL Direction (fewshot)",
@@ -240,6 +242,7 @@
     "aaai27_eval_ipcgrl_fewshot":             "#1a9641",
     "aaai27_eval_mipcgrl_fewshot":            "#66a61e",
     "aaai27_eval_vipcgrl_fewshot":            "#7b3294",
+    "aaai27_eval_finetuned_clip_fewshot":      "#bf812d",
     "aaai27_eval_mgpcgrl_fewshot":            "#2166ac",
     "aaai27_eval_mgpcgrl_fewshot_dw0":         "#4393c3",
     "eval_mgpcgrl_fewshot_direction0625":     "#4393c3",

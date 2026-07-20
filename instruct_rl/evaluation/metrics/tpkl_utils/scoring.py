@@ -5,9 +5,17 @@ scoring.py
 """
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from instruct_rl.evaluation.metrics.tpkl_utils.patch import MAX_TILE, extract_windows
+
+# Chunk pred_levels along N so the dense (chunk, K) count matrix stays bounded.
+# Without this, np.bincount(minlength=N*K) allocates an O(N*K) array which, for
+# window size 3 with large N (e.g. N=10000), balloons to tens of GB and thrashes
+# RAM/CPU indefinitely.
+_JSD_MAX_CELLS = int(os.environ.get("TPKL_JSD_MAX_CELLS", 50_000_000))
 
 
 def compute_jsd_scores(pred_levels: np.ndarray,
@@ -65,29 +73,39 @@ def compute_jsd_scores(pred_levels: np.ndarray,
         # hashes (N, P) → remap_idx (N, P)  ← searchsorted는 정렬된 배열에서 O(log K)
         remap_idx = np.searchsorted(all_keys, hashes)   # (N, P)
 
-        # ── 벡터화 bincount (offset trick) ──────────────────────────────────
-        offsets   = (np.arange(N, dtype=np.int64) * K).reshape(N, 1)
-        flat      = (remap_idx.astype(np.int64) + offsets).ravel()
-        counts_2d = np.bincount(flat, minlength=N * K).reshape(N, K).astype(np.float32)
-
-        # Laplace smoothing + 정규화  →  (N, K)
-        counts_2d += epsilon
-        counts_2d /= counts_2d.sum(axis=1, keepdims=True)
-
         # ── GT를 remapped 공간의 밀집 벡터로 변환 ────────────────────────────
         gt_idx = np.searchsorted(all_keys, gt_keys)   # valid because gt_keys ⊆ all_keys
         gt_vec  = np.full(K, epsilon, dtype=np.float32)
         gt_vec[gt_idx] = gt_probs.astype(np.float32)
         gt_vec /= gt_vec.sum()
+        q = gt_vec[np.newaxis, :]  # (1, K)
 
-        # ── JSD (완전 벡터화, float32) ────────────────────────────────────────
-        p = counts_2d            # (N, K)
-        q = gt_vec[np.newaxis:]  # (1, K)
-        m = np.float32(0.5) * (p + q)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            kl_pm = np.where(p > 0, p * np.log(p / m), np.float32(0.0)).sum(axis=1)
-            kl_qm = np.where(q > 0, q * np.log(q / m), np.float32(0.0)).sum(axis=1)
-        scores += 0.5 * (kl_pm + kl_qm)
+        # ── 청크 단위 bincount + JSD ────────────────────────────────────────
+        # 전체 (N, K) 밀집 행렬을 한 번에 만들면 N*K 가 수십억 원소로 폭증하여
+        # 메모리를 고갈시키므로, 행(N)을 청크로 나눠 chunk*K 크기만 유지한다.
+        chunk = max(1, min(N, _JSD_MAX_CELLS // max(K, 1)))
+        for start in range(0, N, chunk):
+            end = min(start + chunk, N)
+            n = end - start
+            remap_chunk = remap_idx[start:end]                    # (n, P)
+
+            # ── 벡터화 bincount (offset trick, 청크 한정) ──────────────────
+            offsets   = (np.arange(n, dtype=np.int64) * K).reshape(n, 1)
+            flat      = (remap_chunk.astype(np.int64) + offsets).ravel()
+            counts_2d = np.bincount(flat, minlength=n * K).reshape(n, K).astype(np.float32)
+
+            # Laplace smoothing + 정규화  →  (n, K)
+            counts_2d += epsilon
+            counts_2d /= counts_2d.sum(axis=1, keepdims=True)
+
+            # ── JSD (완전 벡터화, float32) ────────────────────────────────
+            p = counts_2d            # (n, K)
+            m = np.float32(0.5) * (p + q)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                kl_pm = np.where(p > 0, p * np.log(p / m), np.float32(0.0)).sum(axis=1)
+                kl_qm = np.where(q > 0, q * np.log(q / m), np.float32(0.0)).sum(axis=1)
+            scores[start:end] += 0.5 * (kl_pm + kl_qm)
+
         if _pbar is not None:
             _pbar.set_postfix_str(f"JSD w={k} N={N}")
             _pbar.update(1)

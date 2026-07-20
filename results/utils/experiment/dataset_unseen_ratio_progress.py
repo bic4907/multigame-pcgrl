@@ -62,16 +62,16 @@ from utils.experiment.benchmark import (
 _CFG = load_cfg()
 _MARKERS: list[str] = ["o", "s", "^", "D", "v", "P", "X", "*", "h", "+"]
 _VIPCGRL_LABEL = "VIPCGRL"
-_MGPCGRL_NO_DEC_LABEL = r"MGPCGRK ($-\mathcal{L}_{\mathrm{dec}}$)"
+_MGPCGRL_NO_DIR_LABEL = r"MGPCGRL ($-\mathcal{L}_{\mathrm{dir}}$)"
 _MGPCGRL_LABEL = "MGPCGRL"
 _GROUP_ORDER: dict[str, int] = {
     _VIPCGRL_LABEL: 0,
-    _MGPCGRL_NO_DEC_LABEL: 1,
+    _MGPCGRL_NO_DIR_LABEL: 1,
     _MGPCGRL_LABEL: 2,
 }
 _GOOGLE_GROUP_COLORS: dict[str, str] = {
     _VIPCGRL_LABEL: "#DB4437",          # Google red
-    _MGPCGRL_NO_DEC_LABEL: "#0F9D58",   # Google green
+    _MGPCGRL_NO_DIR_LABEL: "#0F9D58",   # Google green
     _MGPCGRL_LABEL: "#4285F4",          # Google blue
 }
 _GOOGLE_FALLBACK_COLORS: list[str] = ["#F4B400", "#AB47BC", "#00ACC1", "#FF7043"]
@@ -213,9 +213,9 @@ def _group_label(project: str, run_cfg: dict, run_name: str, group_by: str) -> s
     if "vipcgrl" in project or "vipcgrl" in run_name:
         return _VIPCGRL_LABEL
     if project == "aaai27_eval_mgpcgrl_zeroshot_dw0":
-        return _MGPCGRL_NO_DEC_LABEL
+        return _MGPCGRL_NO_DIR_LABEL
     if project == "aaai27_eval_mgpcgrl_fewshot_dw0":
-        return _MGPCGRL_NO_DEC_LABEL
+        return _MGPCGRL_NO_DIR_LABEL
 
     if group_by == "none":
         return "All"
@@ -227,7 +227,7 @@ def _group_label(project: str, run_cfg: dict, run_name: str, group_by: str) -> s
         dw_label = _extract_dw_label(ckpt_name)
         if dw_label:
             return dw_label
-        return _MGPCGRL_NO_DEC_LABEL
+        return _MGPCGRL_NO_DIR_LABEL
 
     if group_by == "encoder_ckpt":
         delta_weight = _to_float_token(run_cfg.get("encoder_delta_weight"))
@@ -239,7 +239,7 @@ def _group_label(project: str, run_cfg: dict, run_name: str, group_by: str) -> s
         if dw_label:
             return dw_label
         if "zeroshot" in project or "zeroshot" in run_name:
-            return _MGPCGRL_NO_DEC_LABEL
+            return _MGPCGRL_NO_DIR_LABEL
 
     return _project_display_name(project)
 
@@ -474,7 +474,7 @@ def write_line_plot(output_path: Path, rows: list[dict]) -> None:
     ax.grid(axis="both", alpha=0.3)
 
     baseline_stat = agg.get((_VIPCGRL_LABEL, split_ratio))
-    target_stat = agg.get((_MGPCGRL_NO_DEC_LABEL, 1.0))
+    target_stat = agg.get((_MGPCGRL_NO_DIR_LABEL, 1.0))
     if baseline_stat and target_stat:
         baseline_y = baseline_stat["mean"]
         target_y = target_stat["mean"]
@@ -527,7 +527,7 @@ def write_line_plot(output_path: Path, rows: list[dict]) -> None:
             zorder=6,
         )
 
-    mgpcgrl_stat = agg.get((_MGPCGRL_NO_DEC_LABEL, 0.4))
+    mgpcgrl_stat = agg.get((_MGPCGRL_NO_DIR_LABEL, 0.4))
     da_stat = agg.get((_MGPCGRL_LABEL, 0.4))
     if mgpcgrl_stat and da_stat:
         baseline_y = mgpcgrl_stat["mean"]

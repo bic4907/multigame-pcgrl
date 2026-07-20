@@ -56,9 +56,41 @@ def _path_metric_and_coords(level: np.ndarray) -> tuple[float, list[tuple[int, i
 
     return float(max(best_dist, 0)), best_path
 
+def _eval_path_metric_and_coords(level: np.ndarray) -> tuple[float, list[tuple[int, int]]]:
+    from envs.pathfinding import (
+        calc_diameter,
+        get_max_path_length_static,
+        get_path_coords_diam,
+    )
+    from envs.probs.multigame import MultigamePassable
+    from evaluator.utils import init_flood_net
+    import jax
+    import jax.numpy as jnp
+
+    env_map = jnp.asarray(level, dtype=jnp.int32)
+    region_network, path_network = init_flood_net(level.shape)
+    path_length, flood_path_state, _, _ = calc_diameter(
+        region_network,
+        path_network,
+        env_map,
+        MultigamePassable,
+    )
+    coords_arr = get_path_coords_diam(
+        flood_count=flood_path_state.flood_count,
+        max_path_len=get_max_path_length_static(level.shape),
+    )
+    path_length = float(np.asarray(jax.device_get(path_length)))
+    coords_np = np.asarray(jax.device_get(coords_arr), dtype=np.int32)
+    coords = [
+        (int(y), int(x))
+        for y, x in coords_np
+        if int(y) >= 0 and int(x) >= 0
+    ]
+    return path_length, coords
+
 def _compute_metric(level: np.ndarray, reward_enum: int) -> float:
     if reward_enum == 1:
-        metric, _ = _path_metric_and_coords(level)
+        metric, _ = _eval_path_metric_and_coords(level)
         return metric
     if reward_enum in COUNT_TILE_ID_BY_REWARD_ENUM:
         return float(np.sum(level == COUNT_TILE_ID_BY_REWARD_ENUM[reward_enum]))
@@ -84,4 +116,3 @@ def _count_regions(level: np.ndarray) -> int:
                     visited[ny, nx] = True
                     q.append((ny, nx))
     return regions
-

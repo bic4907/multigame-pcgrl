@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -76,6 +77,7 @@ from utils.experiment.benchmark import (
     _load_project_display_names,
     _project_display_name,
 )
+from scipy import stats as scipy_stats
 
 _CFG = load_cfg()
 
@@ -96,6 +98,11 @@ _DEFAULT_PROGRESS_PROJECT_ORDER: list[str] = [
     "aaai27_eval_mgpcgrl_unseen",
     "aaai27_eval_mgpcgrl_all",
     "aaai27_eval_mgpcgrl_oracle",
+]
+_DEFAULT_SIGNIFICANCE_BASELINE_PROJECT = "aaai27_eval_vipcgrl_fewshot"
+_DEFAULT_SIGNIFICANCE_TARGET_PROJECTS: list[str] = [
+    "aaai27_eval_mgpcgrl_fewshot_dw0",
+    "aaai27_eval_mgpcgrl_fewshot",
 ]
 
 
@@ -1116,6 +1123,285 @@ def _latex_escape(value: str) -> str:
     return "".join(replacements.get(ch, ch) for ch in value)
 
 
+def _seed_metric_means(rows: list[dict], metric: str) -> dict[str, float]:
+    seed_vals: dict[str, list[float]] = defaultdict(list)
+    for row in rows:
+        value = row.get("metrics", {}).get(metric)
+        if value is None:
+            continue
+        seed = row.get("seed") or row.get("run", str(id(row)))
+        seed_vals[str(seed)].append(value)
+    return {
+        seed: sum(values) / len(values)
+        for seed, values in seed_vals.items()
+        if values
+    }
+
+
+def _filter_table_cell_rows(
+    rows: list[dict],
+    project: str,
+    unseen_game: str,
+    game_split: str | None,
+) -> list[dict]:
+    return [
+        row for row in rows
+        if row.get("project") == project
+        and row.get("unseen_game", "unknown") == unseen_game
+        and (game_split is None or row.get("game_split") == game_split)
+    ]
+
+
+def _paired_ttest_greater(
+    baseline_by_seed: dict[str, float],
+    target_by_seed: dict[str, float],
+    alternative: str,
+) -> dict | None:
+    common_seeds = sorted(set(baseline_by_seed) & set(target_by_seed))
+    if len(common_seeds) < 2:
+        return None
+
+    baseline = [baseline_by_seed[s] for s in common_seeds]
+    target = [target_by_seed[s] for s in common_seeds]
+    diffs = [t - b for t, b in zip(target, baseline)]
+    mean_diff = sum(diffs) / len(diffs)
+    if len(diffs) <= 1:
+        return None
+
+    diff_mean = mean_diff
+    diff_var = sum((d - diff_mean) ** 2 for d in diffs) / (len(diffs) - 1)
+    diff_std = math.sqrt(diff_var)
+    if diff_std <= 1e-12:
+        if abs(diff_mean) <= 1e-12:
+            t_stat, p_value = 0.0, 1.0
+        elif alternative == "greater":
+            t_stat = math.inf if diff_mean > 0 else -math.inf
+            p_value = 0.0 if diff_mean > 0 else 1.0
+        elif alternative == "less":
+            t_stat = math.inf if diff_mean > 0 else -math.inf
+            p_value = 1.0 if diff_mean > 0 else 0.0
+        else:
+            t_stat = math.inf if diff_mean > 0 else -math.inf
+            p_value = 0.0
+    else:
+        test = scipy_stats.ttest_rel(
+            target,
+            baseline,
+            alternative=alternative,
+        )
+        t_stat = float(test.statistic)
+        p_value = float(test.pvalue)
+
+    return {
+        "n": len(common_seeds),
+        "baseline_mean": sum(baseline) / len(baseline),
+        "target_mean": sum(target) / len(target),
+        "mean_diff": mean_diff,
+        "t": t_stat,
+        "p": p_value,
+        "effect_dz": mean_diff / diff_std if diff_std > 1e-12 else math.inf,
+        "seeds": ",".join(common_seeds),
+    }
+
+
+def _holm_adjust(results: list[dict]) -> None:
+    valid = [
+        result for result in results
+        if result.get("p") is not None and math.isfinite(result["p"])
+    ]
+    ranked = sorted(valid, key=lambda result: result["p"])
+    m = len(ranked)
+    running = 0.0
+    for idx, result in enumerate(ranked, start=1):
+        adjusted = min(1.0, (m - idx + 1) * result["p"])
+        running = max(running, adjusted)
+        result["p_holm"] = running
+
+
+def _sig_stars(p_value: float | None, alpha: float = 0.05) -> str:
+    if p_value is None or not math.isfinite(p_value) or p_value >= alpha:
+        return ""
+    if p_value < 0.001:
+        return "***"
+    if p_value < 0.01:
+        return "**"
+    return "*"
+
+
+def compute_fewshot_significance_tests(
+    rows: list[dict],
+    metric: str,
+    experiment: str | None,
+    baseline_project: str = _DEFAULT_SIGNIFICANCE_BASELINE_PROJECT,
+    target_projects: list[str] | None = None,
+    alternative: str = "greater",
+) -> list[dict]:
+    target_projects = target_projects or list(_DEFAULT_SIGNIFICANCE_TARGET_PROJECTS)
+    relevant_projects = {row["project"] for row in rows}
+    if baseline_project not in relevant_projects:
+        return []
+
+    unseen_rows = [row for row in rows if row.get("game_split") == "unseen"]
+    unseen_games = _ordered_unseen_games({
+        row.get("unseen_game", "unknown") for row in unseen_rows
+    })
+    projects = [
+        project for project in _ordered_projects(set(target_projects), experiment)
+        if project in relevant_projects
+    ]
+
+    split_labels: list[tuple[str, str | None]] = [
+        ("unseen", "unseen"),
+        ("seen", "seen"),
+        ("all", None),
+    ]
+    results: list[dict] = []
+    for project in projects:
+        for unseen_game in unseen_games:
+            for split_label, split in split_labels:
+                baseline_values = _seed_metric_means(
+                    _filter_table_cell_rows(rows, baseline_project, unseen_game, split),
+                    metric,
+                )
+                target_values = _seed_metric_means(
+                    _filter_table_cell_rows(rows, project, unseen_game, split),
+                    metric,
+                )
+                stat = _paired_ttest_greater(
+                    baseline_values,
+                    target_values,
+                    alternative=alternative,
+                )
+                if stat is None:
+                    stat = {
+                        "n": len(set(baseline_values) & set(target_values)),
+                        "baseline_mean": None,
+                        "target_mean": None,
+                        "mean_diff": None,
+                        "t": None,
+                        "p": None,
+                        "effect_dz": None,
+                        "seeds": "",
+                    }
+                stat.update({
+                    "baseline_project": baseline_project,
+                    "target_project": project,
+                    "unseen_game": unseen_game,
+                    "split": split_label,
+                    "alternative": alternative,
+                    "metric": metric,
+                })
+                results.append(stat)
+
+    _holm_adjust(results)
+    for result in results:
+        result.setdefault("p_holm", None)
+        result["stars"] = _sig_stars(result.get("p_holm"))
+    return results
+
+
+def _significance_lookup(results: list[dict]) -> dict[tuple[str, str, str], dict]:
+    return {
+        (result["target_project"], result["unseen_game"], result["split"]): result
+        for result in results
+    }
+
+
+def _format_p_value(value: float | None) -> str:
+    if value is None or not math.isfinite(value):
+        return ""
+    if value < 0.001:
+        return "<0.001"
+    return f"{value:.3f}"
+
+
+def write_fewshot_significance_tests_csv(
+    output_path: Path,
+    results: list[dict],
+) -> None:
+    headers = [
+        "metric",
+        "baseline_project",
+        "target_project",
+        "unseen_game",
+        "split",
+        "alternative",
+        "n",
+        "baseline_mean",
+        "target_mean",
+        "mean_diff",
+        "t",
+        "effect_dz",
+        "p",
+        "p_holm",
+        "stars",
+        "seeds",
+    ]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        for result in results:
+            writer.writerow({key: result.get(key, "") for key in headers})
+
+
+def write_fewshot_significance_table_markdown(
+    output_path: Path,
+    rows: list[dict],
+    metric_order: list[str],
+    experiment: str | None,
+    significance_results: list[dict],
+    decimals: int = 4,
+) -> None:
+    metric = metric_order[0]
+    unseen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="unseen")
+    seen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="seen")
+    all_agg = aggregate_by_unseen_game_method(rows, [metric], game_split=None)
+    unseen_rows = [r for r in rows if r.get("game_split") == "unseen"]
+    unseen_games = _ordered_unseen_games({r.get("unseen_game", "unknown") for r in unseen_rows})
+    projects = _ordered_projects(
+        {r["project"] for r in unseen_rows},
+        experiment,
+    )
+    sig = _significance_lookup(significance_results)
+
+    header_cols = ["method"]
+    for game in unseen_games:
+        header_cols += [f"{game} / unseen", f"{game} / seen", f"{game} / all"]
+
+    lines = [
+        "| " + " | ".join(header_cols) + " |",
+        "| " + " | ".join(["---"] * len(header_cols)) + " |",
+    ]
+    for proj in projects:
+        cells = [_project_display_name(proj)]
+        for game in unseen_games:
+            for split_label, agg in (("unseen", unseen_agg), ("seen", seen_agg), ("all", all_agg)):
+                cell = _format_mean_std(
+                    agg.get((proj, game), {}).get(metric),
+                    decimals,
+                )
+                test = sig.get((proj, game, split_label))
+                if cell and test:
+                    stars = test.get("stars", "")
+                    p_holm = _format_p_value(test.get("p_holm"))
+                    if stars:
+                        cell = f"{cell}{stars}"
+                    if p_holm:
+                        cell = f"{cell} (p={p_holm})"
+                cells.append(cell or "-")
+        lines.append("| " + " | ".join(cells) + " |")
+
+    lines += [
+        "",
+        "Paired one-sided t-test on seed-level means, alternative: target > VIPCGRL.",
+        "Reported p-values are Holm-adjusted across all MGPCGRL-vs-VIPCGRL cells; * p<0.05, ** p<0.01, *** p<0.001.",
+    ]
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def write_fewshot_table_csv(
     output_path: Path,
     rows: list[dict],
@@ -1313,6 +1599,30 @@ def parse_args() -> argparse.Namespace:
         default="unseen",
         metavar="EXPERIMENT",
     )
+    parser.add_argument(
+        "--no-significance",
+        action="store_true",
+        help="fewshot significance table/test CSV 생성을 생략한다.",
+    )
+    parser.add_argument(
+        "--significance-baseline-project",
+        default=_DEFAULT_SIGNIFICANCE_BASELINE_PROJECT,
+        metavar="PROJECT",
+        help="significance 비교 기준 project (기본: VIPCGRL fewshot).",
+    )
+    parser.add_argument(
+        "--significance-target-projects",
+        nargs="+",
+        default=list(_DEFAULT_SIGNIFICANCE_TARGET_PROJECTS),
+        metavar="PROJECT",
+        help="baseline 대비 유의성 검정 대상 project 목록.",
+    )
+    parser.add_argument(
+        "--significance-alternative",
+        choices=["greater", "less", "two-sided"],
+        default="greater",
+        help="paired t-test alternative. 기본 greater는 target > baseline 검정.",
+    )
     return parser.parse_args()
 
 
@@ -1427,10 +1737,36 @@ def main() -> None:
         experiment=experiment,
         decimals=args.decimals,
     )
+    significance_results: list[dict] = []
+    if not args.no_significance and metric_order:
+        significance_results = compute_fewshot_significance_tests(
+            norm_rows,
+            metric=metric_order[0],
+            experiment=experiment,
+            baseline_project=args.significance_baseline_project,
+            target_projects=args.significance_target_projects,
+            alternative=args.significance_alternative,
+        )
+        if significance_results:
+            write_fewshot_significance_tests_csv(
+                run_dir / f"{table_prefix}_significance_tests.csv",
+                significance_results,
+            )
+            write_fewshot_significance_table_markdown(
+                run_dir / f"{table_prefix}_significance_table.md",
+                norm_rows,
+                metric_order,
+                experiment=experiment,
+                significance_results=significance_results,
+                decimals=args.decimals,
+            )
     log.info("table     : %s", run_dir / "progress_table.md")
     log.info("table     : %s", run_dir / f"{table_prefix}.csv")
     log.info("table     : %s", run_dir / f"{table_prefix}.md")
     log.info("table     : %s", run_dir / f"{table_prefix}.tex")
+    if significance_results:
+        log.info("table     : %s", run_dir / f"{table_prefix}_significance_tests.csv")
+        log.info("table     : %s", run_dir / f"{table_prefix}_significance_table.md")
 
     # ── 플롯 ──────────────────────────────────────────────────────────────
     _hl = hlines or None

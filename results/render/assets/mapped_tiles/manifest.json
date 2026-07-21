@@ -1,0 +1,149 @@
+{
+  "source_mapping": "dataset/multigame/tile_mapping.json",
+  "source_tile_root": "dataset/multigame/tile_ims",
+  "render_tile_size": 32,
+  "render_tile_ids": {
+    "1": "empty",
+    "2": "wall",
+    "3": "interactable",
+    "4": "hazard",
+    "5": "collectable"
+  },
+  "games": {
+    "doom": {
+      "empty": {
+        "render_tile_id": 1,
+        "source": "dataset/multigame/tile_ims/doom/doom_empty.png",
+        "output": "results/render/assets/mapped_tiles/doom/empty.png"
+      },
+      "wall": {
+        "render_tile_id": 2,
+        "source": "dataset/multigame/tile_ims/doom/doom_wall.png",
+        "output": "results/render/assets/mapped_tiles/doom/wall.png"
+      },
+      "interactable": {
+        "render_tile_id": 3,
+        "source": "dataset/multigame/tile_ims/doom/doom_interact.png",
+        "output": "results/render/assets/mapped_tiles/doom/interactable.png"
+      },
+      "hazard": {
+        "render_tile_id": 4,
+        "source": "dataset/multigame/tile_ims/doom/doom_hazard.png",
+        "output": "results/render/assets/mapped_tiles/doom/hazard.png"
+      },
+      "collectable": {
+        "render_tile_id": 5,
+        "source": "dataset/multigame/tile_ims/doom/doom_collect.png",
+        "output": "results/render/assets/mapped_tiles/doom/collectable.png"
+      }
+    },
+    "dungeon": {
+      "empty": {
+        "render_tile_id": 1,
+        "source": "dataset/multigame/tile_ims/dungeon/empty.png",
+        "output": "results/render/assets/mapped_tiles/dungeon/empty.png"
+      },
+      "wall": {
+        "render_tile_id": 2,
+        "source": "dataset/multigame/tile_ims/dungeon/solid.png",
+        "output": "results/render/assets/mapped_tiles/dungeon/wall.png"
+      },
+      "interactable": {
+        "render_tile_id": 3,
+        "source": "dataset/multigame/tile_ims/dungeon/dungeon_interactable.png",
+        "output": "results/render/assets/mapped_tiles/dungeon/interactable.png"
+      },
+      "hazard": {
+        "render_tile_id": 4,
+        "source": "dataset/multigame/tile_ims/dungeon/bat.png",
+        "output": "results/render/assets/mapped_tiles/dungeon/hazard.png"
+      },
+      "collectable": {
+        "render_tile_id": 5,
+        "source": "dataset/multigame/tile_ims/dungeon/treasure.png",
+        "output": "results/render/assets/mapped_tiles/dungeon/collectable.png"
+      }
+    },
+    "pokemon": {
+      "empty": {
+        "render_tile_id": 1,
+        "source": "dataset/multigame/tile_ims/pokemon/floor_0.png",
+        "output": "results/render/assets/mapped_tiles/pokemon/empty.png"
+      },
+      "wall": {
+        "render_tile_id": 2,
+        "source": "dataset/multigame/tile_ims/pokemon/tree.png",
+        "output": "results/render/assets/mapped_tiles/pokemon/wall.png"
+      },
+      "interactable": {
+        "render_tile_id": 3,
+        "source": "dataset/multigame/tile_ims/pokemon/water.png",
+        "output": "results/render/assets/mapped_tiles/pokemon/interactable.png"
+      },
+      "hazard": {
+        "render_tile_id": 4,
+        "source": "dataset/multigame/tile_ims/pokemon/floor_4.png",
+        "output": "results/render/assets/mapped_tiles/pokemon/hazard.png"
+      },
+      "collectable": {
+        "render_tile_id": 5,
+        "source": "dataset/multigame/tile_ims/pokemon/pokeball.png",
+        "output": "results/render/assets/mapped_tiles/pokemon/collectable.png"
+      }
+    },
+    "zelda": {
+      "empty": {
+        "render_tile_id": 1,
+        "source": "dataset/multigame/tile_ims/zelda/floor.png",
+        "output": "results/render/assets/mapped_tiles/zelda/empty.png"
+      },
+      "wall": {
+        "render_tile_id": 2,
+        "source": "dataset/multigame/tile_ims/zelda/wall.png",
+        "output": "results/render/assets/mapped_tiles/zelda/wall.png"
+      },
+      "interactable": {
+        "render_tile_id": 3,
+        "source": "dataset/multigame/tile_ims/zelda/zelda_interact.png",
+        "output": "results/render/assets/mapped_tiles/zelda/interactable.png"
+      },
+      "hazard": {
+        "render_tile_id": 4,
+        "source": "dataset/multigame/tile_ims/zelda/zelda_hazard.png",
+        "output": "results/render/assets/mapped_tiles/zelda/hazard.png"
+      },
+      "collectable": {
+        "render_tile_id": 5,
+        "source": "dataset/multigame/tile_ims/zelda/zelda_collectable.png",
+        "output": "results/render/assets/mapped_tiles/zelda/collectable.png"
+      }
+    },
+    "sokoban": {
+      "empty": {
+        "render_tile_id": 1,
+        "source": "dataset/multigame/tile_ims/sokoban/sokoban_empty.png",
+        "output": "results/render/assets/mapped_tiles/sokoban/empty.png"
+      },
+      "wall": {
+        "render_tile_id": 2,
+        "source": "dataset/multigame/tile_ims/sokoban/sokoban_wall.png",
+        "output": "results/render/assets/mapped_tiles/sokoban/wall.png"
+      },
+      "interactable": {
+        "render_tile_id": 3,
+        "source": "dataset/multigame/tile_ims/sokoban/sokoban_interact.png",
+        "output": "results/render/assets/mapped_tiles/sokoban/interactable.png"
+      },
+      "hazard": {
+        "render_tile_id": 4,
+        "source": "dataset/multigame/tile_ims/sokoban/sokoban_hazard.png",
+        "output": "results/render/assets/mapped_tiles/sokoban/hazard.png"
+      },
+      "collectable": {
+        "render_tile_id": 5,
+        "source": "dataset/multigame/tile_ims/sokoban/sokoban_collectable.png",
+        "output": "results/render/assets/mapped_tiles/sokoban/collectable.png"
+      }
+    }
+  }
+}

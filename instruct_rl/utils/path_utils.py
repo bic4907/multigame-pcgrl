@@ -10,7 +10,12 @@ from os.path import abspath, join
 from encoder.model import apply_encoder_model
 from encoder.clip_model import get_clip_encoder, get_cnnclip_encoder, get_cnnclip_decoder_encoder
 from conf.config import Config, TrainConfig, EncoderConfig
-from conf.game_utils import parse_game_str, GAME_ABBR, infer_seen_games_from_ckpt_name
+from conf.game_utils import (
+    parse_game_str,
+    GAME_ABBR,
+    infer_seen_games_from_ckpt_name,
+    unseen_abbr_from_seen_games,
+)
 from encoder.pretrained_clip_model import get_pretrained_clip_encoder
 from encoder.finetuned_clip_model import get_finetuned_clip_encoder
 from envs.candy import Candy, CandyParams
@@ -105,26 +110,7 @@ def _parse_encgame_from_ckpt(ckpt_name: str):
 
 def _unseen_abbr_from_seen_games(seen_games):
     """seen game list에서 canonical unseen game 약어 문자열을 만든다."""
-    if not seen_games:
-        return None
-
-    from conf.game_utils import GAME_ABBR_INV, GAME_ABBR
-    seen_game_set = {("doom" if g == "doom2" else g) for g in seen_games}
-    all_games = [
-        g for games in GAME_ABBR.values() for g in games
-        if g not in ("doom2",)
-    ]
-    unseen = [g for g in all_games if g not in seen_game_set and g != "doom2"]
-    if not unseen:
-        return None
-
-    abbr_parts, seen_abbrs = [], set()
-    for g in unseen:
-        abbr = GAME_ABBR_INV.get(g, g[:2])
-        if abbr not in seen_abbrs:
-            abbr_parts.append(abbr)
-            seen_abbrs.add(abbr)
-    return ''.join(abbr_parts)
+    return unseen_abbr_from_seen_games(seen_games)
 
 
 

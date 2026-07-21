@@ -15,7 +15,11 @@ import shutil
 import hydra
 
 from conf.config import MGPCGRLEvalConfig
-from conf.game_utils import compute_seen_unseen_split
+from conf.game_utils import (
+    compute_seen_unseen_split,
+    infer_seen_games_from_ckpt_name,
+    unseen_abbr_from_seen_games,
+)
 from instruct_rl.utils.log_utils import suppress_jax_debug_logs
 from instruct_rl.utils.eval_utils import main_eval_entry
 from train_mgpcgrl import inject_vipcgrl_obs
@@ -73,12 +77,28 @@ def main(config: MGPCGRLEvalConfig):
             _seen, _unseen = compute_seen_unseen_split(seen_raw)
             config.seen_games = list(_seen)
             config.unseen_games = list(_unseen)
+            config.train_unseen_abbr = unseen_abbr_from_seen_games(_seen)
             logger.info(
                 "Auto-setting seen_games=%s, unseen_games=%s from encoder dataset_setting.json",
                 _seen, _unseen,
             )
     else:
         logger.warning("dataset_setting.json not found at %s", dataset_setting_path)
+
+    # Ensure eval exp_dir is resolved to the matching trained MGPCGRL run before
+    # main_eval_entry() calls init_config(). Older full-shot subset encoder names
+    # only encode seen games as ``clipdec-game-dgpk...`` rather than
+    # ``_unseen-...``; make the derived unseen suffix explicit for eval names.
+    if not config.train_unseen_abbr:
+        inferred_seen = infer_seen_games_from_ckpt_name(config.encoder.ckpt_name)
+        inferred_unseen_abbr = unseen_abbr_from_seen_games(inferred_seen)
+        if inferred_unseen_abbr:
+            config.train_unseen_abbr = inferred_unseen_abbr
+            logger.info(
+                "Auto-setting train_unseen_abbr=%s from encoder ckpt_name=%s",
+                inferred_unseen_abbr,
+                config.encoder.ckpt_name,
+            )
 
     main_eval_entry(config, inject_obs_fn=inject_vipcgrl_obs)
     
@@ -95,4 +115,3 @@ def main(config: MGPCGRLEvalConfig):
 
 if __name__ == "__main__":
     main()
-

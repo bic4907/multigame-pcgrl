@@ -18,13 +18,15 @@ parameters:
   train_seen_ratio:
     value: 1.0
   dataset_unseen_ratio:
-    values: [0.1, 0.2, 0.4, 0.6, 0.8]
+    values: [0.03, 0.1, 0.2, 0.4, 0.6, 0.8]
   encoder.ckpt_dir:
     value: '/mnt/nas/mgpcgrl/predictive_reward'
   encoder.ckpt_name:
     values:
-      - "clipdec-game-all_unseen-dm_ur-0.03_exp-def_0"
-      - "clipdec-game-all_unseen-dm_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-all_unseen-dg_ur-0.03_exp-def_0"
+      - "clipdec-game-all_unseen-dg_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-all_unseen-zd_ur-0.03_exp-def_0"
+      - "clipdec-game-all_unseen-zd_ur-0.03_exp-def_dw-0p03_0"
   saves_dir:
     value: '/mnt/nas/mgpcgrl/predictive_reward'
 command:

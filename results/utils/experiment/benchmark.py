@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 from collections import defaultdict
 from pathlib import Path
 
@@ -50,6 +51,7 @@ from utils.core.normalization import (
     save_normalization_scale,
     load_normalization_scale,
 )
+from scipy import stats as scipy_stats
 
 _CFG = load_cfg()
 
@@ -432,6 +434,252 @@ def _gamenum_project_stats(rows: list[dict], metric: str) -> dict[str, dict]:
         if stat:
             result[project] = stat
     return result
+
+
+def _seed_metric_means_for_project(rows: list[dict], project: str, metric: str) -> dict[str, float]:
+    seed_vals: dict[str, list[float]] = defaultdict(list)
+    for row in rows:
+        if row.get("project") != project:
+            continue
+        value = row.get("metrics", {}).get(metric)
+        if value is None:
+            continue
+        seed = row.get("seed") or row.get("run", str(id(row)))
+        seed_vals[str(seed)].append(value)
+    return {
+        seed: sum(values) / len(values)
+        for seed, values in seed_vals.items()
+        if values
+    }
+
+
+def _paired_ttest(
+    baseline_by_seed: dict[str, float],
+    target_by_seed: dict[str, float],
+    alternative: str,
+) -> dict | None:
+    common_seeds = sorted(set(baseline_by_seed) & set(target_by_seed))
+    if len(common_seeds) < 2:
+        return None
+
+    baseline = [baseline_by_seed[s] for s in common_seeds]
+    target = [target_by_seed[s] for s in common_seeds]
+    diffs = [t - b for t, b in zip(target, baseline)]
+    mean_diff = sum(diffs) / len(diffs)
+    diff_var = sum((d - mean_diff) ** 2 for d in diffs) / (len(diffs) - 1)
+    diff_std = math.sqrt(diff_var)
+
+    if diff_std <= 1e-12:
+        if abs(mean_diff) <= 1e-12:
+            t_stat, p_value = 0.0, 1.0
+        elif alternative == "greater":
+            t_stat = math.inf if mean_diff > 0 else -math.inf
+            p_value = 0.0 if mean_diff > 0 else 1.0
+        elif alternative == "less":
+            t_stat = math.inf if mean_diff > 0 else -math.inf
+            p_value = 1.0 if mean_diff > 0 else 0.0
+        else:
+            t_stat = math.inf if mean_diff > 0 else -math.inf
+            p_value = 0.0
+    else:
+        test = scipy_stats.ttest_rel(target, baseline, alternative=alternative)
+        t_stat = float(test.statistic)
+        p_value = float(test.pvalue)
+
+    return {
+        "n": len(common_seeds),
+        "baseline_mean": sum(baseline) / len(baseline),
+        "target_mean": sum(target) / len(target),
+        "mean_diff": mean_diff,
+        "t": t_stat,
+        "p": p_value,
+        "effect_dz": mean_diff / diff_std if diff_std > 1e-12 else math.inf,
+        "seeds": ",".join(common_seeds),
+    }
+
+
+def _holm_adjust(results: list[dict]) -> None:
+    valid = [
+        result for result in results
+        if result.get("p") is not None and math.isfinite(result["p"])
+    ]
+    ranked = sorted(valid, key=lambda result: result["p"])
+    m = len(ranked)
+    running = 0.0
+    for idx, result in enumerate(ranked, start=1):
+        adjusted = min(1.0, (m - idx + 1) * result["p"])
+        running = max(running, adjusted)
+        result["p_holm"] = running
+
+
+def _sig_stars(p_value: float | None, alpha: float = 0.05) -> str:
+    if p_value is None or not math.isfinite(p_value) or p_value >= alpha:
+        return ""
+    if p_value < 0.001:
+        return "***"
+    if p_value < 0.01:
+        return "**"
+    return "*"
+
+
+def _format_p_value(value: float | None) -> str:
+    if value is None or not math.isfinite(value):
+        return ""
+    if value < 0.001:
+        return "<0.001"
+    return f"{value:.3f}"
+
+
+def _find_gamenum_baseline_method(table_cfg: dict) -> dict | None:
+    baseline_label = str(table_cfg.get("significance_baseline_label", "VIPCGRL"))
+    for method in table_cfg.get("methods", []):
+        if str(method.get("label", "")) == baseline_label:
+            return method
+    for method in table_cfg.get("methods", []):
+        if baseline_label in str(method.get("label", "")):
+            return method
+    return None
+
+
+def _is_gamenum_significance_target(method: dict, baseline_method: dict, table_cfg: dict) -> bool:
+    if method is baseline_method:
+        return False
+
+    label = str(method.get("label", ""))
+    target_labels = table_cfg.get("significance_target_labels")
+    if isinstance(target_labels, list):
+        return label in {str(item) for item in target_labels}
+
+    target_contains = str(table_cfg.get("significance_target_label_contains", "MGPCGRL"))
+    if target_contains:
+        return target_contains in label
+
+    return True
+
+
+def compute_gamenum_significance_tests(
+    rows: list[dict],
+    table_cfg: dict,
+    metric: str,
+) -> list[dict]:
+    baseline_method = _find_gamenum_baseline_method(table_cfg)
+    if not baseline_method:
+        return []
+
+    alternative = str(table_cfg.get("significance_alternative", "greater"))
+    domain_counts = [str(x) for x in table_cfg.get("domain_counts", [2, 3, 5])]
+    baseline_projects = baseline_method.get("projects", {})
+    results: list[dict] = []
+
+    for method in table_cfg.get("methods", []):
+        label = str(method.get("label", ""))
+        if not _is_gamenum_significance_target(method, baseline_method, table_cfg):
+            continue
+        projects = method.get("projects", {})
+        for n in domain_counts:
+            baseline_project = str(baseline_projects.get(n, ""))
+            target_project = str(projects.get(n, ""))
+            if not baseline_project or not target_project:
+                continue
+
+            baseline_values = _seed_metric_means_for_project(rows, baseline_project, metric)
+            target_values = _seed_metric_means_for_project(rows, target_project, metric)
+            stat = _paired_ttest(
+                baseline_values,
+                target_values,
+                alternative=alternative,
+            )
+            if stat is None:
+                stat = {
+                    "n": len(set(baseline_values) & set(target_values)),
+                    "baseline_mean": None,
+                    "target_mean": None,
+                    "mean_diff": None,
+                    "t": None,
+                    "p": None,
+                    "effect_dz": None,
+                    "seeds": "",
+                }
+            stat.update({
+                "metric": metric,
+                "method": label,
+                "domain_count": n,
+                "baseline_project": baseline_project,
+                "target_project": target_project,
+                "alternative": alternative,
+            })
+            results.append(stat)
+
+    _holm_adjust(results)
+    for result in results:
+        result.setdefault("p_holm", None)
+        result["stars"] = _sig_stars(result.get("p_holm"))
+    return results
+
+
+def _gamenum_significance_lookup(results: list[dict]) -> dict[tuple[str, str], dict]:
+    return {
+        (result["method"], result["domain_count"]): result
+        for result in results
+    }
+
+
+def write_gamenum_significance_table_markdown(
+    output_path: Path,
+    rows: list[dict],
+    table_cfg: dict,
+    decimals: int,
+) -> None:
+    metric = table_cfg.get("metric", "progress")
+    domain_counts = [str(x) for x in table_cfg.get("domain_counts", [2, 3, 5])]
+    methods = table_cfg.get("methods", [])
+    mean_decimals = int(table_cfg.get("mean_decimals", min(decimals, 3)))
+    std_decimals = int(table_cfg.get("std_decimals", 2))
+    baseline_method = _find_gamenum_baseline_method(table_cfg)
+    baseline_label = str(baseline_method.get("label", "VIPCGRL")) if baseline_method else "VIPCGRL"
+    stats_by_project = _gamenum_project_stats(rows, metric)
+    tests = compute_gamenum_significance_tests(rows, table_cfg, metric)
+    sig = _gamenum_significance_lookup(tests)
+
+    header_cols = ["Method"] + [f"{n} Domains" for n in domain_counts]
+    lines = [
+        "| " + " | ".join(header_cols) + " |",
+        "| " + " | ".join(["---"] * len(header_cols)) + " |",
+    ]
+
+    for method in methods:
+        method_label = str(method.get("label", ""))
+        projects = method.get("projects", {})
+        cells = [method_label]
+        for n in domain_counts:
+            stat = stats_by_project.get(str(projects.get(n, "")))
+            cell = _format_gamenum_cell(stat, mean_decimals, std_decimals)
+            if method is baseline_method:
+                cell = f"{cell} (baseline)" if cell != "-" else "-"
+            else:
+                test = sig.get((method_label, n))
+                if test:
+                    stars = test.get("stars", "")
+                    p_holm = _format_p_value(test.get("p_holm"))
+                    n_common = test.get("n")
+                    if stars:
+                        cell = f"{cell}{stars}"
+                    if p_holm:
+                        cell = f"{cell} (p={p_holm}, n={n_common})"
+            cells.append(cell)
+        lines.append("| " + " | ".join(cells) + " |")
+
+    alternative = str(table_cfg.get("significance_alternative", "greater"))
+    lines += [
+        "",
+        f"Paired one-sided t-test on seed-level means, alternative: target > {baseline_label}."
+        if alternative == "greater"
+        else f"Paired t-test on seed-level means, alternative: {alternative}.",
+        f"Reported p-values are Holm-adjusted across all MGPCGRL-vs-{baseline_label} cells; * p<0.05, ** p<0.01, *** p<0.001.",
+    ]
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def write_gamenum_table_outputs(
@@ -1030,9 +1278,16 @@ def main() -> None:
     gamenum_table_cfg = exp_cfg.get("gamenum_table")
     if isinstance(gamenum_table_cfg, dict):
         write_gamenum_table_outputs(run_dir, rows, gamenum_table_cfg, args.decimals)
+        write_gamenum_significance_table_markdown(
+            run_dir / "fullshot_gamenum_significance_table.md",
+            rows,
+            gamenum_table_cfg,
+            args.decimals,
+        )
         log.info("gamenum table csv: %s", run_dir / "fullshot_gamenum_table.csv")
         log.info("gamenum table md : %s", run_dir / "fullshot_gamenum_table.md")
         log.info("gamenum table tex: %s", run_dir / "fullshot_gamenum_table.tex")
+        log.info("gamenum sig md : %s", run_dir / "fullshot_gamenum_significance_table.md")
 
     plot_rows = collect_plot_rows_from_results(input_root, metric_order)
     if target_projects:

@@ -9,7 +9,8 @@
         "aaai27_eval_ipcgrl_fullshot",
         "aaai27_eval_mipcgrl_fullshot",
         "aaai27_eval_vipcgrl_fullshot",
-        "aaai27_eval_mgpcgrl_fullshot"
+        "aaai27_eval_mgpcgrl_fullshot",
+        "aaai27_eval_mgpcgrl_fullshot_nodec"
       ],
       "re_oracle_project":          "aaai27_eval_cpcgrl",
       "re_oracle_label":            "CPCGRL (Oracle)",
@@ -24,16 +25,19 @@
         "aaai27_eval_vipcgrl_fullshot_2",
         "aaai27_eval_mgpcgrl_fullshot_2",
         "aaai27_eval_mgpcgrl_fullshot_2_dw0",
+        "aaai27_eval_mgpcgrl_fullshot_2_nodec",
         "aaai27_eval_ipcgrl_fullshot_3",
         "aaai27_eval_mipcgrl_fullshot_3",
         "aaai27_eval_vipcgrl_fullshot_3",
         "aaai27_eval_mgpcgrl_fullshot_3",
         "aaai27_eval_mgpcgrl_fullshot_3_dw0",
+        "aaai27_eval_mgpcgrl_fullshot_3_nodec",
         "aaai27_eval_ipcgrl_fullshot",
         "aaai27_eval_mipcgrl_fullshot",
         "aaai27_eval_vipcgrl_fullshot",
         "aaai27_eval_mgpcgrl_fullshot",
-        "aaai27_eval_mgpcgrl_fullshot_dw0"
+        "aaai27_eval_mgpcgrl_fullshot_dw0",
+        "aaai27_eval_mgpcgrl_fullshot_nodec"
       ],
       "re_oracle_project":          "aaai27_eval_cpcgrl",
       "re_oracle_label":            "CPCGRL (Oracle)",
@@ -74,6 +78,14 @@
               "2": "aaai27_eval_mgpcgrl_fullshot_2_dw0",
               "3": "aaai27_eval_mgpcgrl_fullshot_3_dw0",
               "5": "aaai27_eval_mgpcgrl_fullshot_dw0"
+            }
+          },
+          {
+            "label": "MGPCGRL ($-\\mathcal{L}_{\\mathrm{dec}}$)",
+            "projects": {
+              "2": "aaai27_eval_mgpcgrl_fullshot_2_nodec",
+              "3": "aaai27_eval_mgpcgrl_fullshot_3_nodec",
+              "5": "aaai27_eval_mgpcgrl_fullshot_nodec"
             }
           },
           {
@@ -163,6 +175,7 @@
     "aaai27_eval_vipcgrl_fullshot":             "VIPCGRL (5 games)",
     "aaai27_eval_mgpcgrl_fullshot":             "MGPCGRL (5 games)",
     "aaai27_eval_mgpcgrl_fullshot_dw0":         "MGPCGRL (5 games, dw=0)",
+    "aaai27_eval_mgpcgrl_fullshot_nodec":       "MGPCGRL (5 games, -L_dec)",
     "aaai27_eval_mgpcgrl_unseen":"MGPCGRL",
     "aaai27_eval_mgpcgrl_all":   "MGPCGRL (all)",
     "aaai27_eval_mgpcgrl_oracle":"MGPCGRL (oracle)",
@@ -174,11 +187,13 @@
     "aaai27_eval_vipcgrl_fullshot_2":         "VIPCGRL (2 games)",
     "aaai27_eval_mgpcgrl_fullshot_2":         "MGPCGRL (2 games)",
     "aaai27_eval_mgpcgrl_fullshot_2_dw0":     "MGPCGRL (2 games, dw=0)",
+    "aaai27_eval_mgpcgrl_fullshot_2_nodec":   "MGPCGRL (2 games, -L_dec)",
     "aaai27_eval_ipcgrl_fullshot_3":          "IPCGRL (3 games)",
     "aaai27_eval_mipcgrl_fullshot_3":         "MIPCGRL (3 games)",
     "aaai27_eval_vipcgrl_fullshot_3":         "VIPCGRL (3 games)",
     "aaai27_eval_mgpcgrl_fullshot_3":         "MGPCGRL (3 games)",
     "aaai27_eval_mgpcgrl_fullshot_3_dw0":     "MGPCGRL (3 games, dw=0)",
+    "aaai27_eval_mgpcgrl_fullshot_3_nodec":   "MGPCGRL (3 games, -L_dec)",
     "aaai27_eval_ipcgrl_zeroshot":             "IPCGRL (zeroshot)",
     "aaai27_eval_mipcgrl_zeroshot":            "MIPCGRL (zeroshot)",
     "aaai27_eval_vipcgrl_zeroshot":            "VIPCGRL (zeroshot)",
@@ -223,16 +238,19 @@
     "aaai27_eval_vipcgrl_fullshot":            "#7b3294",
     "aaai27_eval_mgpcgrl_fullshot":            "#2166ac",
     "aaai27_eval_mgpcgrl_fullshot_dw0":        "#4393c3",
+    "aaai27_eval_mgpcgrl_fullshot_nodec":      "#92c5de",
     "aaai27_eval_ipcgrl_fullshot_2":           "#1a9641",
     "aaai27_eval_mipcgrl_fullshot_2":          "#66a61e",
     "aaai27_eval_vipcgrl_fullshot_2":          "#7b3294",
     "aaai27_eval_mgpcgrl_fullshot_2":          "#2166ac",
     "aaai27_eval_mgpcgrl_fullshot_2_dw0":      "#4393c3",
+    "aaai27_eval_mgpcgrl_fullshot_2_nodec":    "#92c5de",
     "aaai27_eval_ipcgrl_fullshot_3":           "#1a9641",
     "aaai27_eval_mipcgrl_fullshot_3":          "#66a61e",
     "aaai27_eval_vipcgrl_fullshot_3":          "#7b3294",
     "aaai27_eval_mgpcgrl_fullshot_3":          "#2166ac",
     "aaai27_eval_mgpcgrl_fullshot_3_dw0":      "#4393c3",
+    "aaai27_eval_mgpcgrl_fullshot_3_nodec":    "#92c5de",
     "aaai27_eval_ipcgrl_zeroshot":            "#1a9641",
     "aaai27_eval_mipcgrl_zeroshot":           "#66a61e",
     "aaai27_eval_vipcgrl_zeroshot":           "#7b3294",

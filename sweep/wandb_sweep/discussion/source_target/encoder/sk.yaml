@@ -1,0 +1,37 @@
+program: train_clip_decoder.py
+project: aaai27_encoder_mgpcgrl_source_target
+method: grid
+metric:
+  goal: minimize
+  name: val/loss
+parameters:
+  wandb_project:
+    value: aaai27_encoder_mgpcgrl_source_target
+  # target(unseen)=sk(sokoban) 고정. game 값에 따라 source(seen) 게임이 결정된다.
+  #   game='sk'      -> source 없음 (baseline, seen game 0개)
+  #   game='<src>sk' -> source=<src> 1개 (seen game 1개)
+  # seen_ratio=0.1 은 source가 없는 game='sk' 케이스에서는 seen 게임 자체가 없어
+  # 아무 효과가 없다 (ckpt 이름에 sr-0.1 이 붙지만 의미상 무시해도 된다).
+  game:
+    values:
+      - 'sk'
+      - 'dgsk'
+      - 'pksk'
+      - 'dmsk'
+      - 'zdsk'
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/mgpcgrl_source_target'
+  unseen_games:
+    value: 'sk'
+  unseen_ratio:
+    value: 0.03
+  seen_ratio:
+    value: 0.1
+  delta_weight:
+    value: 0.03
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

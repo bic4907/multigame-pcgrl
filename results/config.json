@@ -4,6 +4,14 @@
     "num_workers": 10
   },
   "experiments": {
+    "source_target": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_source_target"
+      ],
+      "display_names": {
+        "aaai27_eval_mgpcgrl_source_target": "source_target"
+      }
+    },
     "fullshot": {
       "target_projects": [
         "aaai27_eval_ipcgrl_fullshot",

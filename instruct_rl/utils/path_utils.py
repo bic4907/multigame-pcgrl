@@ -52,11 +52,13 @@ def _to_pstr(v: float) -> str:
     return f"{v:g}".replace('.', 'p')
 
 
-def _build_unseen_suffix(un_abbr, ur, sr) -> str:
-    """un_abbr/ur/sr → '_un-XX_ur-YY_sr-ZZ' 형태 suffix.
+def _build_unseen_suffix(un_abbr, ur, sr, encgame=None) -> str:
+    """un_abbr/ur/sr/encgame → '_un-XX_ur-YY_sr-ZZ_encgame-WW' 형태 suffix.
 
     모두 None/empty 이면 빈 문자열을 반환한다 (unseen 정보가 없으면 생략).
     sr == 1.0 이면 실험명에 포함하지 않는다.
+    encgame 은 encoder 의 game 이 'all' 이 아닐 때만 붙는다
+    (``_parse_encgame_from_ckpt`` 참고).
     """
     parts = []
     if un_abbr:
@@ -65,6 +67,8 @@ def _build_unseen_suffix(un_abbr, ur, sr) -> str:
         parts.append(f'ur-{_to_pstr(ur)}')
     if sr is not None and sr != 1.0:
         parts.append(f'sr-{_to_pstr(sr)}')
+    if encgame:
+        parts.append(f'encgame-{encgame}')
     return ('_' + '_'.join(parts)) if parts else ''
 
 
@@ -83,6 +87,27 @@ def _parse_unseen_from_ckpt(ckpt_name: str):
     )
 
 
+def _parse_encgame_from_ckpt(ckpt_name: str):
+    """encoder ckpt 이름의 ``game-<games>`` 값을 추출. 'all' 이거나 없으면 None.
+
+    RL 은 보통 encoder 와 무관하게 game='all' 로 돌기 때문에, encoder 쪽 game 을
+    제한해 실험을 나누는 경우(source_target: game=source+target) RL exp_dir 이
+    encoder 간에 충돌한다 — (un, ur, sr) 이 모두 같기 때문이다. 이를 구분하려면
+    encoder 의 game 자체가 경로에 들어가야 한다.
+
+    encoder 가 game-all 인 (기존) 실험은 None 을 반환해 경로를 그대로 유지한다.
+    """
+    if not ckpt_name:
+        return None
+    import re
+    m_game = re.search(r'(?:^|[_-])game-([^_]+)', ckpt_name)
+    if not m_game:
+        return None
+
+    game = m_game.group(1)
+    return None if game == 'all' else game
+
+
 def _unseen_abbr_from_seen_games(seen_games):
     """seen game list에서 canonical unseen game 약어 문자열을 만든다."""
     return unseen_abbr_from_seen_games(seen_games)
@@ -98,7 +123,7 @@ def _unseen_suffix(config) -> str:
       3. config.reward_seen_games/seen_games 에서 자동 계산 (un_abbr only)
 
     unseen 정보가 전혀 없으면 빈 문자열을 반환한다 (suffix 생략).
-    형식: '_un-XX_ur-YY_sr-ZZ'
+    형식: '_un-XX_ur-YY_sr-ZZ[_encgame-WW]'
     """
     # ── 1. 명시 파라미터 (MGPCGRL config 에만 존재) ──────────────────────────
     un_abbr = getattr(config, 'train_unseen_abbr', None)   # e.g. "zd"
@@ -107,11 +132,15 @@ def _unseen_suffix(config) -> str:
     # encoder ckpt_name에서 파싱한 sr을 우선 사용
     sr      = None
 
+    enc_cfg = getattr(config, 'encoder', None)
+    ckpt_name = (getattr(enc_cfg, 'ckpt_name', None)
+                 or getattr(enc_cfg, 'ckpt_path', None) or "")
+
+    # ── encoder game: 'all' 이 아닌 경우만 (RL game 과 독립적인 경로 식별자) ──
+    encgame = _parse_encgame_from_ckpt(ckpt_name)
+
     # ── 2. encoder.ckpt_name 에서 파싱 ──────────────────────────────────────
     if un_abbr is None or ur is None or sr is None:
-        enc_cfg = getattr(config, 'encoder', None)
-        ckpt_name = (getattr(enc_cfg, 'ckpt_name', None)
-                     or getattr(enc_cfg, 'ckpt_path', None) or "")
         c_un, c_ur, c_sr = _parse_unseen_from_ckpt(ckpt_name)
         if un_abbr is None: un_abbr = c_un
         if ur is None:      ur      = c_ur
@@ -145,7 +174,7 @@ def _unseen_suffix(config) -> str:
         un_abbr = _unseen_abbr_from_seen_games(seen_games)
 
     # unseen 정보가 전혀 없으면 suffix 생략
-    return _build_unseen_suffix(un_abbr, ur, sr)
+    return _build_unseen_suffix(un_abbr, ur, sr, encgame)
 
 
 def get_exp_group(config) -> str:

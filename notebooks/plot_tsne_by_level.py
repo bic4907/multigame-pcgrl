@@ -181,7 +181,20 @@ def draw_direction_arrow(
     min_blend = 0.35  # 가장 짧은 화살표도 완전히 흰색이 되지 않도록 최소 채도 유지
 
     arrow_style = "simple,head_length=1.05,head_width=0.85,tail_width=0.24"
+    # jitter 화살표: 각 게임의 실제 화살표와 같은 출발점에서, 방향을 살짝 흩뜨린 짧은
+    # 회색 화살표 몇 개를 함께 그려서 "여러 방향이 대체로 한 방향으로 정렬된다"는
+    # 느낌을 준다 (본 화살표보다 뒤/아래 zorder로 깔아둔다).
+    jitter_style = "simple,head_length=1.0,head_width=0.8,tail_width=0.22"
+    jitter_frac = 0.5    # 본 화살표 길이 대비 짧게
+    # 게임별로 jitter 방향을 특정 각도(도 단위, xy 평면 회전)로 고정한다. 순수 난수로 두면
+    # 던전 화살표가 다른 클러스터로 뻗어 모양을 깨서, 게임마다 깔끔한 방향을 직접 지정한다.
+    jitter_deg = {"doom": -10.0, "dungeon": 55.0, "pokemon": -45.0, "sokoban": 20.0, "zelda": -55.0}
+
     for game, (start, end) in endpoints_by_game.items():
+        start = np.asarray(start, dtype=float)
+        end = np.asarray(end, dtype=float)
+        direction = end - start
+        seg_len = float(np.linalg.norm(direction)) or 1.0
         base_color = np.array(mcolors.to_rgb(game_color(game, unseen_games)))
         t = (lengths[game] - len_lo) / (len_hi - len_lo) if len_hi > len_lo else 1.0
         blend = min_blend + (1.0 - min_blend) * t
@@ -189,9 +202,36 @@ def draw_direction_arrow(
         mid_y = (start[1] + end[1]) / 2.0
         alpha = depth_alpha_fn(mid_y) if depth_alpha_fn is not None else 1.0
         zorder = depth_zorder_fn(mid_y) if depth_zorder_fn is not None else 50
+        # doom 화살표를 다른 화살표들보다 항상 맨 앞에 오게 zorder를 올린다.
+        if game == "doom":
+            zorder = zorder + 5
+
+        # --- jitter 화살표 (회색, 짧게, 본 화살표와 동일한 시작점) ---
+        # 본 화살표 방향을 xy 평면에서 지정 각도만큼 회전시켜 jitter 방향을 만든다.
+        theta = np.deg2rad(jitter_deg.get(game, 90.0))
+        cos_t, sin_t = np.cos(theta), np.sin(theta)
+        j_dir = direction.copy()
+        j_dir[0] = direction[0] * cos_t - direction[1] * sin_t
+        j_dir[1] = direction[0] * sin_t + direction[1] * cos_t
+        j_end = start + (j_dir / (np.linalg.norm(j_dir) or 1.0)) * seg_len * jitter_frac
+        j_kwargs = dict(
+            mutation_scale=15, arrowstyle=jitter_style,
+            facecolor="#8a8a8a", edgecolor="#000000", linewidth=0.6,
+            shrinkA=0, shrinkB=0,  # tail을 start에 정확히 고정 (기본 shrink=2 때문에 벌어지던 문제 해결)
+            zorder=zorder - 1, clip_on=False, alpha=0.65 * alpha,
+        )
+        if is_3d:
+            jarr = Arrow3D([start[0], j_end[0]], [start[1], j_end[1]], [start[2], j_end[2]], **j_kwargs)
+            ax.add_artist(jarr)
+        else:
+            jarr = FancyArrowPatch((start[0], start[1]), (j_end[0], j_end[1]), **j_kwargs)
+            ax.add_patch(jarr)
+
         kwargs = dict(
             mutation_scale=16, arrowstyle=arrow_style,
-            facecolor=color, edgecolor="black", linewidth=0.8, zorder=zorder, clip_on=False, alpha=alpha,
+            facecolor=color, edgecolor="black", linewidth=0.8,
+            shrinkA=0, shrinkB=0,  # 본 화살표 tail도 start에 정확히 고정
+            zorder=zorder, clip_on=False, alpha=alpha,
         )
         if is_3d:
             arrow = Arrow3D([start[0], end[0]], [start[1], end[1]], [start[2], end[2]], **kwargs)
@@ -258,11 +298,11 @@ def find_representative_index(
 # x는 왼쪽→오른쪽으로 (예전보다 촘촘하게) 벌리고, y는 가운데(unseen 게임)가 가장 높고
 # 가장자리로 갈수록 낮아지는 완만한 호를 그린다.
 LEVEL_THUMBNAIL_SLOTS: dict[str, tuple[float, float]] = {
-    "zelda": (-0.15, 0.52),
-    "pokemon": (-0.07, 0.95),
-    "dungeon": (0.30, 1.12),
-    "sokoban": (0.67, 1.17),
-    "doom": (1.04, 1.12),
+    "zelda": (-0.25, 0.65),
+    "dungeon": (0.0, 1.17),
+    "pokemon": (0.53, 1.22),
+    "sokoban": (1.08, 1.17),
+    "doom": (1.31, 0.65),
 }
 
 
@@ -323,9 +363,9 @@ def draw_level_thumbnails(
         ax.add_artist(ab)
         # 라벨: 대표 샘플의 instruction 텍스트 (없으면 game/bin 폴백). 이미지 좌우 폭을
         # 넘지 않도록, 이미지 표시 폭(px * zoom ≈ point)에 맞춰 줄바꿈 폭을 정한다.
-        fontsize = 14
+        fontsize = 17
         img_width_pt = img.shape[1] * zoom
-        wrap_width = max(12, int(img_width_pt / (fontsize * 0.42)))
+        wrap_width = max(12, int(img_width_pt / (fontsize * 0.32)))
         caption = captions.get(f"{game}_bin{target_bin}", f"{game} (bin {target_bin})")
         # 단어 중간이 잘리면 보기 나쁘므로, 폭을 넘더라도 단어 단위는 유지한다.
         caption = "\n".join(textwrap.wrap(caption, width=wrap_width, break_long_words=False, break_on_hyphens=False))
@@ -455,7 +495,8 @@ def render_plot(
 
     # 레벨 썸네일을 붙일 땐 좌우 여백이 훨씬 많이 필요해서 figure를 넓힌다 —
     # 그래야 axes-fraction 오프셋이 실제 인치 단위로도 캡션/이미지를 담을 만큼 벌어진다.
-    figsize = (9.0, 9.8) if level_thumbnails else (6.4, 6.8)
+    # 세로로 긴 느낌을 줄이고 정사각형에 가깝게 — 썸네일이 붙을 때 높이를 낮춘다.
+    figsize = (9.5, 8.2) if level_thumbnails else (6.4, 6.8)
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection="3d") if is_3d else fig.add_subplot(111)
     if is_3d:
@@ -480,8 +521,8 @@ def render_plot(
             values = np.concatenate([values, arrow_points[:, axis]])
         lo, hi = axis_limits(values, axis_percentile, pad)
         if axis == 1:
-            # 우하단(t-SNE dim 2) 축의 아래쪽이 유독 타이트해서 조금 더 여유를 준다.
-            lo = lo - 1
+            # 반전 넣은 depth 축(우하단) 범위를 -10~10으로 좁힌다.
+            lo, hi = max(lo, -10.0), min(hi, 10.0)
         set_lim(lo, hi)
     if is_3d:
         ax.set_box_aspect((1, 1, 1), zoom=1.25)
@@ -532,9 +573,9 @@ def render_plot(
             color = game_color(game, unseen_games)
             pts = coords[sel]
             if is_unseen:
-                kwargs = {"marker": "*", "s": 100, "linewidths": 0.5, "edgecolors": "white"}
+                kwargs = {"marker": "*", "s": 145, "linewidths": 0.5, "edgecolors": "white"}
             else:
-                kwargs = {"marker": "o", "s": 48, "linewidths": 0.5, "edgecolors": "white"}
+                kwargs = {"marker": "o", "s": 52, "linewidths": 0.5, "edgecolors": "white"}
             # 축 범위를 타이트하게 잡아도(percentile crop) 그 밖으로 나가는 점이 잘리지 않고 보이게 한다.
             kwargs["clip_on"] = False
             kwargs["zorder"] = depth_rank
@@ -563,25 +604,25 @@ def render_plot(
     game_handles = [
         mlines.Line2D([], [], color=game_color(g, unseen_games),
                       marker="*" if g in unseen_games else "o", linestyle="None",
-                      markersize=15 if g in unseen_games else 12,
+                      markersize=18 if g in unseen_games else 15,
                       markeredgecolor="white", markeredgewidth=0.8,
                       label=g.capitalize())
         for g in unique_games
     ]
     # Type은 큐브 좌하단 빈 공간에, Game은 그래프의 실제 오른쪽(우하단 바깥)에 배치한다.
     seen_unseen_handles = [
-        mlines.Line2D([], [], color="black", marker="o", linestyle="None", markersize=12,
+        mlines.Line2D([], [], color="black", marker="o", linestyle="None", markersize=15,
                       markeredgecolor="white", markeredgewidth=0.8, label="Seen"),
-        mlines.Line2D([], [], color="black", marker="*", linestyle="None", markersize=15,
+        mlines.Line2D([], [], color="black", marker="*", linestyle="None", markersize=18,
                       markeredgecolor="white", markeredgewidth=0.8, label="Unseen"),
     ]
     type_legend = ax.legend(handles=seen_unseen_handles, title="Type", loc="lower left",
-                             bbox_to_anchor=(0.9, -0.1), ncol=1, frameon=True,
-                             handletextpad=0.4, fontsize=14, markerscale=0.8)
+                             bbox_to_anchor=(1.08, -0.15), ncol=1, frameon=True,
+                             handletextpad=0.4, fontsize=18, title_fontsize=19, markerscale=1.1)
     ax.add_artist(type_legend)
 
-    ax.legend(handles=game_handles, title="Game", loc="lower left", bbox_to_anchor=(-0.3, -0.1),
-              ncol=1, frameon=True, handletextpad=0.4, fontsize=14, markerscale=0.8)
+    ax.legend(handles=game_handles, title="Game", loc="lower right", bbox_to_anchor=(0.0, -0.15),
+              ncol=1, frameon=True, handletextpad=0.4, fontsize=18, title_fontsize=19, markerscale=1.1)
 
     from matplotlib.ticker import MultipleLocator
 

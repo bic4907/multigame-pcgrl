@@ -41,7 +41,7 @@ def _annotate_trend(ax, x, y, loc: str = "upper left", color: str = "k") -> None
     r, p = pearsonr(xy["x"], xy["y"])
     xa, ha = (0.03, "left") if "left" in loc else (0.97, "right")
     ya = 0.97 if "upper" in loc else 0.05
-    ax.text(xa, ya, f"R = {r:.3f}\np = {p:.3f}", transform=ax.transAxes,
+    ax.text(xa, ya, f"$R = {r:.3f}$\n$p = {p:.3f}$", transform=ax.transAxes,
             ha=ha, va="top" if "upper" in loc else "bottom", fontsize=9,
             bbox=dict(boxstyle="round", fc="white", ec="0.6", alpha=0.85))
 
@@ -107,9 +107,85 @@ def plot_similarity_boxplot(out_dir: Path, n_bins: int = 15,
     ax.spines[["top", "right"]].set_visible(False)
 
     fig.tight_layout(pad=0.3)
-    png_path = out_dir / "fig_similarity_boxplot.png"
-    pdf_path = out_dir / "fig_similarity_boxplot.pdf"
+    png_path = out_dir / "fig_transferbility.png"
+    pdf_path = out_dir / "fig_transferbility.pdf"
     fig.savefig(png_path, dpi=300)
     fig.savefig(pdf_path)
     plt.close(fig)
     return png_path
+
+
+def plot_similarity_boxplot_per_enum(out_dir: Path, n_bins: int = 10,
+                                     exclude_absent_source: bool = False) -> list[Path]:
+    """Same boxplot but produced separately for each reward enum.
+
+    Per-enum sample size is small (~16-20 rows), so we use fewer bins and skip
+    the within-enum z-scoring of the predictor (raw JS distance is fine when
+    only one enum is present). y-axis is still standardized within the enum
+    for consistent scale across figures.
+    """
+    from scipy.stats import pearsonr
+
+    m = merged_feature_table().copy()
+    if exclude_absent_source:
+        m = m[m["source_present"] == 1.0]
+
+    def _z(x):
+        s = x.std()
+        return (x - x.mean()) / s if s > 1e-9 else x * 0.0
+
+    m["diff_z"] = m.groupby("reward_enum")["diff_vs_baseline"].transform(_z)
+
+    paths: list[Path] = []
+    for enum_label, g in m.groupby("reward_enum"):
+        sub = g[["js_distance", "diff_z"]].replace([np.inf, -np.inf], np.nan).dropna()
+        if sub["js_distance"].nunique() < 3:
+            continue
+        n_b = min(n_bins, sub["js_distance"].nunique())
+        sub = sub.assign(bin=pd.qcut(sub["js_distance"], q=n_b, duplicates="drop"))
+        groups = list(sub.groupby("bin", observed=True))
+        positions = [float(interval.mid) for interval, _ in groups]
+        data = [gg["diff_z"].to_numpy() for _, gg in groups]
+        n_boxes = len(groups)
+
+        span = sub["js_distance"].max() - sub["js_distance"].min()
+        width = 0.46 * span / max(n_boxes, 1)
+
+        cmap = plt.get_cmap("coolwarm")
+        box_colors = [cmap(0.25 + 0.50 * i / max(n_boxes - 1, 1)) for i in range(n_boxes)]
+
+        fig, ax = plt.subplots(figsize=(3.5, 2.7))
+        bp = ax.boxplot(data, positions=positions, widths=width, showmeans=True,
+                        patch_artist=True, manage_ticks=False, showfliers=False,
+                        meanprops=dict(marker="D", markerfacecolor="white",
+                                       markeredgecolor="0.3", markersize=4),
+                        medianprops=dict(color="0.15", linewidth=1.5),
+                        whiskerprops=dict(linewidth=0.9),
+                        capprops=dict(linewidth=0.9))
+        for patch, color in zip(bp["boxes"], box_colors):
+            patch.set(facecolor=color, alpha=0.85, edgecolor="0.35", linewidth=0.8)
+
+        _annotate_trend(ax, sub["js_distance"], sub["diff_z"], loc="upper left")
+        ax.axhline(0, color="grey", lw=0.7, ls="--")
+        ax.set_ylim(-2.0, 2.0)
+        ax.set_yticks([-2, -1, 0, 1, 2])
+        x_lo, x_hi = sub["js_distance"].min(), sub["js_distance"].max()
+        pad = 0.05 * (x_hi - x_lo)
+        ax.set_xticks(np.linspace(x_lo, x_hi, 5))
+        ax.xaxis.set_major_formatter(plt.FormatStrFormatter("%.2f"))
+        ax.set_xlim(x_hi + pad, x_lo - pad)
+        ax.set_xlabel("Source-Target JS Distance", fontsize=9)
+        ax.set_ylabel(r"Target-domain $\Delta$ Progress", fontsize=9)
+        ax.set_title(str(enum_label), fontsize=9)
+        ax.grid(True, axis="y", alpha=0.2)
+        ax.spines[["top", "right"]].set_visible(False)
+
+        fig.tight_layout(pad=0.3)
+        slug = str(enum_label).lower().replace(" ", "_")
+        png = out_dir / f"fig_transferbility_{slug}.png"
+        pdf = out_dir / f"fig_transferbility_{slug}.pdf"
+        fig.savefig(png, dpi=300)
+        fig.savefig(pdf)
+        plt.close(fig)
+        paths.append(png)
+    return paths

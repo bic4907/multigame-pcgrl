@@ -19,8 +19,11 @@ def main() -> None:
     out = config.OUTPUT_DIR / stamp
     out.mkdir(parents=True, exist_ok=True)
     fig = plots.plot_similarity_boxplot(out)
+    per_enum = plots.plot_similarity_boxplot_per_enum(out)
     print(f"Analysis complete. Outputs in: {out}")
     print(f"  figure: {fig.name} (+ .pdf)")
+    for p in per_enum:
+        print(f"  figure: {p.name} (+ .pdf)")
 
 
 if __name__ == "__main__":

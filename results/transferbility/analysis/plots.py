@@ -42,7 +42,7 @@ def _annotate_trend(ax, x, y, loc: str = "upper left", color: str = "k") -> None
     xa, ha = (0.03, "left") if "left" in loc else (0.97, "right")
     ya = 0.97 if "upper" in loc else 0.05
     ax.text(xa, ya, f"$R = {r:.3f}$\n$p = {p:.3f}$", transform=ax.transAxes,
-            ha=ha, va="top" if "upper" in loc else "bottom", fontsize=9,
+            ha=ha, va="top" if "upper" in loc else "bottom", fontsize=11,
             bbox=dict(boxstyle="round", fc="white", ec="0.6", alpha=0.85))
 
 
@@ -80,7 +80,7 @@ def plot_similarity_boxplot(out_dir: Path, n_bins: int = 15,
     cmap = plt.get_cmap("coolwarm")
     box_colors = [cmap(0.25 + 0.50 * i / max(n_boxes - 1, 1)) for i in range(n_boxes)]
 
-    fig, ax = plt.subplots(figsize=(3.5, 2.7))
+    fig, ax = plt.subplots(figsize=(2.8, 2.2))
     bp = ax.boxplot(data, positions=positions, widths=width, showmeans=True,
                     patch_artist=True, manage_ticks=False, showfliers=False,
                     meanprops=dict(marker="D", markerfacecolor="white",
@@ -101,8 +101,8 @@ def plot_similarity_boxplot(out_dir: Path, n_bins: int = 15,
     ax.xaxis.set_major_formatter(plt.FormatStrFormatter("%.1f"))
     # Inverted x-axis (high JSD left, low JSD right).
     ax.set_xlim(x_hi + pad, x_lo - pad)
-    ax.set_xlabel("Source-Target JS Distance", fontsize=9)
-    ax.set_ylabel(r"Target-domain $\Delta$ Progress", fontsize=9)
+    ax.set_xlabel("Source-Target JS Distance", fontsize=11)
+    ax.set_ylabel(r"Target-domain $\Delta$ Progress", fontsize=11)
     ax.grid(True, axis="y", alpha=0.2)
     ax.spines[["top", "right"]].set_visible(False)
 
@@ -154,7 +154,7 @@ def plot_similarity_boxplot_per_enum(out_dir: Path, n_bins: int = 10,
         cmap = plt.get_cmap("coolwarm")
         box_colors = [cmap(0.25 + 0.50 * i / max(n_boxes - 1, 1)) for i in range(n_boxes)]
 
-        fig, ax = plt.subplots(figsize=(3.5, 2.7))
+        fig, ax = plt.subplots(figsize=(2.8, 2.2))
         bp = ax.boxplot(data, positions=positions, widths=width, showmeans=True,
                         patch_artist=True, manage_ticks=False, showfliers=False,
                         meanprops=dict(marker="D", markerfacecolor="white",
@@ -174,9 +174,9 @@ def plot_similarity_boxplot_per_enum(out_dir: Path, n_bins: int = 10,
         ax.set_xticks(np.linspace(x_lo, x_hi, 5))
         ax.xaxis.set_major_formatter(plt.FormatStrFormatter("%.2f"))
         ax.set_xlim(x_hi + pad, x_lo - pad)
-        ax.set_xlabel("Source-Target JS Distance", fontsize=9)
-        ax.set_ylabel(r"Target-domain $\Delta$ Progress", fontsize=9)
-        ax.set_title(str(enum_label), fontsize=9)
+        ax.set_xlabel("Source-Target JS Distance", fontsize=11)
+        ax.set_ylabel(r"Target-domain $\Delta$ Progress", fontsize=11)
+        ax.set_title(str(enum_label), fontsize=11)
         ax.grid(True, axis="y", alpha=0.2)
         ax.spines[["top", "right"]].set_visible(False)
 

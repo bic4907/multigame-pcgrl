@@ -71,6 +71,15 @@ TILE_NAMES = {
     "sokoban": {"interactable_count": "box",    "hazard_count": None,      "collectable_count": None},
 }
 
+# ── task(subplot) 제목 표기 ───────────────────────────────────────────────────
+TASK_TITLES = {
+    "region":             "Region count",
+    "path_length":        "Path length",
+    "interactable_count": "Interactable tile count",
+    "hazard_count":       "Hazard tile count",
+    "collectable_count":  "Collectable tile count",
+}
+
 # ── task별 x축 방향 의미 (왼쪽 ↔ 오른쪽) ──────────────────────────────────────
 AXIS_SEMANTICS = {
     "region":             ("Few", "Many"),
@@ -299,7 +308,7 @@ def plot_threshold_boxplot(all_df: pd.DataFrame, out_dir: Path):
                         fontsize=13, color="black")
 
         # 태스크(task) 이름만 bold — Pretendard-Regular뿐이라 stroke로 faux-bold 처리
-        title = ax.set_title(feat.replace("_", " ").capitalize(),
+        title = ax.set_title(TASK_TITLES.get(feat, feat.replace("_", " ")).title(),
                              fontsize=15, loc="left", pad=6)
         title.set_color("black")
         title.set_path_effects([pe.withStroke(linewidth=0.7, foreground="black")])

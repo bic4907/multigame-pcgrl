@@ -114,8 +114,27 @@
         "aaai27_eval_ipcgrl_zeroshot",
         "aaai27_eval_mipcgrl_zeroshot",
         "aaai27_eval_vipcgrl_zeroshot",
-        "aaai27_eval_mgpcgrl_zeroshot_dw10"
+        "aaai27_eval_mgpcgrl_zeroshot_dw0",
+        "aaai27_eval_mgpcgrl_zeroshot"
       ],
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
+    },
+    "zeroshot_metrics": {
+      "target_projects": [
+        "aaai27_eval_ipcgrl_zeroshot",
+        "aaai27_eval_mipcgrl_zeroshot",
+        "aaai27_eval_vipcgrl_zeroshot",
+        "aaai27_eval_mgpcgrl_zeroshot_dw0",
+        "aaai27_eval_mgpcgrl_zeroshot"
+      ],
+      "metrics": ["progress", "tpkldiv", "vit_score", "diversity"],
+      "metrics_table": {
+        "enabled": true,
+        "prefix": "zeroshot_multimetric_table",
+        "caption": "\\textbf{Zero-shot generalization performance across metrics.} Progress is reported on a 0--1 scale; TPKL-Div, ViTScore, and Diversity use their original result scale. Bold values indicate the best method per split and metric.",
+        "label": "tab:zeroshot_metrics"
+      },
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
     },
@@ -131,6 +150,25 @@
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label":   "CPCGRL (Oracle)"
     },
+    "fewshot_metrics": {
+      "target_projects": [
+        "aaai27_eval_ipcgrl_fewshot",
+        "aaai27_eval_mipcgrl_fewshot",
+        "aaai27_eval_vipcgrl_fewshot",
+        "aaai27_eval_finetuned_clip_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot_dw0",
+        "aaai27_eval_mgpcgrl_fewshot"
+      ],
+      "metrics": ["progress", "tpkldiv", "vit_score", "diversity"],
+      "metrics_table": {
+        "enabled": true,
+        "prefix": "fewshot_multimetric_table",
+        "caption": "\\textbf{Few-shot generalization performance across metrics.} Progress is reported on a 0--1 scale; TPKL-Div, ViTScore, and Diversity use their original result scale. Bold values indicate the best method per split and metric.",
+        "label": "tab:fewshot_metrics"
+      },
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label":   "CPCGRL (Oracle)"
+    },
     "dwctrl": {
       "target_projects": [
         "aaai27_encoder_mgpcgrl_dwctrl"
@@ -138,16 +176,16 @@
       "project_display_names": {
         "aaai27_encoder_mgpcgrl_dwctrl": "MGPCGRL DW Control"
       },
-      "history_loss_key": "train(decoder)/reg_loss",
-      "history_loss_label": "Decoder Regression Loss",
-      "history_loss_output_name": "decoder_reg_loss",
+      "history_loss_key": "train(direction)/continuous_delta_loss",
+      "history_loss_label": "Cosine Distance",
+      "history_loss_output_name": "continuous_delta_loss",
       "history_epoch_offset": 0,
-      "download_history_loss": false,
+      "download_history_loss": true,
       "download_prediction_artifacts": true,
       "save_prediction_rows": false,
       "default_decoder_nograd": false,
       "prediction_metric": "regression_mae_norm",
-      "prediction_metric_label": "Normalized MAE",
+      "prediction_metric_label": "Normalized Prediction Error",
       "prediction_metric_output_name": "prediction_loss",
       "prediction_norm_group_cols": ["unseen_game", "reward_enum"],
       "exclude_delta_weights": [0.1],
@@ -206,7 +244,7 @@
     "aaai27_eval_mipcgrl_zeroshot":            "MIPCGRL (zeroshot)",
     "aaai27_eval_vipcgrl_zeroshot":            "VIPCGRL (zeroshot)",
     "aaai27_eval_mgpcgrl_zeroshot":            "MGPCGRL (zeroshot)",
-    "aaai27_eval_mgpcgrl_zeroshot_dw0":        "MGPCGRL (zeroshot)",
+    "aaai27_eval_mgpcgrl_zeroshot_dw0":        "MGPCGRL (zeroshot, dw=0)",
     "aaai27_eval_mgpcgrl_zeroshot_dw10":       "MGPCGRL (zeroshot, dw=0.1)",
     "aaai27_eval_ipcgrl_fewshot":             "IPCGRL (fewshot)",
     "aaai27_eval_mipcgrl_fewshot":            "MIPCGRL (fewshot)",
@@ -263,7 +301,7 @@
     "aaai27_eval_mipcgrl_zeroshot":           "#66a61e",
     "aaai27_eval_vipcgrl_zeroshot":           "#7b3294",
     "aaai27_eval_mgpcgrl_zeroshot":           "#2166ac",
-    "aaai27_eval_mgpcgrl_zeroshot_dw0":       "#2166ac",
+    "aaai27_eval_mgpcgrl_zeroshot_dw0":       "#4393c3",
     "aaai27_eval_mgpcgrl_zeroshot_dw10":      "#4393c3",
     "aaai27_eval_ipcgrl_fewshot":             "#1a9641",
     "aaai27_eval_mipcgrl_fewshot":            "#66a61e",

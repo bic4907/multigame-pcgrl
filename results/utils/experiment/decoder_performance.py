@@ -9,9 +9,12 @@ Inputs:
 Outputs:
   - decoder_prediction_rows.csv
   - decoder_epoch_metrics.csv
-  - decoder_delta_loss_history.csv
-  - delta_loss.png/.pdf
-  - regression.png/.pdf
+  - continuous_delta_loss_history.csv
+  - continuous_delta_loss.png/.pdf
+  - prediction_loss.png/.pdf
+  - prediction_loss_continuous_delta_loss.png/.pdf
+  - prediction_loss_by_unseen_game.png/.pdf
+  - by_game/<game>/prediction_loss.png/.pdf
 """
 
 from __future__ import annotations
@@ -162,16 +165,31 @@ def _default_cache_dir() -> Path:
     return _RESULTS_DIR / "wandb_projects" / "decoder_performance_cache"
 
 
-def _apply_plot_style(mpl) -> None:
-    font_path = Path.home() / "Library/Fonts/Pretendard-Regular.otf"
-    if font_path.is_file():
-        from matplotlib import font_manager
+_PRETENDARD_CANDIDATES: tuple[Path, ...] = (
+    Path(os.environ.get("PRETENDARD_MEDIUM_PATH", "")),
+    Path(os.environ.get("PRETENDARD_REGULAR_PATH", "")),
+    Path("/Users/inchang/Desktop/MuCap-fin2/mucap/fonts/Pretendard-Medium.otf"),
+    Path.home() / "Library/Fonts/Pretendard-Medium.otf",
+    Path.home() / "Library/Fonts/Pretendard-Regular.otf",
+    Path("/Library/Fonts/Pretendard-Medium.otf"),
+    Path("/Library/Fonts/Pretendard-Regular.otf"),
+)
 
+
+def _apply_plot_style(mpl) -> None:
+    font_family = "Pretendard"
+    from matplotlib import font_manager
+
+    for font_path in _PRETENDARD_CANDIDATES:
+        if not str(font_path) or not font_path.is_file():
+            continue
         font_manager.fontManager.addfont(str(font_path))
+        font_family = font_manager.FontProperties(fname=str(font_path)).get_name()
+        break
     mpl.rcParams.update(
         {
-            "font.family": "sans-serif",
-            "font.sans-serif": ["Pretendard", "Arial", "Helvetica", "DejaVu Sans"],
+            "font.family": font_family,
+            "font.sans-serif": [font_family, "Pretendard", "Arial", "Helvetica", "DejaVu Sans"],
             "font.weight": "regular",
             "axes.labelweight": "regular",
             "axes.titleweight": "regular",
@@ -756,13 +774,13 @@ def _method_key(delta_weight: object, decoder_nograd: object = None) -> str:
 
 def _method_label(method_key: str) -> str:
     labels = {
-        "mgpcgrl": "MGPCGRL",
-        "mgpcgrl_da": "MGPCGRL-DA",
+        "mgpcgrl": r"MGPCGRL ($-\mathcal{L}_{\mathrm{dir}}$)",
+        "mgpcgrl_da": "MGPCGRL",
         "detach": "Detach",
         "unknown": "Unknown",
     }
     if method_key.startswith("delta_"):
-        return method_key.removeprefix("delta_")
+        return rf"$\lambda_{{\mathrm{{dir}}}}={method_key.removeprefix('delta_')}$"
     return labels.get(method_key, method_key)
 
 
@@ -802,9 +820,9 @@ def _display_game_name(game: str) -> str:
 
 def _method_color(method_key: str) -> str:
     colors = {
-        "mgpcgrl": "#4d4d4d",
-        "mgpcgrl_da": "#2166ac",
-        "detach": "#b2182b",
+        "mgpcgrl": "#0F9D58",
+        "mgpcgrl_da": "#4285F4",
+        "detach": "#DB4437",
     }
     return colors.get(method_key, "#777777")
 
@@ -812,24 +830,17 @@ def _method_color(method_key: str) -> str:
 def _method_marker(method_key: str) -> str:
     markers = {
         "mgpcgrl": "o",
-        "mgpcgrl_da": "*",
-        "detach": "s",
+        "mgpcgrl_da": "s",
+        "detach": "^",
     }
     return markers.get(method_key, "D")
 
 
 def _method_line_style(method_key: str) -> str:
-    styles = {
-        "mgpcgrl": "-",
-        "mgpcgrl_da": "--",
-        "detach": "-.",
-    }
-    return styles.get(method_key, ":")
+    return "-"
 
 
 def _method_marker_size(method_key: str) -> float:
-    if method_key == "mgpcgrl_da":
-        return 6.8
     return 4.5
 
 
@@ -959,7 +970,7 @@ def _plot_by_unseen_game(
             title="Unseen game",
             loc="upper right",
             bbox_to_anchor=(1.0, 1.24),
-            frameon=True,
+            frameon=False,
             fontsize=8,
             title_fontsize=9,
         )
@@ -969,7 +980,7 @@ def _plot_by_unseen_game(
             title="Method",
             loc="upper left",
             bbox_to_anchor=(0.0, 1.24),
-            frameon=True,
+            frameon=False,
             fontsize=8,
             title_fontsize=9,
         )
@@ -1267,10 +1278,12 @@ def _plot_performance(
             ax.xaxis.set_major_locator(MultipleLocator(1000))
             ax.xaxis.set_major_formatter(FuncFormatter(_epoch_formatter))
             ax.legend(
-                title="Method",
-                loc="upper right",
-                bbox_to_anchor=(1.0, 1.22),
-                frameon=True,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 1.22),
+                ncol=max(1, len(methods)),
+                frameon=False,
+                handlelength=1.6,
+                columnspacing=1.2,
             )
             if ylim_exclude_epoch_max is not None:
                 ylim_df = plot_df[
@@ -1292,6 +1305,151 @@ def _plot_performance(
         plt.close(fig)
 
 
+def _plot_prediction_and_history_subplots(
+    *,
+    epoch_metrics: pd.DataFrame,
+    loss_history: pd.DataFrame,
+    output_path: Path,
+    epoch_bin_size: int,
+    max_points_per_line: int,
+    prediction_metric: str,
+    prediction_metric_label: str,
+    history_loss_label: str,
+    ylim_exclude_epoch_max: float | None,
+) -> None:
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.ticker import FuncFormatter, MultipleLocator
+
+    if epoch_metrics.empty or loss_history.empty:
+        return
+    if epoch_bin_size <= 0:
+        epoch_bin_size = _auto_bin_size(epoch_metrics, loss_history, max_points_per_line)
+
+    plt.style.use("seaborn-v0_8-whitegrid")
+    _apply_plot_style(mpl)
+
+    specs = [
+        (epoch_metrics, prediction_metric, prediction_metric_label),
+        (loss_history, "history_loss", history_loss_label),
+    ]
+    plot_specs = [
+        (_aggregate_for_plot(source, value_col, epoch_bin_size), value_col, ylabel)
+        for source, value_col, ylabel in specs
+    ]
+
+    methods_by_key: dict[str, dict] = {}
+    for plot_df, _, _ in plot_specs:
+        if plot_df.empty:
+            continue
+        for method in (
+            plot_df[["method_key", "method_label", "method_order"]]
+            .drop_duplicates()
+            .to_dict("records")
+        ):
+            methods_by_key[str(method["method_key"])] = method
+    methods = sorted(methods_by_key.values(), key=lambda item: int(item["method_order"]))
+
+    def _epoch_formatter(value: float, _pos: int) -> str:
+        if abs(value) >= 1000:
+            scaled = value / 1000.0
+            if abs(scaled - round(scaled)) < 1e-6:
+                return f"{int(round(scaled))}e3"
+            return f"{scaled:g}e3"
+        if abs(value - round(value)) < 1e-6:
+            return str(int(round(value)))
+        return f"{value:g}"
+
+    def _marker_indices(n_points: int) -> list[int]:
+        if n_points <= 0:
+            return []
+        step = max(1, n_points // 12)
+        indices = list(range(0, n_points, step))
+        if indices[-1] != n_points - 1:
+            indices.append(n_points - 1)
+        return indices
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, axes = plt.subplots(1, 2, figsize=(5.2, 2.05), sharex=False)
+    for ax, (plot_df, value_col, ylabel) in zip(axes, plot_specs, strict=False):
+        if plot_df.empty:
+            ax.text(0.5, 0.5, f"No data: {value_col}", ha="center", va="center")
+            ax.set_axis_off()
+            continue
+        for method in methods:
+            method_key = str(method["method_key"])
+            wdf = plot_df[plot_df["method_key"].astype(str) == method_key].sort_values("epoch")
+            if wdf.empty:
+                continue
+            x = wdf["epoch"].astype(float).to_numpy()
+            y = wdf[value_col].astype(float).to_numpy()
+            sem = wdf["sem"].fillna(0.0).astype(float).to_numpy()
+            ax.plot(
+                x,
+                y,
+                color=_method_color(method_key),
+                linewidth=1.9,
+                linestyle=_method_line_style(method_key),
+                marker=_method_marker(method_key),
+                markevery=_marker_indices(len(x)),
+                markersize=_method_marker_size(method_key),
+            )
+            ax.fill_between(
+                x,
+                y - sem,
+                y + sem,
+                color=_method_color(method_key),
+                alpha=0.16,
+                linewidth=0,
+            )
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel(ylabel)
+        ax.xaxis.set_major_locator(MultipleLocator(1000))
+        ax.xaxis.set_major_formatter(FuncFormatter(_epoch_formatter))
+        if ylim_exclude_epoch_max is not None:
+            ylim_df = plot_df[
+                pd.to_numeric(plot_df["epoch"], errors="coerce") > ylim_exclude_epoch_max
+            ].copy()
+            if not ylim_df.empty:
+                y = pd.to_numeric(ylim_df[value_col], errors="coerce")
+                sem = pd.to_numeric(ylim_df.get("sem", 0.0), errors="coerce").fillna(0.0)
+                lo = (y - sem).min()
+                hi = (y + sem).max()
+                if pd.notna(lo) and pd.notna(hi) and hi > lo:
+                    pad = (hi - lo) * 0.08
+                    ax.set_ylim(max(0.0, lo - pad), hi + pad)
+
+    handles = [
+        Line2D(
+            [0],
+            [0],
+            color=_method_color(str(method["method_key"])),
+            linewidth=1.9,
+            linestyle=_method_line_style(str(method["method_key"])),
+            marker=_method_marker(str(method["method_key"])),
+            markersize=_method_marker_size(str(method["method_key"])),
+            label=str(method["method_label"]),
+        )
+        for method in methods
+    ]
+    if handles:
+        fig.legend(
+            handles=handles,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1.04),
+            ncol=len(handles),
+            frameon=False,
+            handlelength=1.7,
+            columnspacing=1.4,
+        )
+    fig.tight_layout(pad=0.2, rect=(0, 0, 1, 0.9))
+    fig.subplots_adjust(wspace=0.42)
+    fig.savefig(output_path.with_suffix(".png"), dpi=240, bbox_inches="tight")
+    fig.savefig(output_path.with_suffix(".pdf"), bbox_inches="tight")
+    plt.close(fig)
+
+
 def _plot_decoder_outputs(
     *,
     epoch_metrics: pd.DataFrame,
@@ -1306,6 +1464,18 @@ def _plot_decoder_outputs(
     prediction_metric_output_name: str,
     ylim_exclude_epoch_max: float | None,
 ) -> None:
+    if not epoch_metrics.empty and not loss_history.empty:
+        _plot_prediction_and_history_subplots(
+            epoch_metrics=epoch_metrics,
+            loss_history=loss_history,
+            output_path=run_dir / f"{prediction_metric_output_name}_{history_loss_output_name}",
+            epoch_bin_size=args.epoch_bin_size,
+            max_points_per_line=args.max_points_per_line,
+            prediction_metric=prediction_metric,
+            prediction_metric_label=prediction_metric_label,
+            history_loss_label=history_loss_label,
+            ylim_exclude_epoch_max=ylim_exclude_epoch_max,
+        )
     if not loss_history.empty:
         _plot_performance(
             epoch_metrics=pd.DataFrame(),
@@ -1320,30 +1490,52 @@ def _plot_decoder_outputs(
             prediction_metric_output_name=prediction_metric_output_name,
             ylim_exclude_epoch_max=ylim_exclude_epoch_max,
         )
-    if not epoch_metrics.empty and "unseen_game" in epoch_metrics.columns:
-        for metric_name, metric_label, output_name in loss_plot_specs:
-            _plot_by_unseen_game(
-                epoch_metrics=epoch_metrics,
-                output_path=run_dir / output_name,
-                epoch_bin_size=args.epoch_bin_size,
-                max_points_per_line=args.max_points_per_line,
-                prediction_metric=metric_name,
-                prediction_metric_label=metric_label,
-                ylim_exclude_epoch_max=ylim_exclude_epoch_max,
-            )
-            _plot_last_epoch_bar(
-                epoch_metrics=epoch_metrics,
-                output_path=run_dir / f"{output_name}_last_epoch_bar",
-                prediction_metric=metric_name,
-                prediction_metric_label=metric_label,
-                ylim_exclude_epoch_max=ylim_exclude_epoch_max,
-            )
-    else:
-        for metric_name, metric_label, output_name in loss_plot_specs:
+    for metric_name, metric_label, output_name in loss_plot_specs:
+        _plot_performance(
+            epoch_metrics=epoch_metrics,
+            loss_history=pd.DataFrame(),
+            output_base=run_dir / "decoder_performance_by_delta_weight",
+            epoch_bin_size=args.epoch_bin_size,
+            max_points_per_line=args.max_points_per_line,
+            history_loss_label=history_loss_label,
+            history_loss_output_name=history_loss_output_name,
+            prediction_metric=metric_name,
+            prediction_metric_label=metric_label,
+            prediction_metric_output_name=output_name,
+            ylim_exclude_epoch_max=ylim_exclude_epoch_max,
+        )
+        if epoch_metrics.empty or "unseen_game" not in epoch_metrics.columns:
+            continue
+
+        _plot_by_unseen_game(
+            epoch_metrics=epoch_metrics,
+            output_path=run_dir / f"{output_name}_by_unseen_game",
+            epoch_bin_size=args.epoch_bin_size,
+            max_points_per_line=args.max_points_per_line,
+            prediction_metric=metric_name,
+            prediction_metric_label=metric_label,
+            ylim_exclude_epoch_max=ylim_exclude_epoch_max,
+        )
+        _plot_last_epoch_bar(
+            epoch_metrics=epoch_metrics,
+            output_path=run_dir / f"{output_name}_last_epoch_bar",
+            prediction_metric=metric_name,
+            prediction_metric_label=metric_label,
+            ylim_exclude_epoch_max=ylim_exclude_epoch_max,
+        )
+
+        unseen_games = sorted(
+            g for g in epoch_metrics["unseen_game"].dropna().unique()
+            if str(g) and str(g) != "unknown"
+        )
+        for unseen_game in unseen_games:
+            game_metrics = epoch_metrics[epoch_metrics["unseen_game"] == unseen_game]
+            if game_metrics.empty:
+                continue
             _plot_performance(
-                epoch_metrics=epoch_metrics,
+                epoch_metrics=game_metrics,
                 loss_history=pd.DataFrame(),
-                output_base=run_dir / "decoder_performance_by_delta_weight",
+                output_base=run_dir / "by_game" / _safe_name(str(unseen_game)) / "decoder_performance_by_delta_weight",
                 epoch_bin_size=args.epoch_bin_size,
                 max_points_per_line=args.max_points_per_line,
                 history_loss_label=history_loss_label,

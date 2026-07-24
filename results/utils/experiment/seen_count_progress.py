@@ -104,6 +104,42 @@ _DEFAULT_SIGNIFICANCE_TARGET_PROJECTS: list[str] = [
     "aaai27_eval_mgpcgrl_fewshot_dw0",
     "aaai27_eval_mgpcgrl_fewshot",
 ]
+_DEFAULT_SIGNIFICANCE_BY_EXPERIMENT: dict[str, tuple[str, list[str]]] = {
+    "fewshot": (
+        "aaai27_eval_vipcgrl_fewshot",
+        ["aaai27_eval_mgpcgrl_fewshot_dw0", "aaai27_eval_mgpcgrl_fewshot"],
+    ),
+    "fewshot_metrics": (
+        "aaai27_eval_vipcgrl_fewshot",
+        ["aaai27_eval_mgpcgrl_fewshot_dw0", "aaai27_eval_mgpcgrl_fewshot"],
+    ),
+    "zeroshot": (
+        "aaai27_eval_vipcgrl_zeroshot",
+        ["aaai27_eval_mgpcgrl_zeroshot_dw0", "aaai27_eval_mgpcgrl_zeroshot"],
+    ),
+    "zeroshot_metrics": (
+        "aaai27_eval_vipcgrl_zeroshot",
+        ["aaai27_eval_mgpcgrl_zeroshot_dw0", "aaai27_eval_mgpcgrl_zeroshot"],
+    ),
+}
+_METRIC_HIGHER_IS_BETTER: dict[str, bool] = {
+    "progress": True,
+    "vit_score": True,
+    "tpkldiv": False,
+    "diversity": True,
+}
+_METRIC_LATEX_LABELS: dict[str, str] = {
+    "progress": r"Progress$\uparrow$",
+    "vit_score": r"ViTScore$\uparrow$",
+    "tpkldiv": r"TPKL-Div$\downarrow$",
+    "diversity": r"Diversity$\uparrow$",
+}
+_METRIC_MARKDOWN_LABELS: dict[str, str] = {
+    "progress": "Progress ↑",
+    "vit_score": "ViTScore ↑",
+    "tpkldiv": "TPKL-Div ↓",
+    "diversity": "Diversity ↑",
+}
 
 
 def _save_figure_png_pdf(fig, output_path: Path, dpi: int = 200) -> Path:
@@ -1095,6 +1131,225 @@ def write_table_markdown(
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def aggregate_by_project_split(rows: list[dict], metric_order: list[str]) -> dict[tuple[str, str], dict]:
+    """(project, split) -> {metric: stat}. split is unseen/seen/all."""
+    grouped: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for row in rows:
+        split = row.get("game_split")
+        if split in {"unseen", "seen"}:
+            grouped[(row["project"], split)].append(row)
+        grouped[(row["project"], "all")].append(row)
+
+    result: dict[tuple[str, str], dict] = {}
+    for key, group_rows in grouped.items():
+        stats: dict = {}
+        for metric in metric_order:
+            stat = _seed_agg(group_rows, metric)
+            if stat:
+                stats[metric] = stat
+        result[key] = stats
+    return result
+
+
+def _metric_display_stat(metric: str, stat: dict | None) -> dict | None:
+    if not stat:
+        return None
+    factor = 0.01 if metric == "progress" and abs(float(stat["mean"])) > 1.5 else 1.0
+    return {
+        **stat,
+        "mean": float(stat["mean"]) * factor,
+        "std": float(stat["std"]) * factor,
+    }
+
+
+def _metric_best_keys(
+    agg: dict[tuple[str, str], dict],
+    projects: list[str],
+    splits: list[str],
+    metric_order: list[str],
+    tol: float = 1e-12,
+) -> set[tuple[str, str, str]]:
+    best: set[tuple[str, str, str]] = set()
+    for split in splits:
+        for metric in metric_order:
+            candidates: list[tuple[str, float]] = []
+            for project in projects:
+                stat = _metric_display_stat(metric, agg.get((project, split), {}).get(metric))
+                if stat:
+                    candidates.append((project, float(stat["mean"])))
+            if not candidates:
+                continue
+            higher = _METRIC_HIGHER_IS_BETTER.get(metric, True)
+            best_value = max(v for _, v in candidates) if higher else min(v for _, v in candidates)
+            for project, value in candidates:
+                if abs(value - best_value) <= tol:
+                    best.add((project, split, metric))
+    return best
+
+
+def _format_metric_cell(
+    metric: str,
+    stat: dict | None,
+    decimals: int,
+    bold: bool = False,
+    latex: bool = False,
+) -> str:
+    display_stat = _metric_display_stat(metric, stat)
+    if not display_stat:
+        return "-"
+    mean = display_stat["mean"]
+    std = display_stat["std"]
+    if latex:
+        cell = rf"{mean:.{decimals}f}\std{{{std:.{decimals}f}}}"
+        return rf"\textbf{{{cell}}}" if bold else cell
+    cell = f"{mean:.{decimals}f} +- {std:.{decimals}f}"
+    return f"**{cell}**" if bold else cell
+
+
+def write_multi_metric_table_csv(
+    output_path: Path,
+    rows: list[dict],
+    metric_order: list[str],
+    experiment: str | None,
+) -> None:
+    agg = aggregate_by_project_split(rows, metric_order)
+    projects = _ordered_projects({r["project"] for r in rows}, experiment)
+    splits = ["unseen", "seen", "all"]
+    headers = ["method", "split"]
+    for metric in metric_order:
+        headers += [f"{metric}_mean", f"{metric}_std", f"{metric}_n"]
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        for project in projects:
+            for split in splits:
+                stats = agg.get((project, split), {})
+                if not stats:
+                    continue
+                rec: dict = {"method": _project_display_name(project), "split": split}
+                for metric in metric_order:
+                    stat = _metric_display_stat(metric, stats.get(metric))
+                    rec[f"{metric}_mean"] = stat["mean"] if stat else ""
+                    rec[f"{metric}_std"] = stat["std"] if stat else ""
+                    rec[f"{metric}_n"] = stat["n"] if stat else 0
+                writer.writerow(rec)
+
+
+def write_multi_metric_table_markdown(
+    output_path: Path,
+    rows: list[dict],
+    metric_order: list[str],
+    experiment: str | None,
+    decimals: int = 3,
+) -> None:
+    agg = aggregate_by_project_split(rows, metric_order)
+    projects = _ordered_projects({r["project"] for r in rows}, experiment)
+    splits = ["unseen", "seen", "all"]
+    best = _metric_best_keys(agg, projects, splits, metric_order)
+
+    headers = ["method", "split"] + [
+        _METRIC_MARKDOWN_LABELS.get(metric, METRIC_DISPLAY_NAMES.get(metric, metric))
+        for metric in metric_order
+    ]
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(["---"] * len(headers)) + " |",
+    ]
+    for project in projects:
+        for split in splits:
+            stats = agg.get((project, split), {})
+            if not stats:
+                continue
+            cells = [_project_display_name(project), split]
+            for metric in metric_order:
+                cells.append(
+                    _format_metric_cell(
+                        metric,
+                        stats.get(metric),
+                        decimals,
+                        bold=(project, split, metric) in best,
+                    )
+                )
+            lines.append("| " + " | ".join(cells) + " |")
+
+    lines += [
+        "",
+        "Progress is reported on a 0-1 scale; other metrics use their original result scale.",
+        "Bold values indicate the best method within each split and metric.",
+    ]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_multi_metric_table_latex(
+    output_path: Path,
+    rows: list[dict],
+    metric_order: list[str],
+    experiment: str | None,
+    decimals: int = 3,
+    caption: str | None = None,
+    label: str | None = None,
+) -> None:
+    agg = aggregate_by_project_split(rows, metric_order)
+    projects = _ordered_projects({r["project"] for r in rows}, experiment)
+    splits = ["unseen", "seen", "all"]
+    best = _metric_best_keys(agg, projects, splits, metric_order)
+    metric_headers = [
+        _METRIC_LATEX_LABELS.get(metric, _latex_escape(METRIC_DISPLAY_NAMES.get(metric, metric)))
+        for metric in metric_order
+    ]
+    caption = caption or (
+        "\\textbf{Generalization Performance Across Metrics.} "
+        "Progress is reported on a 0-1 scale; TPKL-Div, ViTScore, and Diversity use their original result scale. "
+        "Bold values indicate the best method per split and metric."
+    )
+    label = label or f"tab:{experiment or 'generalization'}_metrics"
+
+    lines = [
+        r"\begin{table*}[t]",
+        r"\small",
+        rf"\caption{{{caption}}}",
+        rf"\label{{{_latex_escape(label)}}}",
+        r"\begin{tabular}{ll" + "c" * len(metric_order) + "}",
+        r"\toprule",
+        "Method & Split & " + " & ".join(metric_headers) + r" \\",
+        r"\midrule",
+    ]
+    for project_idx, project in enumerate(projects):
+        if project_idx > 0:
+            lines.append(r"\midrule")
+        display = _latex_escape(_project_display_name(project))
+        first_row = True
+        for split in splits:
+            stats = agg.get((project, split), {})
+            if not stats:
+                continue
+            method_cell = display if first_row else ""
+            first_row = False
+            cells = [method_cell, _latex_escape(split)]
+            for metric in metric_order:
+                cells.append(
+                    _format_metric_cell(
+                        metric,
+                        stats.get(metric),
+                        decimals,
+                        bold=(project, split, metric) in best,
+                        latex=True,
+                    )
+                )
+            lines.append(" & ".join(cells) + r" \\")
+    lines += [
+        r"\bottomrule",
+        r"\end{tabular}",
+        r"\end{table*}",
+    ]
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def _ordered_projects(projects: set[str], experiment: str | None = None) -> list[str]:
     folder_order = _get_experiment_folder_order(experiment)
     ordered = [p for p in folder_order if p in projects]
@@ -1228,6 +1483,10 @@ def _sig_stars(p_value: float | None, alpha: float = 0.05) -> str:
     return "*"
 
 
+def _mean_float(values: list[float]) -> float:
+    return sum(values) / len(values) if values else float("nan")
+
+
 def compute_fewshot_significance_tests(
     rows: list[dict],
     metric: str,
@@ -1235,6 +1494,7 @@ def compute_fewshot_significance_tests(
     baseline_project: str = _DEFAULT_SIGNIFICANCE_BASELINE_PROJECT,
     target_projects: list[str] | None = None,
     alternative: str = "greater",
+    alpha: float = 0.05,
 ) -> list[dict]:
     target_projects = target_projects or list(_DEFAULT_SIGNIFICANCE_TARGET_PROJECTS)
     relevant_projects = {row["project"] for row in rows}
@@ -1296,7 +1556,7 @@ def compute_fewshot_significance_tests(
     _holm_adjust(results)
     for result in results:
         result.setdefault("p_holm", None)
-        result["stars"] = _sig_stars(result.get("p_holm"))
+        result["stars"] = _sig_stars(result.get("p_holm"), alpha=alpha)
     return results
 
 
@@ -1307,12 +1567,357 @@ def _significance_lookup(results: list[dict]) -> dict[tuple[str, str, str], dict
     }
 
 
+def _is_mgpcgrl_project(project: str) -> bool:
+    return "mgpcgrl" in project.lower()
+
+
+def _resolve_rigor_projects(
+    rows: list[dict],
+    experiment: str | None,
+) -> tuple[list[str], list[str]]:
+    projects = {row["project"] for row in rows}
+    ordered = _ordered_projects(projects, experiment)
+    targets = [project for project in ordered if _is_mgpcgrl_project(project)]
+    baselines = [project for project in ordered if not _is_mgpcgrl_project(project)]
+    return targets, baselines
+
+
+def compute_significance_rigor_tests(
+    rows: list[dict],
+    metric: str,
+    experiment: str | None,
+    alpha: float = 0.05,
+) -> list[dict]:
+    """Pairwise MGPCGRL-vs-other-method tests with gain/drop classification."""
+    targets, baselines = _resolve_rigor_projects(rows, experiment)
+    if not targets or not baselines:
+        return []
+
+    unseen_rows = [row for row in rows if row.get("game_split") == "unseen"]
+    unseen_games = _ordered_unseen_games({
+        row.get("unseen_game", "unknown") for row in unseen_rows
+    })
+    split_labels: list[tuple[str, str | None]] = [
+        ("unseen", "unseen"),
+        ("seen", "seen"),
+        ("all", None),
+    ]
+
+    results: list[dict] = []
+    for target_project in targets:
+        for baseline_project in baselines:
+            for unseen_game in unseen_games:
+                for split_label, split in split_labels:
+                    baseline_values = _seed_metric_means(
+                        _filter_table_cell_rows(rows, baseline_project, unseen_game, split),
+                        metric,
+                    )
+                    target_values = _seed_metric_means(
+                        _filter_table_cell_rows(rows, target_project, unseen_game, split),
+                        metric,
+                    )
+                    stat = _paired_ttest_greater(
+                        baseline_values,
+                        target_values,
+                        alternative="two-sided",
+                    )
+                    if stat is None:
+                        stat = {
+                            "n": len(set(baseline_values) & set(target_values)),
+                            "baseline_mean": None,
+                            "target_mean": None,
+                            "mean_diff": None,
+                            "t": None,
+                            "p": None,
+                            "effect_dz": None,
+                            "seeds": "",
+                        }
+                    stat.update({
+                        "metric": metric,
+                        "target_project": target_project,
+                        "baseline_project": baseline_project,
+                        "unseen_game": unseen_game,
+                        "split": split_label,
+                        "alternative": "two-sided",
+                    })
+                    results.append(stat)
+
+    _holm_adjust(results)
+    for result in results:
+        result.setdefault("p_holm", None)
+        mean_diff = result.get("mean_diff")
+        p_holm = result.get("p_holm")
+        significant = (
+            mean_diff is not None
+            and p_holm is not None
+            and math.isfinite(p_holm)
+            and p_holm < alpha
+        )
+        if mean_diff is None:
+            direction = "insufficient"
+        elif mean_diff > 0:
+            direction = "gain"
+        elif mean_diff < 0:
+            direction = "drop"
+        else:
+            direction = "tie"
+        result["direction"] = direction
+        result["significant"] = significant
+        if significant and direction == "gain":
+            verdict = "significant_gain"
+        elif significant and direction == "drop":
+            verdict = "significant_drop"
+        elif direction == "gain":
+            verdict = "nonsignificant_gain"
+        elif direction == "drop":
+            verdict = "nonsignificant_drop"
+        elif direction == "tie":
+            verdict = "tie"
+        else:
+            verdict = "insufficient"
+        result["verdict"] = verdict
+        result["stars"] = _sig_stars(p_holm, alpha=alpha)
+    return results
+
+
+def summarize_significance_rigor(results: list[dict]) -> list[dict]:
+    grouped: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
+    for result in results:
+        grouped[
+            (
+                result.get("target_project", ""),
+                result.get("baseline_project", ""),
+                result.get("split", ""),
+            )
+        ].append(result)
+
+    summary: list[dict] = []
+    for (target_project, baseline_project, split), group in sorted(grouped.items()):
+        valid = [r for r in group if r.get("mean_diff") is not None]
+        deltas = [float(r["mean_diff"]) for r in valid]
+        sig_gain = sum(1 for r in valid if r.get("verdict") == "significant_gain")
+        sig_drop = sum(1 for r in valid if r.get("verdict") == "significant_drop")
+        nonsig_gain = sum(1 for r in valid if r.get("verdict") == "nonsignificant_gain")
+        nonsig_drop = sum(1 for r in valid if r.get("verdict") == "nonsignificant_drop")
+        ties = sum(1 for r in valid if r.get("verdict") == "tie")
+        p_vals = [
+            float(r["p_holm"]) for r in valid
+            if r.get("p_holm") is not None and math.isfinite(r["p_holm"])
+        ]
+        valid_count = len(valid)
+        summary.append({
+            "target_project": target_project,
+            "baseline_project": baseline_project,
+            "split": split,
+            "cells": len(group),
+            "valid_tests": valid_count,
+            "mean_delta": _mean_float(deltas),
+            "significant_gains": sig_gain,
+            "significant_drops": sig_drop,
+            "nonsignificant_gains": nonsig_gain,
+            "nonsignificant_drops": nonsig_drop,
+            "ties": ties,
+            "rigor_score": ((sig_gain - sig_drop) / valid_count) if valid_count else float("nan"),
+            "min_p_holm": min(p_vals) if p_vals else float("nan"),
+            "max_p_holm": max(p_vals) if p_vals else float("nan"),
+        })
+    return summary
+
+
 def _format_p_value(value: float | None) -> str:
     if value is None or not math.isfinite(value):
         return ""
     if value < 0.001:
         return "<0.001"
     return f"{value:.3f}"
+
+
+def _format_optional_float(value: object, decimals: int) -> str:
+    if value is None:
+        return ""
+    try:
+        value_f = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if math.isnan(value_f):
+        return ""
+    return f"{value_f:.{decimals}f}"
+
+
+def write_significance_rigor_tests_csv(output_path: Path, results: list[dict]) -> None:
+    headers = [
+        "metric",
+        "target_project",
+        "baseline_project",
+        "unseen_game",
+        "split",
+        "alternative",
+        "n",
+        "baseline_mean",
+        "target_mean",
+        "mean_diff",
+        "t",
+        "effect_dz",
+        "p",
+        "p_holm",
+        "direction",
+        "significant",
+        "verdict",
+        "stars",
+        "seeds",
+    ]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        for result in results:
+            writer.writerow({key: result.get(key, "") for key in headers})
+
+
+def write_significance_rigor_summary_csv(output_path: Path, summary_rows: list[dict]) -> None:
+    headers = [
+        "target_project",
+        "baseline_project",
+        "split",
+        "cells",
+        "valid_tests",
+        "mean_delta",
+        "significant_gains",
+        "significant_drops",
+        "nonsignificant_gains",
+        "nonsignificant_drops",
+        "ties",
+        "rigor_score",
+        "min_p_holm",
+        "max_p_holm",
+    ]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        for row in summary_rows:
+            writer.writerow({key: row.get(key, "") for key in headers})
+
+
+def write_significance_rigor_markdown(
+    output_path: Path,
+    results: list[dict],
+    summary_rows: list[dict],
+    experiment: str | None,
+    alpha: float,
+    decimals: int = 3,
+) -> None:
+    targets = _ordered_projects(
+        {str(result["target_project"]) for result in results if result.get("target_project")},
+        experiment,
+    )
+    baselines = _ordered_projects(
+        {str(result["baseline_project"]) for result in results if result.get("baseline_project")},
+        experiment,
+    )
+    lines = [
+        f"# Significance Rigor ({experiment or 'experiment'})",
+        "",
+        f"- Metric: `{results[0]['metric'] if results else 'progress'}`",
+        "- Comparison: each MGPCGRL-series method against every non-MGPCGRL method.",
+        "- Test: paired two-sided t-test on seed-level means.",
+        f"- Correction: Holm adjustment across all pairwise cells; significant if `p_holm < {alpha:g}`.",
+        "- Delta: target mean - baseline mean. Positive means MGPCGRL is higher.",
+        "",
+        "## Methods",
+        "",
+        "| role | methods |",
+        "| --- | --- |",
+        "| targets | " + ", ".join(_project_display_name(project) for project in targets) + " |",
+        "| baselines | " + ", ".join(_project_display_name(project) for project in baselines) + " |",
+        "",
+        "## Rigor Summary",
+        "",
+        "| target | baseline | split | valid | mean delta | sig gains | sig drops | n.s. gains | n.s. drops | score |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+
+    for row in summary_rows:
+        lines.append(
+            "| "
+            f"{_project_display_name(row['target_project'])} | "
+            f"{_project_display_name(row['baseline_project'])} | "
+            f"{row['split']} | "
+            f"{row['valid_tests']} | "
+            f"{_format_optional_float(row['mean_delta'], decimals)} | "
+            f"{row['significant_gains']} | "
+            f"{row['significant_drops']} | "
+            f"{row['nonsignificant_gains']} | "
+            f"{row['nonsignificant_drops']} | "
+            f"{_format_optional_float(row['rigor_score'], decimals)} |"
+        )
+
+    significant = [
+        result for result in results
+        if result.get("verdict") in {"significant_gain", "significant_drop"}
+    ]
+    significant.sort(
+        key=lambda result: (
+            result.get("target_project", ""),
+            result.get("baseline_project", ""),
+            result.get("split", ""),
+            result.get("unseen_game", ""),
+        )
+    )
+    lines += [
+        "",
+        "## Significant Cells",
+        "",
+        "| target | baseline | unseen game | split | verdict | delta | p_holm | n |",
+        "| --- | --- | --- | --- | --- | ---: | ---: | ---: |",
+    ]
+    if significant:
+        for result in significant:
+            lines.append(
+                "| "
+                f"{_project_display_name(result['target_project'])} | "
+                f"{_project_display_name(result['baseline_project'])} | "
+                f"{result['unseen_game']} | "
+                f"{result['split']} | "
+                f"{result['verdict']} | "
+                f"{_format_optional_float(result.get('mean_diff'), decimals)} | "
+                f"{_format_p_value(result.get('p_holm'))} | "
+                f"{result.get('n', '')} |"
+            )
+    else:
+        lines.append("| - | - | - | - | no significant gain/drop | - | - | - |")
+
+    lines += [
+        "",
+        "Full pairwise test rows are saved in the sibling `*_significance_rigor_tests.csv` file.",
+    ]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _resolve_significance_projects(
+    experiment: str | None,
+    exp_cfg: dict,
+    baseline_project: str | None,
+    target_projects: list[str] | None,
+) -> tuple[str, list[str]]:
+    default_baseline, default_targets = _DEFAULT_SIGNIFICANCE_BY_EXPERIMENT.get(
+        experiment or "",
+        (_DEFAULT_SIGNIFICANCE_BASELINE_PROJECT, list(_DEFAULT_SIGNIFICANCE_TARGET_PROJECTS)),
+    )
+    resolved_baseline = (
+        baseline_project
+        or exp_cfg.get("significance_baseline_project")
+        or default_baseline
+    )
+    resolved_targets = (
+        target_projects
+        or exp_cfg.get("significance_target_projects")
+        or default_targets
+    )
+    if isinstance(resolved_targets, str):
+        resolved_targets = [resolved_targets]
+    return str(resolved_baseline), [str(project) for project in resolved_targets]
 
 
 def write_fewshot_significance_tests_csv(
@@ -1351,6 +1956,8 @@ def write_fewshot_significance_table_markdown(
     metric_order: list[str],
     experiment: str | None,
     significance_results: list[dict],
+    baseline_project: str,
+    alpha: float = 0.05,
     decimals: int = 4,
 ) -> None:
     metric = metric_order[0]
@@ -1394,8 +2001,14 @@ def write_fewshot_significance_table_markdown(
 
     lines += [
         "",
-        "Paired one-sided t-test on seed-level means, alternative: target > VIPCGRL.",
-        "Reported p-values are Holm-adjusted across all MGPCGRL-vs-VIPCGRL cells; * p<0.05, ** p<0.01, *** p<0.001.",
+        (
+            "Paired one-sided t-test on seed-level means, "
+            f"alternative: target > {_project_display_name(baseline_project)}."
+        ),
+        (
+            "Reported p-values are Holm-adjusted across all target-vs-baseline cells; "
+            f"* p<{alpha:g}, ** p<0.01, *** p<0.001."
+        ),
     ]
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1602,26 +2215,37 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-significance",
         action="store_true",
-        help="fewshot significance table/test CSV 생성을 생략한다.",
+        help="significance table/test CSV 생성을 생략한다.",
+    )
+    parser.add_argument(
+        "--no-significance-rigor",
+        action="store_true",
+        help="MGPCGRL-vs-all-method significance rigor 리포트 생성을 생략한다.",
     )
     parser.add_argument(
         "--significance-baseline-project",
-        default=_DEFAULT_SIGNIFICANCE_BASELINE_PROJECT,
+        default=None,
         metavar="PROJECT",
-        help="significance 비교 기준 project (기본: VIPCGRL fewshot).",
+        help="significance 비교 기준 project (기본: experiment별 VIPCGRL).",
     )
     parser.add_argument(
         "--significance-target-projects",
         nargs="+",
-        default=list(_DEFAULT_SIGNIFICANCE_TARGET_PROJECTS),
+        default=None,
         metavar="PROJECT",
-        help="baseline 대비 유의성 검정 대상 project 목록.",
+        help="baseline 대비 유의성 검정 대상 project 목록 (기본: experiment별 MGPCGRL variants).",
     )
     parser.add_argument(
         "--significance-alternative",
         choices=["greater", "less", "two-sided"],
         default="greater",
         help="paired t-test alternative. 기본 greater는 target > baseline 검정.",
+    )
+    parser.add_argument(
+        "--significance-alpha",
+        type=float,
+        default=0.05,
+        help="Holm 보정 후 significance 판정 기준 alpha.",
     )
     return parser.parse_args()
 
@@ -1646,7 +2270,14 @@ def main() -> None:
     input_root = resolve_input_root(args.input, _RESULTS_DIR)
     log.info("input_root: %s", input_root)
 
-    metric_order: list[str] = args.metrics or ["progress"]
+    exp_cfg = _CFG.get("experiments", {}).get(experiment, {})
+    metric_order: list[str] = (
+        args.metrics
+        or exp_cfg.get("metrics")
+        or ["progress"]
+    )
+    if isinstance(metric_order, str):
+        metric_order = [metric_order]
 
     rows = collect_rows_with_seen_count(
         input_root, metric_order,
@@ -1679,7 +2310,6 @@ def main() -> None:
     # config의 re_oracle_project (기본 aaai27_eval_cpcgrl) 데이터를 읽어
     # metric 별 전체 평균을 구하고 가로선으로 표시한다.
     hlines: dict[str, dict[str, float]] = {}
-    exp_cfg = _CFG.get("experiments", {}).get(experiment, {})
     baseline_project = args.baseline_project
     if baseline_project is None:
         baseline_project = exp_cfg.get(
@@ -1737,15 +2367,60 @@ def main() -> None:
         experiment=experiment,
         decimals=args.decimals,
     )
+    metrics_table_cfg = exp_cfg.get("metrics_table", {})
+    metrics_table_enabled = (
+        bool(metrics_table_cfg.get("enabled", False))
+        or len(metric_order) > 1
+    )
+    if metrics_table_enabled:
+        metrics_table_prefix = metrics_table_cfg.get(
+            "prefix",
+            f"{table_prefix}_metrics",
+        )
+        write_multi_metric_table_csv(
+            run_dir / f"{metrics_table_prefix}.csv",
+            rows,
+            metric_order,
+            experiment=experiment,
+        )
+        write_multi_metric_table_markdown(
+            run_dir / f"{metrics_table_prefix}.md",
+            rows,
+            metric_order,
+            experiment=experiment,
+            decimals=args.decimals,
+        )
+        write_multi_metric_table_latex(
+            run_dir / f"{metrics_table_prefix}.tex",
+            rows,
+            metric_order,
+            experiment=experiment,
+            decimals=args.decimals,
+            caption=metrics_table_cfg.get("caption"),
+            label=metrics_table_cfg.get("label"),
+        )
     significance_results: list[dict] = []
+    rigor_results: list[dict] = []
     if not args.no_significance and metric_order:
+        sig_baseline_project, sig_target_projects = _resolve_significance_projects(
+            experiment,
+            exp_cfg,
+            args.significance_baseline_project,
+            args.significance_target_projects,
+        )
+        log.info(
+            "significance: baseline=%s targets=%s",
+            sig_baseline_project,
+            sig_target_projects,
+        )
         significance_results = compute_fewshot_significance_tests(
             norm_rows,
             metric=metric_order[0],
             experiment=experiment,
-            baseline_project=args.significance_baseline_project,
-            target_projects=args.significance_target_projects,
+            baseline_project=sig_baseline_project,
+            target_projects=sig_target_projects,
             alternative=args.significance_alternative,
+            alpha=args.significance_alpha,
         )
         if significance_results:
             write_fewshot_significance_tests_csv(
@@ -1758,15 +2433,55 @@ def main() -> None:
                 metric_order,
                 experiment=experiment,
                 significance_results=significance_results,
+                baseline_project=sig_baseline_project,
+                alpha=args.significance_alpha,
                 decimals=args.decimals,
             )
+        else:
+            log.warning("significance 결과가 없습니다. baseline/target project와 seed 매칭을 확인하세요.")
+
+        if not args.no_significance_rigor and experiment in _DEFAULT_SIGNIFICANCE_BY_EXPERIMENT:
+            rigor_results = compute_significance_rigor_tests(
+                norm_rows,
+                metric=metric_order[0],
+                experiment=experiment,
+                alpha=args.significance_alpha,
+            )
+            if rigor_results:
+                rigor_summary = summarize_significance_rigor(rigor_results)
+                write_significance_rigor_tests_csv(
+                    run_dir / f"{table_prefix}_significance_rigor_tests.csv",
+                    rigor_results,
+                )
+                write_significance_rigor_summary_csv(
+                    run_dir / f"{table_prefix}_significance_rigor_summary.csv",
+                    rigor_summary,
+                )
+                write_significance_rigor_markdown(
+                    run_dir / f"{table_prefix}_significance_rigor.md",
+                    rigor_results,
+                    rigor_summary,
+                    experiment=experiment,
+                    alpha=args.significance_alpha,
+                    decimals=args.decimals,
+                )
+            else:
+                log.warning("significance rigor 결과가 없습니다. MGPCGRL target 또는 비교 baseline을 확인하세요.")
     log.info("table     : %s", run_dir / "progress_table.md")
     log.info("table     : %s", run_dir / f"{table_prefix}.csv")
     log.info("table     : %s", run_dir / f"{table_prefix}.md")
     log.info("table     : %s", run_dir / f"{table_prefix}.tex")
+    if metrics_table_enabled:
+        log.info("table     : %s", run_dir / f"{metrics_table_prefix}.csv")
+        log.info("table     : %s", run_dir / f"{metrics_table_prefix}.md")
+        log.info("table     : %s", run_dir / f"{metrics_table_prefix}.tex")
     if significance_results:
         log.info("table     : %s", run_dir / f"{table_prefix}_significance_tests.csv")
         log.info("table     : %s", run_dir / f"{table_prefix}_significance_table.md")
+    if rigor_results:
+        log.info("table     : %s", run_dir / f"{table_prefix}_significance_rigor_tests.csv")
+        log.info("table     : %s", run_dir / f"{table_prefix}_significance_rigor_summary.csv")
+        log.info("table     : %s", run_dir / f"{table_prefix}_significance_rigor.md")
 
     # ── 플롯 ──────────────────────────────────────────────────────────────
     _hl = hlines or None

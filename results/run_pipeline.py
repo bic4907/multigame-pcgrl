@@ -142,16 +142,18 @@ STEPS: list[dict] = [
 
 # 특정 experiment 에서 실행하지 않을 step id
 _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
-    "zeroshot":        {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략
-    "fewshot":                  {3, 9, 10},        # benchmark / seen_ratio_progress / condition_shift 생략; step 11(progress) 사용
-    "fewshot_seenrate":         {3, 9, 10},        # legacy alias
-    "fewshot_delta_alignment": {3, 9, 10, 12}, # fewshot 비교 — step 11(progress)만 사용
-    "directional_fewshot": {3, 9, 10, 12}, # fewshot 비교 — step 11(progress)만 사용
-    "domain_condition":{3, 9, 10},        # fewshot과 동일 — step 11(progress) 사용
-    "instruction_type":{3, 9, 10},        # fewshot과 동일 — step 11(progress) 사용
+    "zeroshot":                 {3, 9, 10, 12, 13, 14},  # step 11(progress)만 사용
+    "zeroshot_metrics":         {3, 9, 10, 12, 13, 14},  # step 11(progress + metrics table)만 사용
+    "fewshot":                  {3, 9, 10, 12, 13, 14},  # step 11(progress)만 사용
+    "fewshot_metrics":          {3, 9, 10, 12, 13, 14},  # step 11(progress + metrics table)만 사용
+    "fewshot_seenrate":         {3, 9, 10, 12, 13, 14},  # legacy alias
+    "fewshot_delta_alignment":  {3, 9, 10, 12, 13, 14},  # fewshot 비교 — step 11(progress)만 사용
+    "directional_fewshot":      {3, 9, 10, 12, 13, 14},  # fewshot 비교 — step 11(progress)만 사용
+    "domain_condition":         {3, 9, 10, 12, 13, 14},  # fewshot과 동일 — step 11(progress) 사용
+    "instruction_type":         {3, 9, 10, 12, 13, 14},  # fewshot과 동일 — step 11(progress) 사용
     "seen_ratio_progress":       {3, 4, 10, 11},    # seen_ratio_progress 전용 — step 9만 실행
     "condition_shift_analysis":  {3, 4, 6, 9, 11},  # condition_shift_analysis 전용 — step 10만 실행
-    "unseen_ratio_ngames":       {3, 9, 10},         # benchmark / seen_ratio_progress / condition_shift 생략
+    "unseen_ratio_ngames":       {3, 9, 10, 12, 13, 14},  # step 11(progress)만 사용
     "encoder_delta_weight_progress": {2, 3, 9, 10, 11},  # downloader + step 12만 실행
     "decoder_performance":       {1, 2, 3, 9, 10, 11, 12},  # step 13만 실행
     "dwctrl":                    {1, 2, 3, 9, 10, 11, 12},  # step 13만 실행

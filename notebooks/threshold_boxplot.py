@@ -27,6 +27,7 @@ import matplotlib.patches as mpatches
 import matplotlib.font_manager as fm
 import matplotlib.patheffects as pe
 from matplotlib.transforms import blended_transform_factory
+from matplotlib.offsetbox import TextArea, HPacker, AnnotationBbox
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE_DIR = ROOT / "dataset" / "multigame" / "cache" / "artifacts"
@@ -188,19 +189,22 @@ def load_all_df(cache_dir: Path) -> pd.DataFrame:
 
 def plot_threshold_boxplot(all_df: pd.DataFrame, out_dir: Path):
     N_MAX_BINS = 8
-    # 무지개 계열 — bin(=level)마다 hue가 확 달라져 분포 차이가 눈에 띈다.
-    _cmap = plt.cm.turbo
-    SEQ_COLORS = [_cmap(0.04 + 0.92 * i / (N_MAX_BINS - 1)) for i in range(N_MAX_BINS)]
+    # cold→warm 계열 — 낮은 level(파랑)에서 높은 level(빨강)로 자연스럽게 이어진다.
+    _cmap = plt.cm.coolwarm
+    SEQ_COLORS = [_cmap(0.06 + 0.88 * i / (N_MAX_BINS - 1)) for i in range(N_MAX_BINS)]
 
     BAR_H = 0.55
 
     def eff_th(th):
         return (th + 0.5) if (th % 1 == 0.0) else th
 
+    # A.1.5가 한 페이지에 들어오도록 세로 높이는 축소하되,
+    # 게임 행 간 라벨 겹침을 막기 위해 subplot 내부 높이는 확보하고
+    # subplot 사이 여백(hspace)을 줄여 전체 페이지 높이를 보정한다.
     fig, axes = plt.subplots(
         len(REWARDS), 1,
-        figsize=(16, 3.7 * len(REWARDS)),
-        gridspec_kw={"hspace": 0.62},
+        figsize=(16, 2.61 * len(REWARDS)),
+        gridspec_kw={"hspace": 0.6},
     )
     fig.patch.set_facecolor("white")
 
@@ -283,7 +287,7 @@ def plot_threshold_boxplot(all_df: pd.DataFrame, out_dir: Path):
         ax.set_yticks(y_ticks)
         ax.set_yticklabels([""] * len(y_ticks))
         ax.tick_params(axis="y", length=0)
-        ax.tick_params(axis="x", labelsize=11, colors="black")
+        ax.tick_params(axis="x", labelsize=12, colors="black")
 
         # ── 게임 이름(첫 글자 대문자) + 게임별 타일 이름/N/A (축 왼쪽 바깥) ──
         ylab_trans = blended_transform_factory(ax.transAxes, ax.transData)
@@ -295,21 +299,30 @@ def plot_threshold_boxplot(all_df: pd.DataFrame, out_dir: Path):
             else:
                 sublabel, sub_color = TILE_NAMES.get(game, {}).get(feat), "#333333"
 
+            # feature 라벨(있으면)을 게임명 바로 왼쪽에 고정 간격으로 붙여
+            # 하나의 묶음으로 만든 뒤, 게임명 오른쪽 끝을 축 가장자리에 정렬한다.
+            game_area = TextArea(
+                game.capitalize(),
+                textprops=dict(fontsize=15, color="black", va="baseline"),
+            )
             if sublabel:
-                ax.text(-0.010, y_pos + 0.16, game.capitalize(),
-                        transform=ylab_trans, ha="right", va="center",
-                        fontsize=13, color="black")
-                ax.text(-0.010, y_pos - 0.19, sublabel,
-                        transform=ylab_trans, ha="right", va="center",
-                        fontsize=11.5, style="italic", color=sub_color)
+                feat_area = TextArea(
+                    sublabel,
+                    textprops=dict(fontsize=12, color=sub_color,
+                                   style="italic", va="baseline"),
+                )
+                packed = HPacker(children=[feat_area, game_area],
+                                 align="baseline", pad=0, sep=8)
             else:
-                ax.text(-0.010, y_pos, game.capitalize(),
-                        transform=ylab_trans, ha="right", va="center",
-                        fontsize=13, color="black")
+                packed = game_area
+            ax.add_artist(AnnotationBbox(
+                packed, (-0.012, y_pos), xycoords=ylab_trans,
+                box_alignment=(1.0, 0.5), frameon=False, pad=0,
+            ))
 
         # 태스크(task) 이름만 bold — Pretendard-Regular뿐이라 stroke로 faux-bold 처리
         title = ax.set_title(TASK_TITLES.get(feat, feat.replace("_", " ")).title(),
-                             fontsize=15, loc="left", pad=6)
+                             fontsize=16, loc="left", pad=6)
         title.set_color("black")
         title.set_path_effects([pe.withStroke(linewidth=0.7, foreground="black")])
         ax.grid(axis="x", linestyle=":", alpha=0.35, zorder=0, color="gray")
@@ -338,7 +351,7 @@ def plot_threshold_boxplot(all_df: pd.DataFrame, out_dir: Path):
         handles=legend_patches,
         loc="upper center",
         ncol=N_MAX_BINS,
-        fontsize=12.5,
+        fontsize=13,
         frameon=True,
         facecolor="white",
         edgecolor="#aaaaaa",

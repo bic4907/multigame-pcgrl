@@ -167,6 +167,7 @@ _DEFAULT_SKIP: set[int] = {9, 10, 11, 12, 13, 14}
 # Steps that consume PIPELINE_NORM_SCALE by default. Step 14 intentionally uses
 # local normalization because predictive_reward compares only the filtered rows.
 _GLOBAL_NORM_STEP_IDS: set[int] = {3, 9, 10, 11, 12}
+_DOMAIN_IDENTITY_PROGRESS_SCRIPT = _HERE / "utils/experiment/domain_identity_progress.py"
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
@@ -387,6 +388,16 @@ def _needs_global_norm_scale(
     return False
 
 
+def _resolve_step_for_experiment(step: dict, experiment: str | None) -> dict:
+    """Return the concrete script for experiment-specific step variants."""
+    if experiment == "domain_identity" and step.get("id") == 11:
+        resolved = dict(step)
+        resolved["script"] = _DOMAIN_IDENTITY_PROGRESS_SCRIPT
+        resolved["description"] = "domain identity 전용 seen/unseen progress plot + summary table"
+        return resolved
+    return step
+
+
 def run_step(
     step: dict,
     extra_args: list[str],
@@ -534,9 +545,10 @@ def main(default_experiment: str | None = None) -> None:
                 )
                 continue
             # ——————————————————————————————————————————————————————————
-            step_extra = extra + _step_extra_args_from_config(_cfg, experiment, step, extra)
-            ok = run_step(step, step_extra, dry_run=args.dry_run, log=log)
-            exp_results.append((step, ok))
+            resolved_step = _resolve_step_for_experiment(step, experiment)
+            step_extra = extra + _step_extra_args_from_config(_cfg, experiment, resolved_step, extra)
+            ok = run_step(resolved_step, step_extra, dry_run=args.dry_run, log=log)
+            exp_results.append((resolved_step, ok))
             if not ok and not args.continue_on_failure:
                 log.error("[ABORT] experiment=%s step %d (%s) 실패 — 다음 실험으로 건너뜁니다.",
                           experiment or "(none)", step["id"], step["name"])

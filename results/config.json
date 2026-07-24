@@ -171,12 +171,18 @@
     },
     "domain_identity": {
       "target_projects": [
-        "aaai27_eval_mgpcgrl_zeroshot",
+        "aaai27_eval_mgpcgrl_fewshot",
         "aaai27_eval_mgpcgrl_fewshot_domain_name_desc",
         "aaai27_eval_mgpcgrl_fewshot_domain_name_mix",
         "aaai27_eval_mgpcgrl_fewshot_domain_name_none"
       ],
       "metrics": ["progress"],
+      "project_display_names": {
+        "aaai27_eval_mgpcgrl_fewshot": "Domain name",
+        "aaai27_eval_mgpcgrl_fewshot_domain_name_desc": "Domain description",
+        "aaai27_eval_mgpcgrl_fewshot_domain_name_mix": "Name + description",
+        "aaai27_eval_mgpcgrl_fewshot_domain_name_none": "No identity"
+      },
       "progress_baseline_project": "none",
       "significance_baseline_project": "aaai27_eval_mgpcgrl_zeroshot",
       "significance_target_projects": [

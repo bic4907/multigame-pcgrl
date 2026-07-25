@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 import sys
+from collections import deque
 from pathlib import Path
 
 import bpy
@@ -764,9 +765,12 @@ def add_region_bands(level: list[list[int]], mats: dict) -> None:
     thickness = 0.13
     shadow_thickness = 0.18
     depth = 0.055
+    inset = 0.16
+    span = 1.0 - 2.0 * inset
+    ignored_holes = interior_nonpassable_holes(passable)
 
     def add_band(name: str, loc: tuple[float, float, float], scale: tuple[float, float, float]) -> None:
-        add_cube(name + "_shadow", (loc[0], loc[1], shadow_z), (scale[0], scale[1] if scale[1] > scale[0] else scale[1], depth), shadow_mat)
+        add_cube(name + "_shadow", (loc[0], loc[1], shadow_z), (scale[0], scale[1], depth), shadow_mat)
         add_cube(name, loc, scale, band_mat)
 
     for row in range(height):
@@ -779,14 +783,74 @@ def add_region_bands(level: list[list[int]], mats: dict) -> None:
             y_max = float(16 - row)
             x_center = x_min + 0.5
             y_center = y_min + 0.5
-            if row == 0 or not passable[row - 1][col]:
-                add_band("region_band_top", (x_center, y_max, band_z), (1.04, thickness, depth))
-            if row + 1 >= height or not passable[row + 1][col]:
-                add_band("region_band_bottom", (x_center, y_min, band_z), (1.04, thickness, depth))
-            if col == 0 or not passable[row][col - 1]:
-                add_band("region_band_left", (x_min, y_center, band_z), (thickness, 1.04, depth))
-            if col + 1 >= width or not passable[row][col + 1]:
-                add_band("region_band_right", (x_max, y_center, band_z), (thickness, 1.04, depth))
+            if is_region_outer_edge(passable, ignored_holes, row - 1, col):
+                add_band("region_band_top", (x_center, y_max - inset, band_z), (span, thickness, depth))
+            if is_region_outer_edge(passable, ignored_holes, row + 1, col):
+                add_band("region_band_bottom", (x_center, y_min + inset, band_z), (span, thickness, depth))
+            if is_region_outer_edge(passable, ignored_holes, row, col - 1):
+                add_band("region_band_left", (x_min + inset, y_center, band_z), (thickness, span, depth))
+            if is_region_outer_edge(passable, ignored_holes, row, col + 1):
+                add_band("region_band_right", (x_max - inset, y_center, band_z), (thickness, span, depth))
+
+
+def is_region_outer_edge(passable: list[list[bool]], ignored_holes: set[tuple[int, int]], row: int, col: int) -> bool:
+    height = len(passable)
+    width = len(passable[0]) if height else 0
+    if row < 0 or row >= height or col < 0 or col >= width:
+        return True
+    return not passable[row][col] and (row, col) not in ignored_holes
+
+
+def interior_nonpassable_holes(passable: list[list[bool]]) -> set[tuple[int, int]]:
+    height = len(passable)
+    width = len(passable[0]) if height else 0
+    seen = [[False for _ in range(width)] for _ in range(height)]
+    holes: set[tuple[int, int]] = set()
+    for start_row in range(height):
+        for start_col in range(width):
+            if passable[start_row][start_col] or seen[start_row][start_col]:
+                continue
+            queue: deque[tuple[int, int]] = deque([(start_row, start_col)])
+            seen[start_row][start_col] = True
+            component: list[tuple[int, int]] = []
+            adjacent_passable: set[tuple[int, int]] = set()
+            touches_border = False
+            while queue:
+                row, col = queue.popleft()
+                component.append((row, col))
+                touches_border = touches_border or row == 0 or col == 0 or row + 1 == height or col + 1 == width
+                for drow, dcol in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                    nrow, ncol = row + drow, col + dcol
+                    if nrow < 0 or nrow >= height or ncol < 0 or ncol >= width:
+                        continue
+                    if passable[nrow][ncol]:
+                        adjacent_passable.add((nrow, ncol))
+                    elif not seen[nrow][ncol]:
+                        seen[nrow][ncol] = True
+                        queue.append((nrow, ncol))
+            if not touches_border and adjacent_to_single_region(passable, adjacent_passable):
+                holes.update(component)
+    return holes
+
+
+def adjacent_to_single_region(passable: list[list[bool]], starts: set[tuple[int, int]]) -> bool:
+    if not starts:
+        return False
+    height = len(passable)
+    width = len(passable[0]) if height else 0
+    target = next(iter(starts))
+    queue: deque[tuple[int, int]] = deque([target])
+    seen = {target}
+    while queue:
+        row, col = queue.popleft()
+        for drow, dcol in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            nrow, ncol = row + drow, col + dcol
+            if nrow < 0 or nrow >= height or ncol < 0 or ncol >= width:
+                continue
+            if passable[nrow][ncol] and (nrow, ncol) not in seen:
+                seen.add((nrow, ncol))
+                queue.append((nrow, ncol))
+    return starts.issubset(seen)
 
 
 def add_tile_indicators(level: list[list[int]], reward_enum: int, mats: dict) -> None:

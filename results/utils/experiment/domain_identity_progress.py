@@ -129,6 +129,9 @@ def _plot_label(project: str) -> str:
         "Name + description": "Name +\ndescription",
         "No identity": "No\nidentity",
         "No domain identity": "No domain\nidentity",
+        "Domain-specific condition": "Domain-specific\ncondition",
+        "Domain-general condition": "Domain-general\ncondition",
+        "Domain-specific + general condition": "Domain-specific +\ngeneral condition",
     }
     if label in fixed:
         return fixed[label]
@@ -231,6 +234,7 @@ def write_summary_latex(
     rows: list[dict],
     records: list[dict],
     metric: str,
+    experiment: str,
     decimals: int,
 ) -> None:
     agg = aggregate_by_project_split(rows, [metric])
@@ -238,12 +242,16 @@ def write_summary_latex(
     splits = ["seen", "unseen", "all"]
     best = _metric_best_keys(agg, projects, splits, [metric])
     metric_label = _METRIC_LATEX_LABELS.get(metric, _latex_escape(METRIC_DISPLAY_NAMES.get(metric, metric)))
+    caption_title = {
+        "domain_identity": "Domain identity ablation.",
+        "domain_condition": "Domain condition ablation.",
+    }.get(experiment, f"{experiment.replace('_', ' ').title()} ablation.")
     lines = [
         r"\begin{table}[t]",
         r"\centering",
         r"\small",
-        r"\caption{\textbf{Domain identity ablation.} Five-game aggregated Seen, Unseen, and All performance.}",
-        r"\label{tab:domain_identity_summary}",
+        rf"\caption{{\textbf{{{_latex_escape(caption_title)}}} Five-game aggregated Seen, Unseen, and All performance.}}",
+        rf"\label{{tab:{experiment}_summary}}",
         r"\begin{tabular}{lccc}",
         r"\toprule",
         rf"Method & Seen {metric_label} & Unseen {metric_label} & All {metric_label} \\",
@@ -276,6 +284,7 @@ def write_seen_unseen_plot(
     output_path: Path,
     records: list[dict],
     metric: str,
+    experiment: str,
     ymin: float | None,
 ) -> None:
     import matplotlib.pyplot as plt
@@ -310,8 +319,10 @@ def write_seen_unseen_plot(
     if ymin is not None and metric == "progress":
         bottom = ymin
 
-    fig, ax = plt.subplots(figsize=(4.7, 3.0))
+    fig_width = 5.0 if experiment == "domain_condition" else 4.7
+    fig, ax = plt.subplots(figsize=(fig_width, 3.0))
     method_colors = sns.color_palette("Set2", n_colors=max(len(records), 3))
+    bar_width = 0.50 if experiment == "domain_condition" else 0.62
     sns.barplot(
         data=df,
         x="Method",
@@ -319,7 +330,7 @@ def write_seen_unseen_plot(
         hue="Split",
         hue_order=["Seen", "Unseen"],
         palette=["#8c8c8c", "#8c8c8c"],
-        width=0.62,
+        width=bar_width,
         errorbar=None,
         ax=ax,
     )
@@ -379,7 +390,7 @@ def write_seen_unseen_plot(
 
 def parse_args() -> argparse.Namespace:
     exp_names = list(_CFG.get("experiments", {}).keys())
-    parser = argparse.ArgumentParser(description="Domain identity ablation progress plot and table.")
+    parser = argparse.ArgumentParser(description="Domain ablation progress plot and table.")
     parser.add_argument("--input", default="wandb_projects", help="Input root under results/, or an absolute path.")
     parser.add_argument("--experiment", choices=exp_names if exp_names else None, default=_DEFAULT_EXPERIMENT)
     parser.add_argument("--metrics", nargs="+", default=None, help="Metric list. The first metric is plotted.")
@@ -392,7 +403,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     experiment = args.experiment or _DEFAULT_EXPERIMENT
-    run_dir = make_run_dir("domain_identity_progress", cfg=_CFG)
+    output_prefix = experiment
+    run_dir = make_run_dir(f"{output_prefix}_progress", cfg=_CFG)
     log = setup_logger(run_dir, name=__file__)
 
     import utils.experiment.benchmark as _bm
@@ -411,11 +423,11 @@ def main() -> None:
 
     rows = collect_rows_with_seen_count(input_root, metric_order, target_projects=folder_order or None)
     if not rows:
-        msg = "No valid rows found for domain_identity."
+        msg = f"No valid rows found for {experiment}."
         log.error(msg)
         raise SystemExit(msg)
     if not any(r.get("game_split") == "unseen" for r in rows):
-        msg = "No unseen split rows found for domain_identity."
+        msg = f"No unseen split rows found for {experiment}."
         log.error(msg)
         raise SystemExit(msg)
 
@@ -430,9 +442,13 @@ def main() -> None:
     norm_rows = apply_normalization(rows, norm_scale, metric_order)
 
     records = _summary_records(norm_rows, metric, experiment)
-    write_summary_csv(run_dir / "domain_identity_summary_table.csv", records, args.decimals)
+    summary_csv = run_dir / f"{output_prefix}_summary_table.csv"
+    summary_md = run_dir / f"{output_prefix}_summary_table.md"
+    summary_tex = run_dir / f"{output_prefix}_summary_table.tex"
+    plot_path = run_dir / f"{output_prefix}_seen_unseen.png"
+    write_summary_csv(summary_csv, records, args.decimals)
     write_summary_markdown(
-        run_dir / "domain_identity_summary_table.md",
+        summary_md,
         norm_rows,
         records,
         metric,
@@ -440,24 +456,26 @@ def main() -> None:
         args.decimals,
     )
     write_summary_latex(
-        run_dir / "domain_identity_summary_table.tex",
+        summary_tex,
         norm_rows,
         records,
         metric,
+        experiment,
         args.decimals,
     )
-    log.info("table: %s", run_dir / "domain_identity_summary_table.csv")
-    log.info("table: %s", run_dir / "domain_identity_summary_table.md")
-    log.info("table: %s", run_dir / "domain_identity_summary_table.tex")
+    log.info("table: %s", summary_csv)
+    log.info("table: %s", summary_md)
+    log.info("table: %s", summary_tex)
 
     if not args.no_plot:
         write_seen_unseen_plot(
-            run_dir / "domain_identity_seen_unseen.png",
+            plot_path,
             records,
             metric,
+            experiment,
             args.ymin,
         )
-        log.info("plot : %s", run_dir / "domain_identity_seen_unseen.png")
+        log.info("plot : %s", plot_path)
 
     log.info(
         "rows_found: %d  (unseen: %d  seen: %d)",

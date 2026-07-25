@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from pathlib import Path
 
 import numpy as np
@@ -37,23 +38,80 @@ def _draw_region_boundaries(draw: ImageDraw.ImageDraw, state: np.ndarray, tile_s
     height, width = state.shape
     outer_width = max(3, tile_size // 4)
     inner_width = max(2, tile_size // 6)
+    inset = max(2, tile_size // 8)
+    ignored_holes = _interior_nonpassable_holes(passable)
     for y, x in zip(*np.where(passable)):
         x0 = int(x) * tile_size
         y0 = int(y) * tile_size
         x1 = x0 + tile_size
         y1 = y0 + tile_size
         edges = []
-        if y == 0 or not passable[y - 1, x]:
-            edges.append((x0, y0, x1, y0))
-        if y + 1 >= height or not passable[y + 1, x]:
-            edges.append((x0, y1, x1, y1))
-        if x == 0 or not passable[y, x - 1]:
-            edges.append((x0, y0, x0, y1))
-        if x + 1 >= width or not passable[y, x + 1]:
-            edges.append((x1, y0, x1, y1))
+        if _is_region_outer_edge(passable, ignored_holes, y - 1, x):
+            edges.append((x0 + inset, y0 + inset, x1 - inset, y0 + inset))
+        if _is_region_outer_edge(passable, ignored_holes, y + 1, x):
+            edges.append((x0 + inset, y1 - inset, x1 - inset, y1 - inset))
+        if _is_region_outer_edge(passable, ignored_holes, y, x - 1):
+            edges.append((x0 + inset, y0 + inset, x0 + inset, y1 - inset))
+        if _is_region_outer_edge(passable, ignored_holes, y, x + 1):
+            edges.append((x1 - inset, y0 + inset, x1 - inset, y1 - inset))
         for edge in edges:
             draw.line(edge, fill=(45, 35, 0, 210), width=outer_width)
             draw.line(edge, fill=(255, 214, 10, 255), width=inner_width)
+
+
+def _is_region_outer_edge(passable: np.ndarray, ignored_holes: set[tuple[int, int]], y: int, x: int) -> bool:
+    height, width = passable.shape
+    if y < 0 or y >= height or x < 0 or x >= width:
+        return True
+    return not passable[y, x] and (y, x) not in ignored_holes
+
+
+def _interior_nonpassable_holes(passable: np.ndarray) -> set[tuple[int, int]]:
+    height, width = passable.shape
+    seen = np.zeros_like(passable, dtype=bool)
+    holes: set[tuple[int, int]] = set()
+    for start_y, start_x in zip(*np.where(~passable)):
+        if seen[start_y, start_x]:
+            continue
+        queue: deque[tuple[int, int]] = deque([(int(start_y), int(start_x))])
+        seen[start_y, start_x] = True
+        component: list[tuple[int, int]] = []
+        touches_border = False
+        adjacent_passable: set[tuple[int, int]] = set()
+        while queue:
+            y, x = queue.popleft()
+            component.append((y, x))
+            touches_border = touches_border or y == 0 or x == 0 or y + 1 == height or x + 1 == width
+            for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                ny, nx = y + dy, x + dx
+                if ny < 0 or ny >= height or nx < 0 or nx >= width:
+                    continue
+                if passable[ny, nx]:
+                    adjacent_passable.add((ny, nx))
+                elif not seen[ny, nx]:
+                    seen[ny, nx] = True
+                    queue.append((ny, nx))
+        if not touches_border and _adjacent_to_single_region(passable, adjacent_passable):
+            holes.update(component)
+    return holes
+
+
+def _adjacent_to_single_region(passable: np.ndarray, starts: set[tuple[int, int]]) -> bool:
+    if not starts:
+        return False
+    target = next(iter(starts))
+    queue: deque[tuple[int, int]] = deque([target])
+    seen = {target}
+    while queue:
+        y, x = queue.popleft()
+        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            ny, nx = y + dy, x + dx
+            if ny < 0 or ny >= passable.shape[0] or nx < 0 or nx >= passable.shape[1]:
+                continue
+            if passable[ny, nx] and (ny, nx) not in seen:
+                seen.add((ny, nx))
+                queue.append((ny, nx))
+    return starts.issubset(seen)
 
 def _overlay_metric(
     image_path: Path,

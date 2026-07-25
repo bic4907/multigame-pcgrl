@@ -24,6 +24,7 @@ class BlenderRenderRequest:
     level: np.ndarray
     output: Path
     label: str = ""
+    reward_enum: int | None = None
     changed_cells: list[list[int]] | None = None
     path_coords: list[list[int]] | None = None
 
@@ -67,6 +68,8 @@ def build_manifest(
             "game": request.game,
             "unified": unified.astype(int).tolist(),
         }
+        if request.reward_enum is not None:
+            stage["reward_enum"] = int(request.reward_enum)
         if request.changed_cells:
             stage["changed_cells"] = request.changed_cells
         if request.path_coords:

@@ -191,6 +191,25 @@
         "aaai27_eval_mgpcgrl_fewshot_domain_name_none"
       ]
     },
+    "domain_condition": {
+      "target_projects": [
+        "aaai27_eval_mgpcgrl_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot_domain_condition_uni",
+        "aaai27_eval_mgpcgrl_fewshot_domain_condition_mix"
+      ],
+      "metrics": ["progress"],
+      "project_display_names": {
+        "aaai27_eval_mgpcgrl_fewshot": "Domain-specific condition",
+        "aaai27_eval_mgpcgrl_fewshot_domain_condition_uni": "Domain-general condition",
+        "aaai27_eval_mgpcgrl_fewshot_domain_condition_mix": "Domain-specific + general condition"
+      },
+      "progress_baseline_project": "none",
+      "significance_baseline_project": "aaai27_eval_mgpcgrl_fewshot",
+      "significance_target_projects": [
+        "aaai27_eval_mgpcgrl_fewshot_domain_condition_uni",
+        "aaai27_eval_mgpcgrl_fewshot_domain_condition_mix"
+      ]
+    },
     "dwctrl": {
       "target_projects": [
         "aaai27_encoder_mgpcgrl_dwctrl"
@@ -277,6 +296,8 @@
     "aaai27_eval_mgpcgrl_fewshot_domain_name_desc": "Domain desc",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_mix":  "Domain name + desc",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_none": "No domain identity",
+    "aaai27_eval_mgpcgrl_fewshot_domain_condition_uni": "Domain-general condition",
+    "aaai27_eval_mgpcgrl_fewshot_domain_condition_mix": "Domain-specific + general condition",
     "eval_mgpcgrl_fewshot_direction0625":     "MGPCGRL Direction (fewshot)",
     "eval_mgpcgrl_fewshot_direction0626":     "MGPCGRL Direction (fewshot)",
     "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "MGPCGRL Delta Alignment (fewshot)",
@@ -337,6 +358,8 @@
     "aaai27_eval_mgpcgrl_fewshot_domain_name_desc": "#0F9D58",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_mix":  "#4285F4",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_none": "#F4B400",
+    "aaai27_eval_mgpcgrl_fewshot_domain_condition_uni": "#0F9D58",
+    "aaai27_eval_mgpcgrl_fewshot_domain_condition_mix": "#4285F4",
     "eval_mgpcgrl_fewshot_direction0625":     "#4393c3",
     "eval_mgpcgrl_fewshot_direction0626":     "#4393c3",
     "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "#92c5de",

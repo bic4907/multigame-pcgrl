@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 import sys
+from collections import deque
 from pathlib import Path
 
 import bpy
@@ -35,11 +36,11 @@ ASSET_SETS = {
         4: {"pack": "mapped_blender_objects/dungeon/collectable", "file": "collectable.glb", "scale": (0.42, 0.42, 0.42), "z": 0.14},
     },
     "sokoban": {
-        0: {"pack": "mapped_blender_objects/sokoban/empty", "file": "empty.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
-        1: {"pack": "mapped_blender_objects/sokoban/wall", "file": "wall.glb", "scale": (1.0, 1.0, 1.0), "z": 0.0},
-        2: {"pack": "__procedural__", "file": "push-block", "scale": (0.78, 0.78, 0.78), "z": 0.02},
-        3: {"pack": "__procedural__", "file": "monster-purple", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "mapped_blender_objects/sokoban/collectable", "file": "collectable.glb", "scale": (0.7, 0.7, 0.7), "z": 0.02},
+        0: {"pack": "mapped_blender_objects/sokoban/empty", "file": "empty.png", "scale": (0.98, 0.98, 0.08), "z": 0.0},
+        1: {"pack": "mapped_blender_objects/sokoban/wall", "file": "wall.png", "scale": (0.98, 0.98, 1.05), "z": 0.0},
+        2: {"pack": "mapped_blender_objects/sokoban/interactable", "file": "interactable.png", "scale": (0.82, 0.82, 0.70), "z": 0.08},
+        3: {"pack": "mapped_blender_objects/sokoban/hazard", "file": "hazard.glb", "scale": (0.176, 0.176, 0.176), "z": 0.08},
+        4: {"pack": "mapped_blender_objects/sokoban/collectable", "file": "collectable.png", "scale": (0.74, 0.74, 0.018), "z": 0.085},
     },
     "doom": {
         0: {"pack": "__procedural__", "file": "doom-empty-textured-cube", "scale": (1.0, 1.0, 1.0), "z": 0.0},
@@ -56,12 +57,19 @@ ASSET_SETS = {
         4: {"pack": "mapped_blender_objects/pokemon/collectable", "file": "collectable.glb", "scale": (0.09, 0.09, 0.09), "z": 0.50},
     },
     "zelda": {
-        0: {"pack": "mapped_blender_objects/zelda/empty", "file": "empty.glb", "scale": (0.95, 0.95, 0.22), "z": -0.04},
-        1: {"pack": "mapped_blender_objects/zelda/wall", "file": "wall.glb", "scale": (0.42, 0.42, 0.42), "z": 0.0},
-        2: {"pack": "mapped_blender_objects/zelda/interactable", "file": "interactable.glb", "scale": (0.46, 0.46, 0.46), "z": 0.03},
-        3: {"pack": "__procedural__", "file": "monster-red", "scale": (0.75, 0.75, 0.75), "z": 0.08},
-        4: {"pack": "mapped_blender_objects/zelda/collectable", "file": "collectable.glb", "scale": (0.68, 0.68, 0.68), "z": 0.12},
+        0: {"pack": "mapped_blender_objects/zelda/empty", "file": "empty.png", "scale": (0.98, 0.98, 0.08), "z": 0.0},
+        1: {"pack": "mapped_blender_objects/zelda/wall", "file": "wall.png", "scale": (0.98, 0.98, 1.05), "z": 0.0},
+        2: {"pack": "mapped_blender_objects/zelda/interactable", "file": "interactable.glb", "scale": (0.010, 0.010, 0.010), "z": 0.020},
+        3: {"pack": "mapped_blender_objects/zelda/hazard", "file": "hazard.glb", "scale": (0.09, 0.09, 0.09), "z": 0.40},
+        4: {"pack": "mapped_blender_objects/zelda/collectable", "file": "collectable.glb", "scale": (0.32, 0.32, 0.32), "z": 0.42},
     },
+}
+
+PASSABLE_CATEGORIES = {0, 2, 3, 4}
+COUNT_CATEGORY_BY_REWARD_ENUM = {
+    2: 2,
+    3: 3,
+    4: 4,
 }
 
 COLORS = {
@@ -75,6 +83,10 @@ COLORS = {
     "path_start": (1.0, 0.92, 0.08, 1.0),
     "path_end": (1.0, 0.92, 0.08, 1.0),
     "path_shadow": (0.80, 0.68, 0.05, 0.28),
+    "region_band": (1.0, 0.84, 0.02, 1.0),
+    "region_band_shadow": (0.30, 0.22, 0.0, 0.45),
+    "tile_indicator": (1.0, 0.84, 0.02, 1.0),
+    "tile_indicator_shadow": (0.30, 0.22, 0.0, 0.40),
     "dark": (0.03, 0.035, 0.04, 1.0),
     "text": (0.9, 0.9, 0.88, 1.0),
 }
@@ -210,6 +222,10 @@ def load_asset_collection(name: str, path: Path) -> bpy.types.Collection:
         collection.objects.link(obj)
     if "pokemon_empty" in name:
         brighten_collection_materials(collection, amount=0.14)
+    if "sokoban_hazard" in name:
+        force_collection_material_color(collection, color=(0.48, 0.24, 0.10, 1.0))
+    if "zelda_interactable" in name:
+        brighten_collection_materials(collection, amount=0.22)
     return collection
 
 
@@ -238,7 +254,7 @@ def brighten_collection_materials(collection: bpy.types.Collection, amount: floa
                 source_socket = old_link.from_socket
                 mat.node_tree.links.remove(old_link)
                 bright = mat.node_tree.nodes.new("ShaderNodeBrightContrast")
-                bright.name = "pokemon_empty_brightness"
+                bright.name = "asset_brightness"
                 bright.inputs["Bright"].default_value = amount
                 bright.inputs["Contrast"].default_value = 0.02
                 mat.node_tree.links.new(source_socket, bright.inputs["Color"])
@@ -251,6 +267,40 @@ def brighten_collection_materials(collection: bpy.types.Collection, amount: floa
                     min(1.0, color[2] * 1.16 + amount * 0.25),
                     color[3],
                 )
+
+
+def force_collection_material_color(collection: bpy.types.Collection, color: tuple[float, float, float, float]) -> None:
+    seen: set[str] = set()
+    for obj in collection.objects:
+        data = getattr(obj, "data", None)
+        materials = getattr(data, "materials", None)
+        if not materials:
+            continue
+        for index, mat in enumerate(materials):
+            if mat is None:
+                continue
+            if mat.name not in seen:
+                mat = mat.copy()
+                mat.name = f"{mat.name}_sokoban_brown"
+                materials[index] = mat
+                seen.add(mat.name)
+            mat.diffuse_color = color
+            if not mat.use_nodes or not mat.node_tree:
+                continue
+            bsdf = mat.node_tree.nodes.get("Principled BSDF")
+            if bsdf is None:
+                continue
+            base_color = bsdf.inputs.get("Base Color")
+            if base_color is not None:
+                for link in list(base_color.links):
+                    mat.node_tree.links.remove(link)
+                base_color.default_value = color
+            emission_color = bsdf.inputs.get("Emission Color")
+            if emission_color is not None:
+                emission_color.default_value = color
+            emission_strength = bsdf.inputs.get("Emission Strength")
+            if emission_strength is not None:
+                emission_strength.default_value = 0.0
 
 
 def link_to_collection_only(obj: bpy.types.Object, collection: bpy.types.Collection) -> None:
@@ -389,6 +439,14 @@ def make_procedural_push_block_collection(name: str) -> bpy.types.Collection:
     return collection
 
 
+def make_textured_tile_block_collection(name: str, image_path: Path) -> bpy.types.Collection:
+    collection = bpy.data.collections.new(f"asset_tile_block_{name}")
+    mat_name = "tile_block_" + name.replace("/", "_").replace(".", "_")
+    mat = image_texture_material(mat_name, image_path)
+    add_collection_cube(collection, "tile_block", (0, 0, 0.5), (1.0, 1.0, 1.0), mat)
+    return collection
+
+
 def make_procedural_collection(name: str) -> bpy.types.Collection:
     if name.startswith("monster-"):
         return make_procedural_monster_collection(name)
@@ -422,6 +480,9 @@ def load_asset_collections(asset_dir: Path) -> dict[str, bpy.types.Collection]:
             path = asset_dir / config["pack"] / config["file"]
             if not path.exists():
                 raise FileNotFoundError(f"Missing asset for {game}:{category}: {path}")
+            if path.suffix.lower() in {".png", ".jpg", ".jpeg"}:
+                collections[key] = make_textured_tile_block_collection(key.replace("/", "_"), path)
+                continue
             collections[key] = load_asset_collection(key.replace("/", "_"), path)
     return collections
 
@@ -458,6 +519,11 @@ def stable_signed_float(*parts: object) -> float:
 
 
 def object_jitter(game: str, category: int, row: int, col: int) -> tuple[float, float, float]:
+    if game == "zelda" and category in (3, 4):
+        rot = stable_signed_float(game, category, row, col, "rot") * math.radians(180)
+        return 0.0, 0.0, rot
+    if game in {"sokoban", "zelda"}:
+        return 0.0, 0.0, 0.0
     if game == "doom" and category == 1:
         return 0.0, 0.0, 0.0
     if game == "pokemon" and category in (2, 3):
@@ -501,6 +567,10 @@ def object_tilt(game: str, category: int) -> tuple[float, float]:
         return math.radians(90), 0.0
     if game == "pokemon" and category == 4:
         return math.radians(-18), 0.0
+    if game == "zelda" and category == 3:
+        return math.radians(-42), math.radians(-10)
+    if game == "zelda" and category == 4:
+        return math.radians(-28), math.radians(12)
     return 0.0, 0.0
 
 
@@ -681,6 +751,132 @@ def add_path_route(coords: list[list[int]], mats: dict) -> None:
         obj.data.materials.append(endpoint_mat)
 
 
+def add_region_bands(level: list[list[int]], mats: dict) -> None:
+    passable = [
+        [int(value) in PASSABLE_CATEGORIES for value in row]
+        for row in level
+    ]
+    height = len(passable)
+    width = len(passable[0]) if height else 0
+    band_mat = mats["region_band"]
+    shadow_mat = mats["region_band_shadow"]
+    band_z = 1.22
+    shadow_z = 1.16
+    thickness = 0.13
+    shadow_thickness = 0.18
+    depth = 0.055
+    inset = 0.16
+    span = 1.0 - 2.0 * inset
+    ignored_holes = interior_nonpassable_holes(passable)
+
+    def add_band(name: str, loc: tuple[float, float, float], scale: tuple[float, float, float]) -> None:
+        add_cube(name + "_shadow", (loc[0], loc[1], shadow_z), (scale[0], scale[1], depth), shadow_mat)
+        add_cube(name, loc, scale, band_mat)
+
+    for row in range(height):
+        for col in range(width):
+            if not passable[row][col]:
+                continue
+            x_min = float(col)
+            x_max = float(col + 1)
+            y_min = float(15 - row)
+            y_max = float(16 - row)
+            x_center = x_min + 0.5
+            y_center = y_min + 0.5
+            if is_region_outer_edge(passable, ignored_holes, row - 1, col):
+                add_band("region_band_top", (x_center, y_max - inset, band_z), (span, thickness, depth))
+            if is_region_outer_edge(passable, ignored_holes, row + 1, col):
+                add_band("region_band_bottom", (x_center, y_min + inset, band_z), (span, thickness, depth))
+            if is_region_outer_edge(passable, ignored_holes, row, col - 1):
+                add_band("region_band_left", (x_min + inset, y_center, band_z), (thickness, span, depth))
+            if is_region_outer_edge(passable, ignored_holes, row, col + 1):
+                add_band("region_band_right", (x_max - inset, y_center, band_z), (thickness, span, depth))
+
+
+def is_region_outer_edge(passable: list[list[bool]], ignored_holes: set[tuple[int, int]], row: int, col: int) -> bool:
+    height = len(passable)
+    width = len(passable[0]) if height else 0
+    if row < 0 or row >= height or col < 0 or col >= width:
+        return True
+    return not passable[row][col] and (row, col) not in ignored_holes
+
+
+def interior_nonpassable_holes(passable: list[list[bool]]) -> set[tuple[int, int]]:
+    height = len(passable)
+    width = len(passable[0]) if height else 0
+    seen = [[False for _ in range(width)] for _ in range(height)]
+    holes: set[tuple[int, int]] = set()
+    for start_row in range(height):
+        for start_col in range(width):
+            if passable[start_row][start_col] or seen[start_row][start_col]:
+                continue
+            queue: deque[tuple[int, int]] = deque([(start_row, start_col)])
+            seen[start_row][start_col] = True
+            component: list[tuple[int, int]] = []
+            adjacent_passable: set[tuple[int, int]] = set()
+            touches_border = False
+            while queue:
+                row, col = queue.popleft()
+                component.append((row, col))
+                touches_border = touches_border or row == 0 or col == 0 or row + 1 == height or col + 1 == width
+                for drow, dcol in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                    nrow, ncol = row + drow, col + dcol
+                    if nrow < 0 or nrow >= height or ncol < 0 or ncol >= width:
+                        continue
+                    if passable[nrow][ncol]:
+                        adjacent_passable.add((nrow, ncol))
+                    elif not seen[nrow][ncol]:
+                        seen[nrow][ncol] = True
+                        queue.append((nrow, ncol))
+            if not touches_border and adjacent_to_single_region(passable, adjacent_passable):
+                holes.update(component)
+    return holes
+
+
+def adjacent_to_single_region(passable: list[list[bool]], starts: set[tuple[int, int]]) -> bool:
+    if not starts:
+        return False
+    height = len(passable)
+    width = len(passable[0]) if height else 0
+    target = next(iter(starts))
+    queue: deque[tuple[int, int]] = deque([target])
+    seen = {target}
+    while queue:
+        row, col = queue.popleft()
+        for drow, dcol in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            nrow, ncol = row + drow, col + dcol
+            if nrow < 0 or nrow >= height or ncol < 0 or ncol >= width:
+                continue
+            if passable[nrow][ncol] and (nrow, ncol) not in seen:
+                seen.add((nrow, ncol))
+                queue.append((nrow, ncol))
+    return starts.issubset(seen)
+
+
+def add_tile_indicators(level: list[list[int]], reward_enum: int, mats: dict) -> None:
+    category = COUNT_CATEGORY_BY_REWARD_ENUM.get(int(reward_enum))
+    if category is None:
+        return
+    check_mat = mats["tile_indicator"]
+    shadow_mat = mats["tile_indicator_shadow"]
+    z = 1.34
+    shadow_offset = mathutils.Vector((0.035, -0.035, -0.055))
+    for row, values in enumerate(level):
+        for col, value in enumerate(values):
+            if int(value) != category:
+                continue
+            x = float(col) + 0.5
+            y = 15.0 - float(row) + 0.5
+            points = [
+                mathutils.Vector((x - 0.31, y + 0.03, z)),
+                mathutils.Vector((x - 0.09, y - 0.20, z)),
+                mathutils.Vector((x + 0.34, y + 0.29, z)),
+            ]
+            for start, end in zip(points, points[1:]):
+                add_cylinder_between("tile_indicator_check_shadow", start + shadow_offset, end + shadow_offset, 0.085, shadow_mat)
+                add_cylinder_between("tile_indicator_check", start, end, 0.065, check_mat)
+
+
 def render_stage(
     stage: dict,
     resolution: tuple[int, int],
@@ -697,6 +893,11 @@ def render_stage(
     )
     if stage.get("changed_cells"):
         add_change_markers(stage["changed_cells"], mats)
+    reward_enum = stage.get("reward_enum")
+    if reward_enum == 0:
+        add_region_bands(stage["unified"], mats)
+    elif reward_enum in COUNT_CATEGORY_BY_REWARD_ENUM:
+        add_tile_indicators(stage["unified"], int(reward_enum), mats)
     if stage.get("path_coords"):
         add_path_route(stage["path_coords"], mats)
 

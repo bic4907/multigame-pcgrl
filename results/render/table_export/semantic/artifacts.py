@@ -89,7 +89,7 @@ def _run_created_ts(run: Any) -> float:
 
 def _is_reward_run(run: Any, reward_enum: int) -> bool:
     text = f"{getattr(run, 'name', '')} {getattr(run, 'id', '')}"
-    return bool(re.search(rf"(^|[-_])ev_re-{reward_enum}([_-]|$)", text))
+    return bool(re.search(rf"(^|[-_])(?:ev_)?re-{reward_enum}([_-]|$)", text))
 
 def _resolve_project_run(api: Any, entity: str, project: str, reward_enum: int) -> Any:
     runs = list(api.runs(f"{entity}/{project}", per_page=300))
@@ -103,6 +103,150 @@ def _resolve_project_run(api: Any, entity: str, project: str, reward_enum: int) 
         return finished, _run_created_ts(run)
 
     return sorted(candidates, key=score)[-1]
+
+def _run_filter_matches(text: str, pattern: str | None) -> bool:
+    if not pattern:
+        return True
+    return bool(re.search(pattern, text))
+
+def _resolve_project_run_for_pattern(
+    api: Any,
+    entity: str,
+    project: str,
+    reward_enum: int,
+    pattern: str | None,
+) -> Any:
+    runs = list(api.runs(f"{entity}/{project}", per_page=300))
+    candidates = []
+    for run in runs:
+        if not _is_reward_run(run, reward_enum):
+            continue
+        text = f"{getattr(run, 'name', '')} {getattr(run, 'id', '')}"
+        if _run_filter_matches(text, pattern):
+            candidates.append(run)
+    if not candidates:
+        if pattern:
+            raise RuntimeError(f"{project}: ev_re-{reward_enum} run matching {pattern!r} not found")
+        raise RuntimeError(f"{project}: ev_re-{reward_enum} run not found")
+
+    def score(run: Any) -> tuple[int, float]:
+        state = str(getattr(run, "state", "")).lower()
+        finished = 1 if state in {"finished", "crashed", "failed"} else 0
+        return finished, _run_created_ts(run)
+
+    return sorted(candidates, key=score)[-1]
+
+def _cached_run_text(run_dir: Path) -> str:
+    meta_path = run_dir / "run_metadata.json"
+    if meta_path.exists():
+        try:
+            payload = json.loads(meta_path.read_text(encoding="utf-8"))
+            return f"{payload.get('run_name', '')} {payload.get('run_id', '')}"
+        except Exception:
+            pass
+    return run_dir.name
+
+def _write_run_metadata(target_dir: Path, run: Any) -> None:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "run_id": getattr(run, "id", ""),
+        "run_name": getattr(run, "name", ""),
+        "created_at": str(getattr(run, "created_at", "") or getattr(run, "createdAt", "")),
+    }
+    (target_dir / "run_metadata.json").write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+def _download_runs_by_game(
+    entity: str,
+    projects: dict[str, str],
+    reward_enums: list[int],
+    games: list[str],
+    output_dir: Path,
+    use_cache_only: bool,
+    run_name_patterns: dict[tuple[str, int, str], str],
+) -> dict[tuple[str, int, str], MethodRewardRun]:
+    runs: dict[tuple[str, int, str], MethodRewardRun] = {}
+    cache_root = SCRIPT_DIR / ".wandb_download" / _safe_slug(entity)
+
+    if use_cache_only:
+        for method, project in projects.items():
+            project_root = cache_root / _safe_slug(project)
+            for reward_enum in reward_enums:
+                for game in games:
+                    pattern = run_name_patterns.get((method, reward_enum, game))
+                    found = []
+                    for h5_path in project_root.glob("*/eval.h5"):
+                        run_dir = h5_path.parent
+                        if not _run_filter_matches(_cached_run_text(run_dir), pattern):
+                            continue
+                        try:
+                            with h5py.File(str(h5_path), "r") as h5:
+                                if not any(f"_re{reward_enum}_" in key for key in h5.keys()):
+                                    continue
+                        except OSError:
+                            continue
+                        csv_dir = h5_path.parent / "csv"
+                        if (csv_dir / "ctrl_sim.csv").exists():
+                            found.append((h5_path.stat().st_mtime, h5_path, csv_dir))
+                    if found:
+                        _, h5_path, csv_dir = sorted(found)[-1]
+                        run_dir = h5_path.parent
+                        runs[(method, reward_enum, game)] = MethodRewardRun(
+                            method=method,
+                            project=project,
+                            reward_enum=reward_enum,
+                            run_id=run_dir.name,
+                            run_name=_cached_run_text(run_dir),
+                            h5_path=h5_path,
+                            csv_dir=csv_dir,
+                        )
+        return runs
+
+    api = _resolve_wandb_api()
+    for method, project in projects.items():
+        for reward_enum in reward_enums:
+            for game in games:
+                pattern = run_name_patterns.get((method, reward_enum, game))
+                result = MethodRewardRun(method=method, project=project, reward_enum=reward_enum)
+                try:
+                    run = _resolve_project_run_for_pattern(api, entity, project, reward_enum, pattern)
+                    run_id = getattr(run, "id", "")
+                    result.run_id = run_id
+                    result.run_name = getattr(run, "name", "")
+                    result.run_url = f"https://wandb.ai/{entity}/{project}/runs/{run_id}"
+                    target_dir = cache_root / _safe_slug(project) / _safe_slug(run_id)
+                    h5_path, h5_err, _ = download_eval_h5_from_run(run, target_dir)
+                    csv_dir, csv_err, _ = download_eval_csv_from_run(run, target_dir)
+                    _write_run_metadata(target_dir, run)
+                    result.h5_path = h5_path
+                    result.csv_dir = csv_dir
+                    result.error = h5_err or csv_err
+                except Exception as exc:
+                    result.error = str(exc)
+                runs[(method, reward_enum, game)] = result
+
+    (output_dir / "run_manifest.json").write_text(
+        json.dumps(
+            {
+                f"{method}_re{reward_enum}_{game}": {
+                    "project": run.project,
+                    "run_id": run.run_id,
+                    "run_name": run.run_name,
+                    "run_url": run.run_url,
+                    "h5_path": str(run.h5_path) if run.h5_path else None,
+                    "csv_dir": str(run.csv_dir) if run.csv_dir else None,
+                    "error": run.error,
+                }
+                for (method, reward_enum, game), run in sorted(runs.items())
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return runs
 
 def _download_runs(
     entity: str,

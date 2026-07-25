@@ -125,7 +125,7 @@
           0.015,
           0.015
         ],
-        "z": 0.2,
+        "z": 0.5,
         "pack": "kenney_mini_dungeon",
         "file": "gate.glb",
         "status": "copied",
@@ -284,11 +284,11 @@
         "tile_id": 2,
         "semantic": "interactable",
         "scale": [
-          0.46,
-          0.46,
-          0.46
+          0.01,
+          0.01,
+          0.01
         ],
-        "z": 0.03,
+        "z": 0.02,
         "pack": "kenney_modular_dungeon",
         "file": "stairs.glb",
         "status": "copied",
@@ -300,24 +300,26 @@
         "tile_id": 3,
         "semantic": "hazard",
         "scale": [
-          0.75,
-          0.75,
-          0.75
+          0.09,
+          0.09,
+          0.09
         ],
-        "z": 0.08,
-        "pack": "__procedural__",
-        "file": "monster-red",
-        "status": "procedural_no_source_glb"
+        "z": 0.4,
+        "pack": "zelda_hazard",
+        "file": "hazard.glb",
+        "status": "copied",
+        "source": "results/render/assets/mapped_blender_objects/zelda/hazard/hazard.glb",
+        "output": "results/render/assets/mapped_blender_objects/zelda/hazard/hazard.glb"
       },
       "collectable": {
         "tile_id": 4,
         "semantic": "collectable",
         "scale": [
-          0.68,
-          0.68,
-          0.68
+          0.32,
+          0.32,
+          0.32
         ],
-        "z": 0.12,
+        "z": 0.42,
         "pack": "kenney_platformer",
         "file": "key.glb",
         "status": "copied",
@@ -363,43 +365,47 @@
         "tile_id": 2,
         "semantic": "interactable",
         "scale": [
-          0.78,
-          0.78,
-          0.78
+          0.82,
+          0.82,
+          0.7
         ],
-        "z": 0.02,
-        "pack": "__procedural__",
-        "file": "push-block",
-        "status": "procedural_no_source_glb"
+        "z": 0.08,
+        "pack": "sokoban_interactable",
+        "file": "interactable.png",
+        "status": "copied",
+        "source": "results/render/assets/mapped_blender_objects/sokoban/interactable/interactable.png",
+        "output": "results/render/assets/mapped_blender_objects/sokoban/interactable/interactable.png"
       },
       "hazard": {
         "tile_id": 3,
         "semantic": "hazard",
         "scale": [
-          0.75,
-          0.75,
-          0.75
+          0.176,
+          0.176,
+          0.176
         ],
         "z": 0.08,
-        "pack": "__procedural__",
-        "file": "monster-purple",
-        "status": "procedural_no_source_glb"
+        "pack": "pokemon_hazard_recolored_brown",
+        "file": "hazard.glb",
+        "status": "copied",
+        "source": "results/render/assets/mapped_blender_objects/pokemon/hazard/hazard.glb",
+        "output": "results/render/assets/mapped_blender_objects/sokoban/hazard/hazard.glb",
+        "textures": "results/render/assets/mapped_blender_objects/sokoban/hazard/Textures"
       },
       "collectable": {
         "tile_id": 4,
         "semantic": "collectable",
         "scale": [
-          0.7,
-          0.7,
-          0.7
+          0.74,
+          0.74,
+          0.018
         ],
-        "z": 0.02,
-        "pack": "kenney_mini_arcade",
-        "file": "prizes.glb",
+        "z": 0.085,
+        "pack": "sokoban_collectable",
+        "file": "collectable.png",
         "status": "copied",
-        "source": "results/render/assets/blender/kenney_mini_arcade/prizes.glb",
-        "output": "results/render/assets/mapped_blender_objects/sokoban/collectable/collectable.glb",
-        "textures": "results/render/assets/mapped_blender_objects/sokoban/collectable/Textures"
+        "source": "results/render/assets/mapped_blender_objects/sokoban/collectable/collectable.png",
+        "output": "results/render/assets/mapped_blender_objects/sokoban/collectable/collectable.png"
       }
     }
   }

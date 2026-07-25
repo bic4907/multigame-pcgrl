@@ -167,7 +167,7 @@ _DEFAULT_SKIP: set[int] = {9, 10, 11, 12, 13, 14}
 # Steps that consume PIPELINE_NORM_SCALE by default. Step 14 intentionally uses
 # local normalization because predictive_reward compares only the filtered rows.
 _GLOBAL_NORM_STEP_IDS: set[int] = {3, 9, 10, 11, 12}
-_DOMAIN_IDENTITY_PROGRESS_SCRIPT = _HERE / "utils/experiment/domain_identity_progress.py"
+_DOMAIN_ABLATION_PROGRESS_SCRIPT = _HERE / "utils/experiment/domain_identity_progress.py"
 
 
 def parse_args(default_experiment: str | None = None) -> argparse.Namespace:
@@ -390,10 +390,10 @@ def _needs_global_norm_scale(
 
 def _resolve_step_for_experiment(step: dict, experiment: str | None) -> dict:
     """Return the concrete script for experiment-specific step variants."""
-    if experiment == "domain_identity" and step.get("id") == 11:
+    if experiment in {"domain_identity", "domain_condition"} and step.get("id") == 11:
         resolved = dict(step)
-        resolved["script"] = _DOMAIN_IDENTITY_PROGRESS_SCRIPT
-        resolved["description"] = "domain identity 전용 seen/unseen progress plot + summary table"
+        resolved["script"] = _DOMAIN_ABLATION_PROGRESS_SCRIPT
+        resolved["description"] = f"{experiment} 전용 seen/unseen progress plot + summary table"
         return resolved
     return step
 

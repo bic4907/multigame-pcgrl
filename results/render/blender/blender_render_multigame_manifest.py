@@ -38,8 +38,8 @@ ASSET_SETS = {
         0: {"pack": "mapped_blender_objects/sokoban/empty", "file": "empty.png", "scale": (0.98, 0.98, 0.08), "z": 0.0},
         1: {"pack": "mapped_blender_objects/sokoban/wall", "file": "wall.png", "scale": (0.98, 0.98, 1.05), "z": 0.0},
         2: {"pack": "mapped_blender_objects/sokoban/interactable", "file": "interactable.png", "scale": (0.82, 0.82, 0.70), "z": 0.08},
-        3: {"pack": "mapped_blender_objects/sokoban/hazard", "file": "hazard.png", "scale": (0.82, 0.82, 0.70), "z": 0.08},
-        4: {"pack": "mapped_blender_objects/sokoban/collectable", "file": "collectable.png", "scale": (0.74, 0.74, 0.58), "z": 0.08},
+        3: {"pack": "mapped_blender_objects/sokoban/hazard", "file": "hazard.glb", "scale": (0.176, 0.176, 0.176), "z": 0.08},
+        4: {"pack": "mapped_blender_objects/sokoban/collectable", "file": "collectable.png", "scale": (0.74, 0.74, 0.018), "z": 0.085},
     },
     "doom": {
         0: {"pack": "__procedural__", "file": "doom-empty-textured-cube", "scale": (1.0, 1.0, 1.0), "z": 0.0},
@@ -221,6 +221,8 @@ def load_asset_collection(name: str, path: Path) -> bpy.types.Collection:
         collection.objects.link(obj)
     if "pokemon_empty" in name:
         brighten_collection_materials(collection, amount=0.14)
+    if "sokoban_hazard" in name:
+        force_collection_material_color(collection, color=(0.48, 0.24, 0.10, 1.0))
     if "zelda_interactable" in name:
         brighten_collection_materials(collection, amount=0.22)
     return collection
@@ -264,6 +266,40 @@ def brighten_collection_materials(collection: bpy.types.Collection, amount: floa
                     min(1.0, color[2] * 1.16 + amount * 0.25),
                     color[3],
                 )
+
+
+def force_collection_material_color(collection: bpy.types.Collection, color: tuple[float, float, float, float]) -> None:
+    seen: set[str] = set()
+    for obj in collection.objects:
+        data = getattr(obj, "data", None)
+        materials = getattr(data, "materials", None)
+        if not materials:
+            continue
+        for index, mat in enumerate(materials):
+            if mat is None:
+                continue
+            if mat.name not in seen:
+                mat = mat.copy()
+                mat.name = f"{mat.name}_sokoban_brown"
+                materials[index] = mat
+                seen.add(mat.name)
+            mat.diffuse_color = color
+            if not mat.use_nodes or not mat.node_tree:
+                continue
+            bsdf = mat.node_tree.nodes.get("Principled BSDF")
+            if bsdf is None:
+                continue
+            base_color = bsdf.inputs.get("Base Color")
+            if base_color is not None:
+                for link in list(base_color.links):
+                    mat.node_tree.links.remove(link)
+                base_color.default_value = color
+            emission_color = bsdf.inputs.get("Emission Color")
+            if emission_color is not None:
+                emission_color.default_value = color
+            emission_strength = bsdf.inputs.get("Emission Strength")
+            if emission_strength is not None:
+                emission_strength.default_value = 0.0
 
 
 def link_to_collection_only(obj: bpy.types.Object, collection: bpy.types.Collection) -> None:

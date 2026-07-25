@@ -30,6 +30,7 @@ from blender.manifest_renderer import (  # noqa: E402
 from table_export.semantic.artifacts import (  # noqa: E402
     _build_candidates,
     _download_runs,
+    _download_runs_by_game,
     _read_state,
 )
 from table_export.semantic.config import (  # noqa: E402
@@ -89,6 +90,45 @@ def _missing_run_keys(
             if run is None or run.h5_path is None or run.csv_dir is None:
                 missing.append((method, reward_enum))
     return missing
+
+
+def _missing_run_game_keys(
+    runs: dict[tuple[str, int, str], Any],
+    projects: dict[str, str],
+    reward_enums: list[int],
+    games: list[str],
+) -> list[tuple[str, int, str]]:
+    missing: list[tuple[str, int, str]] = []
+    for method in projects:
+        for reward_enum in reward_enums:
+            for game in games:
+                run = runs.get((method, reward_enum, game))
+                if run is None or run.h5_path is None or run.csv_dir is None:
+                    missing.append((method, reward_enum, game))
+    return missing
+
+
+def _run_name_patterns(scope: dict[str, Any], methods: list[str], reward_enums: list[int], games: list[str]) -> dict[tuple[str, int, str], str]:
+    raw = scope.get("run_name_patterns")
+    if not isinstance(raw, dict):
+        return {}
+
+    out: dict[tuple[str, int, str], str] = {}
+    for method in methods:
+        method_raw = raw.get(method) or raw.get(method.lower())
+        if not isinstance(method_raw, dict):
+            continue
+        for reward_enum in reward_enums:
+            reward_raw = method_raw.get(str(reward_enum))
+            for game in games:
+                value: Any = None
+                if isinstance(reward_raw, dict):
+                    value = reward_raw.get(game)
+                if value is None:
+                    value = method_raw.get(game)
+                if isinstance(value, str) and value.strip():
+                    out[(method, reward_enum, game)] = value.strip()
+    return out
 
 
 def _split_csv(value: str | None) -> list[str]:
@@ -242,9 +282,9 @@ def _render_cell_images(
         high_path = _path_coords_for_blender(high_state, reward_enum)
         render_levels(
             [
-                BlenderRenderRequest(game, low_state, low_img, "low", path_coords=low_path),
-                BlenderRenderRequest(game, mid_state, mid_img, "mid", path_coords=mid_path),
-                BlenderRenderRequest(game, high_state, high_img, "high", path_coords=high_path),
+                BlenderRenderRequest(game, low_state, low_img, "low", reward_enum=reward_enum, path_coords=low_path),
+                BlenderRenderRequest(game, mid_state, mid_img, "mid", reward_enum=reward_enum, path_coords=mid_path),
+                BlenderRenderRequest(game, high_state, high_img, "high", reward_enum=reward_enum, path_coords=high_path),
             ],
             raw_dir / "_blender_manifests" / f"{stem}.json",
             blender=blender,
@@ -309,23 +349,43 @@ def render_table(args: argparse.Namespace) -> Path:
         for feature in features
         for game in games
     })
+    run_name_patterns = _run_name_patterns(scope, methods, reward_enums, games)
     use_cache_only = args.cache_only
-    runs = _download_runs(
-        entity=args.entity,
-        projects=projects,
-        reward_enums=reward_enums,
-        output_dir=output_dir,
-        use_cache_only=use_cache_only,
-    )
-    missing_projects = _missing_cached_projects(args.entity, projects) if args.cache_only else []
-    missing_run_keys = _missing_run_keys(runs, projects, reward_enums) if args.cache_only else []
-    if missing_run_keys and args.download_missing_cache:
-        missing_text = ", ".join(f"{method}/re{reward_enum}" for method, reward_enum in missing_run_keys)
-        message = f"Missing local W&B artifacts for {missing_text}."
-        if missing_projects:
-            message += " Missing project cache(s): " + ", ".join(missing_projects) + "."
-        print(message + " Downloading required artifacts...")
-        use_cache_only = False
+    if run_name_patterns:
+        runs_by_game = _download_runs_by_game(
+            entity=args.entity,
+            projects=projects,
+            reward_enums=reward_enums,
+            games=games,
+            output_dir=output_dir,
+            use_cache_only=use_cache_only,
+            run_name_patterns=run_name_patterns,
+        )
+        missing_projects = _missing_cached_projects(args.entity, projects) if args.cache_only else []
+        missing_run_game_keys = _missing_run_game_keys(runs_by_game, projects, reward_enums, games) if args.cache_only else []
+        if missing_run_game_keys and args.download_missing_cache:
+            missing_text = ", ".join(f"{method}/re{reward_enum}/{game}" for method, reward_enum, game in missing_run_game_keys)
+            message = f"Missing local W&B artifacts for {missing_text}."
+            if missing_projects:
+                message += " Missing project cache(s): " + ", ".join(missing_projects) + "."
+            print(message + " Downloading required artifacts...")
+            use_cache_only = False
+            runs_by_game = _download_runs_by_game(
+                entity=args.entity,
+                projects=projects,
+                reward_enums=reward_enums,
+                games=games,
+                output_dir=output_dir,
+                use_cache_only=use_cache_only,
+                run_name_patterns=run_name_patterns,
+            )
+        candidates_by_method_re_game = {
+            key: _build_candidates(run, [key[2]])
+            for key, run in runs_by_game.items()
+        }
+        runs = {}
+        candidates_by_method_re = {}
+    else:
         runs = _download_runs(
             entity=args.entity,
             projects=projects,
@@ -333,10 +393,28 @@ def render_table(args: argparse.Namespace) -> Path:
             output_dir=output_dir,
             use_cache_only=use_cache_only,
         )
-    candidates_by_method_re = {
-        key: _build_candidates(run, games)
-        for key, run in runs.items()
-    }
+        missing_projects = _missing_cached_projects(args.entity, projects) if args.cache_only else []
+        missing_run_keys = _missing_run_keys(runs, projects, reward_enums) if args.cache_only else []
+        if missing_run_keys and args.download_missing_cache:
+            missing_text = ", ".join(f"{method}/re{reward_enum}" for method, reward_enum in missing_run_keys)
+            message = f"Missing local W&B artifacts for {missing_text}."
+            if missing_projects:
+                message += " Missing project cache(s): " + ", ".join(missing_projects) + "."
+            print(message + " Downloading required artifacts...")
+            use_cache_only = False
+            runs = _download_runs(
+                entity=args.entity,
+                projects=projects,
+                reward_enums=reward_enums,
+                output_dir=output_dir,
+                use_cache_only=use_cache_only,
+            )
+        candidates_by_method_re = {
+            key: _build_candidates(run, games)
+            for key, run in runs.items()
+        }
+        runs_by_game = {}
+        candidates_by_method_re_game = {}
 
     renderer = SemanticTileRenderer(DEFAULT_MAPPED_TILE_DIR)
     cells: dict[tuple[str, str, str], RenderCell] = {}
@@ -349,8 +427,12 @@ def render_table(args: argparse.Namespace) -> Path:
         for game in games:
             reward_enum = _reward_enum_for_feature_game(feature, game)
             for method in methods:
-                run = runs.get((method, reward_enum))
-                method_candidates = candidates_by_method_re.get((method, reward_enum), {})
+                if run_name_patterns:
+                    run = runs_by_game.get((method, reward_enum, game))
+                    method_candidates = candidates_by_method_re_game.get((method, reward_enum, game), {})
+                else:
+                    run = runs.get((method, reward_enum))
+                    method_candidates = candidates_by_method_re.get((method, reward_enum), {})
                 if run is None or run.h5_path is None:
                     raise RuntimeError(f"Missing eval artifacts for {method}/{game}/{feature} reward_enum={reward_enum}")
 
@@ -489,6 +571,7 @@ def render_table(args: argparse.Namespace) -> Path:
         "cache_only": args.cache_only,
         "download_missing_cache": args.download_missing_cache,
         "resolved_cache_only": use_cache_only,
+        "run_name_patterns": {f"{method}_re{reward_enum}_{game}": pattern for (method, reward_enum, game), pattern in sorted(run_name_patterns.items())},
         "overleaf_dir": overleaf_dir.relative_to(output_dir).as_posix(),
     }
     (output_dir / "used_render_config.json").write_text(

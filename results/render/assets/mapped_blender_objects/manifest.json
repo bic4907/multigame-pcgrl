@@ -125,7 +125,7 @@
           0.015,
           0.015
         ],
-        "z": 0.2,
+        "z": 0.5,
         "pack": "kenney_mini_dungeon",
         "file": "gate.glb",
         "status": "copied",
@@ -284,11 +284,11 @@
         "tile_id": 2,
         "semantic": "interactable",
         "scale": [
-          0.46,
-          0.46,
-          0.46
+          0.01,
+          0.01,
+          0.01
         ],
-        "z": 0.03,
+        "z": 0.02,
         "pack": "kenney_modular_dungeon",
         "file": "stairs.glb",
         "status": "copied",
@@ -300,24 +300,26 @@
         "tile_id": 3,
         "semantic": "hazard",
         "scale": [
-          0.75,
-          0.75,
-          0.75
+          0.09,
+          0.09,
+          0.09
         ],
-        "z": 0.08,
-        "pack": "__procedural__",
-        "file": "monster-red",
-        "status": "procedural_no_source_glb"
+        "z": 0.4,
+        "pack": "zelda_hazard",
+        "file": "hazard.glb",
+        "status": "copied",
+        "source": "results/render/assets/mapped_blender_objects/zelda/hazard/hazard.glb",
+        "output": "results/render/assets/mapped_blender_objects/zelda/hazard/hazard.glb"
       },
       "collectable": {
         "tile_id": 4,
         "semantic": "collectable",
         "scale": [
-          0.68,
-          0.68,
-          0.68
+          0.32,
+          0.32,
+          0.32
         ],
-        "z": 0.12,
+        "z": 0.42,
         "pack": "kenney_platformer",
         "file": "key.glb",
         "status": "copied",

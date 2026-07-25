@@ -200,8 +200,8 @@
       "metrics": ["progress"],
       "project_display_names": {
         "aaai27_eval_mgpcgrl_fewshot": "Domain-specific condition",
-        "aaai27_eval_mgpcgrl_fewshot_domain_condition_uni": "Unified condition",
-        "aaai27_eval_mgpcgrl_fewshot_domain_condition_mix": "Mixed condition"
+        "aaai27_eval_mgpcgrl_fewshot_domain_condition_uni": "Domain-general condition",
+        "aaai27_eval_mgpcgrl_fewshot_domain_condition_mix": "Domain-specific + general condition"
       },
       "progress_baseline_project": "none",
       "significance_baseline_project": "aaai27_eval_mgpcgrl_fewshot",
@@ -296,8 +296,8 @@
     "aaai27_eval_mgpcgrl_fewshot_domain_name_desc": "Domain desc",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_mix":  "Domain name + desc",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_none": "No domain identity",
-    "aaai27_eval_mgpcgrl_fewshot_domain_condition_uni": "Unified condition",
-    "aaai27_eval_mgpcgrl_fewshot_domain_condition_mix": "Mixed condition",
+    "aaai27_eval_mgpcgrl_fewshot_domain_condition_uni": "Domain-general condition",
+    "aaai27_eval_mgpcgrl_fewshot_domain_condition_mix": "Domain-specific + general condition",
     "eval_mgpcgrl_fewshot_direction0625":     "MGPCGRL Direction (fewshot)",
     "eval_mgpcgrl_fewshot_direction0626":     "MGPCGRL Direction (fewshot)",
     "eval_mgpcgrl_fewshot__deltaalignment_fs0627": "MGPCGRL Delta Alignment (fewshot)",

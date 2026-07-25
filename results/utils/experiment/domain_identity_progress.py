@@ -130,8 +130,8 @@ def _plot_label(project: str) -> str:
         "No identity": "No\nidentity",
         "No domain identity": "No domain\nidentity",
         "Domain-specific condition": "Domain-specific\ncondition",
-        "Unified condition": "Unified\ncondition",
-        "Mixed condition": "Mixed\ncondition",
+        "Domain-general condition": "Domain-general\ncondition",
+        "Domain-specific + general condition": "Domain-specific +\ngeneral condition",
     }
     if label in fixed:
         return fixed[label]
@@ -284,6 +284,7 @@ def write_seen_unseen_plot(
     output_path: Path,
     records: list[dict],
     metric: str,
+    experiment: str,
     ymin: float | None,
 ) -> None:
     import matplotlib.pyplot as plt
@@ -318,8 +319,10 @@ def write_seen_unseen_plot(
     if ymin is not None and metric == "progress":
         bottom = ymin
 
-    fig, ax = plt.subplots(figsize=(4.7, 3.0))
+    fig_width = 5.0 if experiment == "domain_condition" else 4.7
+    fig, ax = plt.subplots(figsize=(fig_width, 3.0))
     method_colors = sns.color_palette("Set2", n_colors=max(len(records), 3))
+    bar_width = 0.50 if experiment == "domain_condition" else 0.62
     sns.barplot(
         data=df,
         x="Method",
@@ -327,7 +330,7 @@ def write_seen_unseen_plot(
         hue="Split",
         hue_order=["Seen", "Unseen"],
         palette=["#8c8c8c", "#8c8c8c"],
-        width=0.62,
+        width=bar_width,
         errorbar=None,
         ax=ax,
     )
@@ -469,6 +472,7 @@ def main() -> None:
             plot_path,
             records,
             metric,
+            experiment,
             args.ymin,
         )
         log.info("plot : %s", plot_path)

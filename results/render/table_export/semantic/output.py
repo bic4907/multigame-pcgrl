@@ -172,7 +172,7 @@ def _make_preview_png_pdf(
 
     png_path = output_dir / "table2_semantic_transition_crop.png"
     pdf_path = output_dir / "table2_semantic_transition_crop.pdf"
-    canvas.save(png_path)
+    canvas.save(png_path, dpi=(300, 300))
     canvas.save(pdf_path, "PDF", resolution=300.0)
     return png_path, pdf_path
 

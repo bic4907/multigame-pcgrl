@@ -774,8 +774,8 @@ def _method_key(delta_weight: object, decoder_nograd: object = None) -> str:
 
 def _method_label(method_key: str) -> str:
     labels = {
-        "mgpcgrl": r"MGPCGRL ($-\mathcal{L}_{\mathrm{dir}}$)",
-        "mgpcgrl_da": "MGPCGRL",
+        "mgpcgrl": r"ReWARD ($-\mathcal{L}_{\mathrm{dir}}$)",
+        "mgpcgrl_da": "ReWARD",
         "detach": "Detach",
         "unknown": "Unknown",
     }

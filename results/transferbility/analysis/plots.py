@@ -1,4 +1,4 @@
-"""Figure: source->target JS-distance boxplot vs. target-domain delta progress."""
+"""Figure: source->target JS-divergence boxplot vs. target-domain delta progress."""
 from __future__ import annotations
 
 import os
@@ -48,11 +48,11 @@ def _annotate_trend(ax, x, y, loc: str = "upper left", color: str = "k") -> None
 
 def plot_similarity_boxplot(out_dir: Path, n_bins: int = 15,
                             exclude_absent_source: bool = False) -> Path:
-    """Boxplot of within-enum z-scored delta across z-scored JS-distance bins.
+    """Boxplot of within-enum z-scored delta across z-scored JS-divergence bins.
 
-    Predictor: source->target JS distance, standardized within each reward enum
+    Predictor: source->target JS divergence, standardized within each reward enum
     (removes per-enum scale confound). Response: `diff_vs_baseline` z-scored
-    within each reward enum. x-axis is inverted so smaller distances are on
+    within each reward enum. x-axis is inverted so smaller divergences are on
     the right, matching the narrative "closer distributions -> better transfer".
     """
     m = merged_feature_table().copy()
@@ -64,8 +64,8 @@ def plot_similarity_boxplot(out_dir: Path, n_bins: int = 15,
         return (x - x.mean()) / s if s > 1e-9 else x * 0.0
 
     m["diff_z"] = m.groupby("reward_enum")["diff_vs_baseline"].transform(_z)
-    m["js_z"] = m.groupby("reward_enum")["js_distance"].transform(_z)
-    sub = m[["js_distance", "js_z", "diff_z"]].replace([np.inf, -np.inf], np.nan).dropna()
+    m["js_z"] = m.groupby("reward_enum")["js_divergence"].transform(_z)
+    sub = m[["js_divergence", "js_z", "diff_z"]].replace([np.inf, -np.inf], np.nan).dropna()
 
     sub = sub.assign(bin=pd.qcut(sub["js_z"], q=n_bins, duplicates="drop"))
     groups = list(sub.groupby("bin", observed=True))
@@ -101,7 +101,7 @@ def plot_similarity_boxplot(out_dir: Path, n_bins: int = 15,
     ax.xaxis.set_major_formatter(plt.FormatStrFormatter("%.1f"))
     # Inverted x-axis (high JSD left, low JSD right).
     ax.set_xlim(x_hi + pad, x_lo - pad)
-    ax.set_xlabel("Source-Target JS Distance", fontsize=11)
+    ax.set_xlabel("Source-Target JS Divergence", fontsize=11)
     ax.set_ylabel(r"Target-domain $\Delta$ Progress", fontsize=11)
     ax.grid(True, axis="y", alpha=0.2)
     ax.spines[["top", "right"]].set_visible(False)
@@ -120,7 +120,7 @@ def plot_similarity_boxplot_per_enum(out_dir: Path, n_bins: int = 10,
     """Same boxplot but produced separately for each reward enum.
 
     Per-enum sample size is small (~16-20 rows), so we use fewer bins and skip
-    the within-enum z-scoring of the predictor (raw JS distance is fine when
+    the within-enum z-scoring of the predictor (raw JS divergence is fine when
     only one enum is present). y-axis is still standardized within the enum
     for consistent scale across figures.
     """
@@ -138,17 +138,17 @@ def plot_similarity_boxplot_per_enum(out_dir: Path, n_bins: int = 10,
 
     paths: list[Path] = []
     for enum_label, g in m.groupby("reward_enum"):
-        sub = g[["js_distance", "diff_z"]].replace([np.inf, -np.inf], np.nan).dropna()
-        if sub["js_distance"].nunique() < 3:
+        sub = g[["js_divergence", "diff_z"]].replace([np.inf, -np.inf], np.nan).dropna()
+        if sub["js_divergence"].nunique() < 3:
             continue
-        n_b = min(n_bins, sub["js_distance"].nunique())
-        sub = sub.assign(bin=pd.qcut(sub["js_distance"], q=n_b, duplicates="drop"))
+        n_b = min(n_bins, sub["js_divergence"].nunique())
+        sub = sub.assign(bin=pd.qcut(sub["js_divergence"], q=n_b, duplicates="drop"))
         groups = list(sub.groupby("bin", observed=True))
         positions = [float(interval.mid) for interval, _ in groups]
         data = [gg["diff_z"].to_numpy() for _, gg in groups]
         n_boxes = len(groups)
 
-        span = sub["js_distance"].max() - sub["js_distance"].min()
+        span = sub["js_divergence"].max() - sub["js_divergence"].min()
         width = 0.46 * span / max(n_boxes, 1)
 
         cmap = plt.get_cmap("coolwarm")
@@ -165,16 +165,16 @@ def plot_similarity_boxplot_per_enum(out_dir: Path, n_bins: int = 10,
         for patch, color in zip(bp["boxes"], box_colors):
             patch.set(facecolor=color, alpha=0.85, edgecolor="0.35", linewidth=0.8)
 
-        _annotate_trend(ax, sub["js_distance"], sub["diff_z"], loc="upper left")
+        _annotate_trend(ax, sub["js_divergence"], sub["diff_z"], loc="upper left")
         ax.axhline(0, color="grey", lw=0.7, ls="--")
         ax.set_ylim(-2.0, 2.0)
         ax.set_yticks([-2, -1, 0, 1, 2])
-        x_lo, x_hi = sub["js_distance"].min(), sub["js_distance"].max()
+        x_lo, x_hi = sub["js_divergence"].min(), sub["js_divergence"].max()
         pad = 0.05 * (x_hi - x_lo)
         ax.set_xticks(np.linspace(x_lo, x_hi, 5))
         ax.xaxis.set_major_formatter(plt.FormatStrFormatter("%.2f"))
         ax.set_xlim(x_hi + pad, x_lo - pad)
-        ax.set_xlabel("Source-Target JS Distance", fontsize=11)
+        ax.set_xlabel("Source-Target JS Divergence", fontsize=11)
         ax.set_ylabel(r"Target-domain $\Delta$ Progress", fontsize=11)
         ax.set_title(str(enum_label), fontsize=11)
         ax.grid(True, axis="y", alpha=0.2)

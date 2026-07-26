@@ -1,4 +1,4 @@
-"""Source->target JS distance per (reward_enum, target, source)."""
+"""Source->target JS distance/divergence per (reward_enum, target, source)."""
 from __future__ import annotations
 
 import math
@@ -30,7 +30,7 @@ def _prob(values: np.ndarray, edges: np.ndarray) -> np.ndarray:
 
 
 def pair_feature_table() -> pd.DataFrame:
-    """JS distance for every ordered (source, target, enum) combination."""
+    """JS distance/divergence for every ordered (source, target, enum) combination."""
     rows: List[dict] = []
     for enum in config.REWARD_LABEL_TO_ENUM.values():
         for target in config.GAMES:
@@ -43,12 +43,14 @@ def pair_feature_table() -> pd.DataFrame:
                 t = get_array(target, enum)
                 edges = _edges(s, t)
                 ps, pt = _prob(s, edges), _prob(t, edges)
-                js = (float(jensenshannon(ps, pt, base=2.0))
-                      if ps.sum() and pt.sum() else np.nan)
+                js_distance = (float(jensenshannon(ps, pt, base=2.0))
+                               if ps.sum() and pt.sum() else np.nan)
+                js_divergence = js_distance ** 2 if np.isfinite(js_distance) else np.nan
                 rows.append(dict(
                     reward_enum=config.ENUM_TO_REWARD_LABEL[enum],
                     enum=enum, target=target, source=source,
-                    js_distance=js,
+                    js_distance=js_distance,
+                    js_divergence=js_divergence,
                     source_present=float(config.feature_present(source, enum)),
                 ))
     return pd.DataFrame(rows)

@@ -41,6 +41,9 @@ Step numbers:
     14 dataset_unseen_ratio_progress
                                 dataset_unseen_ratio 변화에 따른 unseen 게임 progress plot
                                 (predictive_reward 전용; 다른 실험에서는 생략)
+    15 encoder_loss             W&B encoder 예측 artifact 다운로드 → unseen 도메인별
+                                Final/Best regression 지표 테이블 + 학습 곡선 plot
+                                (encoder_loss 전용; appendix용)
 
 NOTE: step 5 (seen_unseen_report), 7 (unseen_count_progress), 8 (game_impact_analysis)
       스크립트 파일은 results/utils/experiment/ 아래에 보존되어 있으나
@@ -138,31 +141,38 @@ STEPS: list[dict] = [
         "script": _HERE / "utils/experiment/dataset_unseen_ratio_progress.py",
         "description": "dataset_unseen_ratio 변화에 따른 unseen 게임 progress 꺾은선 그래프 (predictive_reward 전용)",
     },
+    {
+        "id": 15,
+        "name": "encoder_loss",
+        "script": _HERE / "utils/experiment/encoder_loss.py",
+        "description": "encoder 학습 loss 변화 — unseen 도메인별 Final/Best regression 지표 테이블 + 곡선 (encoder_loss 전용; appendix용)",
+    },
 ]
 
 # 특정 experiment 에서 실행하지 않을 step id
 _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
-    "zeroshot":                 {3, 9, 10, 12, 13, 14},  # step 11(progress)만 사용
-    "zeroshot_metrics":         {3, 9, 10, 12, 13, 14},  # step 11(progress + metrics table)만 사용
-    "fewshot":                  {3, 9, 10, 12, 13, 14},  # step 11(progress)만 사용
-    "fewshot_metrics":          {3, 9, 10, 12, 13, 14},  # step 11(progress + metrics table)만 사용
-    "fewshot_seenrate":         {3, 9, 10, 12, 13, 14},  # legacy alias
-    "fewshot_delta_alignment":  {3, 9, 10, 12, 13, 14},  # fewshot 비교 — step 11(progress)만 사용
-    "directional_fewshot":      {3, 9, 10, 12, 13, 14},  # fewshot 비교 — step 11(progress)만 사용
-    "domain_condition":         {3, 9, 10, 12, 13, 14},  # fewshot과 동일 — step 11(progress) 사용
-    "domain_identity":          {3, 9, 10, 12, 13, 14},  # domain identity 비교 — step 11(progress) 사용
-    "instruction_type":         {3, 9, 10, 12, 13, 14},  # fewshot과 동일 — step 11(progress) 사용
-    "seen_ratio_progress":       {3, 4, 10, 11},    # seen_ratio_progress 전용 — step 9만 실행
-    "condition_shift_analysis":  {3, 4, 6, 9, 11},  # condition_shift_analysis 전용 — step 10만 실행
-    "unseen_ratio_ngames":       {3, 9, 10, 12, 13, 14},  # step 11(progress)만 사용
-    "encoder_delta_weight_progress": {2, 3, 9, 10, 11},  # downloader + step 12만 실행
-    "decoder_performance":       {1, 2, 3, 9, 10, 11, 12},  # step 13만 실행
-    "dwctrl":                    {1, 2, 3, 9, 10, 11, 12},  # step 13만 실행
-    "predictive_reward":         {3, 9, 10, 11, 12, 13},  # downloader + summary + step 14만 실행
-    None:                        {9, 10, 11, 12, 13, 14},    # experiment 미지정 시 생략
+    "zeroshot":                 {3, 9, 10, 12, 13, 14, 15},  # step 11(progress)만 사용
+    "zeroshot_metrics":         {3, 9, 10, 12, 13, 14, 15},  # step 11(progress + metrics table)만 사용
+    "fewshot":                  {3, 9, 10, 12, 13, 14, 15},  # step 11(progress)만 사용
+    "fewshot_metrics":          {3, 9, 10, 12, 13, 14, 15},  # step 11(progress + metrics table)만 사용
+    "fewshot_seenrate":         {3, 9, 10, 12, 13, 14, 15},  # legacy alias
+    "fewshot_delta_alignment":  {3, 9, 10, 12, 13, 14, 15},  # fewshot 비교 — step 11(progress)만 사용
+    "directional_fewshot":      {3, 9, 10, 12, 13, 14, 15},  # fewshot 비교 — step 11(progress)만 사용
+    "domain_condition":         {3, 9, 10, 12, 13, 14, 15},  # fewshot과 동일 — step 11(progress) 사용
+    "domain_identity":          {3, 9, 10, 12, 13, 14, 15},  # domain identity 비교 — step 11(progress) 사용
+    "instruction_type":         {3, 9, 10, 12, 13, 14, 15},  # fewshot과 동일 — step 11(progress) 사용
+    "seen_ratio_progress":       {3, 4, 10, 11, 15},    # seen_ratio_progress 전용 — step 9만 실행
+    "condition_shift_analysis":  {3, 4, 6, 9, 11, 15},  # condition_shift_analysis 전용 — step 10만 실행
+    "unseen_ratio_ngames":       {3, 9, 10, 12, 13, 14, 15},  # step 11(progress)만 사용
+    "encoder_delta_weight_progress": {2, 3, 9, 10, 11, 15},  # downloader + step 12만 실행
+    "decoder_performance":       {1, 2, 3, 9, 10, 11, 12, 15},  # step 13만 실행
+    "dwctrl":                    {1, 2, 3, 9, 10, 11, 12, 15},  # step 13만 실행
+    "predictive_reward":         {3, 9, 10, 11, 12, 13, 15},  # downloader + summary + step 14만 실행
+    "encoder_loss":              {1, 2, 3, 9, 10, 11, 12, 13, 14},  # step 15(encoder_loss)만 실행
+    None:                        {9, 10, 11, 12, 13, 14, 15},    # experiment 미지정 시 생략
 }
-# fullshot 등 전용 실험이 아닌 일반 실험: 9, 10, 11, 12 생략
-_DEFAULT_SKIP: set[int] = {9, 10, 11, 12, 13, 14}
+# fullshot 등 전용 실험이 아닌 일반 실험: 9, 10, 11, 12, 15 생략
+_DEFAULT_SKIP: set[int] = {9, 10, 11, 12, 13, 14, 15}
 
 # Steps that consume PIPELINE_NORM_SCALE by default. Step 14 intentionally uses
 # local normalization because predictive_reward compares only the filtered rows.

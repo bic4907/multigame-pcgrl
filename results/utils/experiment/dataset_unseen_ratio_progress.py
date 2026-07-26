@@ -62,8 +62,8 @@ from utils.experiment.benchmark import (
 _CFG = load_cfg()
 _MARKERS: list[str] = ["o", "s", "^", "D", "v", "P", "X", "*", "h", "+"]
 _VIPCGRL_LABEL = "VIPCGRL"
-_MGPCGRL_NO_DIR_LABEL = r"MGPCGRL ($-\mathcal{L}_{\mathrm{dir}}$)"
-_MGPCGRL_LABEL = "MGPCGRL"
+_MGPCGRL_NO_DIR_LABEL = r"ReWARD ($-\mathcal{L}_{\mathrm{dir}}$)"
+_MGPCGRL_LABEL = "ReWARD"
 _GROUP_ORDER: dict[str, int] = {
     _VIPCGRL_LABEL: 0,
     _MGPCGRL_NO_DIR_LABEL: 1,

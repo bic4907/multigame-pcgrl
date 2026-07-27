@@ -2,13 +2,15 @@
 
 [![dataset validation](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml/badge.svg)](https://github.com/bic4907/multigame-pcgrl/actions/workflows/multigame-cache-tests.yml)
 
-This repository provides a **multi-game dataset pipeline** for level-text representation learning and controllable level generation.
 
-![Teasure](docs/teaser.png)
+This repository contains the code for **MGPCGRL (Multi-Game PCGRL)**, a
+multi-domain reinforcement learning framework for instruction-conditioned
+procedural content generation.
 
-- **Multiverse** enables one model to generate levels across multiple game domains by learning representations that align level and text features in a **shared embedding space**.
-- In this shared space, **text composition and embedding interpolation** can mix characteristics from different games, while instruction structure can control each domain's contribution.
-- This shared representation can also serve as a conditioning signal for RL generators such as **PCGRL**, extending to natural-language-driven control of level goals and style.
+MGPCGRL targets a practical gap in PCGRL: rewards and instruction meanings are
+usually hand-defined for one game at a time. The framework instead learns shared
+representations between design instructions and game levels, then transfers
+reward signals across game domains.
 
 ---
 

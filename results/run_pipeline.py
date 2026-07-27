@@ -154,6 +154,7 @@ _EXPERIMENT_SKIP: dict[str | None, set[int]] = {
     "zeroshot":                 {3, 9, 10, 12, 13, 14, 15},  # step 11(progress)만 사용
     "zeroshot_metrics":         {3, 9, 10, 12, 13, 14, 15},  # step 11(progress + metrics table)만 사용
     "fewshot":                  {3, 9, 10, 12, 13, 14, 15},  # step 11(progress)만 사용
+    "upperbound":               {3, 9, 10, 12, 13, 14, 15},  # fewshot과 동일 — step 11(progress) 사용
     "fewshot_metrics":          {3, 9, 10, 12, 13, 14, 15},  # step 11(progress + metrics table)만 사용
     "fewshot_seenrate":         {3, 9, 10, 12, 13, 14, 15},  # legacy alias
     "fewshot_delta_alignment":  {3, 9, 10, 12, 13, 14, 15},  # fewshot 비교 — step 11(progress)만 사용

@@ -163,6 +163,28 @@
         "aaai27_eval_mgpcgrl_fewshot_dw0",
         "aaai27_eval_mgpcgrl_fewshot"
       ],
+      "significance_baseline_project": "aaai27_eval_mgpcgrl_fewshot_dw0",
+      "significance_target_projects": [
+        "aaai27_eval_mgpcgrl_fewshot"
+      ],
+      "re_oracle_project": "aaai27_eval_cpcgrl",
+      "re_oracle_label": "CPCGRL (Oracle)"
+    },
+    "upperbound": {
+      "target_projects": [
+        "aaai27_eval_ipcgrl_fewshot",
+        "aaai27_eval_mipcgrl_fewshot",
+        "aaai27_eval_vipcgrl_fewshot",
+        "aaai27_eval_finetuned_clip_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot_dw0",
+        "aaai27_eval_mgpcgrl_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot_oracle"
+      ],
+      "significance_baseline_project": "aaai27_eval_mgpcgrl_fewshot_dw0",
+      "significance_target_projects": [
+        "aaai27_eval_mgpcgrl_fewshot",
+        "aaai27_eval_mgpcgrl_fewshot_oracle"
+      ],
       "re_oracle_project": "aaai27_eval_cpcgrl",
       "re_oracle_label": "CPCGRL (Oracle)"
     },
@@ -335,6 +357,7 @@
     "aaai27_eval_finetuned_clip_fewshot": "CLIP (fewshot)",
     "aaai27_eval_mgpcgrl_fewshot": "MGPCGRL (fewshot)",
     "aaai27_eval_mgpcgrl_fewshot_dw0": "MGPCGRL (fewshot, dw=0)",
+    "aaai27_eval_mgpcgrl_fewshot_oracle": "MGPCGRL (fewshot oracle)",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_desc": "Domain desc",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_mix": "Domain name + desc",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_none": "No domain identity",
@@ -397,6 +420,7 @@
     "aaai27_eval_finetuned_clip_fewshot": "#bf812d",
     "aaai27_eval_mgpcgrl_fewshot": "#2166ac",
     "aaai27_eval_mgpcgrl_fewshot_dw0": "#4393c3",
+    "aaai27_eval_mgpcgrl_fewshot_oracle": "#92c5de",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_desc": "#0F9D58",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_mix": "#4285F4",
     "aaai27_eval_mgpcgrl_fewshot_domain_name_none": "#F4B400",

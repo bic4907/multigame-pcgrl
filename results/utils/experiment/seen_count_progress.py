@@ -1959,7 +1959,12 @@ def write_fewshot_significance_table_markdown(
     baseline_project: str,
     alpha: float = 0.05,
     decimals: int = 4,
+    p_key: str = "p_holm",
+    p_label: str = "Holm-adjusted p-values",
 ) -> None:
+    if p_key not in {"p", "p_holm"}:
+        raise ValueError(f"Unsupported p_key: {p_key}")
+
     metric = metric_order[0]
     unseen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="unseen")
     seen_agg = aggregate_by_unseen_game_method(rows, [metric], game_split="seen")
@@ -1990,12 +1995,13 @@ def write_fewshot_significance_table_markdown(
                 )
                 test = sig.get((proj, game, split_label))
                 if cell and test:
-                    stars = test.get("stars", "")
-                    p_holm = _format_p_value(test.get("p_holm"))
+                    p_value = test.get(p_key)
+                    stars = _sig_stars(p_value, alpha=alpha)
+                    p_display = _format_p_value(p_value)
                     if stars:
                         cell = f"{cell}{stars}"
-                    if p_holm:
-                        cell = f"{cell} (p={p_holm})"
+                    if p_display:
+                        cell = f"{cell} (p={p_display})"
                 cells.append(cell or "-")
         lines.append("| " + " | ".join(cells) + " |")
 
@@ -2006,7 +2012,7 @@ def write_fewshot_significance_table_markdown(
             f"alternative: target > {_project_display_name(baseline_project)}."
         ),
         (
-            "Reported p-values are Holm-adjusted across all target-vs-baseline cells; "
+            f"Reported p-values are {p_label}; "
             f"* p<{alpha:g}, ** p<0.01, *** p<0.001."
         ),
     ]
@@ -2436,6 +2442,20 @@ def main() -> None:
                 baseline_project=sig_baseline_project,
                 alpha=args.significance_alpha,
                 decimals=args.decimals,
+                p_key="p_holm",
+                p_label="Holm-adjusted across all target-vs-baseline cells",
+            )
+            write_fewshot_significance_table_markdown(
+                run_dir / f"{table_prefix}_significance_table_uncorrected.md",
+                norm_rows,
+                metric_order,
+                experiment=experiment,
+                significance_results=significance_results,
+                baseline_project=sig_baseline_project,
+                alpha=args.significance_alpha,
+                decimals=args.decimals,
+                p_key="p",
+                p_label="uncorrected raw paired-test p-values",
             )
         else:
             log.warning("significance 결과가 없습니다. baseline/target project와 seed 매칭을 확인하세요.")
@@ -2478,6 +2498,7 @@ def main() -> None:
     if significance_results:
         log.info("table     : %s", run_dir / f"{table_prefix}_significance_tests.csv")
         log.info("table     : %s", run_dir / f"{table_prefix}_significance_table.md")
+        log.info("table     : %s", run_dir / f"{table_prefix}_significance_table_uncorrected.md")
     if rigor_results:
         log.info("table     : %s", run_dir / f"{table_prefix}_significance_rigor_tests.csv")
         log.info("table     : %s", run_dir / f"{table_prefix}_significance_rigor_summary.csv")

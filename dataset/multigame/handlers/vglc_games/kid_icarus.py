@@ -3,7 +3,7 @@ dataset/multigame/handlers/vglc_games/kid_icarus.py
 ====================================================
 Kid Icarus (TheVGLC) preprocessing handler.
 
-tile text
+Tile mapping
 ---------
 0  : empty    (-)
 1  : solid    (#)
@@ -61,4 +61,3 @@ def make_legend() -> TileLegend:
 class KidIcarusPreprocessor(BasePreprocessor):
     def char_to_int(self, char: str) -> int:
         return _CHAR_MAP.get(char, KidIcarusTile.UNKNOWN)
-

@@ -2,13 +2,13 @@
 """
 dataset/reward_annotations/resubmit_keys.py
 ============================================
-text map text in  text batch  text (failuretext sample textprocess for ).
+Submit a batch only for selected map keys, for retrying failed samples.
 
-TARGET_KEYS array in  textprocesstext map text(= ann.json row["key"])  text Usagetext text.
+Add map keys to retry (ann.json row["key"]) to TARGET_KEYS before running.
 
 Usage:
-    python dataset/reward_annotations/resubmit_keys.py              # text + finish text + ann.json update
-    python dataset/reward_annotations/resubmit_keys.py --dry-run    # JSONL createtext, text X
+    python dataset/reward_annotations/resubmit_keys.py              # submit, wait, update ann.json
+    python dataset/reward_annotations/resubmit_keys.py --dry-run    # create JSONL only
     python dataset/reward_annotations/resubmit_keys.py --retrieve BATCH_ID
 """
 from __future__ import annotations
@@ -52,13 +52,13 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# text map text list — text in  text  map text  text
-# map text = ann.json each row  of  "key" text
-#   doom    text: "dm000000", "dm000123"
-#   zelda   text: "zl000000"
-#   sokoban text: "sk000000"
-#   pokemon text: "pk000000"
-#   dungeon text: "dg000000"
+# Map keys to resubmit; add desired keys here
+# A map key is the "key" field of an ann.json row
+#   Doom example: "dm000000", "dm000123"
+#   Zelda example: "zl000000"
+#   Sokoban example: "sk000000"
+#   Pokemon example: "pk000000"
+#   Dungeon example: "dg000000"
 # ─────────────────────────────────────────────────────────────────────────────
 TARGET_KEYS: list[str] = [
     "pk001058",
@@ -67,7 +67,7 @@ TARGET_KEYS: list[str] = [
 # ─────────────────────────────────────────────────────────────────────────────
 
 _ALL_GAMES = ["doom", "zelda", "sokoban", "pokemon", "dungeon"]
-_POLL_INTERVAL = 10  # batch finish check text (seconds)
+_POLL_INTERVAL = 10  # Batch-completion polling interval in seconds
 
 
 def build_jsonl_for_keys(
@@ -76,7 +76,7 @@ def build_jsonl_for_keys(
     cache_by_game: dict,
     system_prompt: str,
 ) -> tuple[Path, list[str]] | tuple[None, None]:
-    """TARGET_KEYS in  text  rowtext text JSONL  createtext."""
+    """Create JSONL from only the rows matching TARGET_KEYS."""
     key_set = set(target_keys)
     lines: list[str] = []
     matched_games: set[str] = set()
@@ -100,7 +100,7 @@ def build_jsonl_for_keys(
 
             feature_name = row["feature_name"]
             if CUSTOM_THRESHOLDS.get(f"{game}_{feature_name}") is None:
-                logger.info(f"threshold=None text: {row['key']}")
+                logger.info(f"Skipping threshold=None: {row['key']}")
                 continue
 
             reward_enum = int(row["reward_enum"])
@@ -120,10 +120,10 @@ def build_jsonl_for_keys(
             )
             lines.append(json.dumps(req, ensure_ascii=False))
             matched_games.add(game)
-            logger.info(f"  text : {row['key']}  game={game}  enum={reward_enum}  feature={feature_name}")
+            logger.info(f"  Added: {row['key']}  game={game}  enum={reward_enum}  feature={feature_name}")
 
     if not lines:
-        logger.warning("text text  text. TARGET_KEYS  checktext.")
+        logger.warning("No keys matched. Check TARGET_KEYS.")
         return None, None
 
     _BATCH_DIR.mkdir(parents=True, exist_ok=True)
@@ -135,26 +135,26 @@ def build_jsonl_for_keys(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="text map text batch text")
+    parser = argparse.ArgumentParser(description="Resubmit a batch for selected map keys")
     parser.add_argument("--dry-run", action="store_true",
-                        help="JSONL createtext text batch text  text text")
+                        help="Create JSONL without submitting a batch")
     parser.add_argument("--retrieve", metavar="BATCH_ID",
-                        help="finishtext batch result  text ann.json in  apply")
+                        help="Retrieve completed batch results and update ann.json")
     args = parser.parse_args()
 
     # ── retrieve ──
     if args.retrieve:
-        logger.info(f"result text: {args.retrieve}")
+        logger.info(f"Retrieving results: {args.retrieve}")
         results = retrieve_batch_results(args.retrieve)
         n = update_caches(results, _CACHE_DIR, _ALL_GAMES)
-        logger.info(f"total {n}text update finish")
+        logger.info(f"Updated {n} entries")
         return
 
     if not TARGET_KEYS:
-        logger.error("TARGET_KEYS  text text. resubmit_keys.py top of  TARGET_KEYS in  text  text text.")
+        logger.error("TARGET_KEYS is empty. Add keys near the top of resubmit_keys.py.")
         sys.exit(1)
 
-    logger.info(f"target map text: {len(TARGET_KEYS)}text")
+    logger.info(f"Target map keys: {len(TARGET_KEYS)}")
     system_prompt = load_system_prompt()
     cache_by_game = load_cache_by_game(_CACHE_DIR)
 
@@ -165,14 +165,14 @@ def main() -> None:
         sys.exit(1)
 
     if args.dry_run:
-        logger.info("--dry-run mode: batch text text")
+        logger.info("--dry-run mode: skipping batch submission")
         return
 
-    # ── text + finish text + ann.json update ──
+    # ── Submit, wait for completion, and update ann.json ──
     n_requests = sum(1 for _ in jsonl_path.open(encoding="utf-8"))
     batch_id = submit_batch(jsonl_path, matched_games or _ALL_GAMES, [], n_requests)
-    logger.info(f"batch text finish: {batch_id}")
-    logger.info(f"finish text  during  (interval={_POLL_INTERVAL}s) …")
+    logger.info(f"Batch submitted: {batch_id}")
+    logger.info(f"Waiting for completion (interval={_POLL_INTERVAL}s) ...")
 
     start_time = time.time()
     while True:
@@ -190,12 +190,12 @@ def main() -> None:
             print()
             results = retrieve_batch_results(batch_id)
             n = update_caches(results, _CACHE_DIR, _ALL_GAMES)
-            logger.info(f"total {n}text update finish")
+            logger.info(f"Updated {n} entries")
             break
         elif status in ("failed", "expired", "cancelled"):
             print()
-            logger.error(f"batch failure/text/text: {status}")
-            logger.info(f"text text: python resubmit_keys.py --retrieve {batch_id}")
+            logger.error(f"Batch failed/expired/cancelled: {status}")
+            logger.info(f"Manual retrieval: python resubmit_keys.py --retrieve {batch_id}")
             sys.exit(1)
 
 

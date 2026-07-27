@@ -3,8 +3,8 @@
 dataset/scripts/generate_dungeon_reward_annotations.py
 ======================================================
 dungeon_level_dataset metadata of  instruction  scenario_prompt.json basis as
-reward annotation(reward_enum, condition values, sub_condition, text measure)  computetext
-dataset/reward_annotations/dungeon_reward_annotations.csv  to  savetext.
+Compute reward annotations (reward_enum, condition values, sub_condition, and actual measures) and
+save them to dataset/reward_annotations/dungeon_reward_annotations.csv.
 
 Usage:
     python -m dataset.scripts.generate_dungeon_reward_annotations
@@ -23,8 +23,8 @@ _INSTRUCT_DIR = _PROJECT_ROOT / "instruct"
 _DUNGEON_ROOT = _PROJECT_ROOT / "dataset" / "dungeon_level_dataset"
 _OUTPUT_DIR = _PROJECT_ROOT / "dataset" / "reward_annotations"
 
-# reward_enum text (scenario_prompt.json of  scenarios text basis)
-# condition text index also  sametext 1-based (condition_1 ~ condition_5)
+# reward_enum mapping based on scenario_prompt.json scenario keys
+# Condition column indices are also one-based (condition_1 through condition_5)
 _FEATURE_TO_ENUM = {
     "region": 1,
     "path_length": 2,
@@ -37,8 +37,8 @@ _FEATURE_TO_ENUM = {
 
 def _build_instruction_mapping(scenario_path: Path) -> dict:
     """
-    scenario_prompt.json in  instruction(textcharacter) →
-    (feature_name, reward_enum, cond_value, sub_condition) text  createtext.
+    Map instructions (text) from scenario_prompt.json to
+    Create (feature_name, reward_enum, cond_value, sub_condition) mappings.
     """
     with open(scenario_path, "r", encoding="utf-8") as f:
         sp = json.load(f)
@@ -55,7 +55,7 @@ def _build_instruction_mapping(scenario_path: Path) -> dict:
             sub_cond = entry.get("sub_condition", "")
             info = (feature_name, enum_val, value, sub_cond)
 
-            # texttable instruction
+            # Measured instruction
             mapping[key.lower()] = info
             # similar instructions
             for sim in entry.get("similar", []):
@@ -75,7 +75,7 @@ def main():
         print(f"Error: metadata CSV not found at {meta_path}")
         sys.exit(1)
 
-    # ── instruction text build ────────────────────────────────────────────────
+    # ── Build instruction mappings ──────────────────────────────────────────
     instr_mapping = _build_instruction_mapping(scenario_path)
     print(f"[1/3] Built instruction mapping: {len(instr_mapping)} entries")
 
@@ -99,7 +99,7 @@ def main():
         "reward_enum",
         "feature_name",
         "sub_condition",
-        # condition array (5text text, reward_enum and  1:1 text, text featuretext text config, remaining text)
+        # Five condition columns mapped one-to-one to reward_enum; only the active feature is populated
         "condition_1",  # region
         "condition_2",  # path_length
         "condition_3",  # block (wall)
@@ -117,15 +117,15 @@ def main():
             instruction = meta["instruction"]
             instr_lower = instruction.lower()
 
-            # instruction → reward text
+            # Instruction-to-reward mapping
             if instr_lower not in instr_mapping:
                 unmapped_count += 1
                 continue
 
             feature_name, reward_enum, cond_value, sub_cond = instr_mapping[instr_lower]
 
-            # condition array create (text featuretext text config, remaining text)
-            # condition_1~5  reward_enum 1~5 in  text
+            # Create the condition array with only the active feature populated
+            # condition_1 through condition_5 correspond to reward_enum 1 through 5
             conditions = {f"condition_{i}": "" for i in range(1, 6)}
             conditions[f"condition_{reward_enum}"] = cond_value
 
@@ -152,4 +152,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

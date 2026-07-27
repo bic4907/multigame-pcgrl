@@ -1,21 +1,21 @@
 """
 collect_buffer.py
 ==================
-RL  in previoustext training and  text in  trajectory text  text  entry point.
+Entry point that replays a trained RL policy and collects trajectories.
 
-training interval of  text(default 50%~100%) in  text text text(env_idx=0) basis as
-text text to  (obs, action, reward, done, env_map) data  text
-experiment folder of  buffer/ directory in  .npz file to  savetext.
+Over a window of training (50%-100% by default) a single environment (env_idx=0)
+is stepped, and its (obs, action, reward, done, env_map) data is written as
+.npz files into the buffer/ directory of the experiment folder.
 
-text text  buffer_max_samples / num_steps  to  automatic computetext.
+The number of steps is derived automatically from buffer_max_samples / num_steps.
 
 Usage:
     python -m collect_buffer [overrides]
 
 Key parameters:
-    buffer_max_samples    : text maximum transition text (default 10,000)
-    collect_start_ratio   : text start text (default 0.5 = training 50%)
-    collect_end_ratio     : text text text (default 1.0 = training 100%)
+    buffer_max_samples    : maximum number of transitions to collect (default: 10,000)
+    collect_start_ratio   : start of the window (default 0.5 = 50% into training)
+    collect_end_ratio     : end of the window (default 1.0 = end of training)
     buffer_save_dir       : save path (default None → exp_dir/buffer)
 """
 import jax
@@ -31,7 +31,7 @@ suppress_jax_debug_logs()
 # ── CPCGRL obs inject: get_cont_obs → nlp_obs ──────────────────────────────────
 
 def inject_cpcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """env_map + condition  as  continuous observation   computetext nlp_obs  in  inject."""
+    """Build the continuous observation from env_map + condition and inject it into nlp_obs."""
     vmap_state_fn = jax.vmap(env.prob.get_cont_obs, in_axes=(0, 0, None))
     cont_obs = vmap_state_fn(
         env_state.env_state.env_map,

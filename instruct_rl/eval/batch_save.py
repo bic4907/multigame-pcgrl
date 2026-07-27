@@ -1,7 +1,7 @@
 """
 instruct_rl/eval/batch_save.py
 ================================
-evaluation loop  inside  batch result save text.
+Helpers for saving batch results inside the evaluation loop.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def save_batch_results(
     result,
     last_states,
     instruct_df=None,
-    h5_writer=None,   # AsyncH5Writer text
+    h5_writer=None,   # AsyncH5Writer instance
 ):
 
     for idx, (row_i, reward_i, repeat_i, feature, state) in enumerate(zip(
@@ -26,7 +26,7 @@ def save_batch_results(
         result.feature[:batch_valid_size],
         last_states.env_state.env_map[0, :][:batch_valid_size],
     )):
-        # foldertext: {game}_re{re}_{row_i:04d}  (meta if missing existing reward_{row_i} keep)
+        # Folder: {game}_re{re}_{row_i:04d}; retain reward_{row_i} when metadata is absent
         if instruct_df is not None and row_i < len(instruct_df):
             meta = instruct_df.iloc[int(row_i)]
             game   = str(meta.get('game', 'unknown'))
@@ -35,7 +35,7 @@ def save_batch_results(
         else:
             folder_name = f"reward_{row_i}"
 
-        # ── asynchronous HDF5 save — state(env_map)  writer queue in   before text ──────────────
+        # ── Asynchronous HDF5 save: enqueue state (env_map) for the writer ────
         if h5_writer is not None:
             h5_writer.write(folder_name, int(repeat_i), state)
 

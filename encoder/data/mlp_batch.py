@@ -1,14 +1,14 @@
 """
 encoder/data/mlp_batch.py
 =========================
-Annotation text MultiGameDataset → MLP text training for  Dataset.
+Convert annotation-format MultiGameDataset data to an MLP encoder training dataset.
 
-CLIPDatasetBuilder  and  sametext preprocessing pipeline(instruction filter, prefix,
-longtail cut, log1p normalize, stratified split, pixel_values text)  as-is
-abovetext, BERT CLS embeddingtext text  to  computetext.
+Use the same preprocessing pipeline as CLIPDatasetBuilder (instruction filtering, prefixes,
+Delegate long-tail cutoff, log1p normalization, stratified splitting, and
+pixel_values unchanged, then additionally calculate BERT CLS embeddings.
 
-text text(CLIP vs MLP)text text remaining text  text text to
-createtext text  CLIPDatasetBuilder  and  maximumtext sametext text.
+Keep the constructor signature as close as possible to CLIPDatasetBuilder so
+the encoder type (CLIP vs MLP) changes while other variables remain controlled.
 BERT embedding  instruct_rl.utils.dataset_loader._compute_bert_embeddings reuse.
 """
 
@@ -34,15 +34,15 @@ logging.getLogger("absl").setLevel(logging.ERROR)
 
 @dataclass
 class MLPDataset:
-    """MLP text training for  Dataset.
+    """Dataset for MLP encoder training.
 
-    CLIPDataset  and  text text:
+    Correspondence with CLIPDataset:
         bert_embeddings  ← (CLIPDataset  in   none)  BERT CLS embedding
         pixel_values     ← CLIPDataset.pixel_values  level map (H, W, C)
         condition_targets           ← same
         reward_enum_targets         ← same
         game_names                  ← reward_cond  in  extract
-        instructions                ← text instruction text
+        instructions                <- original instruction text
         is_train                    ← same (unseen game  False)
     """
     bert_embeddings: np.ndarray      # (N, nlp_input_dim)
@@ -57,38 +57,38 @@ class MLPDataset:
 # ── Dataset Builder ───────────────────────────────────────────────────────────
 
 class MLPDatasetBuilder:
-    """CLIPDatasetBuilder + BERT embedding as  MLPDataset   createtext.
+    """Create an MLPDataset from CLIPDatasetBuilder output and BERT embeddings.
 
-    createtext text  CLIPDatasetBuilder  and  sametext,
-    MLP  before  for  parameter(exclude_games, nlp_input_dim)text text text.
+    The constructor matches CLIPDatasetBuilder and adds only MLP-specific
+    parameters (exclude_games and nlp_input_dim).
 
-    Parameters  (CLIPDatasetBuilder  and  sametext order·name)
+    Parameters follow the same order and names as CLIPDatasetBuilder.
     ----------
     processor : CLIPProcessor
-        CLIPDatasetBuilder internal tokenizer. BERT embedding compute and   text.
+        Internal CLIPDatasetBuilder tokenizer, unrelated to BERT embedding.
     paired_data : MultiGameDataset
     rng_key : jax.random.PRNGKey
     train_ratio : float
     max_len : int
     max_samples : int | None
-    prepend text (text instruction_prefix)
+    prepend option (single instruction_prefix)
     -------------------------------------
     instruction_prefix : str | None
-        "name" / "desc" / "none" (text  None) — CLIPDatasetBuilder  and  same.
+        "name" / "desc" / "none" (or None), matching CLIPDatasetBuilder.
     longtail_cut : bool
 
     Parameters  (MLP  before  for )
     ----------------------
     exclude_games : set[str] | None
-        unseen game name text. ``unseen_ratio`` text training in  text
-        remaining  is_train=False (val)  to  text zero/few-shot evaluation in  text for text.
+        Unseen game names. Include only ``unseen_ratio`` in training and mark
+        the rest is_train=False for zero/few-shot evaluation.
     nlp_input_dim : int
         BERT embedding dimension (default 768).
     unseen_ratio : float
-        unseen game(train pool)  during  training in  text for text ratio (few-shot ratio).
-        0.0 = zero-shot (unseen training data 0%), 1.0 = unseen train pool  before text.
+        Fraction of the unseen-game training pool to use (few-shot ratio).
+        0.0 is zero-shot; 1.0 uses the complete unseen training pool.
     seen_ratio : float
-        seen game(train pool)  during  training in  text for text ratio. 1.0 =  before text text for .
+        Fraction of each seen-game training pool to use; 1.0 uses all samples.
     """
 
     def __init__(
@@ -130,20 +130,20 @@ class MLPDatasetBuilder:
         clip_ds = self._clip_builder.get_dataset()
         d = self._clip_builder.preprocessed_dataset_dict
 
-        # 2. CLIPDatasetBuilder   preprocessingtext instruction(prefix text) as  BERT embedding compute
+        # 2. Compute BERT embeddings from CLIPDatasetBuilder-preprocessed instructions
         instructions: list[str] = d["language_inst"]
         bert_embeds = self._compute_bert(instructions)
 
-        # 3. game_names extract (CLIPDataset  in   reward_cond text in  text)
+        # 3. Extract game_names (stored inside reward_cond in CLIPDataset)
         game_names = np.array(d["game_type"])
 
         # 4. is_train: CLIPDatasetBuilder split + few-shot ratio apply
-        #    - seen  game: train pool  during  seen_ratio prefix text training in  text for
-        #    - unseen game: train pool  during  unseen_ratio prefix text training in  text for
-        #      (remaining  is_train=False  to  text zero/few-shot evaluation in  text for )
+        #    - Seen games: train only on the seen_ratio prefix of the training pool
+        #    - Unseen games: train only on the unseen_ratio prefix; mark the rest
+        #      is_train=False for zero/few-shot evaluation
         is_train = self._apply_fewshot_split(game_names, clip_ds.is_train.copy())
 
-        # 5. summary  to text
+        # 5. Summary log
         self._log_split(game_names, is_train)
 
         self._dataset = MLPDataset(
@@ -162,13 +162,13 @@ class MLPDatasetBuilder:
         return self._dataset
 
     def get_condition_norm_stats(self) -> tuple[dict, dict]:
-        """CLIPDatasetBuilder  of  reward_enumtext condition normalize parameter return."""
+        """Return CLIPDatasetBuilder's per-reward_enum condition normalization parameters."""
         return self._clip_builder.get_condition_norm_stats()
 
-    # ── internal text ───────────────────────────────────────────────────────────
+    # ── Internal methods ──────────────────────────────────────────────────────
 
     def _compute_bert(self, instructions: list[str]) -> np.ndarray:
-        """CLIPDatasetBuilder   preprocessingtext instruction string → BERT CLS embedding."""
+        """Convert CLIPDatasetBuilder-preprocessed instruction strings to BERT CLS embeddings."""
         from instruct_rl.utils.dataset_loader import _compute_bert_embeddings
 
         class _FakeSample:
@@ -182,28 +182,28 @@ class MLPDatasetBuilder:
     def _apply_fewshot_split(
         self, game_names: np.ndarray, is_train: np.ndarray
     ) -> np.ndarray:
-        """gametext train pool  in  few-shot ratio   applytext.
+        """Apply few-shot ratios within each game's training pool.
 
-        CLIPDatasetBuilder  of  text train/val split result(``is_train``)  text
-        each game of  train pool(is_train=True)  during  ratio prefix text training in  text.
+        Given CLIPDatasetBuilder's natural train/validation split (``is_train``),
+        retain only a ratio prefix of each game's training pool.
 
-        - seen  game (game ∉ exclude_games): seen_ratio prefix text for
-        - unseen game (game ∈ exclude_games): unseen_ratio prefix text for
-          (unseen_ratio=0.0 →  before text text = existing exclude_games text = zero-shot)
+        - Seen games (game not in exclude_games): use the seen_ratio prefix
+        - Unseen games (game in exclude_games): use the unseen_ratio prefix
+          (0.0 excludes all, preserving legacy exclude_games zero-shot behavior)
 
-        prefix select  text index order basis as  deterministic(deterministic) text,
+        Prefix selection is deterministic in natural index order and
         CLIP few-shot(``build_train_indices_for_ratio``  of  pool[:n_use]) and
-        sametext text  text text.
+        has identical semantics.
         """
         new_is_train = is_train.copy()
         for game in sorted(set(game_names.tolist())):
             is_unseen = game in self.exclude_games
             ratio = self.unseen_ratio if is_unseen else self.seen_ratio
             if ratio >= 1.0:
-                continue  #  before text text for  → text none
+                continue  # Use everything; no change
             game_train_idx = np.where((game_names == game) & is_train)[0]
             n_use = int(len(game_train_idx) * ratio)
-            drop_idx = game_train_idx[n_use:]  # ratio exceedtext  training text
+            drop_idx = game_train_idx[n_use:]  # Exclude samples beyond the ratio
             new_is_train[drop_idx] = False
         return new_is_train
 
@@ -236,7 +236,7 @@ def create_mlp_batches(
     train: bool,
     rng: jax.random.PRNGKey,
 ) -> Iterator[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
-    """MLPDataset  in  textbatch  createtext.
+    """Create batches from an MLPDataset.
 
     Parameters
     ----------

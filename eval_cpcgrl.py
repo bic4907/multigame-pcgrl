@@ -2,7 +2,7 @@
 eval_cpcgrl.py
 ==============
 CPCGRL (Conditional PCGRL) evaluation entry point.
-raw condition text  nlp_obs  in  injecttext evaluationtext.
+Evaluate by injecting raw condition vectors into nlp_obs.
 
 Usage:
     python -m eval_cpcgrl [overrides]
@@ -27,4 +27,3 @@ def main(config: CPCGRLEvalConfig):
 
 if __name__ == "__main__":
     main()
-

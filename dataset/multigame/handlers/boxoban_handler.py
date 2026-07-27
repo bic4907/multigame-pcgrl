@@ -3,18 +3,18 @@ dataset/multigame/handlers/boxoban_handler.py
 =============================================
 Google DeepMind Boxoban dataset handler.
 
-text: https://github.com/google-deepmind/boxoban-levels
+Source: https://github.com/google-deepmind/boxoban-levels
 folder structure:
     boxoban_levels/
         hard/           000.txt … 003.txt
         medium/train/   000.txt … 449.txt
         medium/valid/   000.txt … 009.txt
 
-level file text
+Level file format
 --------------
-- level  `;` text text to  text
+- Levels are separated by lines starting with `;`
 - level size: 10×10 fixed
-- character  of text:
+- Character meanings:
     '#' : wall
     ' ' : floor/empty
     '.' : target (goal square)
@@ -23,23 +23,23 @@ level file text
     '*' : box on target
     '+' : player on target
 
-tile ID (tile_mapping.json  of  text text to  text available)
+tile ID (remappable through tile_mapping.json)
 ---------------------------------------------------------
 0  EMPTY  – floor/empty (' ', '.')
 1  WALL   – wall ('#')
-2  FLOOR  – floor (same empty textcolumn, text for )
-3  ENEMY  – (none, text for  text text)
+2  FLOOR  – floor (same as empty here; kept for compatibility)
+3  ENEMY  – unused in Sokoban (kept for compatibility)
 4  OBJECT – box ('$', '*')
 5  SPAWN  – player ('@', '+')
 
 16×16 normalize
 ------------
-10×10 level  center(top-left) in  batchtext remaining  WALL(1) to  padding.
+Place the 10x10 level at the top left and pad the remainder with WALL (1).
 
 Diversity filtering
 ----------------
-- tile text(floor/wall/box/player ratio)  feature vector  to  text
-- all level  feature space in  greedy max-min sampling  as  text text
+- Tile ratios (floor / wall / box / player) form the feature vector
+- Greedy max-min sampling over that feature space selects a diverse subset
 """
 from __future__ import annotations
 
@@ -56,9 +56,9 @@ from ..base import BaseGameHandler, GameSample, GameTag, TileLegend
 # ── path default value ─────────────────────────────────────────────────────────────────
 _DEFAULT_BOXOBAN_ROOT = Path(__file__).parent.parent.parent / "boxoban_levels"
 
-# ── tile text ────────────────────────────────────────────────────────────────────
+# ── Tile ids ─────────────────────────────────────────────────────────────────────
 class BoxobanTile:
-    EMPTY  = 0   # floor / empty (  '.' text)
+    EMPTY  = 0   # floor / empty (' ' and '.')
     WALL   = 1   # wall  ('#')
     OBJECT = 4   # box   ('$', '*')
     SPAWN  = 5   # player('@', '+')
@@ -67,7 +67,7 @@ class BoxobanTile:
 # character → integer tile ID
 _CHAR_MAP: dict[str, int] = {
     " ": BoxobanTile.EMPTY,
-    ".": BoxobanTile.EMPTY,   # target square → empty (structure text floor)
+    ".": BoxobanTile.EMPTY,   # target square → empty (floor in the structure layer)
     "#": BoxobanTile.WALL,
     "$": BoxobanTile.OBJECT,  # box
     "*": BoxobanTile.OBJECT,  # box on target
@@ -82,7 +82,7 @@ BOXOBAN_PALETTE: dict[int, Tuple[int, int, int]] = {
     BoxobanTile.SPAWN:  (0,   200, 0),
 }
 
-# Boxoban text size
+# Boxoban level size
 _LEVEL_SIZE = 10
 _TARGET_SIZE = 16
 
@@ -103,8 +103,8 @@ def _make_legend() -> TileLegend:
 
 def _parse_levels_from_file(path: Path) -> List[List[str]]:
     """
-    txt file text in  level list  parsingtext.
-    returntext: each level = text string row of  text
+    Parse the level list out of a txt file.
+    Returns: each level as a list of string rows.
     """
     levels: List[List[str]] = []
     current: List[str] = []
@@ -112,12 +112,12 @@ def _parse_levels_from_file(path: Path) -> List[List[str]]:
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.rstrip()
         if line.startswith(";"):
-            # text → previous level save
+            # Separator line → store the previous level
             if current:
                 levels.append(current)
                 current = []
         elif line == "" and current:
-            # text text  level text in  text  text
+            # A blank line also ends a level
             levels.append(current)
             current = []
         else:
@@ -132,8 +132,8 @@ def _parse_levels_from_file(path: Path) -> List[List[str]]:
 def _lines_to_array(lines: List[str]) -> Optional[np.ndarray]:
     """
     string row list → (H, W) int32 ndarray.
-    row text   text ' '(EMPTY) to  right padding.
-    10×10   text level  None return.
+    Rows shorter than the maximum are right-padded with ' ' (EMPTY).
+    Levels that are not 10x10 return None.
     """
     if not lines:
         return None
@@ -142,7 +142,7 @@ def _lines_to_array(lines: List[str]) -> Optional[np.ndarray]:
     W = max(len(l) for l in lines)
 
     if H != _LEVEL_SIZE or W != _LEVEL_SIZE:
-        return None          # text level text
+        return None          # Not a standard level
 
     grid = np.zeros((H, W), dtype=np.int32)
     for r, line in enumerate(lines):
@@ -155,17 +155,17 @@ def _lines_to_array(lines: List[str]) -> Optional[np.ndarray]:
 
 def _strip_wall_border(arr: np.ndarray) -> np.ndarray:
     """
-     text in  WALL(1)  to text  text row/column  removetext valid text  returntext.
+     Trim the outer rows/columns that are entirely WALL(1) and return the valid region.
 
-    text) 10×10 level in  text/text row   before text WALL text
-        text/text column   before text WALL text → 8×8 return.
-    non-WALL cell  text also  if missing text as-is return.
+    Example: in a 10x10 level whose first and last rows are all WALL and whose first
+        and last columns are all WALL, an 8x8 array is returned.
+    If there is no non-WALL cell, the array is returned unchanged.
     """
     non_wall = (arr != BoxobanTile.WALL)
     rows = np.where(non_wall.any(axis=1))[0]
     cols = np.where(non_wall.any(axis=0))[0]
     if rows.size == 0 or cols.size == 0:
-        return arr  #  before text WALLtext text text return
+        return arr  # Everything is WALL; return as-is
     r0, r1 = int(rows[0]), int(rows[-1]) + 1
     c0, c1 = int(cols[0]), int(cols[-1]) + 1
     return arr[r0:r1, c0:c1]
@@ -173,25 +173,25 @@ def _strip_wall_border(arr: np.ndarray) -> np.ndarray:
 
 def _fit_to_target(arr: np.ndarray, target: int = _TARGET_SIZE) -> np.ndarray:
     """
-    text level  target×target size to  converttext.
+    Resize a level to target x target.
 
-    preprocessing text
+    Steps
     -----------
-    1. structure(WALL / EMPTY) text text  target×target  as  nearest-neighbor text → text text
-    2. text(BOX / PLAYER)   text (r, c) abovetext ratio  target coordinate to  text textbatch
-       - count  text sametext keep (text text)
-    3. result  target×target  to  text return
+    1. Structure (WALL / EMPTY) is resampled to target x target by nearest neighbour
+    2. Objects (BOX / PLAYER) are re-placed by scaling their (r, c) position
+       - their counts are preserved
+    3. The resulting target x target array is returned
     """
     src_h, src_w = arr.shape
 
-    # ── 1. structure text text nearest-neighbor text text ──────────────────────────────
+    # ── 1. Nearest-neighbour resampling of the structure layer ───────────────────
     structure = np.where(arr == BoxobanTile.WALL,
                          BoxobanTile.WALL, BoxobanTile.EMPTY).astype(np.int32)
     row_idx = (np.arange(target) * src_h / target).astype(np.int32)
     col_idx = (np.arange(target) * src_w / target).astype(np.int32)
     out = structure[np.ix_(row_idx, col_idx)]   # (target, target)
 
-    # ── 2. text textbatch ────────────────────────────────────────────────────
+    # ── 2. Re-place the objects ──────────────────────────────────────────────
     object_tiles = {BoxobanTile.OBJECT, BoxobanTile.SPAWN}
     for r in range(src_h):
         for c in range(src_w):
@@ -206,7 +206,7 @@ def _fit_to_target(arr: np.ndarray, target: int = _TARGET_SIZE) -> np.ndarray:
 
     return out.astype(np.int32)
 
-# sub text alias
+# Backward-compatible alias
 _scale2x_to_16x16 = _fit_to_target
 
 
@@ -214,20 +214,20 @@ _scale2x_to_16x16 = _fit_to_target
 
 def _feature_vector(arr: np.ndarray) -> np.ndarray:
     """
-    level array → text measure for  text text. (16×16 basis)
+    Derive the measure features from a level array (16x16 basis).
 
-    text:
+    Features:
       0  : wall ratio
       1  : empty/floor ratio
-      2  : object(box) text
-      3  : spawn(player) text
-      4  : textabove text wall ratio
-      5  : sub text wall ratio
-      6  : text text wall ratio
-      7  : text text wall ratio
+      2  : object (box) count
+      3  : spawn (player) count
+      4  : wall ratio in the top half
+      5  : wall ratio in the bottom half
+      6  : wall ratio in the left half
+      7  : wall ratio in the right half
     """
     total  = arr.size
-    region = arr   # all 16×16 text for
+    region = arr   # the whole 16x16 grid
 
     wall_r  = (region == BoxobanTile.WALL).sum()  / total
     empty_r = (region == BoxobanTile.EMPTY).sum() / total
@@ -257,7 +257,7 @@ def _diversity_sample(
 ) -> List[int]:
     """
     Greedy max-min distance sampling (farthest point sampling).
-    text text in  text to   text text n text of  index  return.
+    Return the indices of n items spread as widely as possible in feature space.
     """
     if len(arrays) <= n:
         return list(range(len(arrays)))
@@ -281,13 +281,13 @@ def _diversity_sample(
     return chosen
 
 
-# ── text augmentation ────────────────────────────────────────────────────────────────
+# ── Object augmentation ──────────────────────────────────────────────────────
 
 def _is_corner(array: np.ndarray, r: int, c: int) -> bool:
     """
-    (r, c)  text text.
-    text = EMPTY tile text text  during  text as  adjacenttext text text  text WALLtext text.
-    text outside  WALL to  text.
+    Return True when (r, c) sits in a corner.
+    A corner has two perpendicular neighbours that are WALL; out-of-bounds counts as WALL.
+    Out-of-bounds counts as WALL.
     """
     H, W = array.shape
 
@@ -306,8 +306,8 @@ def _is_corner(array: np.ndarray, r: int, c: int) -> bool:
 
 def _placeable_positions(array: np.ndarray) -> np.ndarray:
     """
-    OBJECT  text  text with abovetext  returntext.
-    condition: EMPTY tile text text  text abovetext.
+    Return the positions where an OBJECT may be placed.
+    A position qualifies when it is an EMPTY tile that is not in a corner.
     """
     candidates = []
     for r, c in np.argwhere(array == BoxobanTile.EMPTY):
@@ -318,16 +318,16 @@ def _placeable_positions(array: np.ndarray) -> np.ndarray:
 
 def _augment_objects(array: np.ndarray) -> np.ndarray:
     """
-    Sokoban map of  text(box) text  1~12text range to  text.
+    Vary the number of boxes in a Sokoban map within the 1-12 range.
 
-    texttable count  1~12 in  text sampletext text, current text  text /removetext texttable in  text.
-    seed  array content of  MD5 text → same text text always same result.
+    A target count is drawn from 1-12 and boxes are added or removed to match it.
+    The seed is the MD5 of the array contents, so the same map always yields the same result.
     """
     digest = hashlib.md5(array.tobytes()).digest()
     seed   = int.from_bytes(digest[:4], byteorder='big')
     rng    = np.random.default_rng(seed)
 
-    # 128text all to  text to  text → 4text text text text of  text remove
+    # Use the full digest rather than the 4-byte seed to avoid correlating with it
     full_hash = int.from_bytes(digest, byteorder='big')
     target = (full_hash % 12) + 1  # 1~12 uniform
     result = array.copy()
@@ -366,7 +366,7 @@ class BoxobanHandler(BaseGameHandler):
     root        : boxoban_levels folder path
     difficulty  : "hard" | "medium" | "both"
     split       : medium  before  for  - "train" | "valid" | "all"
-    n_sample    : diversity sampling  as  extracttext text (None = all)
+    n_sample    : how many levels diversity sampling should keep (None = all)
     seed        : diversity sampling seed
 
     Example
@@ -399,7 +399,7 @@ class BoxobanHandler(BaseGameHandler):
     def game_tag(self) -> str:
         return GameTag.SOKOBAN
 
-    # ── file list text ────────────────────────────────────────────────────────────
+    # ── File discovery ───────────────────────────────────────────────────────────
 
     def _collect_files(self) -> List[Path]:
         files: List[Path] = []
@@ -429,7 +429,7 @@ class BoxobanHandler(BaseGameHandler):
         files = self._collect_files()
         if not files:
             raise FileNotFoundError(
-                f"[boxoban] level file  text  text text: {self._root}"
+                f"[boxoban] No level files found under: {self._root}"
             )
 
         legend = _make_legend()
@@ -449,9 +449,9 @@ class BoxobanHandler(BaseGameHandler):
                 all_ids.append(source_id)
 
         if not all_arrays:
-            raise ValueError("[boxoban] parsing availabletext level  text.")
+            raise ValueError("[boxoban] No parsable levels found.")
 
-        # ── Diversity sampling (augmentation  before  text structure basis) ───────────────
+        # ── Diversity sampling (on the pre-augmentation structure) ──────────────
         n = self._n_sample
         if n is not None and n < len(all_arrays):
             chosen_idxs = _diversity_sample(all_arrays, n, seed=self._seed)
@@ -505,7 +505,7 @@ class BoxobanHandler(BaseGameHandler):
         yield from self._samples
 
     def sample(self, n: int, seed: int = 0) -> List[GameSample]:
-        """all loadtext sample  during  n text  random extract."""
+        """Draw n random samples from everything that was loaded."""
         self._ensure_loaded()
         rng = np.random.default_rng(seed)
         idxs = rng.choice(len(self._samples), size=min(n, len(self._samples)), replace=False)
@@ -516,7 +516,7 @@ class BoxobanHandler(BaseGameHandler):
         return [s for s in self._samples if s.meta.get("difficulty") == difficulty]
 
     def stats(self) -> dict:
-        """loadtext sample in  text text text."""
+        """Summary statistics over the loaded samples."""
         self._ensure_loaded()
         arrays = [s.array for s in self._samples]
         wall_ratios = [(a == BoxobanTile.WALL).mean() for a in arrays]
@@ -529,4 +529,3 @@ class BoxobanHandler(BaseGameHandler):
             "wall_ratio_min":  float(np.min(wall_ratios)),
             "wall_ratio_max":  float(np.max(wall_ratios)),
         }
-

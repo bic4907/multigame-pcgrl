@@ -1,8 +1,8 @@
-"""special tile (INTERACTIVE, HAZARD, COLLECTABLE)   map in  text  text text in
-text of  penalty  text, defaulttext as    tile text  0 as  keeptext also text text also text.
+"""Apply a small penalty merely for the presence of special tiles
+(INTERACTIVE, HAZARD, and COLLECTABLE), encouraging their counts to remain zero.
 
 penalty = (current map of  special tile total count) * weight   (per env)
-→ reward  in  text text "text loss" signal  text.
+Subtracting this value from the reward makes placing more tiles disadvantageous.
 """
 
 import chex
@@ -37,21 +37,21 @@ def get_special_tile_penalty(
     weight: float = 0.01,
     exclude_tiles: chex.Array = jnp.array([-1], dtype=jnp.int32),
 ) -> chex.Array:
-    """special tile count text text in  text  penalty(text = text )  return.
+    """Return a penalty proportional to the increase in special-tile count.
 
     Parameters
     ----------
-    prev_env_map : (H, W) int map — previous text.
-    curr_env_map : (H, W) int map — current text.
-    weight : tile 1text text text penalty size. default 0.01 (text).
+    prev_env_map : previous state as an (H, W) integer map.
+    curr_env_map : current state as an (H, W) integer map.
+    weight : penalty per additional tile; defaults to the small value 0.01.
 
-    exclude_tiles : penalty compute in  text tile text list.
-        text) [INTERACTIVE, -1, -1]  text INTERACTIVE tile text  penalty in  text.
-        default value [-1]   text none and  same.
+    exclude_tiles : tile values excluded from the penalty calculation.
+        For example, [INTERACTIVE, -1, -1] excludes changes in INTERACTIVE tiles.
+        The default [-1] is equivalent to excluding nothing.
 
     Returns
     -------
-    scalar  (text = special tile text  → penalty, text = text → reward).
+    Scalar; positive means more special tiles (a penalty), while negative means fewer (a reward).
     """
     exclude_tiles = jnp.asarray(exclude_tiles, dtype=jnp.int32)
     excluded_mask = jnp.isin(_SPECIAL_TILES, exclude_tiles)  # (3,)

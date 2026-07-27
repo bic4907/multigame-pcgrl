@@ -3,8 +3,8 @@ dataset/multigame/handlers/fdm_game/augmentation.py
 ===================================================
 FDM data augmentation utility.
 
-- text 90 also  rotate
-- text text automatic convert
+- 90-degree clockwise rotation
+- Automatic conversion of directional terms
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from ...base import GameSample
 import dataclasses
 
 
-# text text convert rule (text 90 also  rotate)
+# Directional-term conversion rules for a 90-degree clockwise rotation
 # right, left, up, down
 DIRECTION_MAPPING_1 = {
     "right": "down",
@@ -40,7 +40,7 @@ DIRECTION_MAPPING_3 = {
     "left": "top",
 }
 
-# text map text
+# Combined mapping
 ALL_DIRECTION_MAPPINGS = {
     **DIRECTION_MAPPING_1,
     **DIRECTION_MAPPING_2,
@@ -50,7 +50,7 @@ ALL_DIRECTION_MAPPINGS = {
 
 def rotate_array_cw_90(array: np.ndarray) -> np.ndarray:
     """
-    array  text as  90 also  rotate.
+    Rotate an array 90 degrees clockwise.
 
     Parameters
     ----------
@@ -58,30 +58,30 @@ def rotate_array_cw_90(array: np.ndarray) -> np.ndarray:
 
     Returns
     -------
-    (W, H) int32 rotatetext array
+    Rotated (W, H) int32 array.
 
     Examples
     --------
     [[1, 2],     [[3, 1],
      [3, 4]]  →   [4, 2]]
     """
-    # np.rot90  text text to , k=-1  text for text text rotate
+    # np.rot90 rotates counterclockwise, so use k=-1 for clockwise rotation
     return np.rot90(array, k=-1).astype(array.dtype)
 
 
 def transform_instruction_for_rotation(instruction: str) -> str:
     """
-    text 90 also  rotate in  text instruction of  text text  convert.
+    Convert directional terms in an instruction to match a 90-degree clockwise rotation.
 
     Parameters
     ----------
     instruction : str
-        text instruction
+        Original instruction.
 
     Returns
     -------
     str
-        text text  converttext instruction
+        Instruction with converted directional terms.
 
     Examples
     --------
@@ -91,17 +91,17 @@ def transform_instruction_for_rotation(instruction: str) -> str:
     if not instruction:
         return instruction
 
-    #  text text text processtext duplicate text text
+    # Process the longest terms first to prevent overlapping matches
     sorted_words = sorted(ALL_DIRECTION_MAPPINGS.keys(), key=len, reverse=True)
 
     result = instruction
     for original in sorted_words:
         rotated = ALL_DIRECTION_MAPPINGS[original]
 
-        # text text  text text
+        # Regular expression that respects word boundaries
         pattern = r'\b' + re.escape(original) + r'\b'
 
-        # textcharacter preservetext text
+        # Replace while preserving letter case
         def replace_preserve_case(match):
             matched_text = match.group()
             if matched_text.isupper():
@@ -118,17 +118,17 @@ def transform_instruction_for_rotation(instruction: str) -> str:
 
 def create_rotated_sample(sample: GameSample) -> GameSample:
     """
-    sample  text 90 also  rotatetext text sample  create.
+    Create a new sample rotated 90 degrees clockwise.
 
     Parameters
     ----------
     sample : GameSample
-        text sample
+        Original sample.
 
     Returns
     -------
     GameSample
-        rotatetext sample (source_id in  '_rot90' text )
+        Rotated sample with "_rot90" appended to source_id.
 
     Examples
     --------
@@ -139,21 +139,21 @@ def create_rotated_sample(sample: GameSample) -> GameSample:
     # array rotate
     rotated_array = rotate_array_cw_90(sample.array)
 
-    # char_grid rotate (text, text texteachtext text)
+    # Rotate char_grid when present and rectangular
     rotated_char_grid = None
     if sample.char_grid is not None:
         # char_grid  List[List[str]] form
-        # text row of  text   text numpy array to  convert available
+        # All rows must have equal length to convert to a NumPy array
         if len(sample.char_grid) > 0:
             row_lengths = [len(row) for row in sample.char_grid]
-            # text row of  text   same text in text rotate text also
+            # Attempt rotation only when all rows have equal length
             if len(set(row_lengths)) == 1:
                 try:
                     char_arr = np.array(sample.char_grid)
                     rotated_char_arr = rotate_array_cw_90(char_arr)
                     rotated_char_grid = rotated_char_arr.tolist()
                 except (ValueError, TypeError):
-                    # convert failure text None as  config
+                    # Set to None if conversion fails
                     rotated_char_grid = None
 
     # instruction convert
@@ -161,14 +161,13 @@ def create_rotated_sample(sample: GameSample) -> GameSample:
     if sample.instruction:
         rotated_instruction = transform_instruction_for_rotation(sample.instruction)
 
-    # text sample create
+    # Create the new sample
     return dataclasses.replace(
         sample,
         source_id=f"{sample.source_id}_rot90",
         array=rotated_array,
         char_grid=rotated_char_grid,
         instruction=rotated_instruction,
-        order=None,  # order    after  text
+        order=None,  # Reassigned later
         meta={**sample.meta, "augmented": "rot90"},
     )
-

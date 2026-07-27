@@ -1,16 +1,16 @@
 """
 conf/game_utils.py
 ==================
-game select text utility.
+Utilities for selecting games.
 
 abbreviation rule (2text):
     dg = dungeon
     pk = pokemon
     sk = sokoban
-    dm = doom  (doom + doom2 text enable)
+    dm = doom  (enables doom and doom2 together)
     zd = zelda
 
-text:
+Examples:
     all = all game enable
 """
 
@@ -20,8 +20,8 @@ import re
 
 from typing import Dict, List, Optional, Set
 
-# ── game 2text abbreviation ↔ include text text ──────────────────────────────────────
-# dm   doom + doom2   text in   text.
+# ── Two-character game abbreviation <-> include_* flags ─────────────────────────
+# 'dm' covers both doom and doom2.
 GAME_ABBR: Dict[str, List[str]] = {
     "dg": ["dungeon"],
     "pk": ["pokemon"],
@@ -30,10 +30,10 @@ GAME_ABBR: Dict[str, List[str]] = {
     "zd": ["zelda"],
 }
 
-# all game name list (include_* text basis)
+# Complete list of game names (based on the include_* fields)
 ALL_GAMES: List[str] = ["dungeon", "pokemon", "sokoban", "doom", "doom2", "zelda"]
 
-# doom  and  doom2   text gametext as  text → text game list  5text
+# doom and doom2 count as one game, so the game list has 5 entries.
 CANONICAL_GAMES: List[str] = [g for g in ALL_GAMES if g != "doom2"]
 CANONICAL_GAMES_TOTAL = 5
 assert len(CANONICAL_GAMES) == CANONICAL_GAMES_TOTAL, (
@@ -41,7 +41,7 @@ assert len(CANONICAL_GAMES) == CANONICAL_GAMES_TOTAL, (
     f"got {len(CANONICAL_GAMES)}: {CANONICAL_GAMES}"
 )
 
-# text text (full name → abbr)  doom, doom2 → dm
+# Reverse map (full name -> abbr): doom and doom2 both map to dm.
 GAME_ABBR_INV: Dict[str, str] = {}
 for _abbr, _names in GAME_ABBR.items():
     for _name in _names:
@@ -49,17 +49,17 @@ for _abbr, _names in GAME_ABBR.items():
 
 
 def parse_game_str(game_str: str) -> Dict[str, bool]:
-    """2text abbreviation string  ``include_*`` dict  to  converttext.
+    """Convert a two-character abbreviation string into an ``include_*`` dict.
 
     Parameters
     ----------
     game_str : str
-        2text abbreviation   text text string. ``"all"``  text all enable.
+        Concatenated two-character abbreviations. ``"all"`` enables every game.
 
     Returns
     -------
     Dict[str, bool]
-        ``include_dungeon``, ``include_pokemon``, ... text   text dict.
+        A dict of ``include_dungeon``, ``include_pokemon``, ... flags.
 
     Examples
     --------
@@ -76,7 +76,7 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
     if not game_str:
         return includes
 
-    # text: all
+    # Special case: all
     if game_str.lower() == "all":
         return {k: True for k in includes}
 
@@ -85,8 +85,8 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
         abbr = game_str[i:i + 2]
         if abbr not in GAME_ABBR:
             raise ValueError(
-                f"text text without game abbreviation: '{abbr}'. "
-                f"text for  available: {list(GAME_ABBR.keys())} text  'all'"
+                f"Unknown game abbreviation: '{abbr}'. "
+                f"Available: {list(GAME_ABBR.keys())} or 'all'"
             )
         for full_name in GAME_ABBR[abbr]:
             includes[f"include_{full_name}"] = True
@@ -110,9 +110,9 @@ def parse_unseen_game_names(unseen_str: str) -> set:
 
 
 def parse_game_names(game_str: str, *, canonical: bool = False) -> List[str]:
-    """2text abbreviation string text  ``all``  full game name text to  converttext.
+    """Convert a two-character abbreviation string (or ``all``) into full game names.
 
-    ``canonical=True`` text ``doom2``  text ``doom`` gametext as text returntext.
+    With ``canonical=True``, ``doom2`` is reported as the ``doom`` game.
     """
     if not game_str:
         return []
@@ -133,7 +133,7 @@ def parse_game_names(game_str: str, *, canonical: bool = False) -> List[str]:
 
 
 def infer_seen_games_from_ckpt_name(ckpt_name: str) -> List[str]:
-    """Encoder checkpoint folder name in  canonical seen game text  text.
+    """Canonical seen-game string used in encoder checkpoint folder names.
 
     Newer zero/few-shot ckpts may carry ``_unseen-XX`` directly. Older
     full-shot subset ckpts only look like ``clip-game-dgpk_exp-def_0``; for
@@ -182,9 +182,9 @@ def build_game_str(
     include_doom2: bool = False,
     include_zelda: bool = False,
 ) -> str:
-    """``include_*`` text as text game abbreviation string  createtext.
+    """Build the game abbreviation string from the ``include_*`` flags.
 
-    doom, doom2  during  text also  True text ``dm``   text text (duplicate text).
+    When both doom and doom2 are set, ``dm`` is emitted once (no duplicates).
     """
     parts: List[str] = []
     if include_dungeon:

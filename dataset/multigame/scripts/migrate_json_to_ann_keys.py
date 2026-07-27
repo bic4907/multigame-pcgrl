@@ -3,14 +3,14 @@
 
 dataset/multigame/scripts/migrate_json_to_ann_keys.py
 ======================================================
-existing {key}.json cache  text text as  converttext  text text text text script.
+Temporary script for migrating legacy {key}.json caches to the new format.
 
-text text: game, source_id, instruction, order, meta (instruction/meta text)
-text text: game, source_id, order, ann_keys (ann.json text)
+Legacy format: game, source_id, instruction, order, meta
+New format: game, source_id, order, ann_keys (ann.json keys only)
 
 convert condition:
-  - ann.json  text  text in text ann_keys  computetext text
-  - ann.json  if missing instruction/meta  removetext text ann_keys  text
+  - Calculate and add ann_keys only when ann.json exists.
+  - Without ann.json, remove instruction/meta and leave ann_keys empty.
 
 Usage:
   python dataset/multigame/scripts/migrate_json_to_ann_keys.py
@@ -41,12 +41,12 @@ _DEFAULT_CACHE_DIR = _HERE.parent / "cache" / "artifacts"
 
 
 def _is_old_format(entry: dict) -> bool:
-    """text text text: instruction text  meta text  text text text."""
+    """Return whether data is legacy format, indicated by instruction or meta."""
     return "instruction" in entry or "meta" in entry
 
 
 def migrate_game(cache_dir: Path, game: str, dry_run: bool = False) -> int:
-    """text game of  .json  text text as  converttext. converttext file text  return."""
+    """Convert one game's JSON files to the new format and return the count."""
     game_dir = cache_dir / game
     if not game_dir.exists():
         return 0
@@ -66,20 +66,20 @@ def migrate_game(cache_dir: Path, game: str, dry_run: bool = False) -> int:
         if not entries:
             continue
 
-        #  text text text text ann_keystext text text  text text
+        # For new-format data, fill ann_keys only when missing
         already_new = not _is_old_format(entries[0])
 
         # ann.json in  ann_keys compute
         ann_data = load_game_annotations_from_cache(cache_dir, game, key)
 
         if already_new and ann_data is None:
-            logger.info(f"  [{game}] {key[:12]}….json:  text text text, ann.json none — text")
+            logger.info(f"  [{game}] {key[:12]}….json: new format, no ann.json -- skipped")
             continue
         if already_new and "ann_keys" in entries[0]:
-            logger.info(f"  [{game}] {key[:12]}….json:  text text text + ann_keys text — text")
+            logger.info(f"  [{game}] {key[:12]}….json: new format with ann_keys -- skipped")
             continue
 
-        # text text convert
+        # Convert to the new format
         new_entries = []
         for e in entries:
             new_entry: dict = {
@@ -90,18 +90,18 @@ def migrate_game(cache_dir: Path, game: str, dry_run: bool = False) -> int:
             new_entries.append(new_entry)
 
         n_samples = len(new_entries)
-        logger.info(f"  [{game}] {key[:12]}….json: {n_samples}text sample convert"
+        logger.info(f"  [{game}] {key[:12]}….json: converted {n_samples} samples"
                     + (" (dry-run)" if dry_run else ""))
 
         if not dry_run:
             meta_path.write_text(_stable_json(new_entries), encoding="utf-8")
             converted += 1
-            # ann_keys text
+            # Add ann_keys
             if ann_data is not None:
                 update_json_with_ann_keys(cache_dir, game, key, ann_data)
-                logger.info(f"  [{game}] {key[:12]}….json: ann_keys text  finish")
+                logger.info(f"  [{game}] {key[:12]}….json: added ann_keys")
             else:
-                logger.warning(f"  [{game}] ann.json none — ann_keys text  save (annotate.py Usage  after  textload text automatic text )")
+                logger.warning(f"  [{game}] no ann.json -- saved without ann_keys (added after annotate.py and reload)")
         else:
             converted += 1
 
@@ -110,27 +110,27 @@ def migrate_game(cache_dir: Path, game: str, dry_run: bool = False) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="{key}.json  text text(game/source_id/order/ann_keys) as  text text text"
+        description="Migrate {key}.json to the new game/source_id/order/ann_keys format"
     )
     parser.add_argument("--cache-dir", type=Path, default=_DEFAULT_CACHE_DIR)
     parser.add_argument("--games", nargs="+",
                         default=["doom", "dungeon", "zelda", "pokemon", "sokoban"])
     parser.add_argument("--dry-run", action="store_true",
-                        help="text to  text text convert targettext text")
+                        help="Print migration targets without writing")
     args = parser.parse_args()
 
     logger.info(f"cache directory: {args.cache_dir}")
     if args.dry_run:
-        logger.info("(dry-run mode: text text none)")
+        logger.info("(dry-run mode: no changes)")
 
     total = 0
     for game in args.games:
         n = migrate_game(args.cache_dir, game, dry_run=args.dry_run)
         if n:
-            logger.info(f"[{game}] {n}text file convert finish")
+            logger.info(f"[{game}] converted {n} files")
         total += n
 
-    logger.info(f"\nfinish: total {total}text file convert")
+    logger.info(f"\nDone: converted {total} files")
 
 
 if __name__ == "__main__":

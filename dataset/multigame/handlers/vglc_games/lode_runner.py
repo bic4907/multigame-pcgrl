@@ -3,7 +3,7 @@ dataset/multigame/handlers/vglc_games/lode_runner.py
 ======================================================
 Lode Runner (TheVGLC) preprocessing handler.
 
-tile text
+Tile mapping
 ---------
 0  : empty     (.)
 1  : solid     (B)
@@ -74,4 +74,3 @@ def make_legend() -> TileLegend:
 class LodeRunnerPreprocessor(BasePreprocessor):
     def char_to_int(self, char: str) -> int:
         return _CHAR_MAP.get(char, LodeRunnerTile.UNKNOWN)
-

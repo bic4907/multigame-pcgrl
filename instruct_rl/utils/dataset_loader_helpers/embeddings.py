@@ -103,7 +103,7 @@ def denorm_condition(
 
 
 def _build_instruct(sample_list, config):
-    """sample text in  Instruct text  buildtext."""
+    """Build an Instruct object from a sample list."""
     logger.info(
         "Building Instruct: samples=%d, use_clip=%s, use_nlp=%s, use_decoder=%s",
         len(sample_list),
@@ -168,7 +168,7 @@ def _build_instruct(sample_list, config):
 
 
 def _load_shared_clip_module_and_ckpt(config):
-    """CLIP text text  init text encoder.ckpt_path  of  checkpoint  1text text."""
+    """Initialize the CLIP encoder module and restore encoder.ckpt_path once."""
     encoder_config = config.encoder
     module, variables = _load_clip_encoder_module(config, encoder_config)
     variables = _restore_encoder_checkpoint(encoder_config, variables)
@@ -176,7 +176,7 @@ def _load_shared_clip_module_and_ckpt(config):
 
 
 def _build_instruct_embedding(sample_list, config, *, shared_module=None, shared_variables=None):
-    """configtext in  text text embedding  computetext."""
+    """Compute text embeddings according to the configuration."""
     n = len(sample_list)
     if getattr(config, "use_clip", False) and config.nlp_input_dim > 0:
         embedding = _compute_clip_embeddings(
@@ -205,14 +205,14 @@ def _build_reward_and_condition(
     shared_module=None,
     shared_variables=None,
 ):
-    """reward_i text condition text  createtext.
+    """Create reward_i and condition vectors.
 
-    text order:
-    1. always dataset metadata to  all array  initializetext.
-    2. reward_decoder_mode in  text decoder to  text range  text:
-       - "noop"  : initializetext metadata  as-is return (decoder text for )
-       - "all"   : all game  decoder text as  text
-       - "unseen": unseen game sampletext decoder text as  text
+    Processing order:
+    1. Always initialize all arrays from dataset metadata.
+    2. Select what to overwrite with the decoder according to reward_decoder_mode:
+       - "noop"  : return initialized metadata unchanged (do not use the decoder)
+       - "all"   : overwrite every game with decoder predictions
+       - "unseen": overwrite only samples from unseen games
     """
     use_decoder = getattr(config, "use_clip", False) and hasattr(config, "decoder")
     num_classes = config.decoder.num_reward_classes if use_decoder else 5
@@ -230,12 +230,12 @@ def _build_reward_and_condition(
             condition_arr[idx, j] = float(val)
     logger.info("Reward/Condition: metadata loaded for all %d samples", n)
 
-    # ── 2. "noop" mode text  decoder text for : metadata as-is return ─────────────
+    # ── 2. "noop" mode or no decoder: return metadata unchanged ───────────────
     if reward_decoder_mode == "noop" or not use_decoder:
         logger.info("Reward/Condition mode: noop (metadata only, decoder not applied)")
         return jnp.array(reward_i_arr, dtype=jnp.int32), jnp.array(condition_arr, dtype=jnp.float32)
 
-    # ── 3. decoder to  text target_indices text ───────────────────────────────
+    # ── 3. Determine target_indices to overwrite with the decoder ─────────────
     if reward_decoder_mode == "unseen":
         reward_seen_games = set(getattr(config, "reward_seen_games", None) or [])
         # doom / doom2 alias
@@ -263,7 +263,7 @@ def _build_reward_and_condition(
                 decoder_set: set = set()
                 for game, indices in unseen_game_indices.items():
                     n_meta = int(len(indices) * reward_unseen_ratio)
-                    # front n_meta text → metadata, remaining → decoder
+                    # First n_meta items use metadata; the remainder use the decoder
                     for idx in indices[n_meta:]:
                         decoder_set.add(idx)
 
@@ -275,7 +275,7 @@ def _build_reward_and_condition(
                     reward_unseen_ratio, n_meta_total, len(target_indices),
                 )
             else:
-                # ── zero-shot: text unseen game sample in  decoder apply ──────────
+                # ── Zero-shot: apply the decoder to every unseen-game sample ──
                 target_indices = [i for i, s in enumerate(sample_list) if s.game not in reward_seen_games]
                 logger.info(
                     "Reward/Condition mode: unseen→decoder (zero-shot) "
@@ -284,7 +284,7 @@ def _build_reward_and_condition(
                     len(target_indices),
                 )
     else:
-        # "all": all  decoder to  text
+        # "all": overwrite every item with decoder output
         target_indices = list(range(n))
         logger.info("Reward/Condition mode: all (%d samples → decoder)", n)
 
@@ -292,7 +292,7 @@ def _build_reward_and_condition(
         logger.info("No decoder target samples — returning metadata as-is")
         return jnp.array(reward_i_arr, dtype=jnp.int32), jnp.array(condition_arr, dtype=jnp.float32)
 
-    # ── 4. target samples in  text decoder text  after  overwrite ──────────────────────
+    # ── 4. Predict target samples with the decoder and overwrite them ─────────
     target_samples = [sample_list[i] for i in target_indices]
     target_embeddings = (
         np.asarray(text_embeddings)[target_indices]
@@ -330,7 +330,7 @@ def _build_reward_and_condition_with_decoder(
     module=None,
     variables=None,
 ):
-    """CLIP decoder text as  reward_i/condition  createtext."""
+    """Generate reward_i/condition through CLIP decoder inference."""
     from conf.config import DecoderConfig
 
     n = len(sample_list)
@@ -439,7 +439,7 @@ def _build_reward_and_condition_with_decoder(
             f"text_embeddings batch mismatch: got={_text_embed_arr.shape[0]}, expected={n}"
         )
 
-    # ── batch text + denorm: reward_decode in  abovetext ──
+    # ── Delegate batched inference and denormalization to reward_decode ──
     from encoder.utils.decoder_reward import reward_decode
 
     reward_i, condition = reward_decode(
@@ -469,17 +469,17 @@ def _build_reward_and_condition_with_decoder(
 
 
 def _tokenize_texts(sample_list, encoder_config, instruction_prefix: str = "none"):
-    """sample text in  CLIP text text to  input_ids / attention_mask   returntext."""
+    """Tokenize samples with CLIP and return input_ids and attention_mask."""
     from transformers import CLIPProcessor
     import random as _random
 
     model_name = "openai/clip-vit-base-patch32"
     processor = CLIPProcessor.from_pretrained(model_name)
 
-    # instruction_prefix dispatcher   text training text and  text
+    # Share the instruction_prefix dispatcher with encoder training code
     from encoder.data.clip_batch import apply_instruction_prefix
 
-    # reproducibility  abovetext fixed seed to  rng create
+    # Create an RNG with a fixed seed for reproducibility
     _rng = _random.Random(42)
 
     texts, has_text = [], []
@@ -521,19 +521,19 @@ def _tokenize_texts(sample_list, encoder_config, instruction_prefix: str = "none
 
 
 def _load_clip_encoder_module(config, encoder_config):
-    """config in  text ContrastiveModule text  ContrastiveDecoderModule  initializetext.
+    """Initialize ContrastiveModule or ContrastiveDecoderModule according to config.
 
-    text:
+    Branches:
       - model == 'pretrained_clip'  → encoder.pretrained_clip_model.ContrastiveModule
-        (HF CLIP wrapper, `final_text_projection` none — pretrained CLIP ckpt  and  text)
-      - model == 'finetuned_clip'   → encoder.finetuned_clip_model  of  trainable text
-        (structure  pretrained  and  same, stop_gradient text remove)
-      - text text                       → existing cnnclip / cnnclip+decoder path
-        (`encoder.clip_model.PretrainedTextEncoder`  of  `final_text_projection` text text for )
+        (HF CLIP wrapper without `final_text_projection`, matching pretrained CLIP checkpoints)
+      - model == 'finetuned_clip' -> trainable variant from encoder.finetuned_clip_model
+        (same structure as pretrained, but without stop_gradient)
+      - otherwise -> legacy cnnclip / cnnclip+decoder path
+        (uses the `final_text_projection` branch in encoder.clip_model.PretrainedTextEncoder)
     """
     _model = getattr(config, "model", None)
 
-    # ── pretrained / finetuned CLIP text ──────────────────────────────────
+    # ── Pretrained / finetuned CLIP branch ────────────────────────────────
     if _model in ("pretrained_clip", "finetuned_clip"):
         if _model == "finetuned_clip":
             from encoder.finetuned_clip_model import (
@@ -548,7 +548,7 @@ def _load_clip_encoder_module(config, encoder_config):
         rng = jax.random.PRNGKey(0)
         dummy_ids = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
         dummy_mask = jnp.ones((1, encoder_config.token_max_len), dtype=jnp.int32)
-        # HF pretrained CLIP vision tower   always 224×224×3 RGB text
+        # The HF pretrained CLIP vision tower always expects 224x224x3 RGB input
         dummy_pix = jnp.ones((1, 224, 224, 3), dtype=jnp.float32)
         mode = "text_state" if encoder_config.state else "text"
         variables = module.init(
@@ -590,7 +590,7 @@ def _load_clip_encoder_module(config, encoder_config):
 
 
 def _format_num_bytes(num_bytes: int) -> str:
-    """text text text  text  read text string to  converttext."""
+    """Convert a byte count to a human-readable string."""
     if num_bytes < 1024:
         return f"{num_bytes} B"
     if num_bytes < 1024**2:
@@ -599,7 +599,7 @@ def _format_num_bytes(num_bytes: int) -> str:
 
 
 def _compute_tree_signature_hash(tree, *, algo: str = "sha256"):
-    """ during text dict/PyTree of  text signature hash  computetext."""
+    """Compute a deterministic signature hash for a nested dictionary/PyTree."""
     from flax.core import FrozenDict
     from flax.traverse_util import flatten_dict
 
@@ -651,7 +651,7 @@ def _compute_tree_signature_hash(tree, *, algo: str = "sha256"):
 
 
 def _checkpoint_signature_for_cache(variables) -> str:
-    """cache text create  abovetext checkpoint text(hex)  computetext."""
+    """Compute a hexadecimal checkpoint signature for cache-key generation."""
     try:
         signature_hex, _, _ = _compute_tree_signature_hash(variables)
         return signature_hex
@@ -660,9 +660,9 @@ def _checkpoint_signature_for_cache(variables) -> str:
 
 
 def _resolve_instruction_prefix(config) -> str:
-    """config in  instruction_prefix mode string  text normalizetext.
+    """Read and normalize the instruction_prefix mode from config.
 
-    Returns "name" / "desc" / "none"  during  text.
+    Return one of "name", "desc", or "none".
     """
     from encoder.data.clip_batch import _normalize_instruction_prefix_mode
     return _normalize_instruction_prefix_mode(getattr(config, "instruction_prefix", "none"))
@@ -671,7 +671,7 @@ def _resolve_instruction_prefix(config) -> str:
 def _build_clip_embedding_cache_path(
     sample_list, *, ckpt_signature: str, instruction_prefix: str = "none"
 ) -> tuple[str, Path]:
-    """CLIP embedding cache text and  save path  createtext."""
+    """Create the CLIP embedding cache key and storage path."""
     hasher = hashlib.sha256()
     hasher.update(b"clip-latent-embedding-cache-v2")
     hasher.update(f"|ckpt_signature={ckpt_signature}".encode("utf-8"))
@@ -690,12 +690,12 @@ def _build_clip_embedding_cache_path(
 def _build_decoder_reward_cache_path(
     sample_list, *, ckpt_signature: str, instruction_prefix: str = "none"
 ) -> tuple[str, Path]:
-    """text reward/condition text cache text and  save path  createtext."""
+    """Create the decoder reward/condition prediction cache key and storage path."""
     hasher = hashlib.sha256()
     hasher.update(b"decoder-reward-cache-v4-text-embed")
     hasher.update(f"|ckpt_signature={ckpt_signature}".encode("utf-8"))
-    # text text  CLIP text embedding text to  instruction_prefix   text
-    # text embedding also  text → cache text in  text text text.
+    # The decoder consumes CLIP text embeddings, so changing instruction_prefix
+    # changes the embedding and must therefore affect the cache key.
     hasher.update(f"|instruction_prefix={instruction_prefix}".encode("utf-8"))
 
     for sample in sample_list:
@@ -712,7 +712,7 @@ def _build_decoder_reward_cache_path(
 
 
 def _log_checkpoint_signature_hash(state, *, ckpt_dir: str, step: int, fmt: str):
-    """text checkpoint state of  signature hash   to text to  text."""
+    """Log the signature hash of a restored checkpoint state."""
     try:
         signature_hex, leaf_count, total_bytes = _compute_tree_signature_hash(state)
         logger.info(
@@ -733,7 +733,7 @@ def _log_checkpoint_signature_hash(state, *, ckpt_dir: str, step: int, fmt: str)
 
 
 def _restore_encoder_checkpoint(encoder_config, variables):
-    """encoder_config.ckpt_path  in   text latest checkpoint  text."""
+    """Restore the latest checkpoint from encoder_config.ckpt_path."""
     ckpt_path = encoder_config.ckpt_path
     if ckpt_path is None:
         logger.warning(
@@ -782,7 +782,7 @@ def _restore_encoder_checkpoint(encoder_config, variables):
 
 
 def _encode_texts_batched(module, variables, input_ids, attention_mask, batch_size=256):
-    """module.apply   batch textabove to  calltext text_embed   text."""
+    """Call module.apply in batches and collect text_embed outputs."""
     from tqdm import tqdm
 
     @jax.jit
@@ -807,7 +807,7 @@ def _encode_texts_batched(module, variables, input_ids, attention_mask, batch_si
 
 
 def _postprocess_embeddings(embeddings, has_text, nlp_input_dim):
-    """instruction without row  zeros  to  text, nlp_input_dim  in  text padding/truncatetext."""
+    """Fill rows without instructions with zeros and pad/truncate to nlp_input_dim."""
     for i, has_text_flag in enumerate(has_text):
         if not has_text_flag:
             embeddings[i] = 0.0
@@ -823,7 +823,7 @@ def _postprocess_embeddings(embeddings, has_text, nlp_input_dim):
 
 
 def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None):
-    """pretrained CLIP encoder  text instruction text -> latent embedding  computetext."""
+    """Compute latent embeddings from instruction text with a pretrained CLIP encoder."""
     nlp_input_dim = config.nlp_input_dim
     encoder_config = config.encoder
 
@@ -902,7 +902,7 @@ def _compute_clip_embeddings(sample_list, config, *, module=None, variables=None
 
 
 def _compute_bert_embeddings(sample_list, nlp_input_dim):
-    """BERT  text for text instruction text in  embedding  computetext."""
+    """Compute embeddings from instruction text using BERT."""
     try:
         from transformers import AutoTokenizer, FlaxAutoModel
     except ImportError as e:
@@ -959,4 +959,3 @@ def _compute_bert_embeddings(sample_list, nlp_input_dim):
 
     logger.info("BERT embeddings shape: %s", cls_embeddings.shape)
     return jnp.array(cls_embeddings, dtype=jnp.float32)
-

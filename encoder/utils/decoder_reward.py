@@ -1,11 +1,11 @@
 """
 encoder/utils/decoder_reward.py
 ================================
-trainingtext CLIP Decoder checkpoint  loadtext,
-instruction(text) embedding → (reward_enum, condition) text  textrowtext  utility.
+Load a trained CLIP decoder checkpoint and
+Utilities for predicting (reward_enum, condition) from instruction text embeddings.
 
-RL training text in  `get_reward_batch` text text  text
-reward_enum / condition  as  reward  computetext text text for text.
+Used in the RL loop to calculate rewards from decoder-predicted reward_enum and
+condition values instead of `get_reward_batch`.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def load_decoder(
     cond_norm_min: jnp.ndarray | None = None,
     cond_norm_max: jnp.ndarray | None = None,
 ) -> Tuple:
-    """CLIP Decoder checkpoint  loadtext.
+    """Load a CLIP decoder checkpoint.
 
     Returns
     -------
@@ -43,8 +43,8 @@ def load_decoder(
     """
     from encoder.clip_model import get_cnnclip_decoder_encoder
 
-    # checkpoint  RL_training=False  to  trainingtext to  sametext mode to  module create
-    # → params tree structure  checkpoint and  text
+    # Create the module in the same mode used for training, with RL_training=False
+    # This makes the parameter-tree structure match the checkpoint
     module, _ = get_cnnclip_decoder_encoder(
         encoder_config,
         decoder_config=decoder_config,
@@ -72,7 +72,7 @@ def load_decoder(
         logger.warning(f"Decoder checkpoint path not found: {ckpt_dir}. Falling back to initialized decoder.")
         return module.apply, variables_template
 
-    # latest step directory text (ckpt_dir   ckpts/ leveltext text text)
+    # Find the latest step directory; ckpt_dir may point at the ckpts/ level
     from glob import glob
     from os.path import basename, join
     step_dirs = [d for d in glob(join(ckpt_dir, '*')) if basename(d).isdigit()]
@@ -82,19 +82,19 @@ def load_decoder(
     else:
         restore_dir = ckpt_dir
 
-    # ── target based text ──
-    # train_clip_decoder   TrainState.create(params=variables)  to  savetext to
+    # ── Target-based restoration ──
+    # train_clip_decoder saves TrainState.create(params=variables)
     # checkpoint = {"step": ..., "params": <variables>, "opt_state": ...}
     # <variables> = {"params": {...}, "norm_stats": {...}}
-    # flax restore_checkpoint  in  target={"params": template}   text
-    # checkpoint of  "params" text  template structure to  text text.
+    # Passing target={"params": template} to Flax restore_checkpoint maps the
+    # checkpoint's "params" field onto the template structure.
     from flax.training.train_state import TrainState
     import optax
 
     dummy_state = TrainState.create(
         apply_fn=module.apply,
         params=variables_template,
-        tx=optax.identity(),  # optimizer  text (text  before  for )
+        tx=optax.identity(),  # No optimizer is needed for inference
     )
 
     restored_state = checkpoints.restore_checkpoint(
@@ -112,7 +112,7 @@ def load_decoder(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  batch text: text_embeddings → (reward_i, condition)
+#  Batched inference: text_embeddings -> (reward_i, condition)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def reward_decode(
@@ -124,29 +124,29 @@ def reward_decode(
     num_classes: int,
     batch_size: int = 256,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """CLIP text to  text embedding in  reward_i / condition  batch text.
+    """Predict reward_i/condition from text embeddings in batches with the CLIP decoder.
 
     Parameters
     ----------
     text_embeddings : (N, D) jnp.ndarray
-        CLIP encoder  text and text latent embedding.
+        Latent embeddings produced by the CLIP encoder.
     apply_fn : Callable
-        ContrastiveDecoderModule.apply (text  same text of  function).
+        ContrastiveDecoderModule.apply or a function with the same signature.
     variables : dict
-        text parameter text dictionary (``{"params": ..., "norm_stats": ...}``).
+        Decoder variable dictionary (``{"params": ..., "norm_stats": ...}``).
     cond_norm_min, cond_norm_max : Dict[int, float]
-        reward_enumtext log-space normalize min/max text.
+        Log-space normalization minima/maxima by reward_enum.
     num_classes : int
-        reward_enum class text.
+        Number of reward_enum classes.
     batch_size : int
         batch size (default value 256).
 
     Returns
     -------
     reward_i : (N, 1) jnp.int32
-        text reward_enum (0-based).
+        Predicted zero-based reward_enum.
     condition : (N, num_classes) jnp.float32
-        text condition text. selecttext enum slottext text  text remaining  -1.
+        Predicted condition vector, with only the selected enum slot populated and all others -1.
     """
     from tqdm import tqdm
 
@@ -193,7 +193,7 @@ def reward_decode(
         float(pred_cond_raw.max()),
     )
 
-    # ── text text text ──
+    # ── Assemble final tensors ──
     reward_i = jnp.array(reward_i_flat, dtype=jnp.int32).reshape(-1, 1)
     condition = jnp.full((n, num_classes), -1.0, dtype=jnp.float32)
     condition = condition.at[jnp.arange(n), reward_i_flat].set(jnp.array(pred_cond_raw))
@@ -206,7 +206,7 @@ def reward_decode(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  text: instruction/text embedding → (reward_enum, condition)
+#  Inference: instruction/text embedding -> (reward_enum, condition)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def predict_reward_condition(
@@ -215,17 +215,17 @@ def predict_reward_condition(
     instruction_embedding: jnp.ndarray,
     num_reward_classes: int = 5,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """text  text for text instruction embedding as text
-    reward_enum (1-based) and  condition text  text.
+    """Use the decoder to predict one-based reward_enum and a condition vector
+    from instruction embeddings.
 
     Parameters
     ----------
     instruction_embedding : (n_envs, D)
-        pretrained CLIP encoder  text and text latent embedding (e.g. 64-dim).
+        Latent embeddings from a pretrained CLIP encoder (e.g. 64-dimensional).
     """
     n_envs = instruction_embedding.shape[0]
 
-    # ContrastiveDecoderModule internal decoder text  direct calltext.
+    # Call the decoder submodule inside ContrastiveDecoderModule directly
     reward_logits, _, condition_pred_raw = apply_fn(
         variables,
         instruction_embedding,
@@ -234,18 +234,18 @@ def predict_reward_condition(
     )
 
     reward_logits = reward_logits[:, :num_reward_classes]  # (n_envs, num_classes)
-    condition_pred_raw = condition_pred_raw[:, :num_reward_classes]  # (n_envs, num_classes) — text text
+    condition_pred_raw = condition_pred_raw[:, :num_reward_classes]  # Original scale
 
     # argmax → 0-based → 1-based
     pred_enum_0based = jnp.argmax(reward_logits, axis=-1)    # (n_envs,)
     reward_i = (pred_enum_0based + 1).reshape(-1, 1).astype(jnp.int32)  # (n_envs, 1)
 
-    # condition text text: (n_envs, 9)
-    # get_reward_batch   condition[:, enum-1]   text for .
-    # text enum slot in text text  text remaining  -1.
+    # Build condition vectors with shape (n_envs, 9)
+    # get_reward_batch uses condition[:, enum-1].
+    # Populate only the predicted enum slot and leave the others at -1.
     condition = jnp.full((n_envs, 9), -1.0, dtype=jnp.float32)
 
-    # each text in  predicted enum in  text  condition text  gather
+    # Gather the condition value for the predicted enum in each environment
     pred_cond_val = condition_pred_raw[
         jnp.arange(n_envs), pred_enum_0based
     ]  # (n_envs,)
@@ -257,7 +257,7 @@ def predict_reward_condition(
 
 
 def _extract_instruction_embedding(instruct_sample, curr_obs):
-    """inject callback text in  instruction embedding  text as  text."""
+    """Safely extract instruction embeddings from injection-callback input."""
     if instruct_sample is not None and hasattr(instruct_sample, "embedding"):
         return instruct_sample.embedding
     if curr_obs is not None and hasattr(curr_obs, "nlp_obs"):
@@ -271,7 +271,7 @@ def predict_from_instruction(
     instruction_embedding: jnp.ndarray,
     num_reward_classes: int = 5,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """instruction embedding in  reward_i/condition  text."""
+    """Predict reward_i/condition from instruction embeddings."""
     return predict_reward_condition(
         apply_fn=apply_fn,
         variables=variables,
@@ -281,7 +281,7 @@ def predict_from_instruction(
 
 
 def build_decoder_reward_inject_fn(config) -> Callable:
-    """train_utils.inject_reward_fn text in  text  callback  createtext."""
+    """Create a callback matching the train_utils.inject_reward_fn signature."""
     from conf.config import DecoderConfig
 
     decoder_cfg = DecoderConfig(num_reward_classes=config.decoder.num_reward_classes)

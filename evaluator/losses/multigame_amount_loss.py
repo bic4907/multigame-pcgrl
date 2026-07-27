@@ -19,18 +19,18 @@ def multigame_amount_loss(
     cond: chex.Array,
     absolute: bool = True,
 ) -> chex.Array:
-    """text multigame tile of  count and  texttable condition text  of  loss.
+    """Loss between the count of a specific multigame tile and its target condition.
 
     Parameters
     ----------
     env_map : chex.Array
         (H, W) integer map.
     tile_name : str
-        "interactive", "hazard", "collectable"  during  text.
+        One of "interactive", "hazard", or "collectable".
     cond : chex.Array
-        texttable tile count (scalar).
+        Measured tile count as a scalar.
     absolute : bool
-        True text text loss, False text text keep.
+        Use absolute loss when True; preserve the sign when False.
 
     Returns
     -------
@@ -52,4 +52,3 @@ def multigame_amount_loss(
     )
 
     return loss
-

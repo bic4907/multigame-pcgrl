@@ -2,10 +2,10 @@
 dataset/multigame/handlers/doom_handler.py
 ==========================================
 DOOM level dataset handler (TheVGLC based).
-Doom map  processtext abovetext handler.
-- file automatic text
-- text map text text (16x16 textabove)
-- tile text text convert
+Doom map preprocessing handler.
+- Automatic file discovery
+- Slicing large maps into 16x16 regions
+- Tile mapping and conversion
 """
 from __future__ import annotations
 from pathlib import Path
@@ -25,13 +25,13 @@ _DEFAULT_DOOM2_ROOT = _DEFAULT_VGLC_ROOT / "Doom2"
 class DoomHandler(BaseGameHandler):
     """
     Doom level handler.
-    TheVGLC Doom dataset in  level  automatic text, text text, converttext.
+    Automatically discover, slice, and convert levels from the TheVGLC Doom dataset.
     Parameters
     ----------
     root : Path | str
-        Doom level directory (*.txt file text)
+        Doom level directory containing *.txt files.
     handler_config : Optional[Any]
-        HandlerConfig text (doom_slicing config)
+        HandlerConfig object containing the doom_slicing settings.
     """
     def __init__(
         self,
@@ -51,10 +51,10 @@ class DoomHandler(BaseGameHandler):
     def game_dir(self) -> Path:
         return self._root
     def _discover(self) -> List[str]:
-        """Doom level file text text text text."""
+        """Discover and slice Doom level files."""
         if not self._root.exists():
             return []
-        # VGLC structure: Processed folder text, if missing text
+        # VGLC layout: prefer the Processed directory, otherwise use the root
         processed = self._root / "Processed"
         if processed.exists():
             txt_files = sorted(processed.glob("*.txt"))
@@ -76,14 +76,14 @@ class DoomHandler(BaseGameHandler):
             self._entries = self._discover()
         return self._entries
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
-        # cache in  text return (text text data text)
+        # Return cached data when available (including sliced data)
         if source_id in self._sliced_cache:
             sample = self._sliced_cache[source_id]
             if order is not None:
                 sample.order = order
             return sample
-        # cache in  without text: source_id parsing
-        # source_id  "path/to/file.txt|slice_idx" text
+        # Parse source_id when the sample is not cached
+        # source_id has the form "path/to/file.txt|slice_idx"
         if "|" in source_id:
             file_path, slice_idx_str = source_id.rsplit("|", 1)
             try:
@@ -101,7 +101,7 @@ class DoomHandler(BaseGameHandler):
             raise FileNotFoundError(f"Doom level file not found: {file_path}")
         text = path.read_text(encoding="utf-8", errors="replace")
         char_grid = self._preprocessor.parse_txt(text)
-        # text text (config  text apply, if missing all)
+        # Apply configured slicing, or use the complete map
         if self._handler_config and hasattr(self._handler_config, "doom"):
             sliced_maps = self._preprocessor.slice_large_map(
                 char_grid,
@@ -116,7 +116,7 @@ class DoomHandler(BaseGameHandler):
             sliced_data = sliced_maps[slice_idx]
             char_grid = sliced_data["map"]
         else:
-            # text text config none: all map  16x16 as  padding/text
+            # No slicing configuration: pad or crop the complete map to 16x16
             if slice_idx != 0:
                 raise IndexError(f"slice_idx {slice_idx} invalid without slicing config")
         array = self._preprocessor.transform(char_grid)

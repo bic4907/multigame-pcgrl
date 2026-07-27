@@ -1,10 +1,10 @@
 """
 instruct_rl/utils/dataset_loader_helpers/preprocessing.py
 ==========================================================
-GameSample text in  text common preprocessing utility.
+Common preprocessing utilities for lists of GameSamples.
 
-text data  to text pipeline(CPCGRL, IPCGRL, VIPCGRL, MGPCGRL,
-CLIP text, MLP text) in  sametext applytext.
+Apply identically in every data-loading pipeline (CPCGRL, IPCGRL, VIPCGRL,
+MGPCGRL, the CLIP encoder, and the MLP encoder).
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logger = logging.getLogger(basename(__file__))
 logger.setLevel(getattr(logging, log_level, logging.INFO))
 
-# (game, reward_enum, cutoff): condition >= cutoff text sample remove
+# (game, reward_enum, cutoff): remove samples whose condition >= cutoff
 LONGTAIL_CUTOFF = [
     ("dungeon", 1, 80),   # path_length >= 80
     ("pokemon", 2, 150),  # interactive_count >= 150
@@ -34,7 +34,7 @@ def _invalid_instruction(inst) -> bool:
 
 
 def apply_longtail_cut(samples: list) -> list:
-    """LONGTAIL_CUTOFF basis as  text condition text of  sample  removetext."""
+    """Remove samples with extreme condition values according to LONGTAIL_CUTOFF."""
     def _is_longtail(s) -> bool:
         reward_enum = s.meta.get("reward_enum")
         condition_value = s.meta.get("conditions", {}).get(reward_enum)
@@ -48,7 +48,7 @@ def apply_longtail_cut(samples: list) -> list:
 
 
 def apply_tile_offset(samples: list, offset: int) -> list:
-    """each sample of  array tile text in  offset  text text sample text  returntext."""
+    """Return new samples with offset added to every array tile value."""
     if offset == 0:
         return samples
     return [dataclasses.replace(s, array=s.array + offset) for s in samples]
@@ -57,7 +57,7 @@ def apply_tile_offset(samples: list, offset: int) -> list:
 def preprocess_samples(samples: list, *, longtail_cut: bool = True) -> list:
     """common sample preprocessing: invalid instruction filter + longtail cut.
 
-    text training and  RL training text in  sametext applytext.
+    Apply identically during encoder and RL training.
     """
     n_before = len(samples)
     dropped_combos = sorted(set(
@@ -86,13 +86,13 @@ def preprocess_samples(samples: list, *, longtail_cut: bool = True) -> list:
 
 
 def build_effective_instructions(samples: list, *, instruction_prefix) -> list:
-    """samples  of  instruction  in  instruction_prefix(name/desc/none)   applytext text  returntext.
+    """Return samples with instruction_prefix (name/desc/none) applied to instructions.
 
-    instruction_prefix in {"name", "desc"}  text CLIP embedding compute(_tokenize_texts) and
-    sametext seed(42) to  prefix   applytext to , embedding in  text to  text text and
-    text  string  text  text text.
+    For instruction_prefix in {"name", "desc"}, use the same seed (42) as CLIP
+    embedding calculation (_tokenize_texts), producing strings identical to the
+    text actually passed to the embedder.
 
-    train / eval text in  same function  text for text text  keeptext.
+    Use this function in both training and evaluation for consistency.
     """
     raw = [getattr(s, 'instruction', None) for s in samples]
 
@@ -106,7 +106,7 @@ def build_effective_instructions(samples: list, *, instruction_prefix) -> list:
     if mode == "none":
         return raw
 
-    # _tokenize_texts  and  sametext fixed seed(42) → embedding text text and  text.
+    # Same fixed seed (42) as _tokenize_texts, matching the embedded text
     _rng = _random.Random(42)
     result = [
         apply_instruction_prefix(inst, s.game, _rng, mode)
@@ -122,4 +122,3 @@ def build_effective_instructions(samples: list, *, instruction_prefix) -> list:
         result[0][:120] if result else "",
     )
     return result
-

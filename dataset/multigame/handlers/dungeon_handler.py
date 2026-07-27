@@ -4,23 +4,23 @@ dataset/multigame/handlers/dungeon_handler.py
 dungeon_level_dataset handler.
 
 - dungeon_levels.npz + dungeon_levels_metadata.csv load
-- instruction / instruction_slug / level_id / sample_id text text
-- DungeonLevelDataset text  direct copytext text independently text
-  (text text text none, numpytext text for )
+- Supports instruction, instruction_slug, level_id, and sample_id tags
+- Reimplemented independently without copying DungeonLevelDataset code
+  (uses only NumPy and has no external package dependency)
 
-tile text (dungeon_level_dataset README basis)
+Tile mapping (based on the dungeon_level_dataset README)
 ---------------------------------------------
 0  : padding / unknown
-1  : floor  (text text 1)
-2  : wall   (text text 2)
-3  : enemy  (text text 3)
+1  : floor  (original value: 1)
+2  : wall   (original value: 2)
+3  : enemy  (original value: 3)
 
 preprocessing filter (cache save  before  apply, legacy annotation basis)
 ---------------------------------------------
-1. RG(region, reward_enum==1) text  25 text  35text sample remove
-2. BD(bat_direction, reward_enum==5) sample  instructionby text remove
-   (key text sort  after  text text keep → text available)
-3. all 4000text to  text
+1. Remove RG (region, reward_enum == 1) samples whose value is 25 or 35.
+2. Remove half of the BD (bat_direction, reward_enum == 5) samples per instruction.
+   (Sort keys in ascending order and keep the first half for reproducibility.)
+3. Truncate the complete set to 4,000 samples.
 """
 from __future__ import annotations
 
@@ -48,12 +48,12 @@ _LEGACY_ANNOT_PATH = (
     / "reward_annotations" / "legacy" / "dungeon_reward_annotations.csv"
 )
 
-# ── preprocessing text ─────────────────────────────────────────────────────────────────
+# ── Preprocessing constants ─────────────────────────────────────────────────────
 _EXCLUDE_RG: frozenset[int] = frozenset({25, 35})
 _TARGET_COUNT: int = 4_000
 
 
-# ── tile text ────────────────────────────────────────────────────────────────────
+# ── Tile constants ──────────────────────────────────────────────────────────────
 class DungeonTile:
     UNKNOWN  = 0
     FLOOR    = 1
@@ -73,9 +73,9 @@ DUNGEON_PALETTE: dict[int, tuple[int, int, int]] = {
 
 def _place_treasure(array: np.ndarray, key: str) -> np.ndarray:
     """
-    FLOOR tile eacheach in  text independently 10% probability to  TREASURE(4) to  text.
-    key(='000000' text)  integer to  converttext seed to  text for  → text available.
-    FLOOR   if missing array   as-is returntext.
+    Independently replace each FLOOR tile with TREASURE (4) with 10% probability.
+    Convert the key (formatted as "000000") to an integer seed for reproducibility.
+    Return the array unchanged when no FLOOR tiles exist.
     """
     rng = np.random.RandomState(int(key))
     floor_pos = np.argwhere(array == DungeonTile.FLOOR)
@@ -98,16 +98,16 @@ def _make_legend() -> TileLegend:
 
 def _apply_preprocess_filter(all_keys: List[str]) -> List[str]:
     """
-    legacy annotation CSV   text preprocessing filter  after  text key list  returntext.
+    Read the legacy annotation CSV and return the keys retained after preprocessing.
 
     filter apply order
     --------------
-    1. reward_enum==1 (RG)  text condition_1 in _EXCLUDE_RG text sample remove
-    2. reward_enum==5 (BD) sample  instruction by text keep
-       (key text sort  after  text text → text available)
-    3. all _TARGET_COUNT text to  text (text order keep)
+    1. Remove reward_enum == 1 (RG) samples whose condition_1 is in _EXCLUDE_RG.
+    2. Keep half of the reward_enum == 5 (BD) samples for each instruction.
+       (Sort keys in ascending order and keep the first half for reproducibility.)
+    3. Truncate to _TARGET_COUNT samples while preserving the original order.
 
-    annotation CSV   if missing all_keys   as-is returntext.
+    Return all_keys unchanged when the annotation CSV is absent.
     """
     if not _LEGACY_ANNOT_PATH.exists():
         return all_keys
@@ -131,7 +131,7 @@ def _apply_preprocess_filter(all_keys: List[str]) -> List[str]:
         cond1_raw   = row.get("condition_1", "")
 
         if reward_enum == "1":
-            # RG text  text target text text
+            # Skip excluded RG values
             try:
                 rg = int(float(cond1_raw))
             except (ValueError, TypeError):
@@ -140,24 +140,24 @@ def _apply_preprocess_filter(all_keys: List[str]) -> List[str]:
                 continue
 
         if reward_enum == "5":
-            # BD sample  instruction by text text during  in  process
+            # Group BD samples by instruction for later processing
             instr = row.get("instruction", "")
             bd_by_instruction.setdefault(instr, []).append(key)
         else:
             keep_set.add(key)
 
-    # BD: instruction by sort  after  text text keep
+    # BD: sort each instruction group and retain only the first half
     for instr in sorted(bd_by_instruction):
-        group = sorted(bd_by_instruction[instr])   # key text → text available
+        group = sorted(bd_by_instruction[instr])   # Ascending keys ensure reproducibility
         half = max(1, len(group) // 2)
         keep_set.update(group[:half])
 
-    # text order keep  after  text
+    # Preserve the original order, then truncate
     filtered = [k for k in all_keys if k in keep_set]
     return filtered[:_TARGET_COUNT]
 
 
-# ── meta dataclass (text) ────────────────────────────────────────────────────────
+# ── Lightweight metadata dataclass ──────────────────────────────────────────────
 class _DungeonMeta:
     __slots__ = ("index", "key", "instruction", "instruction_slug",
                  "level_id", "sample_id")
@@ -179,8 +179,8 @@ class DungeonHandler(BaseGameHandler):
     Parameters
     ----------
     root      : dungeon_level_dataset folder path
-    npz_name  : npz filetext (default 'dungeon_levels.npz')
-    meta_name : csv filetext (default 'dungeon_levels_metadata.csv')
+    npz_name  : NPZ filename (default: 'dungeon_levels.npz')
+    meta_name : CSV filename (default: 'dungeon_levels_metadata.csv')
 
     Example
     -------
@@ -228,10 +228,10 @@ class DungeonHandler(BaseGameHandler):
         # preprocessing filter apply (cache save  before )
         all_keys = [m.key for m in sorted(raw_metas.values(), key=lambda m: m.index)]
 
-        # 1text: ndim!=2 map remove (text or more map, RuntimeWarning text)
+        # First pass: remove ndim != 2 maps (malformed maps that trigger RuntimeWarning)
         all_keys = [k for k in all_keys if self._archive[k].ndim == 2]
 
-        # 2text: legacy annotation based filter (RG, BD, 4000text text)
+        # Second pass: apply legacy annotation filters (RG, BD, and the 4,000-sample limit)
         kept_keys = _apply_preprocess_filter(all_keys)
 
         for key in kept_keys:
@@ -276,11 +276,11 @@ class DungeonHandler(BaseGameHandler):
             },
         )
 
-    # ── expand text text ─────────────────────────────────────────────────────────
+    # ── Extended query methods ──────────────────────────────────────────────────
     def filter_by_instruction(
         self, keyword: str, *, case_sensitive: bool = False
     ) -> List[GameSample]:
-        """instruction in  keyword  text sample list return."""
+        """Return samples whose instruction contains keyword."""
         kw = keyword if case_sensitive else keyword.lower()
         result = []
         for i, m in enumerate(self._metas):
@@ -290,7 +290,7 @@ class DungeonHandler(BaseGameHandler):
         return result
 
     def group_by_instruction(self) -> Dict[str, List[GameSample]]:
-        """instruction_slug → sample text dictionary."""
+        """Return a mapping from instruction_slug to sample lists."""
         groups: Dict[str, List[GameSample]] = {}
         for i, m in enumerate(self._metas):
             sample = self.load_sample(m.key, order=i)
@@ -299,7 +299,7 @@ class DungeonHandler(BaseGameHandler):
 
 
     def category_names(self) -> List[str]:
-        """text instruction string list."""
+        """Return the unique instruction strings."""
         seen = {}
         for m in self._metas:
             seen[m.instruction_slug] = m.instruction

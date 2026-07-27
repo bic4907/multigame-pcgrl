@@ -1,16 +1,15 @@
 """
 train_finetuned_clip_encoder.py
 ================================
-HuggingFace pretrained CLIP  text for text of  (map image, text text) text to
-text  entrypoint.
+Entry point for fine-tuning HuggingFace pretrained CLIP on user-provided
+(map image, text instruction) pairs.
 
-- `MultiGameDataset` + `CLIPDatasetBuilder`  to  224×224 textcell image + text text
-  text  text (existing `train_clip.py`  and  sametext text text).
-- text  `encoder.finetuned_clip_model.get_finetuned_clip_encoder()` → trainable
-  text before  of  `ContrastiveModule` (parameter text structure  RL text `ContrastiveModule`
-   and  text before text same).
-- savetext checkpoint(`pretrained_encoders/finetuned-clip-...`)  RL training text
-  `encoder.ckpt_name=finetuned-clip-...`  to  as-is inject text (text none).
+- `MultiGameDataset` and `CLIPDatasetBuilder` produce 224x224 images and
+  tokenized text while controlling the same variables as `train_clip.py`.
+- `encoder.finetuned_clip_model.get_finetuned_clip_encoder()` supplies a
+  trainable `ContrastiveModule` whose parameter tree exactly matches the RL module.
+- Saved checkpoints (`pretrained_encoders/finetuned-clip-...`) are injected into
+  RL unchanged with `encoder.ckpt_name=finetuned-clip-...`.
 
 Usage:
     python -m train_finetuned_clip_encoder
@@ -59,9 +58,9 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 
 # ── HF CLIP for  RGB pixel_values convert ───────────────────────────────────────────
 #
-# CLIPDatasetBuilder   createtext  pixel_values   cnnclip  for  (B, 16, 16, C_onehot+2)
-# text text HuggingFace CLIP   (B, 224, 224, 3) RGB text  text.
-# → one-hot text in  raw tile enum   text → tile rendering → 224×224 normalize.
+# CLIPDatasetBuilder creates pixel_values for cnnclip with shape (B, 16, 16, C_onehot+2)
+# format, but HuggingFace CLIP requires (B, 224, 224, 3) RGB input.
+# Restore raw tile enums from one-hot channels, render tiles, then normalize to 224x224.
 
 def _render_rgb_pixel_values(pixel_values_5ch: np.ndarray,
                              num_tile_classes: int = 3) -> np.ndarray:
@@ -76,10 +75,10 @@ def _render_rgb_pixel_values(pixel_values_5ch: np.ndarray,
 def _replace_pixel_values_with_rgb(dataset: CLIPDataset,
                                    num_tile_classes: int = 3,
                                    chunk_size: int = 256) -> CLIPDataset:
-    """CLIPDataset  of  pixel_values text HF CLIP RGB text as  text text CLIPDataset return."""
+    """Return a CLIPDataset with pixel_values converted to HF CLIP RGB format."""
     n = len(dataset.class_ids)
     if n == 0:
-        # text dataset: shapetext text text
+        # Empty dataset: retain only the expected shape
         rgb = np.zeros((0, 224, 224, 3), dtype=np.float32)
     else:
         chunks = []
@@ -101,7 +100,7 @@ def _replace_pixel_values_with_rgb(dataset: CLIPDataset,
     )
 
 
-# ── train_step (train_clip.py  and  sametext contrastive loss) ────────────────────
+# ── train_step using the same contrastive loss as train_clip.py ──────────────────
 
 @partial(jax.jit, static_argnums=(3, 4))
 def train_step(train_state: TrainState, batch: CLIPContrastiveBatch,
@@ -156,7 +155,7 @@ def train_step(train_state: TrainState, batch: CLIPContrastiveBatch,
     return train_state, loss, metrics, rng_key
 
 
-# ── train state create (train_clip.py  of  structure text for ) ───────────────────────────
+# ── Create training state, following train_clip.py ───────────────────────────
 
 def get_train_state(config: FinetunedCLIPEncoderTrainConfig, rng_key):
     lr_sched = create_learning_rate_fn(config, config.lr, config.steps_per_epoch)
@@ -192,7 +191,7 @@ def save_checkpoint(config, state, step):
     logger.info(f"Checkpoint saved at step {step} → {ckpt_dir}")
 
 
-# ── text training text ──────────────────────────────────────────────────────────
+# ── Main training loop ──────────────────────────────────────────────────────
 
 def make_train(config: FinetunedCLIPEncoderTrainConfig):
     def train(rng_key):
@@ -281,11 +280,11 @@ def make_train(config: FinetunedCLIPEncoderTrainConfig):
         mode = "text_state" if config.encoder.state else "text"
         config.encoder.mode = mode
 
-        # ── HF CLIP text text as  pixel_values convert (one-time) ───────────────
-        # CLIPDatasetBuilder   (B, 16, 16, num_classes+2) one-hot+coord   text,
-        # HuggingFace pretrained CLIP   (B, 224, 224, 3) RGB   text text.
-        # → raw tile enum text → tile render → 224×224 normalize  after  text.
-        # coordinate text 2 text + clip_input_channel(=raw)  as text one-hot text text compute.
+        # ── Convert pixel_values to HF CLIP input format once ─────────────────
+        # CLIPDatasetBuilder creates (B, 16, 16, num_classes+2) one-hot+coordinate
+        # tensors, whereas HuggingFace CLIP expects (B, 224, 224, 3) RGB.
+        # Restore raw tile enums, render tiles, resize/normalize, and replace them.
+        # Derive the one-hot channel count from two coordinate channels plus clip_input_channel.
         _num_tile_classes = max(1, int(getattr(config, "clip_input_channel", 5)) - 2)
         logger.info("Rendering RGB pixel_values for HF CLIP (num_tile_classes=%d, n_train=%d, n_test=%d) ...",
                     _num_tile_classes, n_train, n_test)
@@ -390,4 +389,3 @@ def main(config: FinetunedCLIPEncoderTrainConfig):
 
 if __name__ == "__main__":
     main()
-

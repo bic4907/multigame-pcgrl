@@ -17,8 +17,8 @@ Most users only need:
 | Doom | `doom` | ❌ | ⚠️ placeholder |
 | Pokemon | `pokemon` | ✅ per-sample | ⚠️ placeholder |
 
-> ⚠️ placeholder: `dataset/reward_annotations/{game}_reward_annotations_placeholder.csv` file to  text.
-> text per-sample annotation prepare text `{game}_reward_annotations.csv`  to  text text.
+> ⚠️ placeholder: served from `dataset/reward_annotations/{game}_reward_annotations_placeholder.csv`.
+> Once real per-sample annotations exist, replace it with `{game}_reward_annotations.csv`.
 
 ## Quick Start
 
@@ -70,17 +70,17 @@ print(len(text_pairs))
 
 ## Reward Annotations
 
-each sample of  `meta` dictionary in  reward annotation  text.
+Reward annotations are attached to each sample's `meta` dictionary.
 
-### reward_enum (1~5,  before  game common)
+### reward_enum (1-5, shared across games)
 
-| reward_enum | feature_name | text |
+| reward_enum | feature_name | description |
 |:-----------:|--------------|------|
-| 1 | `region` | text text(text) text |
-| 2 | `path_length` | text path text  |
-| 3 | `block` | wall / textwater ratio |
-| 4 | `bat_amount` | text / text text |
-| 5 | `bat_direction` | text text / abovetext text |
+| 1 | `region` | number of connected regions |
+| 2 | `path_length` | length of the longest path |
+| 3 | `block` | wall / water ratio |
+| 4 | `bat_amount` | number of enemies |
+| 5 | `bat_direction` | directional spread of the enemies |
 
 ### dungeon — per-sample annotation
 
@@ -96,18 +96,18 @@ print(sample.meta["feature_name"])   # e.g. "path_length"
 print(sample.meta["sub_condition"])  # e.g. "narrow"
 print(sample.meta["conditions"])     # e.g. {2: 40.0}
 
-# reward annotation  with sampletext filter
+# Filter samples with reward annotations
 annotated = ds.with_reward_annotation()
 print(len(annotated))
 
-# reward_enum=2(path_length) sampletext
+# Samples with reward_enum=2 (path_length)
 path_samples = ds.by_reward_enum(2)
 ```
 
-### different game — placeholder (text text WARNING)
+### Other games — placeholder (accessing conditions logs a WARNING)
 
-`sokoban`, `zelda`, `doom`, `pokemon`  text per-sample text annotation  text to
-`conditions` in  text `logging.WARNING`  text.
+`sokoban`, `zelda`, `doom` and `pokemon` have no per-sample annotations yet, so reading
+`conditions` emits a `logging.WARNING`.
 
 ```python
 import logging
@@ -117,41 +117,41 @@ ds = MultiGameDataset(include_dungeon=False, include_sokoban=True,
                       include_zelda=False, include_doom=False, include_pokemon=False)
 
 sample = ds.by_game("sokoban")[0]
-print(sample.meta["reward_enum"])   # 1 (placeholder default value)
+print(sample.meta["reward_enum"])   # 1 (placeholder default)
 print(sample.meta["feature_name"])  # "region"
 
-# conditions text text WARNING  to text text
-val = sample.meta["conditions"][1]  # WARNING: sokoban  placeholdertext
+# Reading conditions logs a WARNING
+val = sample.meta["conditions"][1]  # WARNING: sokoban is a placeholder
 ```
 
 ### reward annotation CSV structure
 
 ```
 dataset/reward_annotations/
-├── dungeon_reward_annotations.csv                  ← text per-sample
-├── sokoban_reward_annotations_placeholder.csv      ← text (game-level)
+├── dungeon_reward_annotations.csv                  ← per-sample annotations
+├── sokoban_reward_annotations_placeholder.csv      ← placeholder annotations (game-level)
 ├── zelda_reward_annotations_placeholder.csv
 ├── doom_reward_annotations_placeholder.csv
 └── pokemon_reward_annotations_placeholder.csv
 ```
 
-CSV text:
+CSV columns:
 ```
 key, instruction, level_id, sample_id,
 reward_enum, feature_name, sub_condition,
 condition_1, condition_2, condition_3, condition_4, condition_5
 ```
 
-placeholder CSV text  text:
+Extra columns in the placeholder CSV:
 ```
 game, is_placeholder   ← "true" fixed
 ```
 
-### placeholder  text annotation as  text
+### Replacing a placeholder with real annotations
 
-1. `{game}_reward_annotations.csv` file  dungeon and  sametext text as  create
+1. Create `{game}_reward_annotations.csv` in the same format as dungeon
 2. `dataset/reward_annotations/`  in  save
-3. placeholder file(`*_placeholder.csv`)  deletetext keep (text CSV  text applytext)
+3. Delete or keep the placeholder (`*_placeholder.csv`); the real CSV takes precedence
 
 ---
 

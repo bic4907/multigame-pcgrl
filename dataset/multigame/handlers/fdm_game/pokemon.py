@@ -86,18 +86,18 @@ def make_legend() -> TileLegend:
 
 class POKEMONPreprocessor(BasePreprocessor):
     """
-    POKEMON map data preprocessingtext.
+    POKEMON map-data preprocessor.
 
-    10x10 one-hot text -> 16x16 integer text
-    (text 3text edge padding)
+    Convert a 10x10 one-hot encoding to a 16x16 integer encoding
+    by applying three cells of edge padding on each side.
     """
 
     def char_to_int(self, char: str) -> int:
-        """POKEMON  one-hot text text to    text  text for  text text."""
+        """Unused because POKEMON data is one-hot encoded."""
         return POKEMONTile.UNKNOWN
 
     def parse_txt(self, text: str) -> List[List[str]]:
-        """POKEMON  text text  text to    text  text for  text text."""
+        """Unused because POKEMON data is not stored as text."""
         return []
 
     def is_valid_pokemon_map(
@@ -105,7 +105,7 @@ class POKEMONPreprocessor(BasePreprocessor):
         onehot_map: np.ndarray,
         max_tile_ratio: float = 0.95,
     ) -> bool:
-        """POKEMON map of  validtext  validatetext. (padding  before  10x10 based)"""
+        """Validate a POKEMON map using the unpadded 10x10 data."""
         total_tiles = 10 * 10
 
         tile_counts = {}
@@ -123,7 +123,7 @@ class POKEMONPreprocessor(BasePreprocessor):
         return True
 
     def transform_pokemon_onehot(self, onehot_map: np.ndarray) -> np.ndarray:
-        """One-hot text 10x10 map -> integer text."""
+        """Convert a one-hot-encoded 10x10 map to integer encoding."""
         h, w, c = onehot_map.shape
         result = np.zeros((h, w), dtype=np.int32)
 
@@ -138,26 +138,26 @@ class POKEMONPreprocessor(BasePreprocessor):
         """
         10x10 map  16x16 as  expand.
 
-        padding text:
-        - text map of  tile  during  empty(0), floor(2), water(6), tree(8)  keep
-        - remaining  text floor(2) to  convert
+        Padding method:
+        - Preserve empty (0), floor (2), water (6), and tree (8) tiles from the original map.
+        - Convert all other tiles to floor (2).
         """
-        # text edge padding as  padding
+        # Apply edge padding first
         padded = np.pad(
             map_10x10,
             pad_width=((3, 3), (3, 3)),
             mode='edge'
         )
 
-        # keeptext tile text of
+        # Define the tiles to preserve
         keep_tiles = {0, 2, 6, 8, 10}  # empty, floor, water, tree, grass
 
-        # paddingtext text in  keep_tiles in  without tile  floor(2) to  convert
-        # paddingtext text:
+        # Convert tiles outside keep_tiles in the padded area to floor (2)
+        # Padded regions:
         # - top: padded[0:3, :]
         # - bottom: padded[13:16, :]
-        # - text: padded[:, 0:3]
-        # - text: padded[:, 13:16]
+        # - Left: padded[:, 0:3]
+        # - Right: padded[:, 13:16]
 
         # top padding (3row)
         for i in range(3):
@@ -171,13 +171,13 @@ class POKEMONPreprocessor(BasePreprocessor):
                 if padded[i, j] not in keep_tiles:
                     padded[i, j] = POKEMONTile.FLOOR
 
-        # text padding (3column)
+        # Right padding (3 columns)
         for i in range(16):
             for j in range(3):
                 if padded[i, j] not in keep_tiles:
                     padded[i, j] = POKEMONTile.FLOOR
 
-        # text padding (3column)
+        # Right padding (3 columns)
         for i in range(16):
             for j in range(13, 16):
                 if padded[i, j] not in keep_tiles:
@@ -187,10 +187,10 @@ class POKEMONPreprocessor(BasePreprocessor):
 
     def apply_grass_to_monster(self, array: np.ndarray) -> np.ndarray:
         """
-        GRASS tile text  ENEMY(monster) tile to  converttext.
+        Convert some GRASS tiles to ENEMY (monster) tiles.
 
-        - each GRASS tiletext independently 1/5 probability to  ENEMY to  text
-        - seed  map array content of  MD5 text in  text → same text text always same result
+        - Replace each GRASS tile independently with probability 1/5.
+        - Derive the seed from an MD5 hash of the map contents, making the result deterministic.
         """
         seed = int.from_bytes(
             hashlib.md5(array.tobytes()).digest()[:4], byteorder='big'
@@ -233,4 +233,3 @@ class POKEMONPreprocessor(BasePreprocessor):
             order=None,
             meta={"source": "five_dollar_model"}
         )
-

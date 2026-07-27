@@ -1,16 +1,16 @@
 """
 dataset/reward_annotations/instruction_config.py
 =================================================
-generate_instructions.py  in  text for text  text config text.
+Prompt configuration used by generate_instructions.py.
   - CUSTOM_THRESHOLDS  : annotation_figure.ipynb  of  CUSTOM_THRESHOLDS basis
-  - RAW_TILE_COLORS    : gametext text tile ID → RGB (rendering for )
+  - RAW_TILE_COLORS    : per-game raw tile ID → RGB (for rendering)
   - RAW_TILE_NAMES     : tile_mapping.json  of  _tile_names  in  automatic load
-  - RAW_TILE_DESCS     : gametext text tile text (tile_mapping.json tiletext basis)
-  - FEATURE_TILE_DESCS : feature_name → (raw text, unified text)
-  - GAME_DESCRIPTIONS  : game text text text
-  - FEATURE_DESCRIPTIONS: feature_name text
-  - UNIFIED_COLOR_DESCS: unified text color text string
-  - FEATURE_ZONE_LABELS: feature_name → 4text zone text text
+  - RAW_TILE_DESCS     : per-game raw tile descriptions (based on tile_mapping.json)
+  - FEATURE_TILE_DESCS : feature_name → (raw tile names, unified category names)
+  - GAME_DESCRIPTIONS  : one-line description of each game
+  - FEATURE_DESCRIPTIONS: description of each feature_name
+  - UNIFIED_COLOR_DESCS: colour description string per unified category
+  - FEATURE_ZONE_LABELS: feature_name → labels for the 4 zones
 """
 from __future__ import annotations
 import json
@@ -24,8 +24,8 @@ _TILE_MAPPING: dict = json.loads(_MAPPING_FILE.read_text(encoding="utf-8"))
 _SUPPORTED_GAMES = ["doom", "zelda", "sokoban", "pokemon", "dungeon"]
 
 # ── Custom Threshold (annotation_figure.ipynb CUSTOM_THRESHOLDS) ─────────────
-# None = text (game, feature) text in  threshold none
-# threshold 3text → 4 bin: text text / text text / text text / text text
+# None = this (game, feature) pair has no threshold
+# 3 thresholds → 4 bins: very few / somewhat few / somewhat many / very many
 CUSTOM_THRESHOLDS: Dict[str, Optional[List[float]]] = {
     "dungeon_region":             [0.5,  1.5,  3.0,  4.5,  9.5,  14.5, 19.5],
     "dungeon_path_length":        [17.5, 23.5, 28.0, 32.5, 38.5, 44.5, 50.5],
@@ -58,71 +58,71 @@ CUSTOM_THRESHOLDS: Dict[str, Optional[List[float]]] = {
     "sokoban_collectable_count":  None,
 }
 
-# ── Raw tile color (gametext text tile ID → RGB) ────────────────────────────────────
+# ── Raw tile colours (per-game raw tile ID → RGB) ────────────────────────────────
 RAW_TILE_COLORS: Dict[str, Dict[int, Tuple[int, int, int]]] = {
     "doom": {
-        0: (30, 30, 30),      # EMPTY  - text of  text (border)
-        1: (110, 110, 110),   # WALL   - text text
-        2: (215, 195, 165),   # FLOOR  - text text
-        3: (230, 40, 40),     # ENEMY  - text
-        4: (0, 210, 100),     # SPAWN  - secondstext
-        5: (230, 230, 0),     # ITEM   - text
-        6: (255, 120, 0),     # DANGER - text
-        7: (50, 120, 230),    # DOOR   - text
+        0: (30, 30, 30),      # EMPTY  - dark grey (border)
+        1: (110, 110, 110),   # WALL   - grey
+        2: (215, 195, 165),   # FLOOR  - light beige
+        3: (230, 40, 40),     # ENEMY  - red
+        4: (0, 210, 100),     # SPAWN  - green
+        5: (230, 230, 0),     # ITEM   - yellow
+        6: (255, 120, 0),     # DANGER - orange
+        7: (50, 120, 230),    # DOOR   - blue
     },
     "zelda": {
-        0: (30, 30, 30),      # EMPTY  - text of  text
-        1: (110, 110, 110),   # WALL   - text text
-        2: (215, 195, 165),   # FLOOR  - text text
-        3: (140, 90, 40),     # DOOR   - text
-        4: (100, 130, 50),    # BLOCK  - text
-        5: (0, 210, 100),     # START  - text  secondstext
-        6: (230, 40, 40),     # MOB    - text
-        7: (230, 230, 0),     # OBJECT - text
-        8: (80, 160, 240),    # FLOOD  - text
+        0: (30, 30, 30),      # EMPTY  - dark grey
+        1: (110, 110, 110),   # WALL   - grey
+        2: (215, 195, 165),   # FLOOR  - light beige
+        3: (140, 90, 40),     # DOOR   - brown
+        4: (100, 130, 50),    # BLOCK  - olive green
+        5: (0, 210, 100),     # START  - bright green
+        6: (230, 40, 40),     # MOB    - red
+        7: (230, 230, 0),     # OBJECT - yellow
+        8: (80, 160, 240),    # FLOOD  - light blue
     },
     "sokoban": {
-        0: (220, 200, 170),   # EMPTY  - text
-        1: (110, 110, 110),   # WALL   - text text
-        4: (160, 80, 30),     # BOX    - text
-        5: (0, 210, 100),     # PLAYER - text  secondstext
+        0: (220, 200, 170),   # EMPTY  - beige
+        1: (110, 110, 110),   # WALL   - grey
+        4: (160, 80, 30),     # BOX    - brown
+        5: (0, 210, 100),     # PLAYER - bright green
     },
     "pokemon": {
-        0:  (30, 30, 30),     # EMPTY  - text of  text
-        1:  (110, 110, 110),  # WALL   - text text
-        2:  (175, 225, 145),  # FLOOR  - textsecondstext (path)
-        3:  (230, 40, 40),    # ENEMY  - text (wild Pokemon)
-        4:  (230, 230, 0),    # OBJECT - text (Pokeball)
-        5:  (0, 210, 100),    # SPAWN  - text  secondstext (door)
-        6:  (50, 150, 240),   # WATER  - text
-        7:  (200, 160, 90),   # FENCE  - text
-        8:  (0, 150, 0),      # TREE   - text  secondstext
-        9:  (210, 100, 50),   # HOUSE  - text
-        10: (120, 205, 90),   # GRASS  - textsecondstext
+        0:  (30, 30, 30),     # EMPTY  - dark grey
+        1:  (110, 110, 110),  # WALL   - grey
+        2:  (175, 225, 145),  # FLOOR  - pale green (path)
+        3:  (230, 40, 40),    # ENEMY  - red (wild Pokemon)
+        4:  (230, 230, 0),    # OBJECT - yellow (Pokeball)
+        5:  (0, 210, 100),    # SPAWN  - bright green (door)
+        6:  (50, 150, 240),   # WATER  - blue
+        7:  (200, 160, 90),   # FENCE  - tan
+        8:  (0, 150, 0),      # TREE   - dark green
+        9:  (210, 100, 50),   # HOUSE  - orange brown
+        10: (120, 205, 90),   # GRASS  - light green
     },
     "dungeon": {
-        0: (30, 30, 30),      # UNKNOWN  - text of  text (border)
-        1: (215, 195, 165),   # FLOOR    - text text
-        2: (110, 110, 110),   # WALL     - text text
-        3: (230, 40, 40),     # ENEMY    - text (bat)
-        4: (230, 230, 0),     # TREASURE - text
+        0: (30, 30, 30),      # UNKNOWN  - dark grey (border)
+        1: (215, 195, 165),   # FLOOR    - light beige
+        2: (110, 110, 110),   # WALL     - grey
+        3: (230, 40, 40),     # ENEMY    - red (bat)
+        4: (230, 230, 0),     # TREASURE - yellow
     },
 }
 
 # ── Raw tile name: tile_mapping.json  of  _tile_names  in  automatic load ─────────────────
-# text: int(tile_id), text: name string (EMPTY, WALL, FLOOR, ENEMY text)
+# key: int(tile_id), value: name string (EMPTY, WALL, FLOOR, ENEMY, ...)
 RAW_TILE_NAMES: Dict[str, Dict[int, str]] = {
     game: {
         int(tid): name
         for tid, name in _TILE_MAPPING[game].get("_tile_names", {}).items()
-        if int(tid) != 99  # UNKNOWN(99) text — text map in  text text
+        if int(tid) != 99  # UNKNOWN(99) excluded — never appears in real maps
     }
     for game in _SUPPORTED_GAMES
     if game in _TILE_MAPPING
 }
 
-# ── unified text → gametext raw tile name text ───────────────────────────────────
-# tile_mapping.json of  mapping in  automatic text: {game: {unified_cat_id: [tile_names]}}
+# ── Unified category → per-game raw tile names ────────────────────────────────
+# Derived automatically from the tile_mapping.json mapping: {game: {unified_cat_id: [tile_names]}}
 UNIFIED_TILE_GROUPS: Dict[str, Dict[int, List[str]]] = {}
 for _game in _SUPPORTED_GAMES:
     if _game not in _TILE_MAPPING:
@@ -137,8 +137,8 @@ for _game in _SUPPORTED_GAMES:
             _groups.setdefault(int(_uni_id), []).append(_name)
     UNIFIED_TILE_GROUPS[_game] = _groups
 
-# ── Raw tile text (tile_mapping.json tiletext basis) ─────────────────────────────────
-# RAW_TILE_NAMES  of  name and  text text text.
+# ── Raw tile descriptions (based on the tile names in tile_mapping.json) ─────────
+# The names match those in RAW_TILE_NAMES.
 RAW_TILE_DESCS: Dict[str, Dict[int, str]] = {
     "doom": {
         0: "void",
@@ -190,8 +190,8 @@ RAW_TILE_DESCS: Dict[str, Dict[int, str]] = {
     },
 }
 
-# ── Featuretext tile text: feature_name → (raw text, unified text) ──────────────────
-# passable basis: Empty + Hazard + Collectable (Interactive text)
+# ── Tiles counted per feature: feature_name → (raw tiles, unified tiles) ─────────
+# Passable definition: Empty + Hazard + Collectable (Interactive excluded)
 FEATURE_TILE_DESCS: Dict[str, Dict[str, Tuple[str, str]]] = {
     "doom": {
         "region":             ("passable tiles: FLOOR, STAIR, ENEMY, ITEM",
@@ -255,8 +255,8 @@ FEATURE_TILE_DESCS: Dict[str, Dict[str, Tuple[str, str]]] = {
     },
 }
 
-# ── Count feature(enum 2,3,4) text raw tile ID list ────────────────────────────────
-# instruction_raw create text per-tile count compute in  text for .
+# ── Raw tile IDs counted by the count features (enum 2, 3, 4) ────────────────────
+# Used when computing the per-tile counts for instruction_raw.
 # tile ID  tile_mapping.json / measure/*.py basis.
 FEATURE_COUNT_TILE_IDS: Dict[str, Dict[str, List[int]]] = {
     "doom": {
@@ -286,7 +286,7 @@ FEATURE_COUNT_TILE_IDS: Dict[str, Dict[str, List[int]]] = {
     },
 }
 
-# ── game text ─────────────────────────────────────────────────────────────────────
+# ── Game descriptions ────────────────────────────────────────────────────────────
 GAME_DESCRIPTIONS: Dict[str, str] = {
     "doom":    "Doom (top-down view of a first-person shooter dungeon map)",
     "zelda":   "The Legend of Zelda (top-down dungeon adventure map)",
@@ -295,7 +295,7 @@ GAME_DESCRIPTIONS: Dict[str, str] = {
     "dungeon": "Dungeon adventure (top-down dungeon crawl map)",
 }
 
-# ── Feature text ──────────────────────────────────────────────────────────────────
+# ── Feature descriptions ─────────────────────────────────────────────────────────
 FEATURE_DESCRIPTIONS: Dict[str, str] = {
     "region":             "number of disconnected passable-area clusters — count of separate walkable zones (not their size or content)",
     "path_length":        "length of the longest traversable path through passable tiles",
@@ -304,7 +304,7 @@ FEATURE_DESCRIPTIONS: Dict[str, str] = {
     "collectable_count":  "total count of collectable/item tiles",
 }
 
-# ── Unified text color text ────────────────────────────────────────────────────
+# ── Colour description per unified category ──────────────────────────────────────
 UNIFIED_COLOR_DESCS: Dict[int, str] = {
     0: "RGB(160,140,120) — grayish-tan",
     1: "RGB(80,80,80) — dark gray",
@@ -313,7 +313,7 @@ UNIFIED_COLOR_DESCS: Dict[int, str] = {
     4: "RGB(200,200,20) — yellow",
 }
 
-# ── Zone text text (featuretext) ───────────────────────────────────────────────────────
+# ── Zone labels (per feature) ────────────────────────────────────────────────────
 FEATURE_ZONE_LABELS: Dict[str, List[str]] = {
     "region": [
         "very few regions",
@@ -367,8 +367,8 @@ FEATURE_ZONE_LABELS: Dict[str, List[str]] = {
     ],
 }
 
-# ── text text: feature × intensity level(0~7) → text tabletext list ────────────────────
-# level 0 =  text text/text, level 7 =  text text/text
+# ── Vocabulary: feature x intensity level (0-7) → candidate word list ────────────
+# level 0 = the fewest / smallest, level 7 = the most / largest
 # existing 4level×4text → 8level×2text (each level  2text of  sub level to  split)
 VOCAB_SETS: Dict[str, List[List[str]]] = {
     "region": [

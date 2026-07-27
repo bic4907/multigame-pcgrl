@@ -1,6 +1,6 @@
 """evaluator/rewards/multigame_amount.py
 
-Multigame tile count based reward (previous map text text also ).
+Reward based on improvements in multigame tile counts relative to the previous map.
 """
 import chex
 import jax
@@ -16,7 +16,7 @@ def get_multigame_amount_reward(
     cond: chex.Array,
     tile_name: str = "interactive",
 ) -> chex.Array:
-    """previous map text multigame tile count condition text improvement.
+    """Improvement in satisfying a multigame tile-count condition over the previous map.
 
     Parameters
     ----------
@@ -25,17 +25,16 @@ def get_multigame_amount_reward(
     curr_env_map : chex.Array
         current (H, W) integer map.
     cond : chex.Array
-        texttable tile count.
+        Measured tile count.
     tile_name : str
-        "interactive", "hazard", "collectable"  during  text.
+        One of "interactive", "hazard", or "collectable".
 
     Returns
     -------
-    chex.Array : reward (text = text, text = text).
+    chex.Array : reward (positive for improvement, negative for regression).
     """
     prev_loss = multigame_amount_loss(prev_env_map, tile_name, cond, absolute=True)
     curr_loss = multigame_amount_loss(curr_env_map, tile_name, cond, absolute=True)
 
     reward = prev_loss - curr_loss
     return reward.astype(float)
-

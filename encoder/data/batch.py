@@ -75,7 +75,7 @@ def create_batches(dataset: Dataset, batch_size: int):
 def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTrainConfig):
     dataset_samples = dataset._samples
 
-    # ── max_samples: dry-run for  — BERT embedding compute  before  in  sample text  text ──
+    # ── max_samples: limit samples before BERT embedding for dry runs ──
     max_samples = getattr(config, 'max_samples', None)
     if max_samples is not None and len(dataset_samples) > max_samples:
         logger.info(f"[dry-run] max_samples={max_samples}: "
@@ -104,7 +104,7 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
         [x + [0] * (max_re_len - len(x)) for x in whole_reward_enum_digits]
     )  # (n_samples, max_re_len)
 
-    # text npz   text text load (text: {game}_re{rn} form)
+    # Load the single NPZ once; keys have the form {game}_re{rn}
     import re as _re
     npz_path = os.path.join(buffer_dir, 'cpcgrl_buffer', 'cpcgrl_pair_dataset.npz')
     _npz_data = np.load(npz_path, allow_pickle=True)
@@ -117,10 +117,10 @@ def create_dataset(buffer_dir: str, dataset: MultiGameDataset, config: RewardTra
 
     dataset = None
     for game in unique_games:
-        # current game in  text  text of  pairs   text
+        # Combine pairs from keys belonging to the current game
         game_keys = sorted(_npz_game_keys.get(game, []))
         if not game_keys:
-            # game text  if missing all text text for  (backward compat)
+            # Use all keys when no game-specific key exists (backward compatibility)
             game_keys = sorted(k for ks in _npz_game_keys.values() for k in ks)
             logger.warning(f"No buffer keys for game={game!r}, using all {len(game_keys)} keys")
 

@@ -1,7 +1,7 @@
 """
 eval_utils.py
 =============
-each eval_*.py entry point in  text  common evaluation entry point.
+Common evaluation entry point shared by eval_*.py scripts.
 
 Example:
     from instruct_rl.utils.eval_utils import main_eval_entry
@@ -33,7 +33,7 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
     if not config.random_agent:
         _, restored_ckpt, encoder_param = init_checkpointer(config)
 
-        # ── checkpoint load text ──────────────────────────────────────────────
+        # ── Ensure checkpoint loading ─────────────────────────────────────────
         if restored_ckpt is None:
             if getattr(config, 'ignore_checkpoint', False):
                 logger.warning(
@@ -53,20 +53,20 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
     else:
         restored_ckpt, encoder_param = None, None
 
-    # train and  sametext MultiGameDataset based eval instruct load
+    # Load evaluation instructions from MultiGameDataset just as in training
     eval_inst = None
     eval_inst_meta = None
     gt_levels = None
     gt_images = None
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:
 
-        _, eval_inst, samples = load_dataset_instruct(config)  # test split text for
+        _, eval_inst, samples = load_dataset_instruct(config)  # Use the test split
         logger.info(f"Loaded eval instruct from dataset: {eval_inst.reward_i.shape[0]} samples")
 
         # sample metadata DataFrame (game, instruction, reward_enum)
-        # instruction_prefix(name/desc/none)  'none'   text text, CLIP embedding compute and
-        # sametext seed(42) to  prefix  applytext results_tb  of  instruction text
-        # text to  CLIP  in  text text  applytext also text text.
+        # When instruction_prefix (name/desc/none) is not 'none', apply it with
+        # the same seed (42) as CLIP embedding generation so results_tb records
+        # the exact instruction text passed to CLIP.
         from instruct_rl.utils.dataset_loader_helpers.preprocessing import build_effective_instructions
         _effective_instructions = build_effective_instructions(
             samples, instruction_prefix=getattr(config, 'instruction_prefix', 'none')
@@ -77,14 +77,14 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
             'reward_enum': [s.meta.get('reward_enum', None) for s in samples],
         })
 
-        # GT level: samples in  direct extract  after  n_epstext repetition
-        # → pred_levels (N*n_eps, H, W)  and  batch size  text
+        # GT levels: extract directly from samples, then repeat n_eps times
+        # Match the pred_levels batch size (N*n_eps, H, W)
         _n_eps = getattr(config, 'n_eps', 1)
         _gt_raw = np.stack([s.array.astype(np.int32) for s in samples])  # (M, H, W)
         gt_levels = np.repeat(_gt_raw, _n_eps, axis=0)                   # (M*n_eps, H, W)
         logger.info(f"GT levels: {_gt_raw.shape} × n_eps={_n_eps} → {gt_levels.shape}")
 
-        # GT rendering image: text text tile batch rendering (render_multigame_maps_batch)
+        # GT images: batched sprite-tile rendering with render_multigame_maps_batch
         _tile_size = getattr(config, 'vit_tile_size', 16)
         logger.info(f"Rendering GT images (tile_size={_tile_size}) ...")
         _gt_images_raw = render_multigame_maps_batch(
@@ -94,7 +94,7 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
         gt_images = np.repeat(_gt_images_raw, _n_eps, axis=0)  # (M*n_eps, H*ts, W*ts, 3)
         logger.info(f"GT images: {_gt_images_raw.shape} × n_eps={_n_eps} → {gt_images.shape}")
 
-        # ── dry-run: max_samples  to  text inside text ─────────────────────────────
+        # ── Dry run: truncate to max_samples ──────────────────────────────
         max_samples = getattr(config, 'max_samples', None)
         if max_samples is not None and eval_inst.reward_i.shape[0] > max_samples:
             import jax.numpy as jnp
@@ -126,11 +126,11 @@ def main_chunk(config, rng, *, inject_obs_fn=None):
 
 
 def main_eval_entry(config, *, inject_obs_fn=None):
-    """Hydra @main  in  calltext  common evaluation entry point.
+    """Common evaluation entry point called from Hydra @main.
 
     Args:
-        config: Hydra config (EvalConfig text  text sub class).
-        inject_obs_fn: obs inject callback. None  text config based inject  to text text for .
+        config: Hydra config (EvalConfig or a subclass).
+        inject_obs_fn: observation-injection callback; use config-based injection when None.
     """
     _eval_start = time.perf_counter()
 
@@ -179,8 +179,8 @@ def main_eval_entry(config, *, inject_obs_fn=None):
         except Exception as _e:
             logger.warning("Failed to load train_setting.json: %s", _e)
 
-    # eval_reward_decoder_mode to  text condition text  text.
-    # reward_decoder_mode  exp_dir path text for  as  as-is keeptext.
+    # eval_reward_decoder_mode selects the actual condition source.
+    # Keep reward_decoder_mode unchanged for exp_dir path matching.
     _eval_rdm = getattr(config, 'eval_reward_decoder_mode', None)
     if _eval_rdm is not None:
         config.reward_decoder_mode = _eval_rdm
@@ -188,7 +188,7 @@ def main_eval_entry(config, *, inject_obs_fn=None):
     _re = getattr(config, 'dataset_reward_enum', None)
     _re_enums = getattr(config, 'eval_dataset_reward_enums', None)
 
-    # eval_dataset_reward_enums   text text → text text  as-is suffix to  text for
+    # When eval_dataset_reward_enums is specified, use it directly as the suffix
     # e.g. "01234" → "_re-01234", [0,1,2] → "_re-012"
     if _re_enums is not None:
         _re_enums_str = ''.join(str(x) for x in _re_enums) if not isinstance(_re_enums, str) else _re_enums
@@ -198,7 +198,7 @@ def main_eval_entry(config, *, inject_obs_fn=None):
     else:
         _re_suffix = ""
 
-    # eval_games   text text abbreviation  foldertext in  text (if missing game text for )
+    # Include eval_games abbreviations in the directory name; otherwise use game
     _eval_games = getattr(config, 'eval_games', None) or getattr(config, 'game', None)
     _game_suffix = f"_game-{_eval_games}" if _eval_games else ""
 

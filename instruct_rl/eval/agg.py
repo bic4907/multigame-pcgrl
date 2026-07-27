@@ -11,10 +11,10 @@ import pandas as pd
 def iqr_mean(x: pd.Series) -> float:
     """IQR based robust mean.
 
-    - NaN text  after  compute.
-    - sample  4text less than text IQR filtering text  text mean return
-      (sample  text text IQR=0  text  before text or moretext to  text text text).
-    - validtext  if missing NaN return.
+    - Exclude NaN values before calculation.
+    - With fewer than four samples, return the plain mean without IQR filtering
+      (too few samples can produce IQR=0 and classify every value as an outlier).
+    - Return NaN when there are no valid values.
     """
     x = x.dropna()
     if x.empty:
@@ -24,10 +24,9 @@ def iqr_mean(x: pd.Series) -> float:
     q1, q3 = x.quantile(0.25), x.quantile(0.75)
     iqr = q3 - q1
     if iqr == 0:
-        # IQR=0 → centertext and  different text or moretext to  process
+        # IQR=0: treat only values different from the median as outliers
         median = x.median()
         filtered = x[x == median]
     else:
         filtered = x[(x >= q1 - 1.5 * iqr) & (x <= q3 + 1.5 * iqr)]
     return float(filtered.mean()) if not filtered.empty else float(x.mean())
-

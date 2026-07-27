@@ -9,9 +9,9 @@ defaults:
 encoder:
   model: cnnclip
 
-# text config
+# Decoder config
 decoder:
   hidden_dim: 128
   num_layers: 2
   num_reward_classes: 5
-  cnn_reward_enum_onehot: true   # CNN text in  reward_enum one-hot text text
+  cnn_reward_enum_onehot: true   # feed the reward_enum one-hot into the CNN decoder

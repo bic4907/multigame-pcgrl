@@ -1,7 +1,7 @@
 """
 image_utils.py
 ==============
-evaluation results image  sampletext text  text text  utility.
+Utilities for sampling evaluation images and overlaying text.
 """
 import textwrap
 
@@ -11,13 +11,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 def annotate_image(img_arr: np.ndarray, game: str, instruction: str, conditions: dict) -> Image.Image:
-    """numpy image array top in  game / instruction / condition text  text .
+    """Overlay game, instruction, and condition text at the top of a NumPy image.
 
     Args:
-        img_arr    : (H, W, C) uint8 text  float32 image.
+        img_arr    : (H, W, C) uint8 or float32 image.
         game       : game name string.
         instruction: instruction string.
-        conditions : {column_name: float} dictionary (NaNtext text  text).
+        conditions : {column_name: float} dictionary; NaN values are omitted.
 
     Returns:
         PIL.Image (RGB).
@@ -48,34 +48,34 @@ def annotate_image(img_arr: np.ndarray, game: str, instruction: str, conditions:
 
 def sample_wandb_images(
     df_ctrl_sim,
-    eval_env_maps: list,   # batchtext env_map list (each text: (n_envs, H, W) uint8)
+    eval_env_maps: list,   # Per-batch env_map list; each item is (n_envs, H, W) uint8
     n_rows: int,
     n_samples: int = 16,
     seed: int = 0,
     tile_size: int = 16,
 ) -> list:
-    """df_ctrl_sim in  condition  text text also text sample  text wandb.Image text return.
+    """Sample non-overlapping conditions from df_ctrl_sim and return wandb.Images.
 
-    env_map(state)  text render_unified_rgb  to  on-demand renderingtext.
+    Render env_map (state) on demand with render_unified_rgb.
 
     Args:
         df_ctrl_sim  : all evaluation results DataFrame.
-        eval_env_maps: batchtext env_map list (each text: (n_envs, H, W) uint8).
-        n_rows       : text valid sample text (padding remove for ).
-        n_samples    : maximum upload image text (default 16).
-        seed         : sampletext random seed.
-        tile_size    : rendering tile textcell size (default 16).
+        eval_env_maps: per-batch env_map list; each item is (n_envs, H, W) uint8.
+        n_rows       : number of valid samples, used to remove padding.
+        n_samples    : maximum number of images to upload (default: 16).
+        seed         : random seed for sampling.
+        tile_size    : rendered tile cell size (default: 16).
     """
     from envs.probs.multigame import render_multigame_map
 
     all_env_maps = np.concatenate(eval_env_maps, axis=0)[:n_rows]  # (n_rows, H, W)
     cond_cols = [c for c in df_ctrl_sim.columns if c.startswith('condition_')]
 
-    # seed==0 row in  row_itext 1text extract → unique instructiontext 1sample
+    # Select one seed==0 row per row_i, yielding one sample per unique instruction
     first_per_row = (
         df_ctrl_sim[df_ctrl_sim['seed'] == 0]
         .drop_duplicates(subset='row_i')
-        .reset_index()  # text DataFrame index(= all_env_maps index) preserve
+        .reset_index()  # Preserve the original DataFrame index (= all_env_maps index)
     )
     sample_df = first_per_row.sample(
         n=min(n_samples, len(first_per_row)),
@@ -100,4 +100,3 @@ def sample_wandb_images(
         wandb_images.append(wandb.Image(pil_img, caption=caption))
 
     return wandb_images
-

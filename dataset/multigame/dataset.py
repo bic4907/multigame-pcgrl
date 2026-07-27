@@ -1,27 +1,27 @@
 """
 dataset/multigame/dataset.py
 ============================
-MultiGameDataset: Dungeon + POKEMON + Sokoban + DOOM text dataset class.
+MultiGameDataset: a unified dataset class for Dungeon, POKEMON, Sokoban, and DOOM.
 
-text  of text: numpy (Pillow  rendering text in text text).
+External dependencies: numpy (Pillow is needed only for rendering).
 
 Example
 -------
     from dataset.multigame import MultiGameDataset
 
-    # use_tile_mapping=True (default value): text sample array  unified 7-category to  converttext return
+    # use_tile_mapping=True (default): sample arrays are converted to the unified categories
     ds = MultiGameDataset(include_dungeon=True, include_pokemon=True, include_doom=True)
     sample = ds[0]
-    # sample.array text range: [0, 6]  (unified category index)
+    # sample.array values lie in [0, NUM_CATEGORIES-1] (unified category index)
 
-    # use_tile_mapping=False: text gametext tile_id as-is return
+    # use_tile_mapping=False: the raw per-game tile ids are returned unchanged
     ds_raw = MultiGameDataset(use_tile_mapping=False)
     sample_raw = ds_raw[0]
-    # sample_raw.array text: game text integer tile_id
+    # sample_raw.array holds the game-specific integer tile ids
 
-    # text text (dataset textload text   before text)
-    ds.use_tile_mapping = False   #   after  __getitem__ / __iter__ text return
-    ds.use_tile_mapping = True    # text unified return
+    # The mode can be switched at any time without reloading the dataset.
+    ds.use_tile_mapping = False   # subsequent __getitem__ / __iter__ return raw ids
+    ds.use_tile_mapping = True    # and unified categories again
 
     # filter
     dungeon_samples = ds.by_game("dungeon")
@@ -61,7 +61,7 @@ from .cache_utils import (
     find_game_cache_key,
     update_ann_batch_id,
     update_json_with_ann_keys,
-    # legacy (sub text)
+    # legacy (kept for backward compatibility)
     build_cache_key,
     load_samples_from_cache,
     save_samples_to_cache,
@@ -76,10 +76,10 @@ logger = logging.getLogger(__name__)
 class _WarningConditionsDict(dict):
     """
     placeholder conditions dict.
-    text per-sample annotation  without game in  conditions text in  text
-    WARNING  to text  text.  (gametext 1text)
+    Logs a WARNING the first time `conditions` is accessed for a game that has no
+    per-sample annotation (once per game).
     """
-    _warned_games: set = set()  # class text:  text warningtext game name
+    _warned_games: set = set()  # class-level: games already warned about
 
     def __init__(self, data: dict, game: str, logger) -> None:
         super().__init__(data)
@@ -118,23 +118,23 @@ class _WarningConditionsDict(dict):
 
 class MultiGameDataset:
     """
-    Dungeon + Sokoban(Boxoban) + POKEMON + DOOM text dataset class.
+    Unified dataset class for Dungeon, Sokoban (Boxoban), POKEMON, and DOOM.
 
     Parameters
     ----------
-    dungeon_root     : dungeon_level_dataset text path
-    pokemon_root     : Five-Dollar-Model text path
-    sokoban_root     : boxoban_levels text path
-    doom_root        : doom_levels text path
-    include_dungeon  : Dungeon dataset text text
-    include_pokemon  : POKEMON dataset text text
-    include_sokoban  : Sokoban dataset text text
-    include_doom     : DOOM dataset text text
-    use_tile_mapping : True(default)text array  unified 7-category to  converttext return.
-                       Falsetext text tile_id as-is return.
-                       load   after  in  also  text as  text text available.
-    handler_config   : HandlerConfig text. None text default value text for .
-                       (gametext preprocessing config text, augmentation config also  text)
+    dungeon_root     : path to dungeon_level_dataset
+    pokemon_root     : path to Five-Dollar-Model
+    sokoban_root     : path to boxoban_levels
+    doom_root        : path to doom_levels
+    include_dungeon  : whether to load the Dungeon dataset
+    include_pokemon  : whether to load the POKEMON dataset
+    include_sokoban  : whether to load the Sokoban dataset
+    include_doom     : whether to load the DOOM dataset
+    use_tile_mapping : if True (default), arrays are converted to unified categories;
+                       if False, raw tile ids are returned unchanged. The mode can be
+                       switched at any time after loading.
+    handler_config   : HandlerConfig instance; None uses the defaults
+                       (per-game preprocessing and augmentation options)
     """
 
     def __init__(
@@ -161,14 +161,14 @@ class MultiGameDataset:
         max_samples_per_game: int = 0,
         max_samples_seed:     int = 42,
         instruction_field:    str = "uni",   # "uni" = instruction_uni, "raw" = instruction_raw
-        # sub text: text parametertext text
+        # Deprecated aliases, kept for backward compatibility
         boxoban_root:         Path | str | None = None,
         include_boxoban:      bool | None = None,
     ) -> None:
         self.use_tile_mapping: bool = use_tile_mapping
         self._instruction_field: str = instruction_field  # "uni" or "raw"
 
-        # sub text process
+        # Backward compatibility
         if boxoban_root is not None:
             sokoban_root = boxoban_root
         if include_boxoban is not None:
@@ -191,12 +191,12 @@ class MultiGameDataset:
         self._cache_dir = cache_dir
         self._use_cache = use_cache
 
-        # gametext cache text text (annotation load in  text for )
+        # Per-game cache keys, reused when loading annotations
         self._game_cache_keys: Dict[str, str] = {}
 
         hc = handler_config.to_dict()
 
-        # ── gametext load config (game, include, root, handler_config_sub) ────────
+        # ── Per-game load spec: (game, root, handler_config subsection) ──────────
         _game_specs = []
         if include_dungeon:
             _game_specs.append(("dungeon", str(dungeon_root), hc.get("dungeon", {})))
@@ -206,14 +206,14 @@ class MultiGameDataset:
             _game_specs.append(("zelda", str(zelda_root), hc.get("zelda", {})))
         if include_pokemon:
             _game_specs.append(("pokemon", str(pokemon_root), hc.get("pokemon", {})))
-        # doom/doom2  text process (text  after  separate text in )
+        # doom/doom2 are handled separately below (they share one cache entry)
 
-        # ── gametext load text ─────────────────────────────────────────────────
+        # ── Load each game ──────────────────────────────────────────────────────
         for game, game_root, game_hc in _game_specs:
             cache_key = build_per_game_cache_key(game, game_root, game_hc)
             logger.debug("[%s] cache key: %s", game, cache_key[:12])
             self._game_cache_keys[game] = cache_key
-            # (1) per-game cache text text also
+            # (1) Try the per-game cache first
             if use_cache:
                 cached = load_game_samples_from_cache(cache_dir, game, cache_key)
                 if cached is not None:
@@ -222,29 +222,29 @@ class MultiGameDataset:
                         self._samples.append(s)
                     continue
 
-            # (2) text dataset in  load
+            # (2) Load from the source dataset
             game_samples = self._load_game_from_source(
                 game, game_root, handler_config
             )
 
             if game_samples is not None:
-                # cache save  before  max_samples apply
+                # Apply max_samples before caching
                 max_s = game_hc.get("max_samples") if isinstance(game_hc, dict) else getattr(game_hc, "max_samples", None)
                 if max_s is not None and len(game_samples) > max_s:
                     game_samples = game_samples[:max_s]
-                # cache save  before  filtering + augmentation apply (viewer/annotate text sametext text  text also text)
+                # Filter and augment before caching, so viewer/annotate see the same data
                 game_samples = self._postprocess_game_samples(game, game_samples, handler_config)
                 for s in game_samples:
                     s.order = len(self._samples)
                     self._samples.append(s)
-                # cache in  save
+                # Store in the cache
                 if use_cache:
                     save_game_samples_to_cache(
                         cache_dir, game, cache_key, game_samples
                     )
                 continue
 
-            # (3) artifact-only fallback: text text text game cache  text load
+            # (3) artifact-only fallback: load whatever cache exists for this game
             if use_cache:
                 fallback = load_any_game_cache(cache_dir, game)
                 if fallback is not None:
@@ -253,16 +253,16 @@ class MultiGameDataset:
                     for s in fallback:
                         s.order = len(self._samples)
                         self._samples.append(s)
-                    # fallback text text loadtext file of  text to  text
+                    # Record the key of the file the fallback actually loaded
                     actual_key = find_game_cache_key(cache_dir, game)
                     if actual_key:
                         self._game_cache_keys[game] = actual_key
                     continue
 
-            # (4) text also  if missing warningtext text
+            # (4) Neither source nor cache is available
             logger.warning("%s: no source data and no cache — skipped", game)
 
-        # ── doom + doom2 text load (sum max_samples=1000 apply  after  cache save) ──
+        # ── Load doom + doom2 together (max_samples applied to the combined set) ──
         if include_doom or include_doom2:
             doom_hc = hc.get("doom", {})
             doom_cache_key = build_combined_doom_cache_key(
@@ -304,24 +304,24 @@ class MultiGameDataset:
                         for s in fallback:
                             s.order = len(self._samples)
                             self._samples.append(s)
-                        # fallback text text loadtext file of  text to  text
+                        # Record the key of the file the fallback actually loaded
                         actual_key = find_game_cache_key(cache_dir, "doom")
                         if actual_key:
                             self._game_cache_keys["doom"] = actual_key
 
-        # ── annotation automatic load (ann.json → sample text) ─────────────────────
+        # ── Load annotations automatically (ann.json -> samples) ─────────────────
         if use_cache and self._game_cache_keys:
             self._ensure_and_load_all_annotations()
 
-        # ── raw counts write (max_samples_per_game apply  before , (game, reward_enum) basis) ──
+        # ── Record raw counts per (game, reward_enum), before max_samples_per_game ──
         self._raw_game_re_counts: dict = {}
         for s in self._samples:
             re = s.meta.get("reward_enum")
             if re is not None:
                 self._raw_game_re_counts[(s.game, re)] = self._raw_game_re_counts.get((s.game, re), 0) + 1
 
-        # ── gametext text text sample text text (source_id basis, annotation text   after ) ──
-        # source_id textabove to  selecttext to  text reward_enum text  text keeptext
+        # ── Cap the per-game sample count (by source_id, after annotations load) ──
+        # Selecting whole source_ids keeps every reward_enum of a level together.
         if max_samples_per_game >= 1:
             import random as _random
             _rng = _random.Random(max_samples_seed)
@@ -346,13 +346,13 @@ class MultiGameDataset:
                 logger.info("max_samples_per_game=%d: total %d → %d samples",
                             max_samples_per_game, _before, len(self._samples))
 
-        # ── N sample textsampletext (gametext, text based) ─────────────────────────
+        # ── Subsample down to N per game (uniformly at random) ────────────────────
         if N >= 1:
             import random as _random
             _total = len(self._samples)
             _rng = _random.Random(42)
             _mask = [False] * _total
-            # gametext index  text order keep to  text
+            # Bucket indices per game, preserving their original order
             _game_buckets: dict = {}
             for i, s in enumerate(self._samples):
                 _game_buckets.setdefault(s.game, []).append(i)
@@ -372,15 +372,15 @@ class MultiGameDataset:
         self, game: str, samples: List[GameSample], handler_config: HandlerConfig
     ) -> List[GameSample]:
         """
-        cache save  before  in  filtering and  augmentation  applytext.
+        Apply filtering and augmentation before the samples are cached.
 
-        apply order:
-        1. Pokemon tiletext filtering (max_tile_count exceed sample remove)
-        2. Instruction text text filtering (min_instruction_words less than remove)
-        3. rotate augmentation (rotate_90 config text 90 also  rotate text text )
-        4. augmentation  after  max_samples textapply
+        Order:
+        1. Pokemon tile filtering (drop samples exceeding max_tile_count)
+        2. Instruction length filtering (drop samples below min_instruction_words)
+        3. Rotation augmentation (90-degree rotations when rotate_90 is enabled)
+        4. max_samples is applied after augmentation
         """
-        # (1) Pokemon tiletext filtering
+        # (1) Pokemon tile filtering
         if game == "pokemon" and handler_config.pokemon.enabled:
             max_tile_count = handler_config.pokemon.max_tile_count
             before = len(samples)
@@ -393,7 +393,7 @@ class MultiGameDataset:
                 logger.info("POKEMON tileset filtering: %d → %d (%d removed, max_tile_count=%d)",
                             before, len(samples), removed, max_tile_count)
 
-        # (2) Instruction text text filtering
+        # (2) Instruction length filtering
         if handler_config.pokemon.enabled:
             min_words = handler_config.pokemon.min_instruction_words
             before = len(samples)
@@ -420,7 +420,7 @@ class MultiGameDataset:
                 logger.info("%s augmentation: %d rotated samples added → %d total",
                             game, len(rotated), len(samples))
 
-        # (4) augmentation  after  max_samples textapply
+        # (4) Apply max_samples after augmentation
         max_s: Optional[int] = None
         if game == "pokemon":
             max_s = handler_config.pokemon.max_samples
@@ -439,7 +439,7 @@ class MultiGameDataset:
     def _load_game_from_source(
         self, game: str, game_root: str, handler_config: HandlerConfig
     ) -> Optional[List[GameSample]]:
-        """text dataset in  game sample  loadtext. failure text None return."""
+        """Load a game's samples from its source dataset. Returns None on failure."""
         root = Path(game_root)
         if not root.exists():
             return None
@@ -500,7 +500,7 @@ class MultiGameDataset:
 
     def _apply_floor_filtering(self, samples: List[GameSample], floor_empty_max: int) -> List[GameSample]:
         """
-        Floor + empty count  floor_empty_max  text sampletext filtering
+        Keep only samples whose floor + empty count is at most floor_empty_max.
         """
         filtered = []
         for sample in samples:
@@ -522,12 +522,10 @@ class MultiGameDataset:
 
     def _apply_pokemon_tileset_filtering(self) -> None:
         """
-        POKEMON sampletext tiletext basis as  filtering.
-        (padding  after  16x16 text in  text tile  250text or more text text)
+        Filter POKEMON samples by how dominant a single tile type is.
 
-        filtering basis:
-        - POKEMON gametext target
-        - text tile text  256text  during  250text or more text text (text map)
+        A padded 16x16 map has 256 cells; if one tile accounts for 250 or more of them the
+        level is essentially empty, so it is dropped. Only POKEMON samples are affected.
         """
         pokemon_indices = [i for i, s in enumerate(self._samples) if s.game == "pokemon"]
 
@@ -539,12 +537,12 @@ class MultiGameDataset:
 
         for i, sample in enumerate(self._samples):
             if sample.game == "pokemon":
-                # POKEMON sample: tiletext basis filtering
+                # POKEMON sample: filter on tile counts
                 flat = sample.array.ravel()
                 tile_counts = np.bincount(flat.astype(int))
                 max_tile_count = int(np.max(tile_counts)) if len(tile_counts) > 0 else 0
 
-                # 256text tile  during  250text or more  same tile  text keep
+                # Drop levels where one tile covers 250 or more of the 256 cells
                 if max_tile_count < 250:
                     filtered_samples.append(sample)
             else:
@@ -561,16 +559,16 @@ class MultiGameDataset:
 
     def _augment_with_rotations_per_game(self) -> None:
         """
-        gametext config in  text each game of  sample  rotatetext augmentation.
+        Augment samples with rotated copies, per game.
 
-        each game of  config in  rotate_90 config  text text gametext rotate augmentation  textrowtext.
-        text: config.pokemon.rotate_90 = Truetext POKEMON gametext rotate augmentation
+        A game is augmented only when rotate_90 is enabled in its handler config.
+        For example, config.pokemon.rotate_90 = True augments only POKEMON samples.
         """
         original_count = len(self._samples)
         rotated_samples = []
 
         for sample in self._samples:
-            # gametext config in  rotate_90 config check
+            # Check rotate_90 in this game's handler config
             should_augment = False
             if sample.game == "pokemon" and self._handler_config.pokemon.rotate_90:
                 should_augment = True
@@ -585,10 +583,10 @@ class MultiGameDataset:
                 rotated = create_rotated_sample(sample)
                 rotated_samples.append(rotated)
 
-        # text next in  rotate sample text
+        # Append the rotated samples
         self._samples.extend(rotated_samples)
 
-        # order text
+        # Renumber
         for i, sample in enumerate(self._samples):
             sample.order = i
 
@@ -596,7 +594,7 @@ class MultiGameDataset:
             logger.info("Data augmentation: %d → %d samples (added %d rotated versions)",
                         original_count, len(self._samples), len(rotated_samples))
 
-        # ── augmentation  after  each gametext text (handler_config of  max_samples text) ────────────
+        # ── Cap each game after augmentation, using max_samples from handler_config ──
         game_sample_counts = {}
         filtered_samples = []
 
@@ -605,7 +603,7 @@ class MultiGameDataset:
             if game not in game_sample_counts:
                 game_sample_counts[game] = 0
 
-            # each game of  handler_config in  max_samples  text
+            # Read max_samples from this game's handler config
             max_samples = None
             if game == "pokemon":
                 max_samples = self._handler_config.pokemon.max_samples
@@ -615,18 +613,18 @@ class MultiGameDataset:
                 max_samples = self._handler_config.zelda.max_samples
             elif game == "dungeon":
                 max_samples = self._handler_config.dungeon.max_samples
-            # sokoban  handler_config in  config  text to  text text
+            # sokoban has no such option in handler_config, so it is left uncapped
 
-            # max_samples text check
+            # Keep the sample if the cap has not been reached
             if max_samples is None or game_sample_counts[game] < max_samples:
                 filtered_samples.append(sample)
                 game_sample_counts[game] += 1
 
-        # filteringtext sample  text apply
+        # Apply the filtered list
         if len(filtered_samples) < len(self._samples):
             self._samples = filtered_samples
 
-            # order text
+            # Renumber
             for i, sample in enumerate(self._samples):
                 sample.order = i
 
@@ -656,10 +654,10 @@ class MultiGameDataset:
     # ── ann.json based annotation automatic load ─────────────────────────────────────
 
     def _ensure_and_load_all_annotations(self) -> None:
-        """text game of  ann.json  check·createtext sample in  text.
+        """Ensure every game has an ann.json and attach it to the samples.
 
-        ann.json  if missing compute_game_annotations() to  automatic compute  after  save.
-         text text as-is load.
+        When ann.json is missing it is computed via compute_game_annotations() and saved;
+        otherwise the existing file is loaded as-is.
         """
         import time as _time
 
@@ -671,7 +669,7 @@ class MultiGameDataset:
         for game, cache_key in games:
             existing = load_game_annotations_from_cache(self._cache_dir, game, cache_key)
             if existing is None:
-                # ann.json none: automatic compute
+                # No ann.json: compute it
                 game_samples = [s for s in self._samples if s.game == game]
                 if not game_samples:
                     logger.info("[Annotation][%s] No samples — skipping", game)
@@ -680,7 +678,7 @@ class MultiGameDataset:
                             game, len(game_samples))
                 t0 = _time.perf_counter()
                 try:
-                    # JAX  of text text lazy import
+                    # Imported lazily to avoid pulling in JAX at module load
                     from dataset.reward_annotations.annotate import compute_game_annotations
                     rows = compute_game_annotations(game_samples, game)
                 except Exception as exc:
@@ -698,14 +696,14 @@ class MultiGameDataset:
                 if existing is None:
                     logger.warning("[Annotation][%s] Failed to reload after save — skipping", game)
                     continue
-                # text create text .json in  ann_keys write
+                # Write the ann_keys into the freshly created .json
                 update_json_with_ann_keys(self._cache_dir, game, cache_key, existing)
             else:
                 n_rows = len(existing.get("annotations", []))
                 has_instr = existing.get("has_instructions", False)
                 logger.debug("[Annotation][%s] ann.json cache hit: %d rows, has_instructions=%s",
                             game, n_rows, has_instr)
-                # ann_keys  .json in  if missing write (existing cache text)
+                # Write ann_keys into .json if absent (older caches lack them)
                 meta_path = self._cache_dir / game / f"{cache_key}.json"
                 if meta_path.exists():
                     import json as _json
@@ -726,15 +724,16 @@ class MultiGameDataset:
     def _try_submit_instruction_batch(
         self, game: str, cache_key: str, ann_data: Dict[str, Any]
     ) -> None:
-        """instruction  without game of  batch  OpenAI Batch API in  text.
+        """Submit instruction generation for a game to the OpenAI Batch API.
 
-        - ann.json in  batch_id   text text text text (finish text  during ).
-        - OPENAI_API_KEY text text if missing text.
-        - text success text batch_id  ann.json in  write.
+        - If ann.json already records a batch_id, the existing batch is reused
+          (a finished one is retrieved, a running one is left alone).
+        - Skipped when OPENAI_API_KEY is not set.
+        - On success the new batch_id is written back to ann.json.
         """
         import os
 
-        #  text batch text → text check  after  finish text automatic text
+        # An existing batch: check its status and retrieve it if it has finished
         existing_batch_id = ann_data.get("batch_id")
         if existing_batch_id:
             try:
@@ -757,7 +756,7 @@ class MultiGameDataset:
                     results = retrieve_batch_results(existing_batch_id)
                     n = update_caches(results, self._cache_dir, [game])
                     logger.info("[Instruction][%s] %d instructions applied to ann.json", game, n)
-                    # ann.json textloadtext existing text (text text latest data text for )
+                    # Reload ann.json so the caller sees the freshly written data
                     updated = load_game_annotations_from_cache(self._cache_dir, game, cache_key)
                     if updated is not None:
                         ann_data.clear()
@@ -774,7 +773,7 @@ class MultiGameDataset:
                 logger.warning("[Instruction][%s] Failed to check batch status: %s", game, exc)
             return
 
-        # API text if missing text
+        # No API key available
         if not os.environ.get("OPENAI_API_KEY"):
             logger.warning(
                 "[Instruction][%s] OPENAI_API_KEY not set — skipping instruction generation "
@@ -796,10 +795,10 @@ class MultiGameDataset:
             enums = list(range(5))
             cache_dir = self._cache_dir
 
-            # threshold=None row text text
+            # Fill in rows whose threshold is None
             fill_none_instructions([game], enums, cache_dir)
 
-            # source_id → array map text (shortened key text for )
+            # source_id -> array index map (used to resolve the shortened keys)
             cache_by_game: Dict[str, Dict[str, Any]] = {}
             for s in self._samples:
                 if s.game == game:
@@ -826,10 +825,10 @@ class MultiGameDataset:
             logger.warning("[Instruction][%s] Batch submission failed: %s", game, exc)
 
     def _attach_annotations_from_cache(self, game: str, ann_data: Dict[str, Any]) -> None:
-        """ann.json data  game sample in  reward_enumby text·text.
+        """Attach ann.json rows to a game's samples, one per reward_enum.
 
-        ann_keys based text (sample meta["ann_keys"] → ann.json row direct text).
-        ann_keys without text text  index text to  fallback.
+        Rows are matched through sample.meta["ann_keys"]; samples without ann_keys fall
+        back to matching by index.
         """
         import dataclasses
         import time as _time
@@ -839,7 +838,7 @@ class MultiGameDataset:
             logger.warning("[Annotation][%s] No annotations in ann.json — skipping", game)
             return
 
-        # key → ann row dictionary (text text)
+        # key -> ann row lookup
         ann_by_key: Dict[str, Dict[str, Any]] = {r["key"]: r for r in all_rows}
 
         game_samples = [s for s in self._samples if s.game == game]
@@ -848,7 +847,7 @@ class MultiGameDataset:
             logger.warning("[Annotation][%s] No loaded samples — skipping", game)
             return
 
-        # fallback: index text for  sort row
+        # fallback: rows sorted for index-based matching
         sorted_rows = sorted(all_rows, key=lambda r: r["key"])
         n_rewards = len(sorted_rows) // n_samples if n_samples else 0
         if n_rewards == 0:
@@ -862,12 +861,12 @@ class MultiGameDataset:
         new_samples: List[GameSample] = []
 
         for i, sample in enumerate(game_samples):
-            # ann_keys based (text text)
+            # Preferred path: match through ann_keys
             ann_keys: Optional[List[str]] = sample.meta.get("ann_keys")
             if ann_keys:
                 ann_list = [ann_by_key[k] for k in ann_keys if k in ann_by_key]
             else:
-                # text text fallback: index text
+                # Legacy fallback: match by index
                 ann_list = [sorted_rows[r * n_samples + i]
                             for r in range(n_rewards)
                             if r * n_samples + i < len(sorted_rows)]
@@ -893,7 +892,7 @@ class MultiGameDataset:
                 uni = ann.get("instruction_uni")
                 target.meta["instruction_raw"] = str(raw) if raw and str(raw) != "None" else None
                 target.meta["instruction_uni"] = str(uni) if uni and str(uni) != "None" else None
-                # instruction text: instruction_field config in  text select
+                # Select the instruction field according to instruction_field
                 if self._instruction_field == "raw":
                     instr = target.meta["instruction_raw"] or target.meta["instruction_uni"]
                 else:
@@ -917,21 +916,22 @@ class MultiGameDataset:
 
     def _load_reward_annotations(self, annotations_dir: Path) -> None:
         """
-        reward_annotations folder in  CSV file  text text game sample of  meta in
-        reward annotation info  text.
-        - {game}_reward_annotations.csv         : per-sample text annotation
-            → each sample  reward text text reward_enumtext sample create
-        - {game}_reward_annotations_placeholder.csv : game textabove text annotation
-            → conditions text text WARNING  to text text
+        Read the CSV files in the reward_annotations folder and attach the annotations to
+        each game's samples via sample.meta.
+
+        - {game}_reward_annotations.csv             : per-sample annotations
+            -> one sample is created per reward_enum
+        - {game}_reward_annotations_placeholder.csv : game-level placeholder annotations
+            -> accessing `conditions` logs a WARNING
         """
         import dataclasses
 
-        # ── per-sample CSV  with game: key order based as  sample  reward text text ──
-        # CSV structure: key order to  sort text [reward0: sample0..N-1, reward1: sample0..N-1, ...]
+        # ── Games with a per-sample CSV: match samples to rewards by key order ──
+        # CSV layout when sorted by key: [reward0: sample0..N-1, reward1: sample0..N-1, ...]
         for csv_path in sorted(annotations_dir.glob("*_reward_annotations.csv")):
             game_name = csv_path.name.replace("_reward_annotations.csv", "")
 
-            # key ordertext to  text row load
+            # Load every row, sorted by key
             all_rows: List[Dict[str, Any]] = []
             with open(csv_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -939,13 +939,13 @@ class MultiGameDataset:
                     all_rows.append(row)
             all_rows.sort(key=lambda r: r["key"])
 
-            #   game of  loadtext sample list (order keep)
+            # Samples already loaded for this game, in order
             game_samples = [s for s in self._samples if s.game == game_name]
             n_samples = len(game_samples)
             if n_samples == 0 or len(all_rows) == 0:
                 continue
 
-            # CSV row text / sample text = reward text
+            # rows / samples = number of reward types
             n_rewards = len(all_rows) // n_samples
             if n_rewards == 0:
                 logger.warning("Reward annotations [%s]: CSV rows (%d) < samples (%d), skipped",
@@ -976,7 +976,7 @@ class MultiGameDataset:
                         if val != "":
                             conditions[ci] = float(val)
                     target.meta["conditions"] = conditions
-                    # instruction_field config in  text raw text  uni select
+                    # Select raw or uni according to instruction_field
                     if self._instruction_field == "raw":
                         raw_val = ann.get("instruction_raw", "").strip()
                         uni_val = ann.get("instruction_uni", "").strip()
@@ -994,10 +994,10 @@ class MultiGameDataset:
                             game_name, n_samples, n_rewards, attached,
                             n_samples, len(new_samples))
 
-        # ── placeholder CSV: per-sample CSV  without game in text apply ──────────
+        # ── placeholder CSV: only used for games without a per-sample CSV ─────────
         for ph_csv in sorted(annotations_dir.glob("*_reward_annotations_placeholder.csv")):
             game_name = ph_csv.name.replace("_reward_annotations_placeholder.csv", "")
-            # per-sample CSV   text text text
+            # Skip when a per-sample CSV already exists
             if (annotations_dir / f"{game_name}_reward_annotations.csv").exists():
                 continue
             ph_features: list[Dict[str, Any]] = []
@@ -1041,8 +1041,8 @@ class MultiGameDataset:
 
     def _apply_mapping(self, sample: GameSample) -> GameSample:
         """
-        use_tile_mapping config in  text array  converttext text GameSample  return.
-        text _samples text  always raw tile_id  keeptext.
+        Return a new GameSample whose array honours the use_tile_mapping setting.
+        The internal _samples list always keeps the raw tile ids.
         """
         if not self.use_tile_mapping:
             return sample
@@ -1051,7 +1051,7 @@ class MultiGameDataset:
         return dataclasses.replace(sample, array=unified_array)
 
     def _find_raw_sample(self, sample: GameSample) -> GameSample:
-        """source_id/game basis as  internal raw sample  text returntext."""
+        """Look up the internal raw sample by (game, source_id)."""
         for s in self._samples:
             if s.game == sample.game and s.source_id == sample.source_id:
                 return s
@@ -1068,32 +1068,32 @@ class MultiGameDataset:
     def __getitem__(self, idx: int) -> GameSample:
         return self._apply_mapping(self._samples[idx])
 
-    # ── text based filter ──────────────────────────────────────────────────────────
+    # ── Filters ────────────────────────────────────────────────────────────────────
     def by_game(self, game: str) -> List[GameSample]:
-        """text game sampletext return."""
+        """Return every sample of the given game."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_game(self._samples, game)]
 
     def by_games(self, games: List[str]) -> List[GameSample]:
-        """text game sample return."""
+        """Return the samples of the given games."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_games(self._samples, games)]
 
     def by_instruction(
         self, keyword: str, *, case_sensitive: bool = False
     ) -> List[GameSample]:
-        """instruction text filter."""
+        """Filter by an instruction keyword."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_instruction(
                     self._samples, keyword, case_sensitive=case_sensitive)]
 
     def with_instruction(self) -> List[GameSample]:
-        """instruction  with sampletext."""
+        """Return the samples that have an instruction."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_with_instruction(self._samples)]
 
     def without_instruction(self) -> List[GameSample]:
-        """instruction  without sampletext."""
+        """Return the samples that have no instruction."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_without_instruction(self._samples)]
 
@@ -1103,18 +1103,18 @@ class MultiGameDataset:
                 for s in tag_utils.extract_by_order(self._samples, start, end)]
 
     def by_meta(self, key: str, value: Any) -> List[GameSample]:
-        """meta text filter."""
+        """Filter by a metadata attribute."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_meta(self._samples, key, value)]
 
     def filter(self, fn) -> List[GameSample]:
-        """text of  condition function to  filtering."""
+        """Filter with a user-supplied predicate over the conditions."""
         return [self._apply_mapping(s)
                 for s in tag_utils.extract_by_predicate(self._samples, fn)]
 
     # ── reward annotation based filter ──────────────────────────────────────────
     def by_reward_enum(self, reward_enum: int) -> List[GameSample]:
-        """reward_enum text as  filtering (1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction)."""
+        """Filter by reward_enum (1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction)."""
         return [self._apply_mapping(s)
                 for s in self._samples
                 if s.meta.get("reward_enum") == reward_enum]
@@ -1126,12 +1126,12 @@ class MultiGameDataset:
                 if s.meta.get("feature_name") == feature_name]
 
     def with_reward_annotation(self) -> List[GameSample]:
-        """reward annotation  with sampletext return."""
+        """Return the samples that carry a reward annotation."""
         return [self._apply_mapping(s)
                 for s in self._samples
                 if "reward_enum" in s.meta]
 
-    # ── text ────────────────────────────────────────────────────────────────────
+    # ── Aggregation ─────────────────────────────────────────────────────────────
     def group_by_game(self) -> Dict[str, List[GameSample]]:
         return tag_utils.group_by_game(self._samples)
 
@@ -1144,7 +1144,7 @@ class MultiGameDataset:
     def summary(self) -> Dict[str, Any]:
         return tag_utils.summary(self._samples)
 
-    # ── rendering (Pillow text) ────────────────────────────────────────────────────
+    # ── Rendering (requires Pillow) ───────────────────────────────────────────────
     def render(
         self,
         sample: GameSample,
@@ -1152,17 +1152,17 @@ class MultiGameDataset:
         save_path: Optional[Path | str] = None,
     ):
         """
-        text sample rendering.
-        use_tile_mapping=True  text unified text text to , False  text text palette to  rendering.
-        save_path text text PNG save, if missing PIL Image return.
+        Render a single sample.
+        With use_tile_mapping=True the unified palette is used, otherwise the game's own
+        palette. Saves a PNG when save_path is given, else returns a PIL Image.
         """
         from .render import render_sample_pil, save_rendered
         from .tile_utils import render_unified_rgb
         from PIL import Image
 
         if self.use_tile_mapping:
-            # array   text unified to  converttext sample  text  text also  text
-            # text raw sample  text  text also  text to  always mapping apply
+            # The sample handed in may already be unified or still raw, so the mapping is
+            # applied unconditionally (it is a no-op on already-mapped arrays).
             mapped = self._apply_mapping(sample)
             rgb = render_unified_rgb(mapped.array, tile_size=tile_size)
             img = Image.fromarray(rgb, "RGB")
@@ -1185,14 +1185,14 @@ class MultiGameDataset:
         save_path: Optional[Path | str] = None,
     ):
         """
-        text sample text rendering.
+        Render several samples in a grid.
         use_tile_mapping config automatic apply.
-        save_path text text PNG save, if missing PIL Image return.
+        Saves a PNG when save_path is given, else returns a PIL Image.
         """
         from .render import render_grid as _rg, save_grid
         from PIL import Image
 
-        # text sample in  mapping apply
+        # Apply the mapping to each sample
         mapped_samples = [self._apply_mapping(s) for s in samples]
 
         if save_path:
@@ -1208,7 +1208,7 @@ class MultiGameDataset:
         save_path: Optional[Path | str] = None,
     ):
         """
-        text(raw) and  7-category mapped image  text to  text renderingtext.
+        Render the raw and the unified-category image side by side.
 
         Left  : raw palette
         Right : unified palette
@@ -1246,18 +1246,18 @@ class MultiGameDataset:
         show_tile_numbers: bool = False
     ) -> "Image.Image":
         """
-        sample  tile image to  renderingtext.
+        Render a sample using its tile images.
 
         Parameters
         ----------
-        sample : GameSample text
-        tile_size : tile size (textcell)
+        sample : GameSample to render
+        tile_size : tile size in pixels
         save_path : save path
-        show_tile_numbers : tile text tabletext text
+        show_tile_numbers : overlay the tile id on each cell
 
         Returns
         -------
-        PIL.Image.Image : renderingtext image
+        PIL.Image.Image : the rendered image
 
         Examples
         --------
@@ -1285,19 +1285,19 @@ class MultiGameDataset:
         show_tile_numbers: bool = False
     ) -> "Image.Image":
         """
-        game level  tile image to  direct renderingtext.
+        Render a raw level array directly using its tile images.
 
         Parameters
         ----------
         game : game name (dungeon, doom, pokemon, sokoban, zelda)
         level : 2D numpy array
-        tile_size : tile size (textcell)
+        tile_size : tile size in pixels
         save_path : save path
-        show_tile_numbers : tile text tabletext text
+        show_tile_numbers : overlay the tile id on each cell
 
         Returns
         -------
-        PIL.Image.Image : renderingtext image
+        PIL.Image.Image : the rendered image
 
         Examples
         --------
@@ -1316,20 +1316,20 @@ class MultiGameDataset:
         )
 
     def mapping_rows(self, game: str):
-        """tile_mapping.json basis text tile -> unified text row list."""
+        """Rows of the raw tile -> unified category mapping, from tile_mapping.json."""
         return game_mapping_rows(game)
 
     # ── utility ────────────────────────────────────────────────────────────────────
     def get_tags(self, idx: int) -> Dict[str, Any]:
-        """index basis text dict return."""
+        """Return the tag dictionary for an index."""
         return tag_utils.build_tags(self._samples[idx])
 
     def all_tags(self) -> List[Dict[str, Any]]:
-        """all sample text text."""
+        """Total number of samples."""
         return [tag_utils.build_tags(s) for s in self._samples]
 
     def available_games(self) -> List[str]:
-        """text game list return."""
+        """List of the loaded games."""
         return [GameTag.DUNGEON, GameTag.SOKOBAN, GameTag.DOOM, GameTag.POKEMON, GameTag.ZELDA]
 
     def sample(
@@ -1339,12 +1339,12 @@ class MultiGameDataset:
         seed: Optional[int] = None,
     ) -> List[GameSample]:
         """
-        random sampletext.
+        Draw random samples.
 
         Parameters
         ----------
-        n    : sample text
-        game : text gametext (None text all)
+        n    : number of samples
+        game : restrict to this game (None = all games)
         seed : random seed
         """
         rng  = np.random.default_rng(seed)

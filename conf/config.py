@@ -35,11 +35,11 @@ class Config:
     seed: int = 0
     saves_dir: str = "saves"
 
-    # Game selection — 2text abbreviation text (dg=dungeon, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
-    # text: "dg" (dungeontext), "dgdm" (dungeon+doom+doom2), "all" (all)
+    # Game selection — two-character abbreviations (dg=dungeon, pk=pokemon, sk=sokoban, dm=doom(+doom2), zd=zelda)
+    # e.g. "dg" (dungeon only), "dgdm" (dungeon + doom + doom2), "all" (every game)
     game: str = "all"
 
-    # include_* text  game string in  automatic parsingtext (sub text for  as  keep)
+    # Parsed from the game string automatically; kept for backward compatibility.
     include_dungeon: bool = True
     include_pokemon: bool = False
     include_sokoban: bool = False
@@ -57,8 +57,8 @@ class Config:
 
     # CLIP params
     use_clip: bool = False
-    # tile-only text text = unified category text (NUM_CATEGORIES).
-    # init_config() in  coord text 2text  text total NUM_CATEGORIES+2   text text text  text.
+    # Tile-only input channels = number of unified categories (NUM_CATEGORIES).
+    # init_config() adds 2 coordinate channels, for a total of NUM_CATEGORIES + 2.
     clip_input_channel: int = NUM_CATEGORIES
 
     vec_cont: bool = False
@@ -96,7 +96,7 @@ class Config:
     # mutation rate initial map generation
     map_mutation_rate: float = 0.1
 
-    # different path of  checkpoint in  training  starttext text text. None text exp_dir/ckpts in  automatic text.
+    # Resume training from a checkpoint elsewhere. If None, resolved from exp_dir/ckpts.
     init_ckpt_path: Optional[str] = None
 
     """ DO NOT USE. WILL BE OVERWRITTEN. """
@@ -160,17 +160,17 @@ class Config:
     dataset_reward_enum: Optional[Union[int, str]] = None   # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
 
-    # common data preprocessing (text pipeline in  sametext apply)
-    longtail_cut: bool = True          # text condition text sample remove
-    max_samples_per_game: int = 1000   # gametext source_id text (0=text)
-    max_samples_seed: int = 42         # max_samples_per_game textsampletext seed
-    rl_tile_offset: int = 1            # tile enum text in  text text (RL data to text for )
+    # Common data preprocessing (applied identically across every pipeline)
+    longtail_cut: bool = True          # drop samples whose condition falls in the long tail
+    max_samples_per_game: int = 1000   # per-game source_id cap (0 = unlimited)
+    max_samples_seed: int = 42         # seed used when sampling down to max_samples_per_game
+    rl_tile_offset: int = 1            # tile enum offset applied when converting to RL data
 
     # Multigame tile placement reward weight (sweep target)
     placement_w_amount: float = 1.0
     placement_w_spread: float = 0.0
 
-    # Special tile (interactive/hazard/collectable) text penalty weight
+    # Placement penalty weight for special tiles (interactive/hazard/collectable)
     special_tile_penalty_weight: float = 0.05
 
 @dataclass
@@ -201,7 +201,7 @@ class EncoderConfig(CLIPConfig):
     ckpt_name: Optional[str] = None
     ckpt_path: Optional[str] = None
     trainable: bool = False
-    tile_offset: int = 0               # tile enum text in  text text (text)
+    tile_offset: int = 0               # tile enum offset applied to encoder inputs
 
 
 @dataclass
@@ -210,8 +210,8 @@ class DecoderConfig:
     num_layers: int = 2
     output_dim: int = 1
     num_reward_classes: int = 5
-    # CNN text in  reward_enum one-hot text  text text text
-    # True text pixel_values in  (B, H, W, num_reward_classes) one-hot  concat
+    # Whether the CNN decoder also receives the reward_enum one-hot.
+    # If True, a (B, H, W, num_reward_classes) one-hot is concatenated to pixel_values.
     cnn_reward_enum_onehot: bool = False
 
 
@@ -241,15 +241,16 @@ class TrainConfig(Config):
     use_embedding_cache: bool = True
 
     # ── instruction prefix mode (train/eval/encoder common) ─────────────────
-    # "name" (default): "In Zelda, ..." text  game name prefix
-    # "desc"      : "(traverse a room, fight creatures, ...) ..." text  game text prefix
-    # "none"/None : prefix textapply
-    # text training text text for text text and  RL training/evaluation in  sametext embedding  text.
+    # "name" (default): prefix with the game name, e.g. "In Zelda, ..."
+    # "desc"          : prefix with a game description, e.g. "(traverse a room, fight creatures, ...) ..."
+    # "none"/None     : no prefix
+    # Must match the value used at encoder training time, so that RL training and
+    # evaluation both see the same embeddings.
     instruction_prefix: Optional[str] = "name"
 
     # ── instruction field select (train/eval/encoder common) ──────────────────
-    # "uni": instruction_uni text for  (text tabletext)
-    # "raw" (default): instruction_raw text for  (gametext text tabletext)
+    # "uni": use instruction_uni (unified wording)
+    # "raw" (default): use instruction_raw (game-specific wording)
     instruction_field: str = "raw"
 
 
@@ -262,8 +263,8 @@ class CPCGRLConfig(TrainConfig):
     dataset_game: Optional[str] = "all"
     dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
     dataset_train_ratio: float = 0.95
-    # condition text based filter: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
-    # text filter  texttable text: "enum_0_min_3_max_10,enum_2_max_50"
+    # Condition-value filter: "enum_{i}_min_{v}" / "enum_{i}_max_{v}" / "enum_{i}_min_{lo}_max_{hi}"
+    # Multiple filters are comma-separated: "enum_0_min_3_max_10,enum_2_max_50"
     dataset_condition_filter: Optional[str] = None
 
     vec_cont: bool = True
@@ -286,34 +287,34 @@ class CPCGRLConfig(TrainConfig):
 
 @dataclass
 class IPCGRLConfig(CPCGRLConfig):
-    """IPCGRL (Instructed PCGRL) — BERT embedding → MLP text."""
+    """IPCGRL (Instructed PCGRL) — BERT embedding passed through an MLP encoder."""
     use_nlp: bool = True
     vec_cont: bool = False
     model: str = "nlpconv"
     nlp_input_dim: int = 768
 
     # ── Task variant marker ──
-    # IPCGRL/MIPCGRL text use_nlp=True, encoder=mlp text RL text path_utils  in
-    # same text  text text. text baseline  of  exp_dir / wandb name   separatetext abovetext
-    #   text  text for text. (MIPCGRLConfig  in  True  to  override)
+    # IPCGRL and MIPCGRL both use use_nlp=True and encoder='mlp', so path_utils cannot
+    # tell them apart. This flag keeps their exp_dir and wandb names distinct.
+    # (MIPCGRLConfig overrides it to True.)
     is_mipcgrl: bool = False
 
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
     wandb_project: Optional[str] = f'{PREFIX}train_ipcgrl'
 
-    # ── encoder unseen experiment text (mgpcgrl/vipcgrl  and  same text) ──────────────
-    # encoder training text text for text seen_ratio — dataset_setting.json in  automatic injecttext.
-    # 1.0 = all seen game data text for  (default value), 0.0~1.0 = seen game data prefix ratio
+    # ── Encoder unseen-experiment settings (shared with mgpcgrl / vipcgrl) ────────
+    # seen_ratio used at encoder training time — injected from dataset_setting.json.
+    # 1.0 = all seen-game data (default); 0.0-1.0 = that leading fraction of it.
     dataset_seen_ratio: float = 1.0
 
-    # encoder training text text for text unseen_ratio — dataset_setting.json in  automatic injecttext.
-    # None(default value) = existing text keep (per-game ratio filtering disabled).
+    # unseen_ratio used at encoder training time — injected from dataset_setting.json.
+    # None (default) keeps the existing behaviour (per-game ratio filtering disabled).
     dataset_unseen_ratio: Optional[float] = None
 
-    # encoder training text seen game list — dataset_setting.json in  automatic injecttext.
-    # (full name text, e.g. ["dungeon", "doom", "zelda"]). text text
-    # train_setting.json in  seen/unseen split  writetext WandB  to text in  text for text.
+    # Games seen at encoder training time — injected from dataset_setting.json as full
+    # names, e.g. ["dungeon", "doom", "zelda"]. Written to train_setting.json and logged
+    # to WandB so the seen/unseen split can be recovered afterwards.
     reward_seen_games: List[str] = field(default_factory=list)
 
 
@@ -327,32 +328,33 @@ class VIPCGRLConfig(CPCGRLConfig):
     vec_cont: bool = False
     nlp_input_dim: int = 64  # encoder.output_dim (pretrained CLIP latent space)
 
-    # coef_human_sim > 0: human_demo sim_reward enable text text to  text for  (0 text disabled)
+    # coef_human_sim > 0 enables the human_demo similarity reward (0 disables it)
     coef_human_sim: float = 30.0
 
     wandb_project: Optional[str] = f"{PREFIX}train_vipcgrl"
 
     ignore_checkpoint: bool = False
 
-    # ── encoder unseen experiment text (mgpcgrl  and  same text) ──────────────────────
-    # encoder training text text for text seen_ratio — dataset_setting.json in  automatic injecttext.
-    # 1.0 = all seen game data text for  (default value), 0.0~1.0 = seen game data prefix ratio
+    # ── Encoder unseen-experiment settings (shared with mgpcgrl) ─────────────────
+    # seen_ratio used at encoder training time — injected from dataset_setting.json.
+    # 1.0 = all seen-game data (default); 0.0-1.0 = that leading fraction of it.
     dataset_seen_ratio: float = 1.0
 
-    # encoder training text text for text unseen_ratio — dataset_setting.json in  automatic injecttext.
-    # None(default value) = existing text keep (per-game ratio filtering disabled).
-    # VIPCGRL in text text for : 0.0 = unseen game textload, 0.0~1.0 = unseen game prefix ratio.
-    # MGPCGRL  always 1.0(full) as  injecttext text unseen game data  loadtext.
+    # unseen_ratio used at encoder training time — injected from dataset_setting.json.
+    # None (default) keeps the existing behaviour (per-game ratio filtering disabled).
+    # For VIPCGRL: 0.0 loads no unseen-game data; 0.0-1.0 loads that leading fraction.
+    # MGPCGRL always injects 1.0, so all unseen-game data is loaded.
     dataset_unseen_ratio: Optional[float] = None
 
-    # ── game_setting_mode: training in  text for text game range select ──
-    # "all"          : all game text for
-    # "encoder_seen" : encoder training text seen gametext text for  (default value, dataset_setting.json in  automatic text)
+    # ── game_setting_mode: which games RL training covers ──
+    # "all"          : every game
+    # "encoder_seen" : only the games seen at encoder training time
+    #                  (default; resolved from dataset_setting.json)
     game_setting_mode: str = "encoder_seen"
 
-    # encoder training text seen game list — dataset_setting.json in  automatic injecttext.
-    # (full name text, e.g. ["dungeon", "doom", "zelda"]). text text
-    # train_setting.json in  seen/unseen split  writetext WandB  to text in  text for text.
+    # Games seen at encoder training time — injected from dataset_setting.json as full
+    # names, e.g. ["dungeon", "doom", "zelda"]. Written to train_setting.json and logged
+    # to WandB so the seen/unseen split can be recovered afterwards.
     reward_seen_games: List[str] = field(default_factory=list)
 
 
@@ -361,44 +363,45 @@ class VIPCGRLConfig(CPCGRLConfig):
 class MGPCGRLConfig(VIPCGRLConfig):
     wandb_project: Optional[str] = f"{PREFIX}train_mgpcgrl"
 
-    # MGPCGRL: clip_decoder based dynamic reward text (reward_i/condition)
+    # MGPCGRL: clip_decoder-based dynamic reward shaping (reward_i / condition)
     use_decoder_reward_shaping: bool = True
 
-    # sim reward text for  availabletext default value  0.0 (disabled). text to  config text enable.
+    # The similarity reward is available but off by default; enable it explicitly in a config.
     coef_human_sim: float = 0.0
 
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
 
     game_setting_mode: str = "all"
 
-    # ── reward_decoder_mode: reward/condition text select (MGPCGRL  before  for ) ──
-    # "noop"  : text game in  text dataset metadata  as-is text for  (decoder text for )
-    # "all"   : text game in  text CLIP decoder text  text for  (default value)
-    # "unseen": seen game  dataset metadata, unseen gametext decoder text text for
+    # ── reward_decoder_mode: where the reward condition comes from (MGPCGRL only) ──
+    # "noop"  : use the dataset metadata as-is for every game (no decoder)
+    # "all"   : use the CLIP decoder prediction for every game
+    # "unseen": dataset metadata for seen games, decoder prediction for unseen games
     reward_decoder_mode: str = "unseen"
 
-    # ── path text for  parameter (encoder ckpt text text) ─────────────────────────
-    # encoder training text text for text unseen games abbreviation (e.g. "zd", "zddm")
+    # ── Parameters used to resolve the encoder checkpoint path ───────────────────
+    # Unseen-game abbreviation used at encoder training time (e.g. "zd", "zddm")
     train_unseen_abbr: Optional[str] = None
-    # encoder training text unseen game data ratio (0.0 ~ 1.0)
+    # Unseen-game data ratio used at encoder training time (0.0 - 1.0)
     train_unseen_ratio: Optional[float] = None
-    # encoder training text seen game data ratio (0.0 ~ 1.0)
+    # Seen-game data ratio used at encoder training time (0.0 - 1.0)
     train_seen_ratio: Optional[float] = None
 
-    # ── reward_unseen_ratio: unseen game  inside  metadata/decoder text ─────────────
-    # dataset_setting.json  of  unseen_ratio  in  automatic injecttext.
-    # each unseen game of  sample  order basis as  split:
-    #   front (reward_unseen_ratio ratio) → metadata (GT condition, encoder training data)
-    #   remaining (1 - reward_unseen_ratio) → reward decoder  to  condition text
-    # 0.0 (default value) = text unseen sample in  decoder apply (zero-shot text)
+    # ── reward_unseen_ratio: metadata/decoder split within the unseen games ──────
+    # Injected from the unseen_ratio in dataset_setting.json. Each unseen game's samples
+    # are split by order:
+    #   leading `reward_unseen_ratio` → metadata (ground-truth condition, encoder training data)
+    #   remaining (1 - reward_unseen_ratio) → condition predicted by the reward decoder
+    # 0.0 (default) applies the decoder to every unseen sample (zero-shot).
     reward_unseen_ratio: float = 0.0
 
-    # ── encoder training text text for text delta_weight (wandb  to text/text for ) ──
-    # encoder_config.json in  automatic injecttext. 0.0 = baseline (direction alignment text for ).
+    # ── delta_weight used at encoder training time (logged to wandb for reference) ──
+    # Injected from encoder_config.json. 0.0 = baseline (direction alignment only).
     encoder_delta_weight: float = 0.0
 
-    # MGPCGRL: unseen game data load ratio (default value 1.0 = all load).
-    # CLI in  text availabletext, 1.0  text text exp_dir name in  '_uro-XX' suffix  text text.
+    # MGPCGRL: fraction of unseen-game data to load (default 1.0 = all).
+    # Overridable from the CLI; any value other than 1.0 appends a '_uro-XX' suffix
+    # to the exp_dir name.
     dataset_unseen_ratio: float = 1.0
 
 
@@ -413,15 +416,15 @@ class PretrainedCLIPPCGRLConfig(CPCGRLConfig):
     vec_cont: bool = False
     nlp_input_dim: int = 512  # encoder.output_dim (pretrained CLIP latent space, no projection)
 
-    # HuggingFace CLIP  RGB image(3text)  text — render_level_from_arr  RGB tile image create
+    # HuggingFace CLIP expects RGB images (3 channels); render_level_from_arr produces them.
     clip_input_channel: int = 3
 
     use_pretrained_clip_reward: bool = True
     wandb_project: Optional[str] = f'{PREFIX}train_pretrained_clip_pcgrl'
 
-    # training in  text for text game list — config.game  in  automatic text also text train_setting.json  in  writetext.
-    # (full name text, e.g. ["dungeon", "doom", "zelda"]). text text
-    # train_setting.json  in  seen/unseen split   writetext WandB  to text in  text for text.
+    # Games used for training — derived from config.game and written to train_setting.json
+    # as full names, e.g. ["dungeon", "doom", "zelda"]. Logged to WandB so the seen/unseen
+    # split can be recovered afterwards.
     reward_seen_games: List[str] = field(default_factory=list)
 
 
@@ -429,25 +432,25 @@ class PretrainedCLIPPCGRLConfig(CPCGRLConfig):
 class FinetunedCLIPPCGRLConfig(PretrainedCLIPPCGRLConfig):
     """Fine-tuned CLIP reward based PCGRL training Config.
 
-    PretrainedCLIPPCGRLConfig  and  sametext text/text structure  text for text,
-    `encoder.ckpt_name` (text  ckpt_path)  as  text fine-tuned CLIP
-    checkpoint  RL text subtree  in  inject text. (existing
-    `apply_encoder_params` text as-is text for )
+    Reuses the observation and model structure of PretrainedCLIPPCGRLConfig, but injects a
+    fine-tuned CLIP checkpoint into the RL subtree via `encoder.ckpt_name` (or `ckpt_path`).
+    The existing `apply_encoder_params` path is used unchanged.
     """
     wandb_project: Optional[str] = f"{PREFIX}train_finetuned_clip_pcgrl"
     dir_prefix: str = "finetuned-clip-pcgrl-"
 
-    # ── Finetuned CLIP  before  for  RL text text ──────────────────────────────────
-    # pretrained_clip  and  parameter text structure  sametext, `get_finetuned_clip_encoder`
-    #  to  text  createtext ckpt  of  trainable parameter text (TrainablePretrained*Encoder)
-    #  and  text text. separate model text to  exp_dir / encoder hash text text.
+    # ── Model selector for RL on top of a fine-tuned CLIP ────────────────────────
+    # The parameter tree matches pretrained_clip, and the checkpoint built by
+    # `get_finetuned_clip_encoder` shares its trainable-parameter layout
+    # (TrainablePretrained*Encoder). A separate model name keeps exp_dir and the
+    # encoder hash distinct.
     model: str = "finetuned_clip"
 
-    # ── encoder unseen experiment text (mgpcgrl/vipcgrl  and  same text) ──
+    # ── Encoder unseen-experiment settings (shared with mgpcgrl / vipcgrl) ──
     dataset_seen_ratio: float = 1.0
 
-    # encoder training text unseen game data ratio (dataset_setting.json in  automatic inject).
-    # None text existing text( before  game in  dataset_seen_ratio apply) keep.
+    # Unseen-game data ratio used at encoder training time (injected from dataset_setting.json).
+    # None keeps the existing behaviour (dataset_seen_ratio applied to every game).
     dataset_unseen_ratio: Optional[float] = None
 
     reward_seen_games: List[str] = field(default_factory=list)
@@ -498,10 +501,10 @@ class EvalConfig(TrainConfig):
 
 @dataclass
 class RandomEvalConfig(EvalConfig):
-    """text before  random text evaluation for  Config.
+    """Config for the random baseline evaluation.
 
-    NN text  uniform random action  text for text,
-    exp_dir name  "random_"  as  starttext (cpcgrl_ text and  text).
+    Ignores the network and samples uniformly random actions. The exp_dir name starts
+    with "random_" to keep it distinct from the cpcgrl_ runs.
     """
 
     random_agent: bool = True
@@ -511,32 +514,33 @@ class RandomEvalConfig(EvalConfig):
     dataset_reward_enum: Optional[Union[int, str]] = 0        # int/list-string (e.g. 0, "01", "0,1") or "all"
     eval_games: str = 'all'
 
-    # (game, re) text evaluation sample text. None text all text for .
+    # Number of evaluation samples per (game, reward_enum) group. None uses all of them.
     eval_samples_per_group: Optional[int] = 200
 
-    # evaluation text text reward_enum text. None text dataset_reward_enum text text for .
-    # text text string to  text available: "12" → [1,2],  "012" → [0,1,2]
-    # text/text also  text for : [0,1,2]
+    # reward_enums to evaluate. None falls back to dataset_reward_enum.
+    # May be given as a digit string: "12" → [1, 2], "012" → [0, 1, 2]
+    # A list is also accepted: [0, 1, 2]
     eval_dataset_reward_enums: Optional[str] = None
 
 
 
 @dataclass
 class CPCGRLEvalConfig(EvalConfig):
-    """CPCGRL evaluation for  Config.
+    """Config for CPCGRL evaluation.
 
-    CPCGRLConfig  and  sametext text/text config  EvalConfig above in  text.
+    Mirrors the observation and model settings of CPCGRLConfig on top of EvalConfig.
     """
     problem: str = "multigame"
 
-    # ── CPCGRLConfig  and  sametext game / dataset default value → exp_dir name text ──
+    # ── Same game / dataset defaults as CPCGRLConfig, so the exp_dir name matches ──
     game: str = "all"
     dataset_game: Optional[str] = "all"
     dataset_reward_enum: Optional[int] = 0        # 0=region
     dataset_train_ratio: float = 0.95
 
-    # evaluation target game (None text game and  same). checkpoint  to text  game basis, evaluation data  eval_games basis.
-    # text: game="all"  to  trainingtext text  text gametext evaluationtext text eval_games="dg" text text.
+    # Games to evaluate on (None means the same as `game`). The checkpoint is resolved from
+    # `game`, while the evaluation data comes from `eval_games`. For example, to evaluate a
+    # model trained with game="all" on a single game, set eval_games="dg".
     eval_games: str = 'all'
 
     vec_cont: bool = True
@@ -547,17 +551,18 @@ class CPCGRLEvalConfig(EvalConfig):
     vec_input_dim: Optional[int] = 5
     nlp_input_dim: int = 0
 
-    max_samples: Optional[int] = None  # dry-run for : data count text (None text all text for )
+    max_samples: Optional[int] = None  # cap the sample count for dry runs (None = no cap)
 
-    # (game, re) text evaluation sample text. None text all text for .
+    # Number of evaluation samples per (game, reward_enum) group. None uses all of them.
     eval_samples_per_group: Optional[int] = 200
 
-    # evaluation text text reward_enum text. None text dataset_reward_enum text text for .
-    # text text string to  text available: "12" → [1,2],  "012" → [0,1,2]
-    # text/text also  text for : [0,1,2]
+    # reward_enums to evaluate. None falls back to dataset_reward_enum.
+    # May be given as a digit string: "12" → [1, 2], "012" → [0, 1, 2]
+    # A list is also accepted: [0, 1, 2]
     eval_dataset_reward_enums: Optional[str] = None
 
-    # True text checkpoint text also  textrow (WARNING text). False(default) text checkpoint text  text  in text.
+    # If True, run even when no checkpoint exists (logs a warning). If False (default),
+    # a missing checkpoint raises an error.
     ignore_checkpoint: bool = False
 
 
@@ -565,10 +570,10 @@ class CPCGRLEvalConfig(EvalConfig):
 
 @dataclass
 class VIPCGRLEvalConfig(CPCGRLEvalConfig):
-    """VIPCGRL evaluation for  Config.
+    """Config for VIPCGRL evaluation.
 
-    pretrained CLIP embedding  nlp_obs  in  injecttext  evaluation config.
-    Decoder reward shaping text  CLIP embeddingtext text for text.
+    Injects the pretrained CLIP embedding into nlp_obs. No decoder reward shaping is
+    applied — only the CLIP embedding is used.
     """
     wandb_project: Optional[str] = f"{PREFIX}eval_vipcgrl"
 
@@ -582,27 +587,27 @@ class VIPCGRLEvalConfig(CPCGRLEvalConfig):
 
     ignore_checkpoint: bool = False
 
-    # ── encoder unseen experiment text (mgpcgrl eval  and  same text) ───────────────
-    # encoder training text text for text seen_ratio — dataset_setting.json in  automatic injecttext.
-    # text/ to text for  as text text for text, eval dataset filtering in   applytext text.
+    # ── Encoder unseen-experiment settings (same as mgpcgrl eval) ────────────────
+    # seen_ratio used at encoder training time — injected from dataset_setting.json.
+    # Used only to resolve the checkpoint path; it does not filter the eval dataset.
     train_seen_ratio: float = 1.0
 
-    # training text seen/unseen game list — dataset_setting.json in  automatic injecttext.
+    # Seen/unseen game lists from training — injected from dataset_setting.json.
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
-    # ── game_setting_mode: evaluation text text for text game range select ──
-    # train_vipcgrl  of  default value(encoder_seen)  and  text exp_dir text  text also text text.
+    # ── game_setting_mode: which games evaluation covers ──
+    # Must match the train_vipcgrl default (encoder_seen) so that exp_dir resolves.
     game_setting_mode: str = "encoder_seen"
 
 
 @dataclass
 class PretrainedCLIPEvalConfig(CPCGRLEvalConfig):
-    """PretrainedCLIP PCGRL evaluation for  Config.
+    """Config for PretrainedCLIP PCGRL evaluation.
 
-    train_pretrained_clip.py  to  trainingtext checkpoint  evaluationtext.
-    precomputed CLIP text embedding  nlp_obs  in  injecttext,
-    separate of  encoder checkpoint text  text text in  text CLIP vision text  text for text.
+    Evaluates a checkpoint trained by train_pretrained_clip.py. The precomputed CLIP text
+    embedding is injected into nlp_obs; no separate encoder checkpoint is loaded, so the
+    stock CLIP vision tower is used.
     """
     wandb_project: Optional[str] = f"{PREFIX}eval_pretrained_clip"
 
@@ -612,18 +617,18 @@ class PretrainedCLIPEvalConfig(CPCGRLEvalConfig):
     vec_cont: bool = False
     model: str = "pretrained_clip"
     use_nlp: bool = False
-    nlp_input_dim: int = 512  # pretrained CLIP text embedding dimension (projection none)
+    nlp_input_dim: int = 512  # pretrained CLIP text embedding dimension (no projection)
 
     ignore_checkpoint: bool = False
 
-    # training text seen/unseen game list — train_setting.json  in  automatic injecttext.
+    # Seen/unseen game lists from training — injected from train_setting.json.
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
 
 @dataclass
 class FinetunedCLIPEvalConfig(PretrainedCLIPEvalConfig):
-    """Fine-tuned CLIP PCGRL evaluation for  Config."""
+    """Config for fine-tuned CLIP PCGRL evaluation."""
     wandb_project: Optional[str] = f"{PREFIX}eval_finetuned_clip"
     dir_prefix: str = "finetuned-clip-pcgrl-"
     model: str = "finetuned_clip"
@@ -631,9 +636,9 @@ class FinetunedCLIPEvalConfig(PretrainedCLIPEvalConfig):
 
 @dataclass
 class MGPCGRLEvalConfig(CPCGRLEvalConfig):
-    """MGPCGRL evaluation for  Config.
+    """Config for MGPCGRL evaluation.
 
-    CPCGRLConfig  and  sametext text/text config  EvalConfig above in  text.
+    Mirrors the observation and model settings of CPCGRLConfig on top of EvalConfig.
     """
     wandb_project: Optional[str] = f"{PREFIX}eval_mgpcgrl"
 
@@ -647,42 +652,43 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
 
     ignore_checkpoint: bool = False
 
-    # encoder training text text for text seen_ratio — dataset_setting.json in  automatic injecttext.
-    # text/ to text for  as text text for text, eval dataset filtering in   applytext text.
+    # seen_ratio used at encoder training time — injected from dataset_setting.json.
+    # Used only to resolve the checkpoint path; it does not filter the eval dataset.
     train_seen_ratio: float = 1.0
 
-    # exp_dir path text for  — train and  sametext default value(unseen) keep.
-    # text eval condition text  eval_reward_decoder_mode to  separate text.
+    # Kept at the training default ("unseen") so the exp_dir path resolves. The condition
+    # source actually used at evaluation is controlled by eval_reward_decoder_mode.
     reward_decoder_mode: str = "unseen"
 
-    # eval text text to  text for text condition text.
-    # "noop" → GT condition text for  (default value, text text  abovetext).
-    # "unseen" → unseen gametext decoder text text for .
+    # Condition source used during evaluation.
+    # "noop"   → ground-truth condition (default; measures generation quality directly)
+    # "unseen" → decoder prediction for unseen games
     eval_reward_decoder_mode: str = "noop"
 
-    # training text seen/unseen game list — reward_decoder_config.json in  automatic injecttext.
+    # Seen/unseen game lists from training — injected from reward_decoder_config.json.
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
 
-    # ── path text for  parameter (encoder ckpt text text) ─────────────────────────
-    # train text MGPCGRLConfig and  sametext text  text exp_dir  text.
+    # ── Parameters used to resolve the encoder checkpoint path ───────────────────
+    # Must match MGPCGRLConfig at training time for exp_dir to line up.
     train_unseen_abbr: Optional[str] = None
     train_unseen_ratio: Optional[float] = None
     train_seen_ratio: Optional[float] = None
 
-    # ── encoder training text text for text delta_weight (wandb  to text/text for ) ──
+    # ── delta_weight used at encoder training time (logged to wandb for reference) ──
     encoder_delta_weight: float = 0.0
 
-    # train and  sametext text  text exp_dir  text. 1.0  text text '_uro-XX' suffix.
+    # Must match training for exp_dir to line up. Any value other than 1.0 adds a
+    # '_uro-XX' suffix.
     dataset_unseen_ratio: float = 1.0
 
 
 @dataclass
 class IPCGRLEvalConfig(CPCGRLEvalConfig):
-    """IPCGRL evaluation for  Config.
+    """Config for IPCGRL evaluation.
 
-    CPCGRLEvalConfig   text BERT embedding + MLP text config  text text.
+    Extends CPCGRLEvalConfig with the BERT-embedding + MLP encoder settings.
     """
     use_nlp: bool = True
     vec_cont: bool = False
@@ -695,10 +701,10 @@ class IPCGRLEvalConfig(CPCGRLEvalConfig):
 
     wandb_project: Optional[str] = f"{PREFIX}eval_ipcgrl"
 
-    # ── encoder training text seen_ratio (analysis only) ──────────────────────────────
+    # ── seen_ratio used during encoder training (analysis only) ─────────────────
     train_seen_ratio: float = 1.0
 
-    # ── training text seen/unseen game list — dataset_setting.json in  automatic injecttext ──
+    # ── Seen/unseen game lists from training — injected from dataset_setting.json ──
     seen_games: List[str] = field(default_factory=list)
     unseen_games: List[str] = field(default_factory=list)
 
@@ -706,35 +712,35 @@ class IPCGRLEvalConfig(CPCGRLEvalConfig):
     # the same encoder seen-game metadata so exp_dir matches the trained run.
     reward_seen_games: List[str] = field(default_factory=list)
 
-    # ── MIPCGRL variant text (IPCGRLConfig  and  same text) ──
+    # ── MIPCGRL variant marker (same role as in IPCGRLConfig) ──
     is_mipcgrl: bool = False
 
 
 @dataclass
 class MIPCGRLEvalConfig(IPCGRLEvalConfig):
-    """MIPCGRL evaluation for  Config — IPCGRLEvalConfig  and  same structure, is_mipcgrl=True."""
+    """Config for MIPCGRL evaluation — same as IPCGRLEvalConfig with is_mipcgrl=True."""
     wandb_project: Optional[str] = f"{PREFIX}eval_mipcgrl"
     is_mipcgrl: bool = True
 
 
 @dataclass
 class CollectBufferConfig(CPCGRLConfig):
-    """training  during  trajectory text  text  Config.
+    """Config for collecting trajectories during training.
 
-    training 50%~100% bin(collect_start_ratio~collect_end_ratio) in
-    text text text(env_idx=0) basis as  data  text
-    experiment folder of  buffer/ directory in  .npz file to  savetext.
+    Collects data from a single environment (env_idx=0) over the
+    collect_start_ratio-collect_end_ratio window of training, and writes it as .npz files
+    into the buffer/ directory of the experiment folder.
     """
     wandb_project: str = 'collect_buffer'
     dir_prefix: str = "buffer-"
 
-    # ── text text parameter ──
-    buffer_max_samples: int = 10_000       # text maximum transition text
-    collect_start_ratio: float = 0.5        # text start ratio (0.5 = training 50%)
-    collect_end_ratio: float = 1.0          # text text ratio (1.0 = training 100%)
-    buffer_save_dir: Optional[str] = None   # save path (None text exp_dir/buffer)
+    # ── Collection parameters ──
+    buffer_max_samples: int = 10_000        # maximum number of transitions to keep
+    collect_start_ratio: float = 0.5        # start of the window (0.5 = 50% into training)
+    collect_end_ratio: float = 1.0          # end of the window (1.0 = end of training)
+    buffer_save_dir: Optional[str] = None   # output path (None = exp_dir/buffer)
 
-    # training  during  env_map  transition in  save (text in  text)
+    # Store env_map in each transition (increases file size)
     collect_env_map: bool = True
 
 
@@ -828,7 +834,7 @@ class RewardConfig(Config):
     steps_per_epoch: Optional[int] = None
     warmup_epochs: int = 10  # set 10% of the total timesteps
 
-    max_samples: Optional[int] = None  # dry-run for : data count text (None text all text for )
+    max_samples: Optional[int] = None  # cap the sample count for dry runs (None = no cap)
 
 
 
@@ -875,10 +881,10 @@ class CLIPTrainConfig(Config):
     figure_dir: str = "figures"
 
     steps_per_epoch: Optional[int] = None
-    max_samples: Optional[int] = None  # dry-run for : data count text (None text all text for )
+    max_samples: Optional[int] = None  # cap the sample count for dry runs (None = no cap)
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
 
-    # instruction prefix mode: "name" (e.g. "In Zelda, ...") / "desc" / "mix" / "none" (text  None)
+    # Instruction prefix mode: "name" (e.g. "In Zelda, ...") / "desc" / "mix" / "none" (or None)
     instruction_prefix: Optional[str] = "name"
 
     # instruction field select: "uni" / "raw" (default)
@@ -887,38 +893,38 @@ class CLIPTrainConfig(Config):
     # overwrite
     embed_type: str = "humanai"
 
-    # ── Seen/Unseen game separate config (CLIPDecoderTrainConfig  and  same text) ──
-    # unseen game text (2text abbreviation, e.g., "zd"=zelda, "pkzd"=pokemon+zelda).
-    # None/""  text existing text (all game  train/test ratio to  split).
+    # ── Seen/unseen game split (same semantics as CLIPDecoderTrainConfig) ──
+    # Unseen games as two-character abbreviations, e.g. "zd"=zelda, "pkzd"=pokemon+zelda.
+    # None/"" keeps the previous behaviour (every game split by train/test ratio).
     unseen_games: Optional[str] = None
-    # few-shot ratio: unseen training text  during  text for text ratio (0.0=zero-shot, 1.0= before text)
+    # Few-shot ratio: fraction of unseen-game data used during training
+    # (0.0 = zero-shot, 1.0 = all of it)
     unseen_ratio: float = 0.0
-    # seen game data ratio (1.0= before text text for )
+    # Fraction of seen-game data used (1.0 = all of it)
     seen_ratio: float = 1.0
-    # text split seed (text available)
+    # Seed for the seen/unseen split
     split_seed: int = 42
 
 @dataclass
 class FinetunedCLIPEncoderTrainConfig(CLIPTrainConfig):
-    """HuggingFace pretrained CLIP  text for text of  (image, text) data to
-    text abovetext Config.
+    """Config for fine-tuning a pretrained HuggingFace CLIP on (image, text) pairs.
 
-    parameter text structure  `pretrained_clip_model.ContrastiveModule`  and  sametext to
-    savetext checkpoint  as-is RL pipeline(`apply_encoder_params`) in  inject text text text.
+    The parameter tree matches `pretrained_clip_model.ContrastiveModule`, so the saved
+    checkpoint can be injected into the RL pipeline via `apply_encoder_params` unchanged.
     """
     wandb_project: str = f"{PREFIX}train_finetuned_clip_encoder"
     dir_prefix: str = "finetuned-clip-"
 
-    # HF CLIP  224×224 text  text → coordinatetext OFF
+    # HF CLIP expects 224x224 RGB input, so coordinate channels are disabled.
     clip_input_channel: int = 3
 
-    # encoder text text (path/exp name text). RL text in   'clip' to   to text.
+    # Encoder settings used for the path / experiment name. RL loads this as 'clip'.
     encoder: EncoderConfig = field(
         default_factory=lambda: EncoderConfig(model="clip", state=True)
     )
 
-    # HF CLIP  text text trainingtext  text text text, epoch  also  text (5~15) keeptext  text
-    # → catastrophic forgetting text + text  also text text
+    # Fine-tuning the full HF CLIP is unstable at higher learning rates, so keep the rate
+    # low and the epoch count modest to limit catastrophic forgetting and overfitting.
     lr: float = 5.0e-6
     weight_decay: float = 0.1
     n_epochs: int = 100
@@ -944,63 +950,67 @@ class CLIPEvalConfig(EvalConfig):
 
 @dataclass
 class CLIPDecoderTrainConfig(CLIPTrainConfig):
-    """CLIP Encoder + Reward Decoder training Config.
+    """Config for training the CLIP encoder together with the reward decoder.
 
-    existing contrastive loss in  text text text  text text
-    state embedding as text reward_enum(text) and  condition(text)  text.
+    Adds a decoder branch on top of the existing contrastive loss, predicting the
+    reward_enum (classification) and the condition value (regression) from the state
+    embedding.
     """
     wandb_project: str = f'{PREFIX}train_mgpcgrl_encoder'
     dir_prefix: str = "clipdec-"
 
-    # ── text config ──
+    # ── Decoder config ──
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
 
     # ── loss weight ──
     contrastive_weight: float = 1.0    # contrastive loss weight
-    cls_weight: float = 1.0            # reward_enum text loss weight
-    reg_weight: float = 1.0            # condition text loss weight
+    cls_weight: float = 1.0            # reward_enum classification loss weight
+    reg_weight: float = 1.0            # condition regression loss weight
 
     # ── Continuous Task-wise Cross-game Direction Alignment Loss ──
-    # same task text in  condition  text text text text embedding  text   text
-    # game text in  sorttext  regularizer. 0.0 → disabled(baseline text).
+    # Regularizer aligning, across games, the embedding direction along which the
+    # condition value increases within the same task. 0.0 disables it (baseline).
     delta_weight: float = 0.03
-    delta_min_group_samples: int = 2   # (game, task) text minimum sample text
-    delta_var_eps: float = 1e-4        # condition variance text (text text invalid)
-    compute_delta_when_zero: bool = True  # delta_weight=0.0 text also  alignment metric compute
+    delta_min_group_samples: int = 2   # minimum samples per (game, task) group
+    delta_var_eps: float = 1e-4        # condition-variance floor; groups below it are skipped
+    compute_delta_when_zero: bool = True  # still compute the alignment metric when delta_weight=0
 
-    # ── regression loss text ──
+    # ── Regression loss ──
     # "huber": Huber loss (δ=1.0), "mae": Mean Absolute Error
     regression_loss: str = "mae"
 
     # ── Seen/Unseen game separate config ──
-    # unseen game text (2text abbreviation, e.g., "zd"=zelda, "pkzd"=pokemon+zelda). None=all seen
+    # Unseen games as two-character abbreviations, e.g. "zd"=zelda, "pkzd"=pokemon+zelda.
+    # None means every game is seen.
     unseen_games: Optional[str] = None
-    # few-shot ratio: unseen training text  during  text for text ratio (0.0=zero-shot, 1.0= before text)
+    # Few-shot ratio: fraction of unseen-game data used during training
+    # (0.0 = zero-shot, 1.0 = all of it)
     unseen_ratio: float = 0.0
-    # seen game data ratio (1.0= before text text for )
+    # Fraction of seen-game data used (1.0 = all of it)
     seen_ratio: float = 1.0
-    # text split seed (text available)
+    # Seed for the seen/unseen split
     split_seed: int = 42
 
     n_epochs: int = 3000
 
-    # ── Step based checkpoint / evaluation text ──
-    ckpt_freq: int = 1000   # checkpoint save text (steps, 0 text disabled)
-    scatter_freq: int = 500  # scatter plot upload text (epochs, 0/text disabled)
+    # ── Step-based checkpoint / evaluation intervals ──
+    ckpt_freq: int = 1000    # checkpoint interval in steps (0 disables)
+    scatter_freq: int = 500  # scatter-plot upload interval in epochs (0 or None disables)
 
-    # ── Unseen game  before  for   to text text ──
-    unseen_eval_freq: int = 100    # unseen regression text  to text text (epochs, 0 text disabled)
-    unseen_scatter_freq: int = 500  # unseen scatter plot  to text text (epochs, 0 text disabled)
+    # ── Unseen-game evaluation intervals ──
+    unseen_eval_freq: int = 100     # unseen regression eval interval in epochs (0 disables)
+    unseen_scatter_freq: int = 500  # unseen scatter-plot interval in epochs (0 disables)
 
     # ── Unseen evaluation data ratio ──
-    # unseen_ratio  : training data in  text   unseen game data ratio (train pool basis)
-    # eval_unseen_ratio : unseen_eval_freq evaluation in  text for text unseen test set ratio (0.0~1.0, 1.0=all)
+    # unseen_ratio      : fraction of unseen-game data mixed into training (train pool)
+    # eval_unseen_ratio : fraction of the unseen test set used by the periodic evaluation
+    #                     (0.0-1.0, 1.0 = all)
     eval_unseen_ratio: float = 1.0
     export_unseen_predictions_csv: bool = True
 
-    # ── Gradient text text ──
-    # True: decoder loss (cls + reg) of  gradient  encoder(latent space)text  before text text
-    # False (default value): decoder loss  encodertext text before text
+    # ── Gradient flow ──
+    # True : stop the decoder loss (cls + reg) gradient from reaching the encoder latent space
+    # False (default): the decoder loss also updates the encoder
     decoder_nograd: bool = False
 
 
@@ -1008,51 +1018,51 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
 class CLIPDecoderUnseenConfig(CLIPDecoderTrainConfig):
     """Seen/Unseen game separate + Few-shot Ratio Sweep Config.
 
-    Seen game of  all training data and  Unseen game of   text ratio training data to
-    CLIP Decoder text  trainingtext, fixedtext text in  gametext reward_accuracy  measuretext.
+    Trains the CLIP decoder on all seen-game data plus a small fraction of unseen-game
+    data, then measures per-game reward_accuracy on a fixed test split.
     """
     wandb_project: str = 'train_clip_decoder_unseen'
     dir_prefix: str = "clipdec-"
 
-    # ── Unseen game text (2text abbreviation, e.g., "zd"=zelda, "pkzd"=pokemon+zelda) ──
+    # ── Unseen games as two-character abbreviations, e.g. "zd"=zelda, "pkzd"=pokemon+zelda ──
     unseen_games: Optional[str] = None
 
-    # ── Few-shot ratio (text Usage for ) ──
-    # 0.0 = zero-shot (unseen training data 0%), 1.0 = unseen training text  before text text for
+    # ── Few-shot ratio ──
+    # 0.0 = zero-shot (no unseen training data), 1.0 = all unseen training data
     unseen_ratio: float = 0.01
 
     # ── Seen game data ratio ──
-    # 1.0 = seen training text  before text text for  (default value), 0.0 = seen training data 0%
+    # 1.0 = all seen training data (default), 0.0 = none of it
     seen_ratio: float = 1.0
 
-    # ── text config ──
-    # train_ratio: training data ratio (text CLIPTrainConfig text, default 0.99 → text 0.8 to  text of )
+    # ── Split config ──
+    # train_ratio: fraction used for training (overrides the CLIPTrainConfig default of 0.8)
     # test ratio = 1.0 - train_ratio
     train_ratio: float = 0.99
-    split_seed: int = 42              # text split seed (text available)
+    split_seed: int = 42              # seed for the seen/unseen split
 
 
 @dataclass
 class CLIPDecoderUnseenSweepConfig(CLIPDecoderUnseenConfig):
     """Seen/Unseen game separate + Few-shot Ratio **Sweep** Config.
 
-    CLIPDecoderUnseenConfig   text, unseen_ratios text  text  to  text of text.
-    sweep/runnable_sweep/unseen_games.py  in  text for text.
+    Extends CLIPDecoderUnseenConfig by sweeping over several unseen_ratios values.
+    Used by sweep/runnable_sweep/unseen_games.py.
     """
-    # ── Few-shot ratio sweep config ──
-    # 0.0 = zero-shot, 1.0 = unseen training text  before text text for
+    # ── Few-shot ratio sweep values ──
+    # 0.0 = zero-shot, 1.0 = all unseen training data
     unseen_ratios: Tuple[float, ...] = (0.0, 0.01, 0.03, 0.05, 0.1)
 
 
 @dataclass
 class IPCGRLEncoderMGConfig(RewardConfig):
-    """IPCGRL MLP text textgame pretraining Config.
+    """Config for multi-game pretraining of the IPCGRL MLP encoder.
 
-    Annotation text MultiGameDataset based.
-    - text: BERT(instruction) → 768-dim embedding
-    - text: MLP text + MLP text
-    - text: condition value text (log1p + per-enum min-max normalize)
-    - unseen_games: training in  text game text (zero-shot evaluation for )
+    Annotations come from MultiGameDataset.
+    - input : BERT(instruction) -> 768-dim embedding
+    - model : MLP encoder + MLP head
+    - target: condition value (log1p + per-enum min-max normalisation)
+    - unseen_games: games excluded from training, for zero-shot evaluation
 
     Usage:
         python train_ipcgrl_encoder_mg.py game=all
@@ -1066,24 +1076,25 @@ class IPCGRLEncoderMGConfig(RewardConfig):
     use_nlp: bool = True
     nlp_input_dim: int = 768
 
-    # Unseen game config (2text abbreviation, e.g. "zd"=zelda, "pkzd"=pokemon+zelda)
-    # text string = text none (all game training)
+    # Unseen games as two-character abbreviations, e.g. "zd"=zelda, "pkzd"=pokemon+zelda.
+    # An empty string means no unseen games (train on all of them).
     unseen_games: str = ""
 
-    # ── Seen/Unseen data ratio (CLIPTrainConfig and  same) ──
-    # unseen_ratio: unseen training text  during  text for text ratio (0.0=zero-shot, 1.0= before text)
+    # ── Seen/unseen data ratios (same semantics as CLIPTrainConfig) ──
+    # unseen_ratio: fraction of unseen-game data used during training
+    #               (0.0 = zero-shot, 1.0 = all of it)
     unseen_ratio: float = 0.0
-    # seen_ratio: seen game data ratio (1.0= before text text for )
+    # seen_ratio: fraction of seen-game data used (1.0 = all of it)
     seen_ratio: float = 1.0
 
-    # Annotation dataset config (CLIPTrainConfig  and  sametext text text)
-    # instruction_prefix mode: "name" (default) / "desc" / "none" (text  None)
+    # Annotation dataset config (same options as CLIPTrainConfig)
+    # instruction_prefix mode: "name" (default) / "desc" / "none" (or None)
     instruction_prefix: Optional[str] = "name"
 
     # instruction field select: "uni" / "raw" (default)
     instruction_field: str = "raw"
 
-    # MLP text (apply_encoder_model  in  model='mlp' text text for )
+    # MLP encoder (apply_encoder_model dispatches on model='mlp')
     encoder: EncoderConfig = field(default_factory=lambda: EncoderConfig(model="mlp"))
 
 
@@ -1095,10 +1106,10 @@ class MIPCGRLConfig(IPCGRLConfig):
 
 @dataclass
 class MIPCGRLEncoderMGConfig(IPCGRLEncoderMGConfig):
-    """MIPCGRL MLP text textgame pretraining Config.
+    """Config for multi-game pretraining of the MIPCGRL MLP encoder.
 
-    IPCGRL text(condition value text textrow) in  text, same latent z  to text
-    task(reward_enum) text head   text  to  trainingtext.
+    Extends IPCGRL (which only regresses the condition value) with a second head that
+    classifies the task (reward_enum) from the same latent z, trained jointly.
         Loss = MSE(condition) + classifier_weight * CrossEntropy(reward_enum)
 
     Usage:
@@ -1109,13 +1120,13 @@ class MIPCGRLEncoderMGConfig(IPCGRLEncoderMGConfig):
     dir_prefix: str = "mipcgrl-enc-mg-"
 
     # ── Classifier config ──
-    # task(reward_enum) text head  of  text weight. 0  text IPCGRL  and  same.
+    # Loss weight for the task (reward_enum) classification head. A value of 0 matches IPCGRL.
     classifier_weight: float = 1.0
-    # classifier MLP hidden / layer text (output_size   num_classes  to  automatic text)
+    # Classifier MLP hidden size / depth (output_size is derived from num_classes)
     classifier_num_layers: int = 2
     classifier_hidden_dim: int = 128
     classifier_dropout_rate: float = 0.0
-    # text class text. None  text dataset of  text reward_enum count to  automatic config.
+    # Number of classes. None derives it from the reward_enum count in the dataset.
     num_classes: Optional[int] = None
 
 

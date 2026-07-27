@@ -1,19 +1,19 @@
 """
 evaluator/metrics/shannon_entropy.py
 =====================================
-Shannon Entropy based level text also  texttable.
+Level-similarity metric based on Shannon entropy.
 
-each level of  tile distribution p  in  text text to text  computetext,
-text level of  text to text text   text also  to  converttext.
+Compute the entropy of each level's tile distribution p and convert the
+entropy difference between two levels to similarity.
 
   H(p) = -Σ p_i · log(p_i)   [nats]  ∈ [0, log(n_cats)]
   sim(i, j) = 1 - |H(p_i) - H(p_j)| / H_max
 
-text : LevelBundle.array — (H, W) int32 unified 5-category tile array
-text also : ∈ [0, 1],  1 = same text to text (same text)
+Input: LevelBundle.array -- (H, W) int32 array with five unified categories
+Similarity: in [0, 1], where 1 means equal entropy (equal diversity)
 
-text  API:
-  .entropy_scores(bundles)  → (N,) each level of  text to text text (text for )
+Additional API:
+  .entropy_scores(bundles) -> (N,) entropy values for analysis
 """
 from __future__ import annotations
 
@@ -26,18 +26,18 @@ from .base import BaseMetricEvaluator, LevelBundle
 
 class ShannonEntropyMetric(BaseMetricEvaluator):
     """
-    Shannon Entropy based tile text text also  texttable.
+    Tile-diversity similarity metric based on Shannon entropy.
 
-    same (game, reward_enum) text  text tile text   text to
-    text to text text   text  text  text.
+    Levels in the same (game, reward_enum) group are expected to have similar
+    tile diversity and therefore small entropy differences.
 
     Parameters
     ----------
     n_categories : int
-        unified tile category text (default 5).
+        Number of unified tile categories (default: 5).
         H_max = log(n_categories) [nats] ≈ 1.609 (n_cats=5)
     eps : float
-        log(0) text for  text.
+        Small value used to avoid log(0).
     """
 
     CAT_NAMES: List[str] = ["empty", "wall", "interactive", "hazard", "collectable"]
@@ -45,9 +45,9 @@ class ShannonEntropyMetric(BaseMetricEvaluator):
     def __init__(self, n_categories: int = 5, eps: float = 1e-10) -> None:
         self.n_categories = n_categories
         self.eps = eps
-        self._h_max = float(np.log(n_categories))   # text distributiontext text maximum text to text
+        self._h_max = float(np.log(n_categories))   # Maximum entropy for a uniform distribution
 
-    # ── BaseMetricEvaluator text ──────────────────────────────────────────────
+    # ── BaseMetricEvaluator implementation ───────────────────────────────────
 
     @property
     def name(self) -> str:
@@ -55,10 +55,10 @@ class ShannonEntropyMetric(BaseMetricEvaluator):
 
     def similarity_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
-        (N, N) pairwise text to text text also  rowtext.
+        (N, N) pairwise entropy-similarity matrix.
 
         sim[i, j] = 1 - |H(p_i) - H(p_j)| / H_max  ∈ [0, 1]
-        texteachtext = 1.0.
+        The diagonal is 1.0.
         """
         entropies = self.entropy_scores(bundles)   # (N,)
         N = len(entropies)
@@ -70,7 +70,7 @@ class ShannonEntropyMetric(BaseMetricEvaluator):
         np.clip(mat, 0.0, 1.0, out=mat)
         return mat
 
-    # ── text  public API ─────────────────────────────────────────────────────────
+    # ── Additional public API ─────────────────────────────────────────────────
 
     def entropy_scores(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
@@ -78,15 +78,14 @@ class ShannonEntropyMetric(BaseMetricEvaluator):
 
         Returns
         -------
-        np.ndarray : shape (N,), text range [0, log(n_categories)]
+        np.ndarray : shape (N,), values in [0, log(n_categories)]
         """
         return np.array([self._entropy(b.array) for b in bundles], dtype=np.float64)
 
     def normalized_entropy_scores(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
-        normalizetext Shannon Entropy ∈ [0, 1] return.
-        0 = text before  text distribution text (text tiletext text)
-        1 = text distribution (text tile text  same ratio)
+        Return normalized Shannon entropy in [0, 1].
+        0 means only one tile type is present; 1 means all tile types have equal proportions.
         """
         return self.entropy_scores(bundles) / self._h_max
 
@@ -99,9 +98,8 @@ class ShannonEntropyMetric(BaseMetricEvaluator):
         return counts / (counts.sum() + self.eps)
 
     def _entropy(self, array: np.ndarray) -> float:
-        """text level array of  Shannon Entropy [nats]."""
+        """Return Shannon entropy in nats for a single level array."""
         p = self._tile_histogram(array)
-        # 0text text  0·log(0) = 0  as  process (text)
+        # Treat zero entries as 0*log(0) = 0 by continuity
         mask = p > self.eps
         return float(-np.sum(p[mask] * np.log(p[mask])))
-

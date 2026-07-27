@@ -1,7 +1,7 @@
 """
 task.py
 =======
-text text create text instruct_df → pred_groups convert utility.
+Utilities for creating task keys and converting instruct_df to pred_groups.
 """
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import numpy as np
 
 
 def quantize_condition(game: str, feature_name: str, cond_val) -> str:
-    """condition text  integer string to  normalize.
-    None → 'none', text(int/float/str) → str(round(float(v)))
+    """Normalize a condition value to an integer string.
+    None becomes 'none'; a number (int/float/str) becomes str(round(float(v))).
     """
     if cond_val is None:
         return "none"
@@ -24,8 +24,8 @@ def quantize_condition(game: str, feature_name: str, cond_val) -> str:
 
 def build_task_key(game: str, reward_enum: int, cond_val,
                    feature_name: str = "") -> str:
-    """'{game}_{reward_enum}_{q_bin}' form of  text text text  return.
-    feature_name  text in  text text text.
+    """Return a task key in the form '{game}_{reward_enum}_{q_bin}'.
+    feature_name is not included in the key.
     """
     q = quantize_condition(game, feature_name, cond_val)
     return f"{game}_{reward_enum}_{q}"
@@ -37,18 +37,18 @@ def group_states_by_task(
     n_eps: int,
 ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
     """
-    instruct_df based as  states  text textabove to  text.
+    Group states by task using instruct_df.
 
     Parameters
     ----------
     instruct_df : pd.DataFrame  (game, reward_enum, feature_name, condition_value)
     states      : (n_inst * n_eps, H, W)
-    n_eps       :  in text(seed) text
+    n_eps       : number of episodes (seeds)
 
     Returns
     -------
     {task_key: (original_indices, levels)}
-        original_indices : states  inside  text abovetext (order text for )
+        original_indices : original positions in states, used to restore order
         levels           : (k, H, W) int
     """
     task_key_list = []
@@ -72,4 +72,3 @@ def group_states_by_task(
         key: (np.array(idxs), states[idxs])
         for key, idxs in groups.items()
     }
-

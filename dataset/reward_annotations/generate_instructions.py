@@ -2,28 +2,28 @@
 """
 dataset/reward_annotations/generate_instructions.py
 =====================================================
-OpenAI Batch API (gpt-4o-2024-08-06)  text for text
-reward annotation CSV of  instruction_raw / instruction_uni text  text.
+Generates instruction_raw / instruction_uni for the reward annotations
+through the OpenAI Batch API (gpt-4o-2024-08-06).
 
-config text: instruction_config.py
-text text: system_prompt.txt
-batch text: batches/batch_log.csv  (text CSV)
+Prompt configuration: instruction_config.py
+System prompt: system_prompt.txt
+Batch log: batches/batch_log.csv (append-only CSV)
 
 Usage:
-  # JSONL create + batch text
+  # Build the JSONL and submit the batch
   python dataset/reward_annotations/generate_instructions.py --submit
 
-  # text game/enumtext process
+  # Restrict to specific games / enums
   python dataset/reward_annotations/generate_instructions.py --submit \\
       --games doom zelda --enums 0 1
 
-  # result text + CSV update
+  # Retrieve results and update the caches
   python dataset/reward_annotations/generate_instructions.py --retrieve BATCH_ID
 
-  # batch text check
+  # Check batch status
   python dataset/reward_annotations/generate_instructions.py --status BATCH_ID
 
-  # text  after  finishtext text → automatic CSV update
+  # Poll until completion, then update the caches automatically
   python dataset/reward_annotations/generate_instructions.py --run
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# ── text to text text ─────────────────────────────────────────────────────────────────
+# ── Project paths ────────────────────────────────────────────────────────────────
 _HERE = Path(__file__).parent
 sys.path.insert(0, str(_HERE.parent.parent))
 
@@ -63,13 +63,13 @@ from instruction_config import (
 )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-logging.getLogger("httpx").setLevel(logging.WARNING)   # openai SDK HTTP request  to text text
+logging.getLogger("httpx").setLevel(logging.WARNING)   # silence the openai SDK HTTP logs
 logger = logging.getLogger(__name__)
 
 # ── path ─────────────────────────────────────────────────────────────────────────
 _CACHE_DIR   = _HERE.parent / "multigame" / "cache" / "artifacts"
 _BATCH_DIR   = _HERE / "batches"
-_BATCH_LOG   = _BATCH_DIR / "batch_log.csv"          # text batch text CSV
+_BATCH_LOG   = _BATCH_DIR / "batch_log.csv"          # CSV log of submitted batches
 _SYSTEM_PROMPT_FILE = _HERE / "system_prompt.txt"
 
 from dataset.multigame.cache_utils import (
@@ -78,16 +78,16 @@ from dataset.multigame.cache_utils import (
     find_game_cache_key,
 )
 
-# ── text config ─────────────────────────────────────────────────────────────────────
+# ── Model settings ───────────────────────────────────────────────────────────────
 MODEL       = "gpt-5.4-mini"
 MAX_TOKENS  = 300
 TEMPERATURE = 2.0
 
-# ── batch  to text CSV text ────────────────────────────────────────────────────────────
+# ── Batch log CSV helpers ────────────────────────────────────────────────────────
 _LOG_HEADER = ["batch_id", "jsonl_file", "games", "enums",
                "n_requests", "status", "submitted_at", "completed_at"]
 
-# ── reward_enum → condition text ─────────────────────────────────────────────────
+# ── reward_enum → condition column ───────────────────────────────────────────────
 _ENUM_TO_COND_COL = {
     0: "condition_0", 1: "condition_1", 2: "condition_2",
     3: "condition_3", 4: "condition_4",
@@ -98,10 +98,10 @@ _MAX_SAMPLES: Dict[str, int] = {
 }
 
 
-# ── text text load ──────────────────────────────────────────────────────────
+# ── Prompt loading ───────────────────────────────────────────────────────────
 
 def load_system_prompt() -> str:
-    """system_prompt.txt  in  text text  text text."""
+    """Read the system prompt from system_prompt.txt."""
     return _SYSTEM_PROMPT_FILE.read_text(encoding="utf-8").strip()
 
 
@@ -151,7 +151,7 @@ def render_unified_png(array: np.ndarray, game: str, tile_size: int = 16) -> byt
     return _render_png(unified, color_map, tile_size)
 
 
-# ── text text text ────────────────────────────────────────────────────────────
+# ── Prompt construction ──────────────────────────────────────────────────────
 
 _COUNT_FEATURES = {"interactable_count", "hazard_count", "collectable_count"}
 
@@ -172,7 +172,7 @@ def build_user_prompt(
     zone_idx_0: Optional[int] = None
     zone_display: Optional[str] = None
     feat_zones = FEATURE_ZONE_LABELS.get(feature_name, [])
-    n_bins = len(feat_zones) if feat_zones else 8   # dynamic as  bin text text (current 8)
+    n_bins = len(feat_zones) if feat_zones else 8   # bin count, currently 8
     if thresholds is not None:
         try:
             zone_idx_0 = feat_zones.index(zone_label)        # 0-based
@@ -203,7 +203,7 @@ def build_user_prompt(
     tile_descs  = RAW_TILE_DESCS.get(game, {})
     tile_colors = RAW_TILE_COLORS.get(game, {})
     if feature_name == "region":
-        # region  passable/wall text tabletext — text tile name  instruction in  text text also text
+        # region is described in terms of passable/wall, so raw tile names are omitted
         game_mapping = {int(k): int(v) for k, v in
                         __import__('json').loads(
                             (__import__('pathlib').Path(__file__).parent.parent /
@@ -264,7 +264,7 @@ def build_user_prompt(
         lines.append(f"Count basis: {uni_desc}")
     lines.append("")
 
-    # text text: feature × level
+    # Vocabulary hint: feature x level
     vocab_hint = ""
     if zone_idx_0 is not None:
         vocab_list = VOCAB_SETS.get(feature_name, [])
@@ -354,7 +354,7 @@ def build_user_prompt(
     return "\n".join(lines)
 
 
-# ── batch request text ────────────────────────────────────────────────────────────────
+# ── Batch request construction ───────────────────────────────────────────────────
 
 def build_batch_request(
     custom_id: str,
@@ -454,7 +454,7 @@ def _shorten_source_id(source_id: str, game: str) -> str:
 
 
 def load_cache_by_game(cache_dir: Path) -> Dict[str, Dict[str, np.ndarray]]:
-    """cache  {game: {sample_id: array}}  to  returntext."""
+    """Return caches as {game: {sample_id: array}}."""
     by_game: Dict[str, List[dict]] = {}
     if cache_dir.is_dir():
         for sub in sorted(cache_dir.iterdir()):
@@ -485,10 +485,10 @@ def load_cache_by_game(cache_dir: Path) -> Dict[str, Dict[str, np.ndarray]]:
     return result
 
 
-# ── JSONL create (text file) ────────────────────────────────────────────────────────
+# ── JSONL construction (one file per batch) ──────────────────────────────────────
 
 def _is_none_threshold(game: str, feature_name: str) -> bool:
-    """CUSTOM_THRESHOLDS   None text (game, feature) text text."""
+    """True when CUSTOM_THRESHOLDS has None for this (game, feature) pair."""
     return CUSTOM_THRESHOLDS.get(f"{game}_{feature_name}") is None
 
 
@@ -499,9 +499,9 @@ def fill_none_instructions(
     force: bool = False,
 ) -> int:
     """
-    CUSTOM_THRESHOLDS   None text row  GPT text  instruction_raw / instruction_uni
-    "None"  as  direct text. updatetext row text  returntext.
-    ann.json in  text result  text ann.json in  savetext.
+    For rows whose threshold is None, write the literal "None" into instruction_raw /
+    instruction_uni without calling GPT. Returns the number of updated rows.
+    The result is written straight back into ann.json.
     """
     none_results: Dict[str, dict] = {}
 
@@ -526,7 +526,7 @@ def fill_none_instructions(
 
     if none_results:
         n = update_caches(none_results, cache_dir, games)
-        logger.info(f"threshold=None row {n}text → 'None'  as  direct text")
+        logger.info(f"threshold=None: wrote 'None' directly into {n} row(s)")
         return n
     return 0
 
@@ -541,9 +541,9 @@ def build_jsonl(
     limit: Optional[int] = None,
 ) -> Optional[Path]:
     """
-    process target row in  text JSONL file  text file to  createtext path  returntext.
-    ann.json in  text text. threshold=None text row  text.
-    createtext row  if missing None  returntext.
+    Write the rows to process into a single JSONL file and return its path.
+    Rows are read from ann.json; rows with threshold=None are skipped.
+    Return None when no row can be created.
     """
     _BATCH_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -554,16 +554,16 @@ def build_jsonl(
     for game in games:
         key = find_game_cache_key(cache_dir, game)
         if key is None:
-            logger.warning(f"{game}: cache text none, text")
+            logger.warning(f"{game}: no cache found, skipping")
             continue
         ann_data = load_game_annotations_from_cache(cache_dir, game, key)
         if ann_data is None:
-            logger.warning(f"{game}: ann.json none, text")
+            logger.warning(f"{game}: no ann.json, skipping")
             continue
 
         sid_map = cache_by_game.get(game, {})
         if not sid_map:
-            logger.warning(f"{game}: array cache none, text")
+            logger.warning(f"{game}: no array cache, skipping")
             continue
 
         for row in ann_data.get("annotations", []):
@@ -574,7 +574,7 @@ def build_jsonl(
                 n_skip += 1
                 continue
 
-            # threshold=None → separate process (GPT call text text)
+            # threshold=None → handled separately (no GPT call)
             if _is_none_threshold(game, row["feature_name"]):
                 n_none += 1
                 continue
@@ -605,12 +605,12 @@ def build_jsonl(
             break
 
     if n_skip:
-        logger.info(f" text text row {n_skip}text text (--force  to  textcreate available)")
+        logger.info(f"skipped {n_skip} row(s) that already have instructions (use --force to regenerate)")
     if n_none:
-        logger.info(f"threshold=None row {n_none}text text (--submit  before  automatic processtext)")
+        logger.info(f"skipped {n_none} row(s) with threshold=None (handled before --submit)")
 
     if not lines:
-        logger.info("createtext request  text.")
+        logger.info("No requests to send.")
         return None
 
     ts       = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -620,7 +620,7 @@ def build_jsonl(
     return out_path
 
 
-# ── batch  to text CSV text ────────────────────────────────────────────────────────────
+# ── Batch log CSV helpers ────────────────────────────────────────────────────────
 
 def _read_batch_log() -> List[dict]:
     if not _BATCH_LOG.exists():
@@ -723,13 +723,13 @@ def _extract_text_from_response_body(body: dict) -> Optional[str]:
 
 
 def retrieve_batch_results(batch_id: str) -> Dict[str, dict]:
-    """finishtext batch result  {custom_id: {instruction_raw, instruction_uni}}  to  return."""
+    """Return completed batch results as {custom_id: {instruction_raw, instruction_uni}}."""
     from openai import OpenAI
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
     b = client.batches.retrieve(batch_id)
     if b.status != "completed":
-        raise RuntimeError(f"batch  text finishtext text. text: {b.status}")
+        raise RuntimeError(f"Batch has not finished. Status: {b.status}")
     if not b.output_file_id:
         raise RuntimeError("output_file_id none")
 
@@ -757,7 +757,7 @@ def retrieve_batch_results(batch_id: str) -> Dict[str, dict]:
 
             msg = _extract_text_from_response_body(body)
             if not msg:
-                logger.warning(f"response text none ({cid})")
+                logger.warning(f"empty response ({cid})")
                 continue
 
             parsed = json.loads(msg)
@@ -769,7 +769,7 @@ def retrieve_batch_results(batch_id: str) -> Dict[str, dict]:
         except Exception as e:
             logger.warning(f"parsing failure ({line[:60]}…): {e}")
 
-    logger.info(f"result parsing: {len(results)}text success")
+    logger.info(f"parsed {len(results)} result(s) successfully")
     _update_batch_log(
         batch_id,
         status="completed",
@@ -781,7 +781,7 @@ def retrieve_batch_results(batch_id: str) -> Dict[str, dict]:
 
 def update_caches(results: Dict[str, dict], cache_dir: Path, games: List[str]) -> int:
     """batch result(results: {key → {instruction_raw, instruction_uni}})
-    each game of  ann.json in  applytext savetext. updatetext row text  returntext."""
+    into each game's ann.json. Returns the number of updated rows."""
     total = 0
     for game in games:
         key = find_game_cache_key(cache_dir, game)
@@ -799,12 +799,12 @@ def update_caches(results: Dict[str, dict], cache_dir: Path, games: List[str]) -
                 updated += 1
 
         if updated > 0:
-            # has_instructions: text row in  instruction  text text check
+            # has_instructions: true only when every row has an instruction
             all_filled = all(
                 r.get("instruction_raw") and r.get("instruction_uni")
                 for r in ann_data.get("annotations", [])
             )
-            # finish text batch_id remove, textfinish text keep (text text)
+            # Drop batch_id once finished; keep it while still incomplete
             existing_batch_id = ann_data.get("batch_id") if not all_filled else None
             save_game_annotations_to_cache(
                 cache_dir, game, key,
@@ -813,7 +813,7 @@ def update_caches(results: Dict[str, dict], cache_dir: Path, games: List[str]) -
                 n_samples=ann_data.get("n_samples", 0),
                 batch_id=existing_batch_id,
             )
-            logger.info(f"  {game}/{key[:12]}….ann.json: {updated}text update"
+            logger.info(f"  {game}/{key[:12]}….ann.json: {updated} row(s) updated"
                         + (f" (has_instructions={all_filled})" if all_filled else ""))
         total += updated
     return total
@@ -827,15 +827,15 @@ def main() -> None:
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--submit",   action="store_true",
-                      help="JSONL create + Batch API text")
+                      help="build the JSONL and submit it to the Batch API")
     mode.add_argument("--retrieve", metavar="BATCH_ID",
-                      help="result text + ann.json update")
+                      help="retrieve results and update ann.json")
     mode.add_argument("--status",   metavar="BATCH_ID",
-                      help="batch text check")
+                      help="check batch status")
     mode.add_argument("--run",      action="store_true",
-                      help="text → text → ann.json update (text text)")
+                      help="submit → poll → update ann.json (all in one)")
     mode.add_argument("--log",      action="store_true",
-                      help="text batch  to text text (batch_log.csv)")
+                      help="print the batch submission log (batch_log.csv)")
 
     parser.add_argument("--games", nargs="+",
                         default=["doom", "zelda", "sokoban", "pokemon", "dungeon"],
@@ -845,9 +845,9 @@ def main() -> None:
                         help="0=region 1=path_length 2=interactable 3=hazard 4=collectable")
     parser.add_argument("--cache-dir",    type=Path, default=_CACHE_DIR)
     parser.add_argument("--limit",        type=int,  default=None,
-                        help="processtext maximum row text (text for )")
+                        help="maximum rows to process (for testing)")
     parser.add_argument("--force",        action="store_true",
-                        help=" text text instruction also  textcreate")
+                        help="regenerate instructions that already exist")
     parser.add_argument("--poll-interval",type=int,  default=10)
     args = parser.parse_args()
 
@@ -855,7 +855,7 @@ def main() -> None:
     if args.log:
         rows = _read_batch_log()
         if not rows:
-            print("(batch  to text none)")
+            print("(no batch log)")
         else:
             for r in rows:
                 print(r)
@@ -871,7 +871,7 @@ def main() -> None:
     if args.retrieve:
         results = retrieve_batch_results(args.retrieve)
         n = update_caches(results, args.cache_dir, args.games)
-        logger.info(f"total {n}text row update finish")
+        logger.info(f"updated {n} row(s) in total")
         return
 
     # ── submit / run ──
@@ -884,7 +884,7 @@ def main() -> None:
         return
     logger.info("cache: " + ", ".join(f"{g}={len(v)}" for g, v in sorted(cache_by_game.items())))
 
-    # threshold=None row  GPT text  "None"  as  direct text
+    # Rows with threshold=None get the literal "None" without calling GPT
     fill_none_instructions(
         games=args.games, enums=args.enums,
         cache_dir=args.cache_dir, force=args.force,
@@ -903,24 +903,24 @@ def main() -> None:
                 limit=args.limit,
             )
             if jsonl_path is None:
-                logger.info(f"  {game}: createtext request none, text")
+                logger.info(f"  {game}: no requests to build, skipping")
                 continue
 
             n_requests = sum(1 for _ in jsonl_path.open(encoding="utf-8"))
             batch_id = submit_batch(jsonl_path, [game], args.enums, n_requests)
             submitted_batches.append((batch_id, game))
         except Exception as e:
-            logger.error(f"  {game}: text failure → {e}, text")
+            logger.error(f"  {game}: submission failed → {e}, skipping")
 
     if not submitted_batches:
-        logger.info("text batch none")
+        logger.info("No batches submitted")
         return
 
     if args.run:
-        logger.info(f"finish text  during  (interval={args.poll_interval}s) …")
+        logger.info(f"waiting for completion (interval={args.poll_interval}s) …")
         all_batches   = list(submitted_batches)           # fixed order
-        n_block       = len(all_batches) + 1              # header + batchtext 1text (fixed)
-        bst: Dict[str, dict] = {                          # batchtext text cache
+        n_block       = len(all_batches) + 1              # Header plus one block per batch
+        bst: Dict[str, dict] = {                          # per-batch status cache
             bid: {"game": game, "status": "submitted", "completed": 0, "total": 0}
             for bid, game in all_batches
         }
@@ -942,7 +942,7 @@ def main() -> None:
                     "total":     info["request_counts"]["total"],
                 })
 
-            # text before  text overwrite
+            # Redraw over the previous block
             if not first:
                 sys.stdout.write(f"\033[{n_block}A")
             first = False
@@ -956,7 +956,7 @@ def main() -> None:
                 sys.stdout.write(f"\r\033[K  [{game:8s}] {bs['status']:15s}  {bar}\n")
             sys.stdout.flush()
 
-            # finish/failure process (logger text  text below in  text)
+            # Handle completion / failure (logged below the status block)
             for batch_id in list(pending_ids):
                 status = bst[batch_id]["status"]
                 game   = bst[batch_id]["game"]
@@ -966,17 +966,17 @@ def main() -> None:
                         results = retrieve_batch_results(batch_id)
                         n = update_caches(results, args.cache_dir, [game])
                         total_updated += n
-                        logger.info(f"  [{game}] finish → {n}text update")
+                        logger.info(f"  [{game}] finished → {n} row(s) updated")
                     except Exception as e:
-                        logger.error(f"  [{game}] result text/update failure → {e}")
+                        logger.error(f"  [{game}] failed to retrieve or apply results → {e}")
                 elif status in ("failed", "expired", "cancelled"):
                     pending_ids.discard(batch_id)
-                    logger.error(f"  [{game}] batch failure/text/text: {status}")
+                    logger.error(f"  [{game}] batch failed / expired / cancelled: {status}")
 
         print()
-        logger.info(f"total {total_updated}text row update finish")
+        logger.info(f"updated {total_updated} row(s) in total")
     else:
-        logger.info("\nbatch text finish. result text:")
+        logger.info("\nAll batches finished. Results:")
         for batch_id, game in submitted_batches:
             logger.info(
                 f"  [{game}] "

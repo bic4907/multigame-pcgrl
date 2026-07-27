@@ -1,7 +1,7 @@
 """
 evaluator/metrics/__init__.py
 ==============================
-level text also  texttable text.
+Level-similarity metrics package.
 
 Example:
     from evaluator.metrics import (
@@ -29,20 +29,19 @@ from .lpips           import LPIPSMetric
 from .shannon_entropy import ShannonEntropyMetric
 
 __all__ = [
-    # data text
+    # Data types
     "LevelBundle",
     "MetricResult",
-    # text based class
+    # Abstract base class
     "BaseMetricEvaluator",
-    # texttable class
+    # Metric evaluators
     "CLIPScoreMetric",
     "TPKLMetric",
     "SSIMMetric",
     "LPIPSMetric",
     "ShannonEntropyMetric",
-    # text utility
+    # Statistical utilities
     "extract_pair_scores",
     "auc_roc_score",
     "roc_curve_points",
 ]
-

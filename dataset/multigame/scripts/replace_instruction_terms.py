@@ -1,8 +1,8 @@
 """
-ann.json file of  instruction_uni  text tabletext  text result  instruction_raw in  text.
-instruction_uni  text text text.
+Read instruction_uni from ann.json and write replaced expressions to instruction_raw.
+Do not modify instruction_uni.
 
-term_dst.json of  dst text  text text Usagetext text.
+Fill in dst values in term_dst.json before running.
 
 Usage:
     python -m dataset.multigame.scripts.replace_instruction_terms
@@ -18,10 +18,9 @@ import re
 import shutil
 from pathlib import Path
 
-# ── text  tabletext (src) fixed text of  ────────────────────────────────────────────────────
-# each enumtext longer match(tile text)  text, shorter(text)  text during  in  text.
-# text(s) also  text text.
-# text text  sametext dst to  text.
+# ── Fixed definitions of source expressions ───────────────────────────────────
+# For each enum, replace longer matches containing "tile" before shorter ones.
+# Match plural forms ending in s as well. Every pattern maps to the same dst.
 
 TERM_PATTERNS: dict[int, list[str]] = {
     2: [r"interactive tiles?", r"interactives?"],   # longer first
@@ -46,7 +45,7 @@ def load_dst(dst_file: Path) -> dict[str, dict[int, str]]:
 
 
 def _pluralize(word: str) -> str:
-    """text text rule apply."""
+    """Apply English pluralization rules."""
     w = word.lower()
     if w.endswith(("s", "ss", "sh", "ch", "x", "z")):
         return word + "es"
@@ -60,9 +59,9 @@ def _pluralize(word: str) -> str:
 
 
 def _replace_pattern(text: str, pattern: str, dst: str) -> str:
-    """text text  text pattern → dst text.
-    - text text  s to  text dst  text as  convert (collectables → items)
-    - text text text textcharacter preserve
+    """Replace pattern with dst while respecting word boundaries.
+    - Pluralize dst when the match ends in s (collectables -> items).
+    - Preserve the case of the first matched letter.
     """
     compiled = re.compile(r"\b" + pattern + r"\b", re.IGNORECASE)
 
@@ -107,7 +106,7 @@ def process_file(
 
     result_text = original_text
     changed = 0
-    pos = 0  # ordertext to  text abovetext text start abovetext
+    pos = 0  # Search start for ordered replacements
 
     for ann in data["annotations"]:
         enum = int(ann["reward_enum"])
@@ -119,7 +118,7 @@ def process_file(
             uni = ann.get("instruction_uni") or ""
             new_raw = replace_in_text(uni, game, enum, dst_map)
             if new_raw == uni:
-                # text none — instruction_raw abovetext pos  before text
+                # No replacement; advance only within instruction_raw
                 old_field = '"instruction_raw":' + json.dumps(old_raw, ensure_ascii=False)
                 idx = result_text.find(old_field, pos)
                 if idx >= 0:
@@ -146,22 +145,22 @@ def process_file(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="instruction_uni tabletext text")
+    parser = argparse.ArgumentParser(description="Replace instruction_uni expressions")
     parser.add_argument("--ann-dir", type=Path, default=ANN_DIR)
     parser.add_argument("--dst-file", type=Path, default=DEFAULT_DST_FILE,
-                        help=f"dst text of  JSON file (default: {DEFAULT_DST_FILE})")
+                        help=f"JSON file defining dst values (default: {DEFAULT_DST_FILE})")
     parser.add_argument("--enums", nargs="*", type=int, default=[2, 3, 4],
-                        help="text target enum (default: 2 3 4). enum 0,1  always uni→raw copy)")
+                        help="Enums to replace (default: 2 3 4); enums 0 and 1 always copy uni to raw")
     parser.add_argument("--games", nargs="*", default=None)
     parser.add_argument("--dry-run", action="store_true",
-                        help="text file text text  text  inside text text")
+                        help="Print changes without modifying files")
     args = parser.parse_args()
 
     enums = set(args.enums)
     dst_map = load_dst(args.dst_file)
     print(f"dst file: {args.dst_file.resolve()}")
 
-    # dst  textwith text warning
+    # Warn about entries with empty dst
     empty_dst = [
         f"{g} / enum {e}"
         for g, enum_map in dst_map.items()
@@ -170,7 +169,7 @@ def main() -> None:
         if e in enums and not dst
     ]
     if empty_dst:
-        print("[WARN] dst  text text:")
+        print("[WARN] Skipping entries with empty dst:")
         for item in empty_dst:
             print(f"  {item}")
 
@@ -178,7 +177,7 @@ def main() -> None:
     if args.games:
         ann_files = [p for p in ann_files if p.parent.name in args.games]
 
-    print(f"\n{'[DRY RUN] ' if args.dry_run else ''}process target: {len(ann_files)}text file  enums={sorted(enums)}\n")
+    print(f"\n{'[DRY RUN] ' if args.dry_run else ''}Targets: {len(ann_files)} files  enums={sorted(enums)}\n")
 
     total_changed = 0
     for ann_path in ann_files:
@@ -188,9 +187,9 @@ def main() -> None:
         print(f"  [{game}]  {status}  ({result['changed']:,} / {result['total']:,} annotations)")
         total_changed += result["changed"]
 
-    print(f"\ntotal text: {total_changed:,}text annotation")
+    print(f"\nTotal changes: {total_changed:,} annotations")
     if args.dry_run:
-        print("(dry-run: file  text text)")
+        print("(dry run: no files were modified)")
 
 
 if __name__ == "__main__":

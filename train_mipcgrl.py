@@ -1,12 +1,12 @@
 """
 train_mipcgrl.py
 ================
-MIPCGRL (Multi-task Instructed PCGRL) — IPCGRL and  sametext RL training pipeline.
+MIPCGRL (Multi-task Instructed PCGRL) uses the same RL training pipeline as IPCGRL.
 
-text text  text for text  text checkpointtext text. MIPCGRL text  condition value
-text in  text task(reward_enum) text  text trainingtext weight text, RL text in
-text forward(latent z extract)text text for text to  train_ipcgrl  and  sametext inject function
-reusetext.
+The only difference is the encoder checkpoint. MIPCGRL encoder weights learn
+task (reward_enum) classification alongside condition-value regression, but
+the RL stage uses only the encoder forward pass (latent z), so it shares the
+injection function.
 
 Usage:
     python -m train_mipcgrl encoder.ckpt_dir=... encoder.ckpt_name=...
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def inject_mipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """BERT embedding  nlp_obs  in  inject.   after  network internal of  MLP text  process."""
+    """Inject BERT embeddings into nlp_obs for the network's MLP encoder."""
     return last_obs.replace(nlp_obs=instruct_sample.embedding)
 
 

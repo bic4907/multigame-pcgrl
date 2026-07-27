@@ -2,8 +2,8 @@
 instruct_rl/utils/train_utils.py
 =================================
 CPCGRL / IPCGRL common training utility.
-each train_*.py  in  modetext obs inject functiontext text of text,
-remaining PPO training text·checkpoint· to text  text reusetext.
+Each train_*.py defines only its mode-specific observation-injection function;
+the PPO loop, checkpointing, and logging are shared here.
 """
 from __future__ import annotations
 
@@ -63,17 +63,17 @@ logger = get_logger(__file__)
 # ── common utility ──────────────────────────────────────────────────────────────────
 
 def _cosine_similarity(x: jnp.ndarray, y: jnp.ndarray, eps: float = 1e-8) -> jnp.ndarray:
-    """batch text text also . x, y: (..., D) → scalar per batch item."""
+    """Batched cosine similarity for x, y of shape (..., D), one scalar per item."""
     dot = jnp.sum(x * y, axis=-1)
     norm = jnp.linalg.norm(x, axis=-1) * jnp.linalg.norm(y, axis=-1) + eps
     return dot / norm
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  ObsInjectFn text:
+#  ObsInjectFn type:
 #    (last_obs, env_state, instruct_sample, config, env) -> last_obs
-#  training/evaluation in  obs  in  condition info  injecttext  callback.
-#  each train_*.py  in  text of text make_train  in   before text.
+#  Callback that injects condition information into observations during training/evaluation.
+#  Defined in each train_*.py and passed to make_train.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
@@ -89,16 +89,16 @@ def make_train(
     inject_reward_fn: Callable | None = None,
     map_size: Optional[int] = None,
 ):
-    """PPO training function  createtext.
+    """Create a PPO training function.
 
     Parameters
     ----------
     inject_obs_fn : (last_obs, env_state, instruct_sample, config, env) -> last_obs
-        each modetext obs inject  to text. None  text obs   as-is text for text.
+        Mode-specific observation injection. None leaves observations unchanged.
     inject_reward_fn : (prev_env_state, curr_env_state, last_obs, curr_obs, instruct_sample, config, env)
         -> (reward_i, condition)
-        reward_i/condition   text in  dynamic as  injecttext  callback.
-        return shape  get_reward_batch text and  sametext text.
+        Callback that dynamically supplies reward_i/condition externally.
+        Its return shape must match the get_reward_batch input.
     """
     config.NUM_UPDATES = config.total_timesteps // config.num_steps // config.n_envs
     config.MINIBATCH_SIZE = config.n_envs * config.num_steps // config.NUM_MINIBATCHES
@@ -236,15 +236,15 @@ def make_train(
                 )
 
         def _buffer_collect_callback(update_steps, traj_batch, env_state):
-            """jax.debug.callback  as  calltext  text text callback."""
+            """Buffer-collection callback invoked through jax.debug.callback."""
             if _buffer_collector is None:
                 return
             step_int = int(update_steps)
             if _buffer_collector.should_collect(step_int):
                 _buffer_collector.collect_and_save(step_int, traj_batch, env_state)
 
-        # ── sim_reward text: env_map → state embedding ────────────────────────
-        # clip_input_channel in  coordinate text(2text)  text one-hot class text  text
+        # ── sim_reward helper: env_map -> state embedding ─────────────────────
+        # Subtract two coordinate channels from clip_input_channel for the one-hot class count
         _num_tile_classes: int = max(1, config.clip_input_channel - 2)
 
         def _get_state_embed(env_map, ref_obs, params):
@@ -275,7 +275,7 @@ def make_train(
 
                 rng, _rng = jax.random.split(rng)
 
-                # ── obs inject (modetext callback) ──
+                # ── Observation injection with the mode-specific callback ──
                 if inject_obs_fn is not None and train_inst is not None:
                     last_obs = inject_obs_fn(last_obs, env_state, instruct_sample, config, env)
 
@@ -299,7 +299,7 @@ def make_train(
                 )
 
                 if inject_reward_fn is not None:
-                    # inject_reward_fn  internal in  rendering·embedding  direct textrow
+                    # inject_reward_fn performs rendering and embedding internally
                     pred_clip_similarity_reward = inject_reward_fn(
                         prev_env_state,
                         env_state,
@@ -344,7 +344,7 @@ def make_train(
                         )
                         reward_batch = cond_reward_batch + config.coef_human_sim * sim_reward
 
-                    # return_info  sim_reward text and  text  always text
+                    # Always track return_info, regardless of sim_reward
                     return_info = ReturnInfo(
                         cond_return=return_info.cond_return * (1 - return_info.prev_done) + cond_reward_batch * (1 - done),
                         sim_return=return_info.sim_return * (1 - return_info.prev_done) + sim_reward * (1 - done),
@@ -549,7 +549,7 @@ def make_train(
 
                     if inject_reward_fn is not None:
 
-                        # inject_reward_fn  internal in  rendering·embedding  direct textrow
+                        # inject_reward_fn performs rendering and embedding internally
                         reward_batch = inject_reward_fn(
                             state,
                             next_state,
@@ -690,7 +690,7 @@ def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None, inject_reward_fn=Non
         "Config must specify dataset_game for loading instruction dataset."
 
     train_inst, test_inst, samples = load_dataset_instruct(config)
-    # level data  Instruct.level text in  text text to  separate level_db build text
+    # Level data is stored in Instruct.level, so no separate level_db is needed
 
     train_jit = jax.jit(
         make_train(
@@ -706,7 +706,7 @@ def main_chunk(config, rng, exp_dir, *, inject_obs_fn=None, inject_reward_fn=Non
 
 
 def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
-    """Hydra @main  in  calltext  common entry point."""
+    """Common entry point called from Hydra @main."""
     from instruct_rl.utils.path_utils import init_config
 
     if config.initialize is None or config.initialize:

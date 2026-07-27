@@ -4,11 +4,11 @@ progress.py
 Progress measure utility.
 
 progress = 1 - |condition - feat_final| / (|condition - feat_s0| + ε)
-  - condition : texttabletext (cont_value)
-  - feat_final: text text in  measuretext feature text
-  - feat_s0   : initial text(s0) in  measuretext feature text
-  - text  [0, 100]  as  text.
-  - condition == -1(null text)text row  NaN return.
+  - condition : target value (cont_value)
+  - feat_final: feature measured in the final state
+  - feat_s0   : feature measured in the initial state (s0)
+  - Values are clipped to [0, 100].
+  - Rows with condition == -1 (the null sentinel) return NaN.
 """
 
 import numpy as np
@@ -18,7 +18,7 @@ EPS = 1e-7
 
 
 def calculate_progress(condition: float, feat: float, feat_s0: float) -> float:
-    """scalar textabove progress compute (0~100, NaN return available)."""
+    """Compute scalar progress from 0 to 100, returning NaN when appropriate."""
     if np.isnan(condition) or condition == -1:
         return float("nan")
     raw = 1.0 - abs(condition - feat) / (abs(condition - feat_s0) + EPS)
@@ -26,20 +26,20 @@ def calculate_progress(condition: float, feat: float, feat_s0: float) -> float:
 
 
 class ProgressWrapper:
-    """df_ctrl_sim DataFrame in  progress_* text  text text.
+    """Add progress_* columns to a df_ctrl_sim DataFrame.
 
     Parameters
     ----------
     n_cond : int
-        condition_* / feat_* text of  count.
+        Number of condition_* / feat_* columns.
     """
 
     def __init__(self, n_cond: int):
         self.n_cond = n_cond
 
     def run(self, df: pd.DataFrame) -> pd.DataFrame:
-        """reward_enum in  text  index of  condition/feat/feat_s0  text
-        text 'progress' text  text text copytext  return."""
+        """Read condition/feat/feat_s0 at the reward_enum index and return
+        a copy with a single 'progress' column."""
         df = df.copy()
 
         def _row_progress(row):
@@ -56,4 +56,3 @@ class ProgressWrapper:
 
         df["progress"] = df.apply(_row_progress, axis=1)
         return df
-

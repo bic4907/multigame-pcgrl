@@ -1,15 +1,15 @@
 """
 evaluator/metrics/tpkl.py
 ==========================
-TPKL (Tile-Pattern KL-Divergence) texttable.
+TPKL (Tile-Pattern KL-Divergence) evaluator.
 
-text: LevelBundle.array — (H, W) int32 unified 5-category tile array
-text: sliding window k×k text distribution text of  symmetric KL-divergence
-      text text text text (GT distribution in   text text)
+Input: LevelBundle.array -- (H, W) int32 array with five unified categories
+Score: symmetric KL divergence between sliding-window k-by-k pattern distributions;
+       lower is more similar (closer to the GT distribution)
 
-tpkl_old.py text (sliding window + symmetric KL) based pairwise text.
+Pairwise implementation based on the tpkl_old.py sliding-window/symmetric-KL method.
 
-unified text (use_tile_mapping=True basis):
+Unified categories when use_tile_mapping=True:
   0=empty, 1=wall, 2=interactive, 3=hazard, 4=collectable
 """
 from __future__ import annotations
@@ -22,10 +22,10 @@ import numpy as np
 from .base import BaseMetricEvaluator, LevelBundle
 
 
-# ── text level utility (tpkl_old.py same  to text) ───────────────────────────────────
+# ── Module-level utilities matching tpkl_old.py ─────────────────────────────
 
 def _sliding_windows(level: np.ndarray, k: int):
-    """k×k text text text also text text  tuple to  yield."""
+    """Yield k-by-k sliding-window patterns as tuples."""
     h, w = level.shape[:2]
     for i in range(h - k + 1):
         for j in range(w - k + 1):
@@ -37,7 +37,7 @@ def _build_distribution(
     window_sizes: Tuple[int, ...],
     epsilon: float,
 ) -> List[Dict[Tuple, float]]:
-    """text also text sizetext Laplace-smoothed normalize distribution return."""
+    """Return a Laplace-smoothed normalized distribution for each window size."""
     dists = []
     for k in window_sizes:
         counts: Counter = Counter()
@@ -50,7 +50,7 @@ def _build_distribution(
 
 
 def _kl(p: Dict, q: Dict, eps: float) -> float:
-    """KL(p ‖ q)  (q  in  without key  eps text)."""
+    """Compute KL(p || q), substituting eps for keys absent from q."""
     return float(sum(pv * np.log(pv / q.get(k, eps)) for k, pv in p.items()))
 
 
@@ -59,8 +59,8 @@ def _sym_kl(
     dists_q: List[Dict],
     eps: float,
 ) -> float:
-    """text also text sizetext symmetric KL divergence sum.
-    0 = same distribution, text  text text.
+    """Sum symmetric KL divergence over window sizes.
+    Zero means identical distributions; larger values mean greater difference.
     """
     return sum(
         0.5 * _kl(p, q, eps) + 0.5 * _kl(q, p, eps)
@@ -68,25 +68,24 @@ def _sym_kl(
     )
 
 
-# ── texttable class ───────────────────────────────────────────────────────────────
+# ── Evaluator class ──────────────────────────────────────────────────────────
 
 class TPKLMetric(BaseMetricEvaluator):
     """
-    Tile-Pattern KL-Divergence texttable.
+    Tile-Pattern KL-Divergence evaluator.
 
-    sliding window text distribution text symmetric KL-divergence based.
-    KL divergence text  text text text text.
+    Based on symmetric KL divergence between sliding-window pattern distributions.
+    Lower KL divergence means greater similarity.
 
-    BaseMetricEvaluator interface  keeptext abovetext
-    similarity_matrix()  exp(-sym_KL) ∈ (0, 1]  to  converttext return.
-    text KL divergence rowtext  text divergence_matrix() text for .
+    To preserve the BaseMetricEvaluator interface, similarity_matrix() returns
+    exp(-sym_KL) in (0, 1]. Use divergence_matrix() for raw KL divergence.
 
     Parameters
     ----------
     window_sizes : tuple of int
-        text text text also text size list. default (2, 3).
+        Sliding-window sizes. Default: (2, 3).
     epsilon : float
-        KL smoothing text. default 1e-6.
+        KL smoothing term. Default: 1e-6.
     """
 
     def __init__(
@@ -97,7 +96,7 @@ class TPKLMetric(BaseMetricEvaluator):
         self.window_sizes = window_sizes
         self.epsilon = epsilon
 
-    # ── BaseMetricEvaluator text ──────────────────────────────────────────────
+    # ── BaseMetricEvaluator implementation ───────────────────────────────────
 
     @property
     def name(self) -> str:
@@ -105,10 +104,10 @@ class TPKLMetric(BaseMetricEvaluator):
 
     def similarity_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
-        (N, N) pairwise text also  rowtext.
+        (N, N) pairwise similarity matrix.
 
         similarity = exp(-sym_KL)  ∈ (0, 1]
-        1.0 = same distribution, 0 in   text distribution  text.
+        1.0 means identical distributions; values closer to zero are more different.
         """
         dists = [
             _build_distribution(b.array, self.window_sizes, self.epsilon)
@@ -122,12 +121,12 @@ class TPKLMetric(BaseMetricEvaluator):
                 mat[i, j] = np.exp(-kl)
         return mat
 
-    # ── text  public API ─────────────────────────────────────────────────────────
+    # ── Additional public API ─────────────────────────────────────────────────
 
     def divergence_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
-        (N, N) pairwise symmetric KL-divergence rowtext.
-        text text text text (0 = same distribution).
+        (N, N) pairwise symmetric KL-divergence matrix.
+        Lower is more similar; zero means identical distributions.
         """
         dists = [
             _build_distribution(b.array, self.window_sizes, self.epsilon)
@@ -141,5 +140,5 @@ class TPKLMetric(BaseMetricEvaluator):
         return mat
 
     def score_divergence(self, a: LevelBundle, b: LevelBundle) -> float:
-        """text text KL divergence text (text text text)."""
+        """Return KL divergence for one pair; lower is more similar."""
         return float(self.divergence_matrix([a, b])[0, 1])

@@ -1,19 +1,18 @@
 """envs/probs/multigame.py  (updated)
 
-tile_mapping.json  of  unified categories(_categories text)  tile_enum as  text
-MultigameProblem text make_multigame_env() text.
+MultigameProblem and make_multigame_env() use the unified categories in the
+tile_mapping.json _categories section as the tile enum.
 
-_categories (7text)
+_categories (5 categories)
 -----------------
-  0  EMPTY   – background / void
-  1  WALL    – solid, impassable obstacle
-  2  FLOOR   – traversable ground
-  3  ENEMY   – hostile entity
-  4  OBJECT  – item / pickup / collectible
-  5  SPAWN   – player start / exit / door
-  6  HAZARD  – environmental damage / trap
+  0  EMPTY        - background / traversable empty space
+  1  WALL         - solid, impassable obstacle
+  2  INTERACTIVE  - interactive entity or structure
+  3  HAZARD       - environmental damage, trap, or hostile entity
+  4  COLLECTABLE  - item, pickup, or collectible
 
-  file text as  "tile_mapping text and  sametext action text   text env"   maketext text text.
+This module alone can create an environment whose action space matches the
+tile_mapping specification.
 
 Usage
 -----
@@ -26,8 +25,8 @@ Usage
         rf_shape=(31, 31),
     )
 
-    # n_editable_tiles   NUM_CATEGORIES(7)  and  text  check
-    assert env.rep.n_editable_tiles == 7
+    # Confirm that n_editable_tiles matches NUM_CATEGORIES (currently 5)
+    assert env.rep.n_editable_tiles == 5
 """
 from __future__ import annotations
 
@@ -57,9 +56,9 @@ _CATEGORIES: dict[int, str] = {
 _CATEGORY_COLORS: dict[int, tuple] = {
     int(k): tuple(v) for k, v in _MAPPING_CONFIG.get("_category_colors_rgb", {}).items()
 }
-NUM_CATEGORIES: int = len(_CATEGORIES)   # 7
+NUM_CATEGORIES: int = len(_CATEGORIES)   # Currently 5
 
-# ── tile image file text: JSON _category_tile_images  in  load ─────────────────
+# ── Tile-image mapping loaded from JSON _category_tile_images ─────────────────
 # key "border" → BORDER tile (index 0)
 # key "0".."N"  → category index (MultigameTiles index = cat+1)
 _TILE_IMS_DIR = Path(__file__).parent / "tile_ims"
@@ -76,26 +75,26 @@ _TILE_SIZE = 16
 
 
 def _make_color_tile(rgb: tuple, size: int = _TILE_SIZE) -> Image.Image:
-    """text RGBA tile image create."""
+    """Create a solid-color RGBA tile image."""
     r, g, b = rgb
     arr = np.full((size, size, 4), [r, g, b, 255], dtype=np.uint8)
     return Image.fromarray(arr, mode="RGBA")
 
 
 def _load_tile_image(filename: str, size: int = _TILE_SIZE) -> Image.Image:
-    """envs/probs/tile_ims/<filename>   load. if missing text fallback."""
+    """Load envs/probs/tile_ims/<filename>, falling back to purple if absent."""
     path = _TILE_IMS_DIR / filename
     if path.exists():
         return Image.open(path).convert("RGBA").resize((size, size))
     import warnings
     warnings.warn(f"[multigame] tile image not found: {path}", stacklevel=2)
-    return _make_color_tile((200, 0, 200), size)   # text = missing tabletext
+    return _make_color_tile((200, 0, 200), size)   # Purple marks a missing image
 
 
 def _load_or_color_tile(cat_idx: int, size: int = _TILE_SIZE) -> Image.Image:
     """category index → tile image.
-    _CATEGORY_IMAGE_FILES(JSON) in  file  text text text file text for ,
-    if missing _CATEGORY_COLORS  to  text tile create."""
+    Use the file specified by _CATEGORY_IMAGE_FILES (JSON), or create a
+    solid-color tile from _CATEGORY_COLORS when no file is configured."""
     fname = _CATEGORY_IMAGE_FILES.get(cat_idx)
     if fname:
         return _load_tile_image(fname, size)
@@ -104,12 +103,12 @@ def _load_or_color_tile(cat_idx: int, size: int = _TILE_SIZE) -> Image.Image:
 
 
 # ── tile_mapping._categories → IntEnum ─────────────────────────────────────────
-# BORDER(0)   env text index 0  text text to , category index  1-shift text
-# BORDER=0, categories=1..NUM_CATEGORIES  to  batchtext.
+# The environment convention requires BORDER at index 0, so category indices
+# are shifted by one: BORDER=0 and categories=1..NUM_CATEGORIES.
 #
 #   MultigameTiles
 #   --------------
-#   BORDER = 0          (env internal text tile, action text )
+#   BORDER = 0            (internal boundary tile; unavailable as an action)
 #   EMPTY  = 1          (category 0)
 #   WALL   = 2          (category 1)
 #   INTERACTABLE = 3      (category 2)
@@ -120,14 +119,14 @@ MultigameTiles = IntEnum(
     "MultigameTiles",
     {"BORDER": 0, **{name.upper(): idx + 1 for idx, name in _CATEGORIES.items()}},
 )
-"""tile_mapping._categories  in  automatic createtext tile enum.
+"""Tile enum generated automatically from tile_mapping._categories.
 
-BORDER=0, EMPTY=1, WALL=2, ..., HAZARD=7  (total 8text)
- in  BORDER   text editable = 7 = NUM_CATEGORIES.
+BORDER=0, EMPTY=1, WALL=2, INTERACTIVE=3, HAZARD=4, COLLECTABLE=5.
+Excluding BORDER leaves 5 editable tiles, equal to NUM_CATEGORIES.
 """
 
-# text/region/path-length text in  "text and  available" as  text tile.
-# textgame text  text also  name  text  text automatic text.
+# Tiles considered passable by pathfinding, region, and path-length metrics.
+# Include only names that exist so category changes remain backward compatible.
 _PASSABLE_TILE_NAMES = (
     "EMPTY",
     "FLOOR",
@@ -146,7 +145,7 @@ MultigamePassable = jnp.array(_passable_tiles, dtype=jnp.int32)
 
 
 class MultigameMetrics(IntEnum):
-    """textgame env   separate text texttable  text for text text text. dummy 1-element."""
+    """The multigame environment has no separate metrics; use one dummy element."""
     DUMMY = 0
 
 
@@ -157,11 +156,11 @@ class MultigameState(ProblemState):
 
 
 class MultigameProblem(Problem):
-    """tile_mapping.json  of  unified 7-category   as-is action text as  text  Problem.
+    """Problem whose action space directly uses the five unified categories.
 
-    - tile_enum  = MultigameTiles  (BORDER + 7 categories = 8text)
-    - editable   = 7 (= NUM_CATEGORIES, BORDER text)
-    - stat/reward   null (0) — reward shaping   text textclass in  text text.
+    - tile_enum = MultigameTiles (BORDER + 5 categories = 6 entries)
+    - editable = 5 (= NUM_CATEGORIES, excluding BORDER)
+    - stats/reward are null (0); subclasses may override them for reward shaping.
     """
 
     tile_enum = MultigameTiles
@@ -175,12 +174,12 @@ class MultigameProblem(Problem):
         + [0.10 / _p_norm] * (NUM_CATEGORIES - 2)
     )
 
-    # fixed count none (text text batch)
+    # No fixed counts; every tile can be placed freely
     tile_nums = tuple([0] * len(MultigameTiles))
 
     # stat weights / trgs / ctrl_threshes: shape (1,) — dummy, no reward
     stat_weights  = np.zeros(1)
-    stat_trgs     = jnp.zeros(1)   # jnp.array text Problem.__init__  in  text text
+    stat_trgs     = jnp.zeros(1)   # Must be a jnp.array for Problem.__init__
     ctrl_threshes = np.zeros(1)
 
     tile_size = _TILE_SIZE
@@ -191,20 +190,20 @@ class MultigameProblem(Problem):
         super().__init__(map_shape, ctrl_metrics, pinpoints)
 
     def get_metric_bounds(self, map_shape: Tuple[int, int]):
-        """text texttable none → dummy (1, 2) array."""
+        """Return a dummy (1, 2) array because there are no metrics."""
         return np.zeros((1, 2), dtype=np.float32)
 
     def get_curr_stats(self, env_map: chex.Array) -> MultigameState:
-        """text texttable none → zeros stats."""
+        """Return zero statistics because there are no metrics."""
         stats = jnp.zeros(len(MultigameMetrics))
         return MultigameState(stats=stats)
 
     def get_stats(self, env_map, prob_state: ProblemState):
-        """text texttable none → zeros (1,)."""
+        """Return zeros with shape (1,) because there are no metrics."""
         return np.zeros(1)
 
     def get_path_coords(self, env_map: chex.Array, prob_state: ProblemState):
-        """path none → empty tuple (render text)."""
+        """Return an empty tuple because there are no paths (render-compatible)."""
         return ()
 
     def draw_path(self, lvl_img, env_map, border_size, path_coords_tpl, tile_size):
@@ -215,7 +214,7 @@ class MultigameProblem(Problem):
     def get_cont_obs(self, env_map, condition, raw_obs: bool = False) -> jnp.array:
         """CPCGRL condition → observation convert.
 
-        text condition text  text text to , -1(text for )  0 as  text as-is return.
+        All condition values are numeric, so mask unused -1 values to 0 and return them.
         total output shape: (5,)  — vec_input_dim  and  same.
         """
         mask = jnp.not_equal(condition, -1).astype(jnp.float32)
@@ -223,7 +222,7 @@ class MultigameProblem(Problem):
         return obs
 
     def init_graphics(self):
-        """tile_mapping.json  of  _category_tile_images   text tile image  initializetext.
+        """Initialize tile images from tile_mapping.json _category_tile_images.
 
         MultigameTiles index:
           BORDER = 0  → _category_tile_images["border"]
@@ -236,7 +235,7 @@ class MultigameProblem(Problem):
 
         graphics: dict = {}
 
-        # BORDER (index 0): JSON "border" text in  load
+        # BORDER (index 0): load from the JSON "border" key
         graphics[0] = _load_tile_image(_BORDER_IMAGE)
 
         # category tiles: MultigameTiles index = cat_idx + 1
@@ -248,12 +247,12 @@ class MultigameProblem(Problem):
 
 
 def render_multigame_map(env_map: np.ndarray, tile_size: int = _TILE_SIZE) -> Image.Image:
-    """tile_mapping._category_tile_images  in  text env_map (H×W int32)   PIL Image  to  renderingtext.
+    """Render an (H, W) int32 env_map as a PIL image using _category_tile_images.
 
     Parameters
     ----------
-    env_map  : (H, W) numpy array, text  MultigameTiles integer
-    tile_size: tile textcell size (default 16)
+    env_map  : (H, W) NumPy array containing MultigameTiles integers
+    tile_size: tile cell size (default: 16)
 
     Returns
     -------
@@ -268,7 +267,7 @@ _tile_array_cache: dict[int, np.ndarray] = {}
 
 
 def _get_tile_array(tile_size: int = _TILE_SIZE) -> np.ndarray:
-    """tile indextext RGBA numpy array  return. tile_sizeby text.
+    """Return an RGBA NumPy array by tile index, cached per tile_size.
 
     Returns
     -------
@@ -295,13 +294,13 @@ def _get_tile_array(tile_size: int = _TILE_SIZE) -> np.ndarray:
 def render_multigame_map_np(env_map: np.ndarray, tile_size: int = _TILE_SIZE) -> np.ndarray:
     """env_map (H, W) → numpy RGB array (H*ts, W*ts, 3).
 
-    PIL paste text text numpy fancy-indexing  as  O(1) text.
-    tile array  tile_sizeby text repetition call text  to text text for  none.
+    Assemble in O(1) with NumPy fancy indexing instead of a PIL paste loop.
+    Tile arrays are cached by tile_size, avoiding reload costs on repeated calls.
     """
     tile_arr = _get_tile_array(tile_size)  # (T, ts, ts, 4)
 
     H, W = env_map.shape
-    # range outside index  fallback (text = index 0 as  clamp, text to   text  index)
+    # Clamp out-of-range indices to the fallback entry at index 0
     idx = np.clip(env_map.astype(np.int32), 0, len(tile_arr) - 1)  # (H, W)
 
     # fancy indexing: (H, W, ts, ts, 4) → transpose → (H*ts, W*ts, 4)
@@ -316,23 +315,23 @@ def render_multigame_maps_batch(
     env_maps: np.ndarray,
     tile_size: int = _TILE_SIZE,
 ) -> np.ndarray:
-    """(N, H, W) array  text text in  rendering → (N, H*ts, W*ts, 3) uint8.
+    """Render an (N, H, W) array to (N, H*ts, W*ts, 3) uint8 in one operation.
 
-    numpy fancy-indexing + reshape text text for text to  for text none.
+    Uses only NumPy fancy indexing and reshape, with no Python loop.
     """
     tile_arr = _get_tile_array(tile_size)  # (T, ts, ts, 4)
 
     N, H, W = env_maps.shape
     idx = np.clip(env_maps.astype(np.int32), 0, len(tile_arr) - 1)  # (N, H, W)
 
-    canvas = tile_arr[idx]                           # (N, H, W, ts, ts, 4) — text text text warning
+    canvas = tile_arr[idx]                           # (N, H, W, ts, ts, 4); can be memory-intensive
     canvas = canvas.transpose(0, 1, 3, 2, 4, 5)    # (N, H, ts, W, ts, 4)
     canvas = canvas.reshape(N, H * tile_size, W * tile_size, 4)
 
     return canvas[:, :, :, :3]  # RGB, (N, H*ts, W*ts, 3)
 
 
-# ── text function ─────────────────────────────────────────────────────────────────
+# ── Factory function ───────────────────────────────────────────────────────────
 
 def make_multigame_env(
     representation: str = "narrow",
@@ -341,15 +340,15 @@ def make_multigame_env(
     act_shape: Tuple[int, int] = (1, 1),
     max_board_scans: float = 3.0,
 ):
-    """tile_mapping._categories text and  sametext action text   text PCGRLEnv   returntext.
+    """Return a PCGRLEnv whose action space matches tile_mapping._categories.
 
     Parameters
     ----------
     representation  : "narrow" | "wide" | "turtle" | "nca"
     map_shape       : (H, W) map size (default 16x16)
-    rf_shape        : receptive field size. None  text 2*map_width-1  to  automatic config.
-    act_shape       : action patch size (narrow/turtle  of  text (1,1))
-    max_board_scans : text  maximum text text text
+    rf_shape        : receptive-field size; defaults to 2*map_width-1 when None
+    act_shape       : action-patch size ((1, 1) for narrow/turtle)
+    max_board_scans : maximum number of board scans
 
     Returns
     -------
@@ -361,7 +360,7 @@ def make_multigame_env(
     """
     from envs.pcgrl_env import PCGRLEnv, PCGRLEnvParams, ProbEnum, RepEnum, PROB_CLASSES
 
-    # MultigameProblem   PROB_CLASSES  in  text (always latest text to  text)
+    # Register MultigameProblem in PROB_CLASSES, always refreshing the entry
     _MULTIGAME_KEY = max(ProbEnum) + 1
     PROB_CLASSES[_MULTIGAME_KEY] = MultigameProblem
 

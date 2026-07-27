@@ -1,7 +1,7 @@
 """
 dataset/multigame/handlers/vglc_games/__init__.py
 ==================================================
-gametext preprocessingtext registry.
+Registry of game-specific preprocessors.
 """
 from __future__ import annotations
 
@@ -38,4 +38,3 @@ LEGEND_FACTORIES: dict[str, callable] = {
 SUPPORTED_GAMES = list(PREPROCESSORS.keys())
 
 __all__ = ["PREPROCESSORS", "PALETTES", "LEGEND_FACTORIES", "SUPPORTED_GAMES"]
-

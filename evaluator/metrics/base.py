@@ -1,11 +1,11 @@
 """
 evaluator/metrics/base.py
 ==========================
-level text also  texttable common interface.
+Common interface for level-similarity metrics.
 
-LevelBundle  — text level of  text tabletext  text  text text
+LevelBundle -- container for all representations of one level
 MetricResult — evaluation results dataclass
-BaseMetricEvaluator — text texttable class  text ABC
+BaseMetricEvaluator -- ABC inherited by every metric class
 """
 from __future__ import annotations
 
@@ -17,15 +17,15 @@ import numpy as np
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# common data text
+# Common data types
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class LevelBundle:
     """
-    text game level of  text tabletext  text  text text.
+    Container for all representations of a single game level.
 
-    each MetricEvaluator  text in text text text text for text.
+    Each MetricEvaluator uses only the fields it needs.
       - TPKL  → array
       - SSIM / LPIPS → image
       - CLIPScore    → text + image
@@ -35,13 +35,13 @@ class LevelBundle:
     array : (H, W) int32 ndarray
         unified 5-category tile array (use_tile_mapping=True basis).
     image : (H, W, 3) uint8 ndarray
-        renderingtext RGB image.
+        Rendered RGB image.
     text : str
-        text instruction.
+        Natural-language instruction.
     game : str
-        game text (e.g. "dungeon", "doom").
+        Game tag (e.g. "dungeon", "doom").
     meta : dict
-        reward_enum, conditions text text  info.
+        Additional information such as reward_enum and conditions.
     """
     array: np.ndarray
     image: np.ndarray
@@ -55,7 +55,7 @@ class LevelBundle:
         sample,                        # dataset.multigame.base.GameSample
         image_np: np.ndarray,
     ) -> "LevelBundle":
-        """GameSample + renderingtext image → LevelBundle."""
+        """Create a LevelBundle from a GameSample and rendered image."""
         return cls(
             array = sample.array,
             image = image_np,
@@ -68,26 +68,26 @@ class LevelBundle:
 @dataclass
 class MetricResult:
     """
-    text texttable of  evaluation results.
+    Evaluation result for a single metric.
 
     Attributes
     ----------
     name : str
-        texttable name.
+        Metric name.
     same_mean : float
-        same-group text mean text also .
+        Mean similarity of same-group pairs.
     diff_mean : float
-        diff-group text mean text also .
+        Mean similarity of different-group pairs.
     delta : float
-        same_mean − diff_mean.  text = same-group text text ( text text).
+        same_mean - diff_mean. Positive means same-group pairs are more similar.
     auc : float
         AUC-ROC ∈ [0, 1].  0.5 = random, 1.0 = perfect.
     same_scores : list[float]
-        same-group text text list.
+        Individual same-group scores.
     diff_scores : list[float]
-        diff-group text text list.
+        Individual different-group scores.
     matrix : np.ndarray | None
-        (N, N) text also  rowtext (keep_matrix=True  to  evaluate() call text in text preserve).
+        (N, N) similarity matrix, retained only when evaluate(keep_matrix=True).
     """
     name:        str
     same_mean:   float
@@ -100,7 +100,7 @@ class MetricResult:
 
     @property
     def is_supported(self) -> bool:
-        """ text text text (Δ > 0 AND AUC > 0.5)."""
+        """Whether the hypothesis is supported (delta > 0 and AUC > 0.5)."""
         return self.delta > 0 and self.auc > 0.5
 
     def __repr__(self) -> str:
@@ -120,7 +120,7 @@ class MetricResult:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# common text utility
+# Common statistical utilities
 # ─────────────────────────────────────────────────────────────────────────────
 
 def extract_pair_scores(
@@ -130,10 +130,10 @@ def extract_pair_scores(
     symmetric: bool = True,
 ) -> Tuple[List[float], List[float]]:
     """
-    text also  rowtext in  same / diff text text extract.
+    Extract same-group and different-group score lists from a similarity matrix.
 
-    symmetric=True  : (i,j)  and  (j,i)   text text (image-image text).
-    symmetric=False : (i,j) text text (text-image text).
+    symmetric=True includes both (i,j) and (j,i), for image-image comparisons.
+    symmetric=False includes only (i,j), for text-image comparisons.
     """
     def _collect(pairs: List[Tuple[int, int]]) -> List[float]:
         out: List[float] = []
@@ -151,7 +151,7 @@ def auc_roc_score(
     diff_scores: List[float],
 ) -> float:
     """
-    AUC-ROC (U-text based).  0.5 = random, 1.0 = perfect.
+    AUC-ROC based on the U statistic. 0.5 is random and 1.0 is perfect.
     """
     s = np.array(same_scores, dtype=np.float64)
     d = np.array(diff_scores, dtype=np.float64)
@@ -167,7 +167,7 @@ def roc_curve_points(
     diff_scores: List[float],
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    ROC text text (fpr, tpr) return.
+    Return ROC curve points (fpr, tpr).
     """
     labels = np.concatenate([np.ones(len(same_scores)), np.zeros(len(diff_scores))])
     scores = np.concatenate([same_scores, diff_scores])
@@ -188,41 +188,41 @@ def roc_curve_points(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# text based class
+# Abstract base class
 # ─────────────────────────────────────────────────────────────────────────────
 
 class BaseMetricEvaluator(ABC):
     """
-    text level text also  texttable of  common text based class.
+    Common abstract base class for all level-similarity metrics.
 
-    textclass text text:
+    Subclasses must implement:
         name              : str property
         similarity_matrix : List[LevelBundle] → (N, N) ndarray
 
-    text  after  automatic text:
-        score_pair : text text text also
-        evaluate   : all text compute → MetricResult
+    Provided automatically:
+        score_pair : similarity for one pair
+        evaluate   : calculate all statistics and return MetricResult
     """
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """texttable text name."""
+        """Return the metric's unique name."""
         ...
 
     @abstractmethod
     def similarity_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
-        (N, N) pairwise text also  rowtext.
-        - text  text text text text.
-        - texteachtext = 1.0 (text text and  of  text also ).
+        (N, N) pairwise similarity matrix.
+        - Higher values mean greater similarity.
+        - The diagonal is 1.0 (self-similarity).
         """
         ...
 
-    # ── text  after  automatic text ─────────────────────────────────────────────────────
+    # ── Provided automatically to subclasses ─────────────────────────────────
 
     def score_pair(self, a: LevelBundle, b: LevelBundle) -> float:
-        """text text (a, b)  of  text also  text."""
+        """Return the similarity score for one pair (a, b)."""
         return float(self.similarity_matrix([a, b])[0, 1])
 
     def evaluate(
@@ -238,11 +238,11 @@ class BaseMetricEvaluator(ABC):
 
         Parameters
         ----------
-        bundles : list of LevelBundle (Ntext)
-        same_pairs : (i, j) — same (game, reward_enum) text text index
-        diff_pairs : (i, j) — different text text index
-        keep_matrix : True  text MetricResult.matrix  in  rowtext save
-        symmetric : extract_pair_scores  in   before text (image-image=True, text-image=False)
+        bundles : list of N LevelBundles
+        same_pairs : (i, j) indices from the same (game, reward_enum) group
+        diff_pairs : (i, j) indices from different groups
+        keep_matrix : store the matrix in MetricResult.matrix when True
+        symmetric : passed to extract_pair_scores (image-image=True, text-image=False)
 
         Returns
         -------
@@ -267,4 +267,3 @@ class BaseMetricEvaluator(ABC):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name!r})"
-

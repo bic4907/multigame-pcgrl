@@ -10,8 +10,8 @@ n_envs: 600
 
 encoder:
   model: clip
-  # text CLIP checkpoint directorytext (pretrained_encoders/<ckpt_name>/ckpts)
-  # text: "finetuned-clip-game-all_exp-def_0" text  textpath ckpt_path
+  # Directory of the fine-tuned CLIP checkpoint (pretrained_encoders/<ckpt_name>/ckpts)
+  # e.g. "finetuned-clip-game-all_exp-def_0", or give a full path via ckpt_path
   ckpt_dir: pretrained_encoders
   ckpt_name: null
   ckpt_path: null

@@ -34,14 +34,14 @@ def is_default_hiddims(config: Config):
 
 
 def _game_abbr(dataset_game: str) -> str:
-    """dataset_game string(alltext text  abbreviation) → 2text abbreviation to  convert."""
+    """Convert a dataset_game name or abbreviation to a two-letter abbreviation."""
     from conf.game_utils import GAME_ABBR_INV
     full = GAME_ABBR[dataset_game][0] if dataset_game in GAME_ABBR else dataset_game
     return GAME_ABBR_INV.get(full, full)
 
 
 def _enc_str(encoder_config) -> str:
-    """encoder ckpt name based 6text text (VIPCGRL text text-MGPCGRL text  before  for )."""
+    """Return a six-character hash of an encoder checkpoint name for non-MGPCGRL models."""
     ckpt = getattr(encoder_config, 'ckpt_name', None) or getattr(encoder_config, 'ckpt_path', None) or ""
     h = hashlib.md5(ckpt.encode()).hexdigest()[:6] if ckpt else "scratch"
     return f'_enc-{h}'
@@ -55,8 +55,8 @@ def _to_pstr(v: float) -> str:
 def _build_unseen_suffix(un_abbr, ur, sr) -> str:
     """un_abbr/ur/sr → '_un-XX_ur-YY_sr-ZZ' form suffix.
 
-    text None/empty  text text string  returntext (unseen info  if missing text).
-    sr == 1.0  text experimenttext in  text text text.
+    Return an empty string when every value is None/empty.
+    Omit sr from experiment names when sr == 1.0.
     """
     parts = []
     if un_abbr:
@@ -84,27 +84,28 @@ def _parse_unseen_from_ckpt(ckpt_name: str):
 
 
 def _unseen_abbr_from_seen_games(seen_games):
-    """seen game list in  canonical unseen game abbreviation string  text."""
+    """Create a canonical unseen-game abbreviation from a seen-game list."""
     return unseen_abbr_from_seen_games(seen_games)
 
 
 
 def _unseen_suffix(config) -> str:
-    """common unseen suffix text (VIPCGRL / MGPCGRL text for ).
+    """Build a common unseen suffix for VIPCGRL and MGPCGRL.
 
-    textabove:
-      1. config.train_unseen_abbr / config.train_unseen_ratio / config.train_seen_ratio (text parameter, MGPCGRL only)
+    Precedence:
+      1. config.train_unseen_abbr / train_unseen_ratio / train_seen_ratio
+         (explicit parameters, MGPCGRL only)
       2. config.encoder.ckpt_name  in  parsing (VIPCGRL / MGPCGRL common)
       3. config.reward_seen_games/seen_games  in  automatic compute (un_abbr only)
 
-    unseen info   before text if missing text string  returntext (suffix text).
-    text: '_un-XX_ur-YY_sr-ZZ'
+    Return an empty string and omit the suffix when no unseen information exists.
+    Format: '_un-XX_ur-YY_sr-ZZ'
     """
-    # ── 1. text parameter (MGPCGRL config  in text text) ──────────────────────────
+    # ── 1. Explicit parameters available only in MGPCGRL config ──────────────
     un_abbr = getattr(config, 'train_unseen_abbr', None)   # e.g. "zd"
     ur      = getattr(config, 'train_unseen_ratio', None)  # e.g. 0.05
-    # train_seen_ratio  RL training parameter text to  sr pathtext in   text for text text
-    # encoder ckpt_name in  parsingtext sr  text text for
+    # train_seen_ratio is an RL-training parameter, so do not use it in sr paths
+    # Prefer sr parsed from the encoder ckpt_name
     sr      = None
 
     # ── 2. encoder.ckpt_name  in  parsing ──────────────────────────────────────
@@ -126,7 +127,7 @@ def _unseen_suffix(config) -> str:
                 infer_seen_games_from_ckpt_name(ckpt_name)
             )
 
-    # ── train_seen_ratio fallback (encoder sr text  text, 1.0 text) ───────────
+    # ── train_seen_ratio fallback only without encoder sr, excluding 1.0 ─────
     if sr is None:
         train_sr = getattr(config, 'train_seen_ratio', None)
         if train_sr is not None and train_sr != 1.0:
@@ -144,14 +145,14 @@ def _unseen_suffix(config) -> str:
         )
         un_abbr = _unseen_abbr_from_seen_games(seen_games)
 
-    # unseen info   before text if missing suffix text
+    # Omit the suffix when there is no unseen information
     return _build_unseen_suffix(un_abbr, ur, sr)
 
 
 def get_exp_group(config) -> str:
-    """experiment text return (seed text).
+    """Return the experiment group name without the seed.
 
-    WandB group text exp_dir path prefix to  text for text.
+    Used as the WandB group and exp_dir path prefix.
     """
     exp_name = getattr(config, 'exp_name', None) or 'def'
 
@@ -173,10 +174,10 @@ def get_exp_group(config) -> str:
         return f'cpcgrl_game-{game}{re_s}{exp_s}'
 
     # IPCGRL / MIPCGRL: BERT embedding
-    # encoder ckpt name in  unseen info parsingtext suffix text  (VIPCGRL / MGPCGRL  and  same rule).
-    # unseen info  if missing suffix text.
-    # MIPCGRL   sametext use_nlp=True text  text ``is_mipcgrl`` text to  prefix
-    # text IPCGRL checkpoint and  text/wandb text  text.
+    # Parse unseen information from the encoder checkpoint and add a suffix,
+    # following the same rule as VIPCGRL/MGPCGRL. Omit it when absent.
+    # MIPCGRL shares the use_nlp=True branch, but is_mipcgrl gives it a distinct
+    # prefix to prevent disk/WandB collisions with IPCGRL checkpoints.
     if getattr(config, 'use_nlp', False):
         enc = _unseen_suffix(config)
         kind = 'mipcgrl' if getattr(config, 'is_mipcgrl', False) else 'ipcgrl'
@@ -186,9 +187,9 @@ def get_exp_group(config) -> str:
     if getattr(config, 'model', None) == 'pretrained_clip':
         return f'preclip_pcgrl_game-{game}{re_s}{exp_s}'
 
-    # FinetunedCLIP: model=finetuned_clip, encoder ckpt text suffix text
-    # (same game/experimenttext text also  text fine-tuned ckpt   inject text text in  text
-    # exp_dir   separatetext also text — mgpcgrl  and  same text)
+    # FinetunedCLIP: model=finetuned_clip with an encoder-checkpoint hash suffix.
+    # Separate exp_dir by injected fine-tuned checkpoint even for identical
+    # games/experiment names, matching MGPCGRL semantics.
     if getattr(config, 'model', None) == 'finetuned_clip':
         enc = _enc_str(config.encoder)
         return f'finclip_pcgrl_game-{game}{re_s}{exp_s}{enc}'
@@ -208,8 +209,8 @@ def get_exp_group(config) -> str:
 
         return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{enc}{delta_s}{uro_s}{exp_s}'
 
-    # VIPCGRL: encoder ckpt name in  unseen info parsingtext suffix text  (MGPCGRL  and  same rule).
-    # unseen info  if missing suffix text.
+    # VIPCGRL: parse unseen information from the encoder checkpoint and append
+    # the same suffix as MGPCGRL; omit it when absent.
     enc = _unseen_suffix(config)
     if getattr(config, 'use_clip', False):
         return f'vipcgrl_game-{game}{re_s}{exp_s}{enc}'
@@ -252,7 +253,7 @@ def get_exp_dir(config):
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
-    # ── random_expname: exp_name   UUID based as  random text ──
+    # ── random_expname: choose exp_name randomly from a UUID ──
     if getattr(config, 'random_exp_name', False):
         config.exp_name = uuid.uuid4().hex[:8]
         logger.info(f"[random_exp_name] exp_name randomly set to: {config.exp_name}")
@@ -263,12 +264,12 @@ def init_config(config: Config):
         for key, val in includes.items():
             setattr(config, key, val)
 
-        # ── dataset_game sync: game parameter  text as   before text text dataset_game  override ──
-        # dataset_game  None text default value("all")text text game text as  text.
+        # ── Synchronize dataset_game when game is explicitly provided ─────────
+        # Replace dataset_game with game when it is None or the default "all".
         if hasattr(config, 'dataset_game'):
             _dg_val = getattr(config, 'dataset_game', None)
             if _dg_val is None or _dg_val == 'all':
-                # abbreviation(dg text)  text gametext as  convert
+                # Convert abbreviations such as dg to full game names
                 _game_key = config.game.lower()
                 if _game_key in GAME_ABBR:
                     config.dataset_game = GAME_ABBR[_game_key][0]
@@ -279,11 +280,11 @@ def init_config(config: Config):
     # ── MultiGameDataset based CPCGRL / IPCGRL / VIPCGRL mode ─────────────
     if hasattr(config, 'dataset_game') and config.dataset_game is not None:
         config.raw_obs = True
-        # instruct_csv  text for text text
+        # instruct_csv is unused
         config.instruct_csv = None
 
         if config.use_clip:
-            # ── VIPCGRL / PretrainedCLIP mode: CLIP latent embedding  text as  text for  ──
+            # ── VIPCGRL / PretrainedCLIP: use CLIP latent embeddings as input ──
             config.vec_cont = False
             config.use_nlp = False
             if config.encoder.model is None:
@@ -291,7 +292,7 @@ def init_config(config: Config):
             if config.nlp_input_dim <= 0:
                 config.nlp_input_dim = config.encoder.output_dim  # encoder output dim (e.g. 64)
             config.vec_input_dim = config.nlp_input_dim
-            # dataset based VIPCGRL: cnnclipconv/clipconv    text configtext text keep
+            # Dataset-based VIPCGRL: preserve an existing cnnclipconv/clipconv setting
             if config.model not in ('nlpconv', 'cnnclipconv', 'clipconv', 'pretrained_clip', 'finetuned_clip'):
                 config.model = 'nlpconv'
             _mode_tag = (
@@ -303,14 +304,14 @@ def init_config(config: Config):
                         f"nlp_input_dim={config.nlp_input_dim}, "
                         f"encoder={config.encoder.model}")
         elif config.use_nlp:
-            # ── IPCGRL mode: BERT → MLP text text  text as  text for  ──
+            # ── IPCGRL: use BERT-to-MLP encoder features as input ──
             config.vec_cont = False
             if config.nlp_input_dim <= 0:
                 config.nlp_input_dim = 768  # BERT base dim
             config.vec_input_dim = config.nlp_input_dim
             if config.model not in ('nlpconv',):
                 config.model = 'nlpconv'
-            # IPCGRL   MLP text  default as  text for
+            # IPCGRL uses the MLP encoder by default
             if config.encoder.model is None:
                 config.encoder.model = 'mlp'
             logger.info(f"[IPCGRL] dataset_game={config.dataset_game}, "
@@ -318,7 +319,7 @@ def init_config(config: Config):
                         f"nlp_input_dim={config.nlp_input_dim}, "
                         f"encoder={config.encoder.model}")
         else:
-            # ── CPCGRL mode: raw condition text  text for  ──
+            # ── CPCGRL: use raw condition vectors ──
             config.vec_cont = True
             config.use_nlp = False
             config.vec_input_dim = 5
@@ -330,7 +331,7 @@ def init_config(config: Config):
                 config.model = 'contconv'
                 logger.info("[CPCGRL] Setting model to `contconv` due to the vec_cont flag")
 
-        # exp_dir text common config  below in  text process
+        # Continue with common settings such as exp_dir below
 
     elif config.aug_type is not None and config.embed_type is not None and config.instruct is not None:
         config.instruct_csv = f'{config.aug_type}/{config.embed_type}/{config.instruct}'
@@ -378,7 +379,7 @@ def init_config(config: Config):
 
         config.text_ratio = min([0.25, 0.5, 0.75, 1.0], key=lambda x: abs(x - config.text_ratio))
 
-        # ── encoder.ckpt_path    text text text text ──
+        # ── Skip when encoder.ckpt_path is already specified ──
         if config.encoder.ckpt_path is not None:
             logger.info(f"Encoder checkpoint path already set: [{config.encoder.ckpt_path}]")
 
@@ -392,7 +393,7 @@ def init_config(config: Config):
             config.encoder.ckpt_path = _pretrained_dir
             logger.info(f"Encoder checkpoint set from ckpt_name='{config.encoder.ckpt_name}' → [{config.encoder.ckpt_path}]")
 
-        # encoder.ckpt   text text  text(dataset based IPCGRL text) checkpoint text text
+        # Skip checkpoint discovery when encoder.ckpt is unspecified (e.g. dataset-based IPCGRL)
         elif config.encoder.ckpt is None and hasattr(config, 'dataset_game') and config.dataset_game is not None:
             logger.info("[IPCGRL] encoder.ckpt not specified — MLP encoder will be trained from scratch")
         else:
@@ -485,7 +486,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         config.model = 'contconv'
 
     if config.encoder.model is not None:
-        # dataset based mode in   model   text configtext text to  text
+        # Dataset-based modes already set model
         _is_dataset_mode = hasattr(config, 'dataset_game') and config.dataset_game is not None
         if not _is_dataset_mode:
             if config.encoder.model == 'clip':
@@ -503,7 +504,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
 
     elif config.model == "nlpconv" or config.model == 'contconv':
 
-        # dataset based VIPCGRL: encoder text (CLIP embedding  text before  computetext)
+        # Dataset-based VIPCGRL needs no encoder because CLIP embeddings are precomputed
         _skip_encoder = (
                 hasattr(config, 'dataset_game') and config.dataset_game is not None
                 and config.encoder.model in ('cnnclip', 'clip')
@@ -589,9 +590,9 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         )
 
     elif config.model == "finetuned_clip":
-        # Fine-tuned CLIP: ckpt parameter text(TrainablePretrained*Encoder)  and
-        # sametext text  RL text in  also  text for text `apply_encoder_params`  of  subtree
-        # replace   text before text.
+        # Fine-tuned CLIP: the RL side must use the same module as the checkpoint
+        # parameter tree (TrainablePretrained*Encoder) for safe subtree replacement
+        # by `apply_encoder_params`.
         network = EncoderCLIPConvForward(
             config=config.encoder,
             encoder=get_finetuned_clip_encoder(config.encoder)[0] if config.encoder.model else None,
@@ -668,12 +669,12 @@ def get_env_params_from_config(config: Config):
     prob_cls = PROB_CLASSES[problem]
     ctrl_metrics = tuple([int(prob_cls.metrics_enum[c.upper()]) for c in config.ctrl_metrics])
 
-    # dataset based VIPCGRL   nlp_input_dim  as  CLIP embedding dimension   before text
+    # Dataset-based VIPCGRL passes the CLIP embedding dimension through nlp_input_dim
     _use_nlp_dim = config.use_nlp or (
             config.use_clip and hasattr(config, 'dataset_game') and config.dataset_game is not None
     )
 
-    # cnnclipconv/clipconv text  nlp_input_dim and  clip_input_channel text text text
+    # cnnclipconv/clipconv models require both nlp_input_dim and clip_input_channel
     _needs_clip_channel = config.model in ('cnnclipconv', 'clipconv', 'pretrained_clip', 'finetuned_clip')
 
     env_params = PCGRLEnvParams(

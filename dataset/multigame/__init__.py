@@ -3,8 +3,8 @@ dataset/multigame/__init__.py
 """
 import logging
 
-# text text text text: NullHandler text as  "No handlers" warning text.
-# text for text  logging.basicConfig(level=logging.INFO) text  configtext automatic as  text.
+# Library convention: attach a NullHandler so importing does not emit "No handlers" warnings.
+# Applications opt in with logging.basicConfig(level=logging.INFO).
 logging.getLogger("dataset.multigame").addHandler(logging.NullHandler())
 
 from .base import GameSample, GameTag, TileLegend, BaseGameHandler, BasePreprocessor

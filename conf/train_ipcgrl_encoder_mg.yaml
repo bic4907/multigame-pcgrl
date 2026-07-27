@@ -1,5 +1,5 @@
 # conf/train_ipcgrl_encoder_mg.yaml
-# IPCGRL MLP text textgame pretraining config
+# Multi-game pretraining config for the IPCGRL MLP encoder
 #
 # Usage:
 #   python train_ipcgrl_encoder_mg.py game=all
@@ -11,7 +11,7 @@ defaults:
   - _self_
 
 
-# ── MLP text config ──
+# ── MLP decoder settings ──
 encoder:
   model: mlp
   num_layers: 2
@@ -20,12 +20,12 @@ encoder:
   dropout_rate: 0.0
   token_max_len: 77
 
-# ── MLP text config ──
+# ── MLP decoder settings ──
 decoder:
   hidden_dim: 128
   num_layers: 2
   output_dim: 1
 
-# ── checkpoint /  to text ──
+# ── Checkpointing / logging ──
 ckpt_freq: 50
 embed_visualize_freq: 50

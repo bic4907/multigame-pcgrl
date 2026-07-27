@@ -1,8 +1,8 @@
 """
 eval_mipcgrl.py
 ===============
-MIPCGRL evaluation entry point. eval_ipcgrl  and  sametext MIPCGRLEvalConfig
-text for text exp_dir / wandb name   ``mipcgrl_...`` prefix  to  separatetext also text text.
+MIPCGRL evaluation entry point. Uses MIPCGRLEvalConfig with the same pipeline as eval_ipcgrl.
+so that exp_dir and wandb names use a distinct ``mipcgrl_...`` prefix.
 """
 import json
 import logging

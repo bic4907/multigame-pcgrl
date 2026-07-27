@@ -187,10 +187,10 @@ def make_train(config: CLIPTrainConfig):
         train_clip_dataset, test_clip_dataset = dataset_builder.get_split_dataset()
         class_id2reward_cond = dataset_builder.get_class_id2reward_cond()
 
-        # ── Seen/Unseen game separate (unseen_games   text text) ──────────────
-        # CLIPDecoderTrainConfig  and  sametext split  to text  applytext mgpcgrl  and
-        # sametext ckpt name/structure  text also text text. vipcgrl   text text  contrastive
-        # trainingtext textrowtext, encoder text in  of  seen/unseen distribution  sametext text.
+        # ── Split seen/unseen games when unseen_games is specified ────────────
+        # Use the same split logic as CLIPDecoderTrainConfig so MGPCGRL has the
+        # same checkpoint naming/structure. VIPCGRL trains only contrastively
+        # without a decoder, but controls the encoder's seen/unseen distribution identically.
         unseen_games_str = getattr(config, "unseen_games", None)
         if unseen_games_str:
             full_dataset = dataset_builder.get_dataset()
@@ -211,7 +211,7 @@ def make_train(config: CLIPTrainConfig):
             logger.info("  Total samples: %d", len(full_dataset.class_ids))
             logger.info("=" * 70)
 
-            # ── dataset_setting.json save (RL training text automatic inject in  text for text) ──
+            # ── Save dataset_setting.json for automatic RL-training injection ──
             os.makedirs(config.exp_dir, exist_ok=True)
             dataset_setting = {
                 "all_games":    unique_games,
@@ -225,7 +225,7 @@ def make_train(config: CLIPTrainConfig):
                 json.dump(dataset_setting, f, indent=2, ensure_ascii=False)
             logger.info("Dataset setting saved: %s", dataset_setting_path)
 
-            # ── gametext train pool / test split  after  ratio apply ──
+            # ── Apply ratios after creating per-game training pools and test splits ──
             game_train_pool, game_test, _ = split_dataset_by_game(
                 full_dataset,
                 unseen_game_set,
@@ -258,7 +258,7 @@ def make_train(config: CLIPTrainConfig):
             logger.info("  Train set = %d samples %s", len(train_indices), _game_counts)
             logger.info("  Test  set = %d samples", len(test_indices))
 
-        # dry-run: data count text
+        # Dry run: limit the data count
         if config.max_samples is not None:
             n = config.max_samples
             n_train_orig = len(train_clip_dataset.class_ids)

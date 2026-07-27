@@ -1,7 +1,7 @@
 """
 instruct_rl/utils/callbacks.py
 ==============================
-training/evaluation  to text callback function text.
+Training and evaluation logging callbacks.
 train_cpcgrl.py  in  separate.
 """
 from timeit import default_timer as timer
@@ -152,13 +152,13 @@ def loss_callback(metric, loss, config, writer):
 
 
 def create_log_handler(config, handler_classes, train_start_time, steps_prev_complete):
-    """MultipleLoggingHandler   create·initializetext returntext.
+    """Create, initialize, and return a MultipleLoggingHandler.
 
     Parameters
     ----------
     config : Config
     handler_classes : list[type]
-        TensorBoardLoggingHandler, WandbLoggingHandler, CSVLoggingHandler text.
+        TensorBoardLoggingHandler, WandbLoggingHandler, CSVLoggingHandler, etc.
     train_start_time : float
     steps_prev_complete : int
 
@@ -175,5 +175,3 @@ def create_log_handler(config, handler_classes, train_start_time, steps_prev_com
     handler.set_steps_prev_complete(steps_prev_complete)
     handler.add_text("Train/Config", f"```{str(config)}```")
     return handler
-
-

@@ -6,11 +6,11 @@ hydra:
   sweeper:
     params: {}
 
-# text text text
+# Training hyperparameters
 encoder:
   model: clip
   state: true
   token_max_len: 77
 
-# default data text
+# Default dataset settings
 game: all

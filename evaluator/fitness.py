@@ -18,12 +18,11 @@ def get_fitness_batch(
 ) -> chex.Array:
     """Compute batch fitness.
 
-    index text  reward.py  and  same:
+    The index mapping is the same as in reward.py:
     0=region, 1=path_length, 2=interactive,
     3=hazard, 4=collectable, 5+=none
 
-    fitness  in   placement(batchquality)  text for text text
-    amount(count achievement)text evaluationtext.
+    Fitness does not use placement quality; it evaluates only amount attainment.
     """
     fitness_funcs = [
         lambda cond, curr_map: get_region_fitness(curr_map, cond[0]) * FitnessWeight.REGION,  # 0: region

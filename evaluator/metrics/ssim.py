@@ -1,11 +1,11 @@
 """
 evaluator/metrics/ssim.py
 ==========================
-SSIM (Structural Similarity Index Measure) texttable.
+SSIM (Structural Similarity Index Measure) evaluator.
 
-text: LevelBundle.image — (H, W, 3) uint8 RGB image
-text also : SSIM ∈ [-1, 1]  (1 = text before  same structure)
- of text: scikit-image  (pip install scikit-image)
+Input: LevelBundle.image -- (H, W, 3) uint8 RGB image
+Similarity: SSIM in [-1, 1] (1 means identical structure)
+Dependency: scikit-image (pip install scikit-image)
 """
 from __future__ import annotations
 
@@ -18,24 +18,24 @@ from .base import BaseMetricEvaluator, LevelBundle
 
 class SSIMMetric(BaseMetricEvaluator):
     """
-    Structural Similarity Index Measure (SSIM) texttable.
+    Structural Similarity Index Measure (SSIM) evaluator.
 
-    skimage.metrics.structural_similarity   text for text
-    renderingtext RGB image text of  structuretext text also   measuretext.
+    Use skimage.metrics.structural_similarity to measure structural similarity
+    between pairs of rendered RGB images.
 
     Parameters
     ----------
     win_size : int | None
-        SSIM text also text size. None = skimage default value(7).
-        image  text  text text as  text text.
+        SSIM window size. None uses the skimage default (7).
+        Small images may require an explicit value.
     """
 
     def __init__(self, win_size: Optional[int] = None) -> None:
         self.win_size = win_size
-        #  of text text text before  validate
+        # Validate the dependency eagerly
         from skimage.metrics import structural_similarity  # noqa: F401
 
-    # ── BaseMetricEvaluator text ──────────────────────────────────────────────
+    # ── BaseMetricEvaluator implementation ───────────────────────────────────
 
     @property
     def name(self) -> str:
@@ -43,7 +43,7 @@ class SSIMMetric(BaseMetricEvaluator):
 
     def similarity_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
-        (N, N) pairwise SSIM matrix.  texteachtext = 1.0.
+        (N, N) pairwise SSIM matrix with a diagonal of 1.0.
         """
         N   = len(bundles)
         mat = np.eye(N, dtype=np.float64)
@@ -68,4 +68,3 @@ class SSIMMetric(BaseMetricEvaluator):
         except TypeError:
             # scikit-image < 0.19 fallback
             return float(_ssim_fn(img1, img2, multichannel=True, **kwargs))
-

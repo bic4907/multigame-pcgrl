@@ -229,7 +229,7 @@ from typing import Any, Dict
 
 
 def get_tile_info(problem: str = "dungeon", representation: str = "narrow") -> Dict[str, Any]:
-    """text  make text tile text info  returntext.
+    """Create an environment and return tile-related information.
 
     Returns
     -------
@@ -238,13 +238,13 @@ def get_tile_info(problem: str = "dungeon", representation: str = "narrow") -> D
         representation      : str
         tile_enum           : IntEnum class
         all_tiles           : list[str]  – tile_enum all name list
-        n_all_tiles         : int        – tile_enum all text (BORDER text)
-        unavailable_tiles   : list       – env  in  text tile text list
-        editable_tiles      : list[str]  – text to  batch availabletext tile name list
-        n_editable_tiles    : int        – text to  batch availabletext tile text
+        n_all_tiles         : int        -- total tile_enum size including BORDER
+        unavailable_tiles   : list       -- tile values excluded from the environment
+        editable_tiles      : list[str]  -- names of tiles that can actually be placed
+        n_editable_tiles    : int        -- number of tiles that can actually be placed
                                           (= action  of  tile dimension size)
     """
-    # text text  text abovetext text text
+    # Local import to avoid a circular dependency
     from envs.pcgrl_env import PCGRLEnv, PCGRLEnvParams, ProbEnum, RepEnum
 
     prob_key = ProbEnum[problem.upper()]
@@ -274,7 +274,7 @@ def get_tile_info(problem: str = "dungeon", representation: str = "narrow") -> D
 
 
 def print_tile_info(problem: str = "dungeon", representation: str = "narrow") -> None:
-    """get_tile_info result  text text text."""
+    """Print get_tile_info results in a readable format."""
     info = get_tile_info(problem, representation)
     print(f"\n{'='*52}")
     print(f"  problem        : {info['problem']}")

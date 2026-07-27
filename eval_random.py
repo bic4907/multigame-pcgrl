@@ -1,10 +1,10 @@
 """
 eval_random.py
 ==============
-text before  random text(Pure Random Policy) as  PCGRL text  evaluationtext  entry point.
+Entry point for evaluating a PCGRL environment with a pure random policy.
 
-NN  text for text text text text action space in  uniform random sampling  textrowtext.
-(initializetext NN policy  text text randomtext  warning)
+Samples uniformly from the action space at every step without using a neural network.
+This is a genuinely random policy, not an initialized neural-network policy.
 
 Usage:
     python -m eval_random [overrides]
@@ -22,12 +22,12 @@ suppress_jax_debug_logs()
 
 @hydra.main(version_base=None, config_path="./conf", config_name="eval_random")
 def main(config: RandomEvalConfig):
-    # ── text before  random policy text ──────────────────────────────────────────────
-    # random_agent=True → runner.py in  NN forward pass text
-    # action space in  uniform random sampling textrow (text random, initialized policy text)
+    # ── Ensure a pure random policy ──────────────────────────────────────────
+    # random_agent=True makes runner.py sample uniformly from the action space
+    # without a neural-network forward pass.
     config.random_agent = True
 
-    # inject_obs_fn=None: obs convert text  as-is text for  (text NN text for  text to  text)
+    # inject_obs_fn=None leaves observations unchanged; they are unused by the policy anyway
     main_eval_entry(config, inject_obs_fn=None)
 
 

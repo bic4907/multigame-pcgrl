@@ -1,16 +1,15 @@
 """Cache helpers for MultiGameDataset.
 
-v1 (legacy): text cache — hash(text init args + all text) → text of  npz/json
-v2 (current):   gametext cache — artifacts/{game}/{key}.npz|json|info.json
-             each game of  cache text  text game of  root, handler_config, handler text as  text.
-             text dataset text  artifacttext as  also  load available.
+v1 (legacy): one global cache — hash(init args + all handler code) → a single npz/json pair
+v2 (current): per-game caches — artifacts/{game}/{key}.npz|json|info.json
+             Each game's cache key is derived from its root, handler_config and handler code,
+             so a partial dataset can still be loaded from previously built artifacts.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import logging
-import socket
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -28,7 +27,7 @@ ANN_SCHEMA_VERSION = 1
 _HERE = Path(__file__).parent
 _PROJECT_ROOT: Path = _HERE.parent.parent
 
-# ── gametext handler file text ──────────────────────────────────────────────────
+# ── Per-game handler source files ─────────────────────────────────────────────
 GAME_HANDLER_FILES: Dict[str, List[str]] = {
     "dungeon": ["handlers/dungeon_handler.py"],
     "sokoban": ["handlers/boxoban_handler.py"],
@@ -78,7 +77,7 @@ def _normalize_path(raw: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def hash_handler_files(game: str) -> str:
-    """gametext handler filetext text."""
+    """Hash the handler source files belonging to a game."""
     handler_paths = GAME_HANDLER_FILES.get(game, [])
     common_files = ["base.py", "tile_utils.py", "handlers/handler_config.py"]
     all_files = sorted(set(handler_paths + common_files))
@@ -101,7 +100,7 @@ def build_per_game_cache_key(
     game_root: str,
     handler_config_dict: Dict[str, Any],
 ) -> str:
-    """gametext cache text  createtext."""
+    """Build the cache key for a single game."""
     payload = {
         "schema": CACHE_SCHEMA_VERSION,
         "game": game,
@@ -119,7 +118,7 @@ def build_combined_doom_cache_key(
     include_doom2: bool,
     handler_config_dict: Dict[str, Any],
 ) -> str:
-    """doom + doom2 text cache text  createtext."""
+    """Build the shared cache key for doom + doom2."""
     payload = {
         "schema": CACHE_SCHEMA_VERSION,
         "game": "doom",
@@ -142,12 +141,12 @@ def _game_cache_paths(cache_dir: Path, game: str, key: str):
 
 
 def _game_ann_path(cache_dir: Path, game: str, key: str) -> Path:
-    """gametext annotation cache file path."""
+    """Path of a game's annotation cache file."""
     return _game_cache_dir(cache_dir, game) / f"{key}.ann.json"
 
 
 def _purge_old_game_caches(game_dir: Path, keep_key: str) -> None:
-    """gametext cache directory in  keep_key text file delete."""
+    """Delete every file in the game's cache directory except those for keep_key."""
     if not game_dir.exists():
         return
     removed: List[Path] = []
@@ -155,7 +154,7 @@ def _purge_old_game_caches(game_dir: Path, keep_key: str) -> None:
         if not f.is_file():
             continue
         stem = f.name
-        # text expandtext  text text text: .ann.json/.info.json  .jsontext text
+        # Check the longer suffixes first: .ann.json / .info.json before .json
         for ext in (".ann.json", ".info.json", ".npz", ".json"):
             if stem.endswith(ext):
                 candidate_key = stem[: -len(ext)]
@@ -174,13 +173,8 @@ def _collect_info(samples: List[GameSample], game: str = "") -> Dict[str, Any]:
     game_counts: Dict[str, int] = {}
     for s in samples:
         game_counts[s.game] = game_counts.get(s.game, 0) + 1
-    try:
-        hostname = socket.gethostname()
-    except Exception:
-        hostname = "unknown"
     return {
         "created_at": datetime.now(tz=timezone.utc).isoformat(),
-        "hostname": hostname,
         "total_samples": len(samples),
         "game": game,
         "game_counts": game_counts,
@@ -190,7 +184,7 @@ def _collect_info(samples: List[GameSample], game: str = "") -> Dict[str, Any]:
 def save_game_samples_to_cache(
     cache_dir: Path, game: str, key: str, samples: List[GameSample]
 ) -> None:
-    """gametext cache save."""
+    """Save a game's samples to the cache."""
     game_dir = _game_cache_dir(cache_dir, game)
     game_dir.mkdir(parents=True, exist_ok=True)
 
@@ -205,7 +199,7 @@ def save_game_samples_to_cache(
 
     np.savez_compressed(npz_path, arrays=arrays)
 
-    # map info + ann_keystext save (instruction/meta  ann.json in  text)
+    # Store map info + ann_keys (instruction and meta live in ann.json)
     meta: List[Dict[str, Any]] = []
     for s in samples:
         entry: Dict[str, Any] = {
@@ -230,7 +224,7 @@ def save_game_samples_to_cache(
 def load_game_samples_from_cache(
     cache_dir: Path, game: str, key: str
 ) -> Optional[List[GameSample]]:
-    """gametext cache load. if missing None return."""
+    """Load a game's samples from the cache; returns None when absent."""
     npz_path, meta_path, info_path = _game_cache_paths(cache_dir, game, key)
     if not npz_path.exists() or not meta_path.exists():
         return None
@@ -246,8 +240,7 @@ def load_game_samples_from_cache(
             _cache_log(
                 f"[MultiGameDataset] Loaded {game} from cache  "
                 f"total={info.get('total_samples', len(meta))} | "
-                f"created_at={info.get('created_at', '?')} | "
-                f"host={info.get('hostname', '?')}",
+                f"created_at={info.get('created_at', '?')}",
                 level="debug",
             )
         except Exception:
@@ -260,8 +253,8 @@ def load_game_samples_from_cache(
 
     samples: List[GameSample] = []
     for i, m in enumerate(meta):
-        # text text: game/source_id/order/ann_keystext save
-        # text text(instruction/meta text) also  text  text text also text text process
+        # Only game/source_id/order/ann_keys are cached here.
+        # Instruction and the remaining meta are attached later from ann.json.
         sample_meta: Dict[str, Any] = {}
         if "ann_keys" in m:
             sample_meta["ann_keys"] = m["ann_keys"]
@@ -286,7 +279,7 @@ def load_game_samples_from_cache(
 
 
 def list_cached_games(cache_dir: Path) -> List[str]:
-    """cache directory in  text for  availabletext game list  returntext."""
+    """Return the games that have a usable cache in the cache directory."""
     if not cache_dir.exists():
         return []
     games = []
@@ -297,10 +290,10 @@ def list_cached_games(cache_dir: Path) -> List[str]:
 
 
 def load_any_game_cache(cache_dir: Path, game: str) -> Optional[List[GameSample]]:
-    """game directory in  with text cachetext loadtext (text  text  text).
+    """Load whatever cache exists in a game directory, ignoring the key.
 
-    artifact-only mode: text data also  text current text to  text  cache also  text,
-    text game directory in  npz file  text text  loadtext.
+    Artifact-only mode: used when the source data is unavailable and the current key does
+    not match, so any npz present in the game directory is loaded instead.
     """
     game_dir = _game_cache_dir(cache_dir, game)
     if not game_dir.exists():
@@ -308,7 +301,7 @@ def load_any_game_cache(cache_dir: Path, game: str) -> Optional[List[GameSample]
     npz_files = sorted(game_dir.glob("*.npz"))
     if not npz_files:
         return None
-    #  text text npz text for
+    # Use the most recent npz
     npz_path = npz_files[-1]
     key = npz_path.stem
     return load_game_samples_from_cache(cache_dir, game, key)
@@ -327,13 +320,13 @@ def save_game_annotations_to_cache(
     n_samples: int = 0,
     batch_id: Optional[str] = None,
 ) -> None:
-    """gametext annotation  {key}.ann.json in  save.
+    """Save a game's annotations to {key}.ann.json.
 
-    annotations: _make_rows()  returntext  dict text.
+    annotations: the list of dicts returned by _make_rows().
                  each dict: key, source_id, reward_enum, feature_name,
                            sub_condition, condition_0..4,
                            instruction_raw, instruction_uni
-    batch_id: OpenAI batch text text write. None text text text.
+    batch_id: OpenAI batch id to record; None leaves it unset.
     """
     game_dir = _game_cache_dir(cache_dir, game)
     game_dir.mkdir(parents=True, exist_ok=True)
@@ -359,9 +352,9 @@ def load_game_annotations_from_cache(
     game: str,
     key: str,
 ) -> Optional[Dict[str, Any]]:
-    """gametext annotation load. text parsing failure text None return.
+    """Load a game's annotations; returns None if the file is missing or unparsable.
 
-    returntext structure:
+    Returned structure:
       {"schema": 1, "game": ..., "n_samples": ...,
        "has_instructions": bool, "annotations": List[dict]}
     """
@@ -385,7 +378,7 @@ def load_game_annotations_from_cache(
 def update_json_with_ann_keys(
     cache_dir: Path, game: str, key: str, ann_data: Dict[str, Any]
 ) -> None:
-    """ann.json of  text info  {key}.json metadata in  ann_keys to  writetext.
+    """Write the ann_keys derived from ann.json back into the {key}.json metadata.
 
     each sample of  ann_keys = [key_r0, key_r1, ..., key_r{n_rewards-1}]
     ann.json row order: reward_enum 0 all → 1 all → … → 4 all
@@ -418,7 +411,7 @@ def update_json_with_ann_keys(
     for i, entry in enumerate(meta):
         if i in sample_ann_keys:
             entry["ann_keys"] = sample_ann_keys[i]
-            # text text text remove
+            # Drop the now-redundant fields
             entry.pop("instruction", None)
             entry.pop("meta", None)
             updated += 1
@@ -432,7 +425,7 @@ def update_json_with_ann_keys(
 
 
 def update_ann_batch_id(cache_dir: Path, game: str, key: str, batch_id: str) -> None:
-    """ann.json in  batch_id text  writetext (instruction batch text textapply)."""
+    """Record a batch_id in ann.json (used when submitting an instruction batch)."""
     ann_path = _game_ann_path(cache_dir, game, key)
     if not ann_path.exists():
         return
@@ -449,7 +442,7 @@ def update_ann_batch_id(cache_dir: Path, game: str, key: str, batch_id: str) -> 
 
 
 def find_game_cache_key(cache_dir: Path, game: str) -> Optional[str]:
-    """game cache directory in  npz file name as  cache text  text text."""
+    """Recover a game's cache key from the npz file name in its cache directory."""
     game_dir = _game_cache_dir(cache_dir, game)
     if not game_dir.exists():
         return None
@@ -460,7 +453,7 @@ def find_game_cache_key(cache_dir: Path, game: str) -> Optional[str]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Legacy (v1) — sub text for
+#  Legacy (v1) — kept for backward compatibility
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _normalize_args(args_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -475,7 +468,7 @@ def _normalize_args(args_dict: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def hash_code_files(code_root: Path) -> str:
-    """[Legacy] all text text."""
+    """[Legacy] Hash of every handler source file."""
     py_files = sorted(
         p for p in code_root.rglob("*.py")
         if "tests" not in p.parts and "__pycache__" not in p.parts
@@ -489,7 +482,7 @@ def hash_code_files(code_root: Path) -> str:
 
 
 def build_cache_key(args_dict: Dict[str, Any], *, code_root: Path) -> str:
-    """[Legacy] text cache text — sub text for ."""
+    """[Legacy] Global cache key — kept for backward compatibility."""
     payload = {
         "schema": 1,
         "args": _normalize_args(args_dict),
@@ -504,7 +497,7 @@ def _cache_paths(cache_dir: Path, key: str):
 
 
 def _purge_old_caches(cache_dir: Path, keep_key: str) -> None:
-    """[Legacy] cache_dir text of  cache file  during  keep_key in  text text  text  text delete."""
+    """[Legacy] Delete every cache file under cache_dir that does not belong to keep_key."""
     removed: List[Path] = []
     for f in cache_dir.iterdir():
         if not f.is_file():
@@ -524,7 +517,7 @@ def _purge_old_caches(cache_dir: Path, keep_key: str) -> None:
 
 
 def save_samples_to_cache(cache_dir: Path, key: str, samples: List[GameSample]) -> None:
-    """[Legacy] text cache save."""
+    """[Legacy] Save a single cache entry."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     npz_path, meta_path, info_path = _cache_paths(cache_dir, key)
     _purge_old_caches(cache_dir, keep_key=key)
@@ -552,7 +545,7 @@ def save_samples_to_cache(cache_dir: Path, key: str, samples: List[GameSample]) 
 
 
 def load_samples_from_cache(cache_dir: Path, key: str) -> Optional[List[GameSample]]:
-    """[Legacy] text cache load."""
+    """[Legacy] Load a single cache entry."""
     npz_path, meta_path, info_path = _cache_paths(cache_dir, key)
     if not npz_path.exists() or not meta_path.exists():
         return None
@@ -586,4 +579,3 @@ def load_samples_from_cache(cache_dir: Path, key: str) -> Optional[List[GameSamp
             )
         )
     return samples
-

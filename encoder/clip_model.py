@@ -192,32 +192,32 @@ class ContrastiveModule(nn.Module):
 
 
 class RewardDecoder(nn.Module):
-    """Embedding → (reward_enum classification, condition regression) text.
+    """Decoder from embeddings to reward_enum classification and condition regression.
 
     Architecture
     ------------
-    Shared trunk (MLP) → text
-      ├─ Classification head (hidden → num_reward_classes)  : reward_enum text
-      └─ Regression head    (hidden → sigmoid → [0,1])      : normalizetext condition text
-          → denorm text cond_min/cond_max  to  text text text
+    Shared trunk (MLP), followed by:
+      - Classification head (hidden -> num_reward_classes): reward_enum classification
+      - Regression head (hidden -> sigmoid -> [0,1]): normalized condition prediction
+        restored to its original scale with cond_min/cond_max during denormalization
 
     cond_norm_min / cond_norm_max   Flax state variable ("norm_stats" collection)
-     to  savetext, checkpoint in  text text.  trainingtext text  text text.
+    They are stored in the checkpoint as non-trainable constants.
 
     Parameters
     ----------
     num_reward_classes : int
-        reward_enum text text (text: 6).
+        Number of reward_enum classes (for example, 6).
     hidden_dim : int
         MLP hidden dimension.
     num_layers : int
-        shared trunk hidden layer text (≥1).
+        Number of shared-trunk hidden layers (at least 1).
     dropout_rate : float
         Dropout rate.
     cond_norm_min_init : jnp.ndarray | None
-        (num_reward_classes,) — initialize text  before text  reward_enumtext condition min text.
+        (num_reward_classes,) condition minimum for each reward_enum.
     cond_norm_max_init : jnp.ndarray | None
-        (num_reward_classes,) — initialize text  before text  reward_enumtext condition max text.
+        (num_reward_classes,) condition maximum for each reward_enum.
     """
     num_reward_classes: int = 6
     hidden_dim: int = 128
@@ -230,13 +230,13 @@ class RewardDecoder(nn.Module):
     def __call__(self, embed: jnp.ndarray, training: bool = False):
         """
         Args:
-            embed: (B, D) — text embedding (L2-normalized).
+            embed: (B, D) L2-normalized encoder embeddings.
         Returns:
-            reward_logits:      (B, num_reward_classes) — reward_enum text logits
-            condition_pred:     (B, num_reward_classes) — normalizetext [0,1] condition text (loss for )
-            condition_pred_raw: (B, num_reward_classes) — text text condition text (text for )
+            reward_logits:      (B, num_reward_classes) reward_enum classification logits
+            condition_pred:     (B, num_reward_classes) normalized [0,1] predictions for loss
+            condition_pred_raw: (B, num_reward_classes) original-scale predictions for inference
         """
-        # ── Norm stats  state variable to  text (training text , checkpoint in  save) ──
+        # ── Register normalization stats as non-trainable checkpointed state ──
         _default_min = jnp.zeros(self.num_reward_classes) if self.cond_norm_min_init is None else self.cond_norm_min_init
         _default_max = jnp.ones(self.num_reward_classes)  if self.cond_norm_max_init is None else self.cond_norm_max_init
 
@@ -249,7 +249,7 @@ class RewardDecoder(nn.Module):
             lambda: _default_max,
         ).value
 
-        # stop_gradient: text before text in  text
+        # stop_gradient: exclude from backpropagation
         cond_min = jax.lax.stop_gradient(cond_min)
         cond_max = jax.lax.stop_gradient(cond_max)
 
@@ -271,14 +271,14 @@ class RewardDecoder(nn.Module):
         reg_h = nn.gelu(reg_h)
         reg_logits = nn.Dense(self.num_reward_classes, name="condition_reg_head")(reg_h)
 
-        # sigmoid → [0, 1] normalize text (loss    text as  compute)
+        # sigmoid -> normalized [0, 1] space used for loss
         condition_pred = jax.nn.sigmoid(reg_logits)
 
-        # textconvert → text text (text text text for )
-        # log1p text in  normalizetext to : denorm → expm1
+        # Invert to the original scale for inference
+        # Values were normalized in log1p space: denormalize, then expm1
         scale = cond_max - cond_min                              # (num_classes,)
-        condition_pred_log = condition_pred * scale + cond_min          # log1p text
-        condition_pred_raw = jnp.expm1(jnp.maximum(condition_pred_log, 0.0))  # text text
+        condition_pred_log = condition_pred * scale + cond_min          # log1p space
+        condition_pred_raw = jnp.expm1(jnp.maximum(condition_pred_log, 0.0))  # Original scale
 
         return reward_logits, condition_pred, condition_pred_raw
 
@@ -286,12 +286,12 @@ class RewardDecoder(nn.Module):
 class ContrastiveDecoderModule(nn.Module):
     """ContrastiveModule + RewardDecoder.
 
-    existing contrastive training in  text text  text text
-    text embedding  as text reward_enum and  condition  text.
+    Add a decoder branch to contrastive training to predict reward_enum and
+    condition from text embeddings.
 
-    reward_enum_onehot_dim > 0  text, pixel_values in  reward_enum of
-    one-hot text  text dimension as  broadcasttext text concattext.
-    → CNN  text level  text reward_enumtext text text text.
+    When reward_enum_onehot_dim > 0, broadcast reward_enum one-hot encoding
+    spatially and concatenate it to pixel_values, informing the CNN which
+    reward_enum the level represents.
     """
     encoders: Dict[str, nn.Module]
     decoder: RewardDecoder
@@ -325,7 +325,7 @@ class ContrastiveDecoderModule(nn.Module):
                     onehot[:, None, None, :], (B, H, W, self.reward_enum_onehot_dim)
                 )
             else:
-                # reward_enum text text zeros (info none)
+                # Use zeros when reward_enum is absent (no information)
                 onehot = jnp.zeros((B, H, W, self.reward_enum_onehot_dim))
             pixel_values = jnp.concatenate([pixel_values, onehot], axis=-1)
 
@@ -361,9 +361,9 @@ class ContrastiveDecoderModule(nn.Module):
 
         output_dict['text_state_temperature'] = self.text_state_temperature
 
-        # ── text: text embedding  as text reward_enum & condition text ──
+        # ── Decoder: predict reward_enum and condition from text embeddings ──
         if "text" in modes:
-            # decoder_nograd=True  text decoder loss  encoder(latent space)text text before text text
+            # decoder_nograd=True prevents decoder loss from reaching the encoder latent space
             decoder_input = (
                 jax.lax.stop_gradient(output_dict["text_embed"])
                 if decoder_nograd
@@ -374,7 +374,7 @@ class ContrastiveDecoderModule(nn.Module):
             )
             output_dict["reward_logits"] = reward_logits
             output_dict["condition_pred"] = condition_pred              # [0,1] normalize (loss for )
-            output_dict["condition_pred_raw"] = condition_pred_raw      # text text (text for )
+            output_dict["condition_pred_raw"] = condition_pred_raw      # Original scale for inference
 
         return output_dict
 
@@ -479,14 +479,14 @@ def get_cnnclip_decoder_encoder(config: EncoderConfig, decoder_config=None,
                                 RL_training: bool = False):
     """
     CNN-based CLIP encoder + RewardDecoder.
-    ContrastiveDecoderModule  returntext.
+    Return a ContrastiveDecoderModule.
 
     Parameters
     ----------
     cond_norm_min : jnp.ndarray | None
-        (num_reward_classes,) — reward_enumtext condition min. textconvert for .
+        (num_reward_classes,) condition minima by reward_enum, used for conversion.
     cond_norm_max : jnp.ndarray | None
-        (num_reward_classes,) — reward_enumtext condition max. textconvert for .
+        (num_reward_classes,) condition maxima by reward_enum, used for conversion.
     """
     from conf.config import DecoderConfig as _DC
     if decoder_config is None:
@@ -524,7 +524,7 @@ def get_cnnclip_decoder_encoder(config: EncoderConfig, decoder_config=None,
         cond_norm_max_init=cond_norm_max,
     )
 
-    # reward_enum one-hot text text  text text
+    # Determine whether to add reward_enum one-hot channels
     _onehot_dim = decoder_config.num_reward_classes if getattr(decoder_config, 'cnn_reward_enum_onehot', False) else 0
 
     module = ContrastiveDecoderModule(

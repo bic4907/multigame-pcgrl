@@ -1,13 +1,13 @@
 """
 dataset/multigame/scripts/generate_samples.py
 =============================================
-dataset class in  sample  text and  samples/ folder in  rendering image  savetext.
+Load samples from the dataset class and save rendered images in samples/.
 
 create structure:
   samples/
     {game}/
-      {game}_raw_01.png      ← game text tile_ims text text (maptext  before )
-      {game}_unified_01.png  ← unified 7-category tile_ims text text (maptext  after )
+      {game}_raw_01.png      <- original game tile_ims sprites before mapping
+      {game}_unified_01.png  <- unified five-category tile_ims sprites after mapping
       ...
     overview_raw.png
     overview_unified.png
@@ -43,18 +43,18 @@ from dataset.multigame.tile_utils import (
     to_unified,
 )
 
-# ── path text ─────────────────────────────────────────────────────────────────
+# ── Path constants ───────────────────────────────────────────────────────────
 TILE_IMS_DIR = _REPO_ROOT / "envs" / "probs" / "tile_ims"
 SAMPLES_DIR  = _MULTIGAME / "samples"
 
 # ── config ─────────────────────────────────────────────────────────────────────
-TILE_SIZE = 16    # tile image   text 16×16 text to  upscale text
+TILE_SIZE = 16    # Tile images are already 16x16, so no upscaling is needed
 N_SAMPLES = 5
 LABEL_H   = 22
 GAP       = 6
 BG        = (30, 30, 30)
 
-# ── text ─────────────────────────────────────────────────────────────────────
+# ── Font ─────────────────────────────────────────────────────────────────────
 def _font(size: int = 11):
     for path in [
         "/System/Library/Fonts/Helvetica.ttc",
@@ -70,12 +70,12 @@ FONT    = _font(11)
 FONT_LG = _font(12)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 1.  tile_ims text text  to text
+# 1. tile_ims sprite loader
 # ──────────────────────────────────────────────────────────────────────────────
 _SPRITE_CACHE: dict[str, Image.Image] = {}
 
 def _load_sprite(name: str) -> Image.Image:
-    """tile_ims/{name}.png   loadtext RGBA to  return. if missing None."""
+    """Load tile_ims/{name}.png as RGBA, returning None when absent."""
     if name in _SPRITE_CACHE:
         return _SPRITE_CACHE[name]
     path = TILE_IMS_DIR / f"{name}.png"
@@ -87,10 +87,10 @@ def _load_sprite(name: str) -> Image.Image:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 2.  gametext tile_id → sprite name text
+# 2. Per-game tile_id-to-sprite-name mappings
 #     (envs/probs/dungeon.py DungeonTiles basis)
 # ──────────────────────────────────────────────────────────────────────────────
-# dungeon: tile_id(int) → sprite filename (expandtext text)
+# Dungeon: integer tile_id -> sprite filename without extension
 _DUNGEON_SPRITE: dict[int, str] = {
     0: "solid",    # BORDER
     1: "empty",    # EMPTY
@@ -103,25 +103,25 @@ _DUNGEON_SPRITE: dict[int, str] = {
     8: "door",     # DOOR
 }
 
-# unified category index → texttable sprite name
-#   dungeon tile_ims  during   of text  text text text  text for
-#   hazard(6)  tile_ims in  text to  color fallback
+# Unified category index -> representative sprite name
+#   Use the semantically closest Dungeon tile_ims sprite.
+#   hazard (6) has no tile image, so fall back to a color.
 _UNIFIED_SPRITE: dict[int, str | None] = {
     0: "empty",    # empty
     1: "solid",    # wall
-    2: "empty",    # floor  (dungeon of  text text)
-    3: "bat",      # enemy  (bat  texttable text as )
-    4: "key",      # object (key  texttable text text as )
-    5: "door",     # spawn  (door  texttable text as )
+    2: "empty",    # floor (Dungeon's empty ground)
+    3: "bat",      # enemy (bat as representative enemy)
+    4: "key",      # object (key as representative item)
+    5: "door",     # spawn (door as representative spawn)
     6: "lava",     # hazard
 }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 3.  text text based level rendering
+# 3. Sprite-based level rendering
 # ──────────────────────────────────────────────────────────────────────────────
 def _color_tile(color_rgb: tuple[int, int, int], size: int = TILE_SIZE) -> Image.Image:
-    """text RGBA tile create (sprite text  text fallback)."""
+    """Create a solid RGBA tile as a fallback when no sprite exists."""
     tile = Image.new("RGBA", (size, size), (*color_rgb, 255))
     return tile
 
@@ -131,18 +131,18 @@ def _composite_sprite(
     fallback_color: tuple[int, int, int],
     size: int = TILE_SIZE,
 ) -> Image.Image:
-    """sprite(RGBA)  fallback_color text above in  text RGB to  return."""
+    """Composite an RGBA sprite over fallback_color and return RGB."""
     bg = Image.new("RGB", (size, size), fallback_color)
     if sprite is not None:
         sp = sprite.resize((size, size), Image.NEAREST)
-        bg.paste(sp, (0, 0), sp)  # RGBA alpha text for
+        bg.paste(sp, (0, 0), sp)  # Use RGBA alpha
     return bg
 
 
 def render_raw_sprites(array: np.ndarray, game: str) -> np.ndarray:
     """
-    game text tile_id → tile_ims text text to  rendering (maptext  before ).
-    dungeontext tile_ims  text to  remaining game  text palette color text for .
+    Render original game tile IDs with tile_ims sprites before mapping.
+    Only Dungeon has tile_ims, so other games use their original palette colors.
     """
     from dataset.multigame.render import array_to_rgb, get_palette
 
@@ -160,7 +160,7 @@ def render_raw_sprites(array: np.ndarray, game: str) -> np.ndarray:
                 tile_img = _composite_sprite(sprite, fallback)
                 canvas.paste(tile_img, (c * TILE_SIZE, r * TILE_SIZE))
     else:
-        # VGLC game: text palette color
+        # VGLC games: original palette colors
         palette = get_palette(game)
         small   = array_to_rgb(array, palette)
         big     = np.repeat(np.repeat(small, TILE_SIZE, axis=0), TILE_SIZE, axis=1)
@@ -171,8 +171,8 @@ def render_raw_sprites(array: np.ndarray, game: str) -> np.ndarray:
 
 def render_unified_sprites(array: np.ndarray, game: str) -> np.ndarray:
     """
-    tile_mapping.json basis unified category to  maptext  after
-    unified categorytext texttable tile_ims text text to  rendering (maptext  after ).
+    after mapping to unified categories using tile_mapping.json.
+    Render mapped data with a representative tile_ims sprite per unified category.
     """
     unified = to_unified(array, game, warn_unmapped=False)
     h, w = unified.shape
@@ -282,7 +282,7 @@ def add_game_header(col: np.ndarray, name: str) -> np.ndarray:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 6.  text
+# 6. Main
 # ──────────────────────────────────────────────────────────────────────────────
 def process_game(game: str, samples: list):
     raw_imgs, unified_imgs = [], []
@@ -319,7 +319,7 @@ def main() -> None:
         all_unified_cols.append(stack_vertical(unified_imgs))
         all_game_names.append(game)
 
-    # Dungeon (tile_ims text text text for )
+    # Dungeon (uses tile_ims sprites)
     print(f"\n[dungeon] loading...")
     try:
         handler = DungeonHandler()
@@ -341,20 +341,20 @@ def main() -> None:
         print("No samples generated.")
         return
 
-    # overview text
+    # Overview grid
     print("\n[overview] generating grids...")
     raw_cols_h     = [add_game_header(c, g) for c, g in zip(all_raw_cols,     all_game_names)]
     unified_cols_h = [add_game_header(c, g) for c, g in zip(all_unified_cols, all_game_names)]
     _save(stack_horizontal(raw_cols_h),     SAMPLES_DIR / "overview_raw.png")
     _save(stack_horizontal(unified_cols_h), SAMPLES_DIR / "overview_unified.png")
 
-    # compare (raw | unified text)
+    # Side-by-side comparison (raw | unified)
     print("\n[compare] generating side-by-side...")
     sbs_rows = []
     for raw_col, uni_col in zip(all_raw_cols, all_unified_cols):
         divider = np.full((max(raw_col.shape[0], uni_col.shape[0]), 3, 3),
                           (80, 80, 80), dtype=np.uint8)
-        # text  text
+        # Match heights
         max_h = max(raw_col.shape[0], uni_col.shape[0])
         def _pad_h(a):
             if a.shape[0] < max_h:
@@ -378,4 +378,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

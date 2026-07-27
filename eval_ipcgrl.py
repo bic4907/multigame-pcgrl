@@ -2,7 +2,7 @@
 eval_ipcgrl.py
 ==============
 IPCGRL (Instructed PCGRL) evaluation entry point.
-BERT embedding  nlp_obs  in  injecttext evaluationtext.
+BERT embeddings are injected into nlp_obs for evaluation.
 
 Usage:
     python -m eval_ipcgrl [overrides]
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="./conf", config_name="eval_ipcgrl")
 def main(config: IPCGRLEvalConfig):
-    # ── MGPCGRL and  sametext  to text: encoder of  dataset_setting.json in  seen/unseen game info inject ──
+    # ── Match MGPCGRL: inject seen/unseen game metadata from the encoder's dataset_setting.json ──
     if config.encoder.ckpt_dir and config.encoder.ckpt_name:
         dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
         if os.path.exists(dataset_setting_path):
@@ -67,4 +67,3 @@ def main(config: IPCGRLEvalConfig):
 
 if __name__ == "__main__":
     main()
-

@@ -1,14 +1,13 @@
 """
 instruct_rl/utils/buffer_collector.py
 =====================================
-training  during  RL  in previoustext of  trajectory text  text  utility.
+Utilities for collecting an RL agent's trajectory buffer during training.
 
-training 50% ~ 100% bin in  text text as
-(obs, action, reward, done, env_map) data  text
-experiment folder in  .npz file to  savetext.
+Collect (obs, action, reward, done, env_map) at regular intervals between
+50% and 100% of training and
+save them as NPZ files in the experiment directory.
 
-text text text(n_collect_envs)  max_samples  text text text text also text
-automatic as  text.
+determine n_collect_envs automatically so max_samples can be filled.
 """
 from __future__ import annotations
 
@@ -23,24 +22,24 @@ logger = get_logger(__file__)
 
 
 class BufferCollector:
-    """training  during  trajectory   text npz file to  savetext  callback text.
+    """Callback that collects trajectories during training and saves NPZ files.
 
     Parameters
     ----------
     save_dir : str
-        text file  savetext directory path.
+        Directory in which to save buffer files.
     total_updates : int
-        all training update step text (NUM_UPDATES).
+        Total number of training update steps (NUM_UPDATES).
     max_samples : int
-        text maximum transition text.
+        Maximum number of transitions to collect.
     num_steps : int
-        text update step text env step text (config.num_steps).
+        Environment steps per update step (config.num_steps).
     n_envs : int
-        parallel text text (config.n_envs). timestep compute text dynamic text text text in  text for .
+        Parallel environments (config.n_envs), used for timestep conversion and dynamic sizing.
     collect_start_ratio : float
-        text start text (0.0~1.0, default 0.5 = 50%).
+        Collection start ratio in [0, 1] (default: 0.5).
     collect_end_ratio : float
-        text text text (0.0~1.0, default 1.0 = 100%).
+        Collection end ratio in [0, 1] (default: 1.0).
     """
 
     def __init__(
@@ -63,32 +62,32 @@ class BufferCollector:
         self.collect_start_ratio = collect_start_ratio
         self.collect_end_ratio = collect_end_ratio
 
-        # ── text bin compute ───────────────────────────────────────
+        # ── Calculate the collection window ──────────────────────
         self.start_step = int(total_updates * collect_start_ratio)
         self.end_step = int(total_updates * collect_end_ratio)
         collect_window = max(1, self.end_step - self.start_step)
 
-        # ── dynamic text text text ────────────────────────────────────
-        # n_collect_envs=1 text start, text available totaltext  max_samples or more  text text text
-        # text available totaltext = n_collections * num_steps * n_collect_envs
+        # ── Determine the dynamic environment count ──────────────
+        # Start at one and increase until capacity reaches max_samples
+        # capacity = n_collections * num_steps * n_collect_envs
         # n_collections = collect_window // collect_interval
         # collect_interval = collect_window // ceil(max_samples / (num_steps * n_collect_envs))
         self.n_collect_envs = self._compute_n_collect_envs(
             max_samples, num_steps, n_envs, collect_window
         )
 
-        # ── interval textcompute (text n_collect_envs basis) ─────────
+        # ── Recalculate interval using the final n_collect_envs ──
         transitions_per_collect = num_steps * self.n_collect_envs
         n_collections_needed = max(1, math.ceil(max_samples / transitions_per_collect))
         self.collect_interval = max(1, collect_window // n_collections_needed)
 
-        # text text text
+        # Actual number of collections
         self.n_collections = min(
             n_collections_needed,
             collect_window // self.collect_interval,
         )
 
-        # timestep convert text: update_step → total_timesteps
+        # Conversion factor from update_step to total_timesteps
         self._timestep_per_update = num_steps * n_envs
 
         self._collected = 0
@@ -114,9 +113,9 @@ class BufferCollector:
         n_envs: int,
         collect_window: int,
     ) -> int:
-        """max_samples   text text text text also text n_collect_envs   text.
+        """Choose n_collect_envs so max_samples can always be filled.
 
-        env 1text to  text 1, text text text text (maximum n_envs).
+        Use one environment when sufficient; otherwise increase up to n_envs.
         """
         for k in range(1, n_envs + 1):
             per_collect = num_steps * k
@@ -131,11 +130,11 @@ class BufferCollector:
     # ── public API ──────────────────────────────────────────────────
 
     def _update_to_timestep(self, update_step: int) -> int:
-        """update_step   total_timesteps basis text as  convert."""
+        """Convert update_step to a total_timesteps-based step."""
         return update_step * self._timestep_per_update
 
     def should_collect(self, update_step: int) -> bool:
-        """current update step  in  text text text text."""
+        """Return whether collection should occur at the current update step."""
         if self._total_transitions >= self.max_samples:
             return False
         if update_step < self.start_step:
@@ -151,16 +150,16 @@ class BufferCollector:
         traj_batch,
         env_state,
     ):
-        """traj_batch  in  env_idx=0..n_collect_envs-1  of  data  extracttext npz  to  save.
+        """Extract env_idx=0..n_collect_envs-1 from traj_batch and save as NPZ.
 
         Parameters
         ----------
         update_step : int
-            current update step text.
+            Current update-step number.
         traj_batch : Transition
             shape (num_steps, n_envs, ...)  of  trajectory batch.
         env_state :
-            current text text.
+            Current environment state.
         """
         if not self.should_collect(update_step):
             return
@@ -169,7 +168,7 @@ class BufferCollector:
         if remaining <= 0:
             return
 
-        k = self.n_collect_envs  # text text text
+        k = self.n_collect_envs  # Number of environments to collect
 
         # ── env_idx=0..k-1 extract  after  (num_steps, k, ...) → (num_steps*k, ...) ──
         done = np.asarray(traj_batch.done[:, :k]).reshape(-1)
@@ -190,7 +189,7 @@ class BufferCollector:
                 -1, *env_state.env_state.env_map.shape[1:]
             )
 
-        # maximum text text
+        # Enforce the maximum collection size
         n_take = min(done.shape[0], remaining)
         done = done[:n_take]
         action = action[:n_take]
@@ -200,7 +199,7 @@ class BufferCollector:
         map_obs = map_obs[:n_take]
         env_map = env_map[:n_take]
 
-        # ── filetext  total_timesteps basis text ──
+        # ── Filename step is based on total_timesteps ──
         timestep = self._update_to_timestep(update_step)
         save_path = os.path.join(
             self.save_dir,
@@ -242,4 +241,3 @@ class BufferCollector:
             "n_files": self._file_idx,
             "save_dir": self.save_dir,
         }
-

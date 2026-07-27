@@ -6,14 +6,14 @@ from collections import defaultdict
 
 
 def _subsample_per_group(samples, n_per_group: int, seed: int = 0):
-    """(game, re) textby maximum n_per_group text  textsampletext.
+    """Subsample at most n_per_group items from each (game, re) group.
 
-      for  sample  n_per_group text text  text   before text text for .
+    Use every available sample when a group contains fewer than n_per_group.
 
     Returns
     -------
     subsampled : list
-    sampled_counts : dict  game -> sampled count  (re  1text text game basis)
+    sampled_counts : mapping from game to sampled count (grouped by game when re is unique)
     """
     by_group: dict = defaultdict(list)
     for sample in samples:
@@ -39,4 +39,3 @@ def _subsample_per_group(samples, n_per_group: int, seed: int = 0):
 
     random.Random(seed).shuffle(result)
     return result, sampled_counts
-

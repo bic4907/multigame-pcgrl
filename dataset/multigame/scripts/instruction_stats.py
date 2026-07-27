@@ -1,12 +1,12 @@
 """
-gametext·reward_enumtext instruction_uni text also  text.
+instruction_uni frequency statistics by game and reward_enum.
 
 Usage:
     python -m dataset.multigame.scripts.instruction_stats
     python -m dataset.multigame.scripts.instruction_stats --top-n 20
-    python -m dataset.multigame.scripts.instruction_stats --top-n -1              # text
-    python -m dataset.multigame.scripts.instruction_stats --no-save               # text
-    python -m dataset.multigame.scripts.instruction_stats --out-dir /tmp/stats    # save abovetext text
+    python -m dataset.multigame.scripts.instruction_stats --top-n -1              # unlimited
+    python -m dataset.multigame.scripts.instruction_stats --no-save               # print only
+    python -m dataset.multigame.scripts.instruction_stats --out-dir /tmp/stats    # change output path
 """
 
 import argparse
@@ -27,7 +27,7 @@ DEFAULT_CACHE_DIR = Path(__file__).parents[1] / "cache"
 
 
 def load_ann_files(cache_dir: Path) -> dict[str, list[dict]]:
-    """game → annotation text return."""
+    """Return a mapping from game to annotation list."""
     result = {}
     for ann_path in sorted(cache_dir.rglob("*.ann.json")):
         game = ann_path.parent.name
@@ -80,9 +80,9 @@ def print_table(
             top = counter.most_common(None if unlimited else top_n)
             others = total - sum(cnt for _, cnt in top)
 
-            # text text compute
+            # Calculate column widths
             max_inst_len = max(len(inst) for inst, _ in top)
-            max_inst_len = max(max_inst_len, 11)  # "Instruction" text minimum
+            max_inst_len = max(max_inst_len, 11)  # Minimum width of the "Instruction" header
             max_inst_len = min(max_inst_len, 80)
 
             header = f"  {'Instruction':<{max_inst_len}}  {'Count':>7}  {'%':>6}"
@@ -164,7 +164,7 @@ def print_summary(stats: dict[tuple[str, int], Counter]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Instruction_uni text also  text")
+    parser = argparse.ArgumentParser(description="instruction_uni frequency statistics")
     parser.add_argument(
         "--cache-dir",
         type=Path,
@@ -175,32 +175,32 @@ def main() -> None:
         "--top-n",
         type=int,
         default=10,
-        help="game×enum text textabove Ntext text (default: 10, -1=text)",
+        help="Print the top N per game x enum (default: 10, -1=unlimited)",
     )
     parser.add_argument(
         "--out-dir",
         type=Path,
         default=DEFAULT_OUT_DIR,
         metavar="DIR",
-        help="CSV save text directory (default: dataset/multigame/cache/statics)",
+        help="CSV output root (default: dataset/multigame/cache/statics)",
     )
     parser.add_argument(
         "--no-save",
         action="store_true",
-        help="CSV save text",
+        help="Do not save CSV files",
     )
     parser.add_argument(
         "--games",
         nargs="*",
         default=None,
-        help="text gametext text (text: --games dungeon zelda)",
+        help="Print only selected games (e.g. --games dungeon zelda)",
     )
     parser.add_argument(
         "--enums",
         nargs="*",
         type=int,
         default=None,
-        help="text reward_enumtext text (text: --enums 0 1)",
+        help="Print only selected reward_enum values (e.g. --enums 0 1)",
     )
     args = parser.parse_args()
 

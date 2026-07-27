@@ -1,10 +1,10 @@
 """
 train_mg_pcgrl.py
 =================
-MGPCGRL (MultiGame PCGRL) — pretrained CLIP embedding  text text to  text for .
+MGPCGRL (MultiGame PCGRL) uses pretrained CLIP embeddings as input features.
 
-existing VIPCGRL pipeline  based as  text,
-experiment text/config  mgpcgrl name as  separatetext execution script.
+Based on the VIPCGRL pipeline, with experiment entries and configuration
+separated under the MGPCGRL name.
 
 Usage:
     python -m train_mg_pcgrl [overrides]
@@ -30,7 +30,7 @@ suppress_jax_debug_logs()
 # ── VIPCGRL obs inject: CLIP embedding → nlp_obs ───────────────────────────────
 
 def inject_vipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """pretrained CLIP text to  computetext embedding  nlp_obs  in  inject."""
+    """Inject embeddings computed by the pretrained CLIP encoder into nlp_obs."""
     return last_obs.replace(nlp_obs=instruct_sample.embedding)
 
 
@@ -42,18 +42,18 @@ def main(config: MGPCGRLConfig):
     if not config.encoder.ckpt_dir or not config.encoder.ckpt_name:
         raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
-    # ── encoder_config.json in  delta_weight text config in  inject (wandb  to text for ) ──
+    # ── Read delta_weight from encoder_config.json into config for wandb logging ──
     encoder_config_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "encoder_config.json")
-    encoder_config_src = None  # local variable to  save (config in  text text)
+    encoder_config_src = None  # Keep locally rather than adding it to config
 
     if os.path.exists(encoder_config_path):
         with open(encoder_config_path, "r") as f:
             encoder_training_config = json.load(f)
-        # delta_weighttext config in  save
+        # Store delta_weight in config
         config.encoder_delta_weight = encoder_training_config.get('delta_weight', 0.0)
         logger.info("Loaded encoder delta_weight=%.4f from: %s",
                     config.encoder_delta_weight, encoder_config_path)
-        encoder_config_src = encoder_config_path  # copy  abovetext path save
+        encoder_config_src = encoder_config_path  # Save the source path for copying
     else:
         logger.warning("encoder_config.json not found at %s", encoder_config_path)
         config.encoder_delta_weight = 0.0
@@ -64,7 +64,7 @@ def main(config: MGPCGRLConfig):
         with open(dataset_setting_path, "r") as f:
             dataset_setting = json.load(f)
 
-        # ── seen_ratio inject: encoder training text text seen game data ratio  as-is text for  ──
+        # ── Reuse the seen-game ratio from encoder training ──
         seen_ratio = dataset_setting.get("seen_ratio", 1.0)
         if seen_ratio != config.dataset_seen_ratio:
             logger.info(
@@ -75,14 +75,14 @@ def main(config: MGPCGRLConfig):
 
         # ── unseen_ratio inject ──────────────────────────────────────────────────
         # dataset_unseen_ratio default value  1.0 (MGPCGRLConfig in  fixed).
-        # CLI to  different text  text text as-is text for text.
-        # reward_unseen_ratio  encoder training text of  unseen_ratio in  separate inject.
+        # Preserve values explicitly supplied through the CLI.
+        # Inject reward_unseen_ratio separately from the encoder's unseen_ratio.
         unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
 
-        # ── reward_unseen_ratio: unseen sample  inside  metadata/decoder text ──────────
+        # ── reward_unseen_ratio: metadata/decoder boundary within unseen samples ──
         # each unseen game of  sample  order basis as  split:
         #   front (reward_unseen_ratio ratio) → metadata (GT, encoder training subset)
-        #   remaining                          → reward decoder  to  condition text
+        #   remaining samples -> predict conditions with the reward decoder
         if unseen_ratio != config.reward_unseen_ratio:
             logger.info(
                 "Auto-setting reward_unseen_ratio=%.4f from encoder dataset_setting.json",
@@ -90,7 +90,7 @@ def main(config: MGPCGRLConfig):
             )
             config.reward_unseen_ratio = unseen_ratio
 
-        # ── game_setting_mode=encoder_seen: seen gametext training target as  config ──
+        # ── game_setting_mode=encoder_seen: configure seen games as training targets ──
         if config.game_setting_mode == "encoder_seen":
             seen_games = dataset_setting.get("seen_games", [])
             if seen_games:
@@ -137,8 +137,8 @@ def main(config: MGPCGRLConfig):
         inject_obs_fn=inject_vipcgrl_obs,
     )
 
-    # ── encoder_config.json  PCGRL training folder to  copy (text for ) ──
-    # main_entry() call  after  exp_dir  createtext to  encoder ckpt path in  copy
+    # ── Copy encoder_config.json to the PCGRL training directory for reference ──
+    # main_entry() creates exp_dir; copy the encoder config there afterward
     if encoder_config_src and hasattr(config, 'exp_dir') and config.exp_dir:
         dst_path = os.path.join(config.exp_dir, "encoder_config.json")
         try:

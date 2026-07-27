@@ -14,7 +14,7 @@ logger = get_logger(__file__)
 
 
 def _compute_sample_set_hash(samples) -> str:
-    """(game, source_id, reward_enum) sort basis MD5 text text 8text."""
+    """Return the first eight MD5 characters for sorted (game, source_id, reward_enum) tuples."""
     h = hashlib.md5()
     for s in sorted(samples, key=lambda x: (x.game, str(x.source_id), x.meta.get("reward_enum", -1))):
         h.update(f"{s.game}:{s.source_id}:{s.meta.get('reward_enum', -1)}".encode())
@@ -22,26 +22,29 @@ def _compute_sample_set_hash(samples) -> str:
 
 
 def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None, re_filter_list=None):
-    """(game, re) text process text  table to  text (text separate logger.info).
+    """Log processing statistics by (game, re) combination as a table.
 
-    Raw  column: MultiGameDataset  to text text after  (max_samples_per_game apply, filter  before )
-    Finalcolumn: common preprocessing  after  text sample text (instruction filter + longtail cut)
-    Hash column: Final sampletext of  MD5 text 8text — text text data text validate for
+    Raw column: immediately after loading MultiGameDataset, after
+        max_samples_per_game but before filtering.
+    Final column: final sample count after common preprocessing
+        (instruction filtering and long-tail cutoff).
+    Hash column: first eight MD5 characters of the final sample set, used to
+        verify that environments use identical data.
     """
     has_sampled = bool(sampled_counts)
     col_sampled = "Sampled"
 
-    # ── Raw: max_samples_per_game apply  before  text text ──
+    # ── Raw counts before max_samples_per_game ──
     raw_cell: dict = getattr(ds, "_raw_game_re_counts", {})
     if not raw_cell:
-        # fallback: ds text (max_samples_per_game   after )
+        # Fallback: iterate over ds (after max_samples_per_game)
         raw_cell = defaultdict(int)
         for sample in ds:
             re = sample.meta.get("reward_enum")
             if re is not None and "conditions" in sample.meta:
                 raw_cell[(sample.game, re)] += 1
 
-    # ── Final: all_samples text (common preprocessing  after ) ──
+    # ── Final counts from all_samples after common preprocessing ──
     final_cell: dict = defaultdict(lambda: {"n": 0, "cond_vals": []})
     group_samples: dict = defaultdict(list)
     for sample in all_samples:
@@ -194,7 +197,7 @@ def _log_dataset_table(ds, all_samples, config, *, sampled_counts: dict = None, 
 
 
 def _log_dataset_summary(config, samples):
-    """reward_enum filter  after  text sample summary (condition text text)."""
+    """Summarize final samples after reward_enum filtering, including condition statistics."""
     re_counter = Counter(s.meta["reward_enum"] for s in samples)
     logger.info("Filtered samples: %d  (reward_enum breakdown below)", len(samples))
     for re_val in sorted(re_counter.keys()):
@@ -227,7 +230,7 @@ def _log_dataset_summary(config, samples):
 
 
 def _log_split_summary(train_samples, test_samples, train_inst, *, sampled_counts: dict = None):
-    """Train/Test split result summary. sampled_counts  text Sampled text  text text."""
+    """Summarize the train/test split, adding a Sampled column when available."""
     train_game = Counter(s.game for s in train_samples)
     test_game = Counter(s.game for s in test_samples)
     games = sorted(set(train_game) | set(test_game))

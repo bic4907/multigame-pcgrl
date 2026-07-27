@@ -1,4 +1,4 @@
-/* ── DOM text ───────────────────────────────────────────────────────────── */
+/* ── DOM references ─────────────────────────────────────────────────────── */
 const gameSelect  = document.getElementById('gameSelect');
 const indexInput  = document.getElementById('indexInput');
 const prevBtn     = document.getElementById('prevBtn');
@@ -20,12 +20,12 @@ const viewRow = document.getElementById('view-row');
 const albumWrap = document.getElementById('album-wrap');
 const albumGrid = document.getElementById('album-grid');
 
-/* ── text ───────────────────────────────────────────────────────────────── */
+/* ── State ──────────────────────────────────────────────────────────────── */
 let gameCounts  = {};
 let currentGame = null;
 let currentIndex= 0;
 let renderMode  = 'raw-color';   // 'raw-color' | 'raw-image' | 'unified-color' | 'unified-image'
-let lastSample  = null;    // text as  text  payload cache
+let lastSample  = null;    // Cache of the most recently received payload
 let currentMapping = null; // current game mapping.json meta
 const mappingCache = {};   // game -> mapping payload
 
@@ -33,7 +33,7 @@ let viewMode = 'album';   // 'single' | 'album'
 let albumPageSize = 30;
 let albumAutoSize = true;
 let albumStart = 0;
-let isInitialized = false; // init() finish text
+let isInitialized = false; // Whether init() has completed
 const sampleCache = {};    // `${game}:${idx}` -> sample payload
 const tileImageCache = new Map(); // url -> HTMLImageElement | null(failed)
 
@@ -76,20 +76,20 @@ function buildTileImageUrl(name) {
 }
 
 /**
- * image  cache in   text load  starttext.
- * onReady callback  text load finish text calltext.
+ * Get an image from the cache or begin loading it.
+ * If onReady is provided, it is called when loading completes.
  * @param {string} url
- * @param {function} [onReady] - load finish text callback
- * @returns {HTMLImageElement|null}  text loadtext text img return,  to text  during  text null
+ * @param {function} [onReady] - Callback invoked after loading
+ * @returns {HTMLImageElement|null} Loaded image, or null while loading
  */
 function getTileImage(url, onReady) {
   if (!url) return null;
 
   const cached = tileImageCache.get(url);
-  if (cached === null) return null;  // 404 text failure
+  if (cached === null) return null;  // Failure such as a 404
   if (cached && cached.complete && cached.naturalWidth > 0) return cached;
 
-  //  to text  during  text text request
+  // Loading or first request
   if (!tileImageCache.has(url)) {
     const img = new Image();
     img.onload = () => {
@@ -99,10 +99,10 @@ function getTileImage(url, onReady) {
     img.onerror = () => {
       tileImageCache.set(url, null);
     };
-    tileImageCache.set(url, img);  //  to text  during  tabletext
+    tileImageCache.set(url, img);  // Mark as loading
     img.src = url;
   } else {
-    //  to text  during text img in  onReady text
+    // Attach onReady to the image being loaded
     const img = tileImageCache.get(url);
     if (img && onReady) {
       const prevOnload = img.onload;
@@ -116,10 +116,10 @@ function getTileImage(url, onReady) {
 }
 
 /**
- * text game of  text tile image  text loadtext.
+ * Preload all tile images for a game.
  * @param {object} mappingInfo
  * @param {string} mode
- * @param {function} onAllReady - text load finish text callback
+ * @param {function} onAllReady - Callback invoked when every image is loaded
  */
 function preloadTileImages(mappingInfo, mode, onAllReady) {
   if (!mappingInfo) { if (onAllReady) onAllReady(); return; }
@@ -135,8 +135,8 @@ function preloadTileImages(mappingInfo, mode, onAllReady) {
   let remaining = 0;
   uniqueUrls.forEach((url) => {
     const cached = tileImageCache.get(url);
-    if (cached === null) return; // failuretext text  text
-    if (cached && cached.complete && cached.naturalWidth > 0) return; //  text loadtext
+    if (cached === null) return; // Skip failed images
+    if (cached && cached.complete && cached.naturalWidth > 0) return; // Already loaded
     remaining++;
   });
 
@@ -380,7 +380,7 @@ function computeAutoAlbumPageSize() {
   const gap = 8;
   const cols = Math.max(1, Math.floor((gridWidth + gap) / (minItem + gap)));
 
-  // text text   text of  texteachtext text to  text basis as  compute.
+  // Cards are nearly square, so calculate from their width.
   const itemSize = Math.floor((gridWidth - gap * (cols - 1)) / cols);
   const rows = Math.max(1, Math.floor((gridHeight + gap) / (itemSize + gap)));
 
@@ -445,7 +445,7 @@ async function renderAlbum(startIdx) {
       viewMode = 'single';
       if (viewModeSelect) viewModeSelect.value = 'single';
 
-      // text game  text text default select as  text.
+      // Make the clicked game the default selection for single view.
       Array.from(gameSelect.options).forEach((o) => {
         o.selected = (o.value === game);
       });
@@ -549,7 +549,7 @@ async function loadAndRender(game, idx) {
   }
 }
 
-/* ──  text text ─────────────────────────────────────────────────────── */
+/* ── Event bindings ────────────────────────────────────────────────────── */
 function bindControls() {
   gameSelect.addEventListener('change', () => {
     if (viewMode === 'album') {
@@ -656,7 +656,7 @@ function bindControls() {
   if (reloadBtn) {
     reloadBtn.addEventListener('click', async () => {
       reloadBtn.disabled = true;
-      if (reloadStatus) reloadStatus.textContent = '⏳  to text  during ...';
+      if (reloadStatus) reloadStatus.textContent = '⏳ Loading...';
       try {
         const res = await fetch('/api/reload', { method: 'POST' });
         const data = await res.json();
@@ -668,7 +668,7 @@ function bindControls() {
           currentMapping = null;
           lastSample = null;
 
-          // game list text
+          // Refresh the game list
           gameSelect.innerHTML = '';
           gameCounts = {};
           (data.games || []).forEach((row, i) => {
@@ -684,14 +684,14 @@ function bindControls() {
             reloadStatus.textContent = `✅ ${data.elapsed_sec}s — ${(data.games || []).map((r) => `${r.game}(${r.count})`).join(', ')}`;
           }
 
-          // text text game text sample to  move
+          // Move to the first sample of the first game
           const g = getPrimaryGame();
           if (g) {
             albumStart = 0;
             await loadAndRender(g, 0);
           }
         } else {
-          if (reloadStatus) reloadStatus.textContent = `❌ ${data.error || 'text text without error'}`;
+          if (reloadStatus) reloadStatus.textContent = `❌ ${data.error || 'Unknown error'}`;
         }
       } catch (err) {
         if (reloadStatus) reloadStatus.textContent = `❌ ${err.message}`;
@@ -710,7 +710,7 @@ async function init() {
   try {
     const games = await fetchGames();
     if (!games.length) {
-      setError('load availabletext dataset  text. path  checktext.');
+      setError('No dataset can be loaded. Check the path.');
       return;
     }
 
@@ -725,7 +725,7 @@ async function init() {
       gameSelect.appendChild(opt);
     });
 
-    // albumAutoSizetext text  text default value as , renderAlbum in  text computetext
+    // Use the default initially for albumAutoSize; renderAlbum recalculates it
     if (!albumAutoSize && albumSizeSelect) {
       albumPageSize = Math.max(1, Number(albumSizeSelect.value || '30'));
     }
@@ -733,11 +733,11 @@ async function init() {
     const g = getPrimaryGame();
     if (g) {
       currentGame = g;
-      // initial load  before : albumAutoSizetext text text size compute
+      // Before initial load, calculate the correct albumAutoSize
       if (albumAutoSize) {
         albumPageSize = computeAutoAlbumPageSize();
       }
-      // initial load: album mode to  text start
+      // Initial load: start quickly in album mode
       viewMode = 'album';
       if (viewModeSelect) viewModeSelect.value = 'album';
       await loadAndRender(g, 0);
@@ -764,7 +764,7 @@ async function fetchJsonOrThrow(url, fallbackLabel) {
     }
   } else {
     const preview = bodyText.slice(0, 80).replace(/\s+/g, ' ');
-    throw new Error(`${fallbackLabel}: JSON response  text (${res.status}) ${preview}`);
+    throw new Error(`${fallbackLabel}: response is not JSON (${res.status}) ${preview}`);
   }
 
   if (!res.ok) {
@@ -797,7 +797,7 @@ async function fetchMapping(game) {
   if (mappingCache[game]) return mappingCache[game];
   const data = await fetchJsonOrThrow(
     `/api/mapping?game=${encodeURIComponent(game)}`,
-    'text request failure',
+    'Mapping request failed',
   );
   mappingCache[game] = data;
   return data;
@@ -897,4 +897,3 @@ function renderMappingPanel(sample, mappingInfo) {
 }
 
 init();
-

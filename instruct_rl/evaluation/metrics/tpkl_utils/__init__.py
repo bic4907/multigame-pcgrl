@@ -3,13 +3,13 @@ tpkl_utils/__init__.py
 ======================
 TPKL utility public API.
 
-text structure
+Submodule structure
 ------------
-patch.py        — text extract / text internal text
+patch.py        -- internal patch extraction and hashing helpers
 distribution.py — GT distribution compute  (build_gt_distribution)
-scoring.py      — JSD text  (compute_jsd_scores)
+scoring.py      -- JSD scoring (compute_jsd_scores)
 dataset.py      — GT level load  (load_gt_levels)
-task.py         — text text / text (quantize_condition, build_task_key,
+task.py         -- task keys and grouping (quantize_condition, build_task_key,
                                       group_states_by_task)
 """
 from instruct_rl.evaluation.metrics.tpkl_utils.distribution import (  # noqa: F401
@@ -26,4 +26,3 @@ from instruct_rl.evaluation.metrics.tpkl_utils.task import (  # noqa: F401
     build_task_key,
     group_states_by_task,
 )
-

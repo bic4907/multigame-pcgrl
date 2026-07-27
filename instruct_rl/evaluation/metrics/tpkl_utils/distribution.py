@@ -1,7 +1,7 @@
 """
 distribution.py
 ===============
-GT level text as text tile text distribution  computetext.
+Compute tile-pattern distributions from a set of GT levels.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def build_gt_distribution(gt_levels: np.ndarray,
                            epsilon: float,
                            _pbar=None) -> list[dict]:
     """
-    gt_levels: (M, H, W) → window_sizestext text distribution text.
+    gt_levels: (M, H, W) -> pattern distribution for each window size.
     """
     n_tiles = int(gt_levels.max()) + 1 if gt_levels.size > 0 else MAX_TILE
     dists = []
@@ -30,6 +30,5 @@ def build_gt_distribution(gt_levels: np.ndarray,
         dists.append({"n_tiles": n_tiles, "dist": patches_to_dist(patches, epsilon, n_tiles)})
         if _pbar is not None:
             _pbar.set_postfix_str(f"GT dist w={k}")
-            _pbar.update(0)   # postfixtext text (update  scoring in )
+            _pbar.update(0)   # Refresh only the postfix; scoring performs updates
     return dists
-

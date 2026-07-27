@@ -1,7 +1,7 @@
 """
 encoder/utils/training.py
 =========================
-train_ipcgrl_encoder / train_clip / train_clip_decoder  in  text
+Shared by train_ipcgrl_encoder, train_clip, and train_clip_decoder.
 dataset create · checkpoint save · wandb initialize utility.
 """
 
@@ -32,15 +32,15 @@ logger.setLevel(getattr(logging, log_level, logging.INFO))
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def build_multigame_dataset(config: Config) -> MultiGameDataset:
-    """config.include_* text and  max_samples_per_game   text for text
-    MultiGameDataset   createtext.
+    """Use config.include_* flags and max_samples_per_game to
+    Create a MultiGameDataset.
 
     Parameters
     ----------
-    config : Config (text  sub class — RewardConfig, CLIPTrainConfig text)
+    config : Config or a subclass such as RewardConfig or CLIPTrainConfig
         ``include_dungeon``, ``include_pokemon``, ``include_sokoban``,
         ``include_doom``, ``include_doom2``, ``include_zelda``,
-        ``max_samples_per_game``, ``max_samples_seed`` text  text.
+        Reads ``max_samples_per_game`` and ``max_samples_seed``.
 
     Returns
     -------
@@ -67,7 +67,7 @@ def build_multigame_dataset(config: Config) -> MultiGameDataset:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def save_encoder_checkpoint(config: Config, state, step: int) -> None:
-    """flax checkpoints   text for text text checkpoint  savetext."""
+    """Save an encoder checkpoint with Flax checkpoints."""
     ckpt_dir = get_ckpt_dir(config)
     ckpt_dir = os.path.abspath(ckpt_dir)
     ckpt_keep = int(getattr(config, "ckpt_keep", 2))
@@ -111,11 +111,10 @@ def save_norm_stats(config: Config, cond_norm_min: dict, cond_norm_max: dict) ->
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def setup_wandb(config: Config) -> None:
-    """wandb   initializetext.
+    """Initialize wandb.
 
-    API text  ``instruct_rl.utils.env_loader.get_wandb_key()`` (.env based)
-      text text for text, if missing ``config.wandb_key``   fallback  as  checktext.
-    text  if missing wandb   disabled text to  text.
+    Prefer the .env-based ``instruct_rl.utils.env_loader.get_wandb_key()``;
+    fall back to ``config.wandb_key``. Keep wandb disabled when no key exists.
     """
     from instruct_rl.utils.env_loader import get_wandb_key
 

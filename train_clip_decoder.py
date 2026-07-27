@@ -3,10 +3,10 @@ train_clip_decoder_unseen.py
 ============================
 Seen/Unseen game separate + Few-shot Ratio Sweep experiment script.
 
-Seen game of  all training data + Unseen game of   text ratio training data to
-CLIP Decoder text  trainingtext, **fixedtext** text in  gametext reward_accuracy  measuretext.
+Trains the CLIP decoder on all seen-game training data plus a small fraction of
+unseen-game data, then measures per-game reward_accuracy on a **fixed** test split.
 
-text text: few-shot ratio (x) vs. per-game reward accuracy (y) text
+The result is a plot of few-shot ratio (x) vs. per-game reward accuracy (y).
 
 Usage
 -----
@@ -74,7 +74,7 @@ logging.getLogger("absl").setLevel(logging.ERROR)
 def parse_unseen_game_names(unseen_str: Optional[str]) -> Set[str]:
     """2text abbreviation string → full game name set.
 
-    None text  text string text text set  returntext.
+    None or an empty string yields an empty set.
 
     Examples
     --------
@@ -115,7 +115,7 @@ def _canonical_game_counts(game_counts: Dict[str, int]) -> Dict[str, int]:
 
 
 def subset_clip_dataset(dataset: CLIPDataset, indices: np.ndarray) -> CLIPDataset:
-    """CLIPDataset in  text index of  text  extracttext."""
+    """Extract the given indices from a CLIPDataset as a new dataset."""
     idx = np.asarray(indices, dtype=int)
     return CLIPDataset(
         class_ids=dataset.class_ids[idx],
@@ -141,17 +141,18 @@ def split_dataset_by_game(
     Dict[str, np.ndarray],  # game → test indices
     np.ndarray,             # all game names (per sample)
 ]:
-    """all dataset  gameby train pool / test  to  splittext.
+    """Split the whole dataset per game into a train pool and a test set.
 
-    - text game(seen + unseen) in  ``test_ratio`` text text text to  separate
-    - split  ``test_seed``  to  text → sametext seed in  always same text
-    - train pool  inside  unseen game data of  text text for text  sweep ratio  in   of text text
+    - Every game (seen and unseen) contributes ``test_ratio`` of its samples to the test set
+    - The split is driven by ``test_seed``, so the same seed always gives the same split
+    - How much of each unseen game's train pool is actually used is decided later by the
+      sweep ratio
 
     Returns
     -------
     game_train_pool : {game_name: ndarray of indices}
     game_test       : {game_name: ndarray of indices}
-    all_game_names  : ndarray of str  (text  = len(full_dataset.class_ids))
+    all_game_names  : ndarray of str (length = len(full_dataset.class_ids))
     """
     all_game_names = np.array(
         [rc["game_name"] for rc in full_dataset.reward_cond]
@@ -168,7 +169,7 @@ def split_dataset_by_game(
         perm = rng.permutation(game_indices)
         n_test = max(1, int(len(perm) * test_ratio))
         game_test[game] = perm[:n_test]
-        game_train_pool[game] = perm[n_test:]  # fixed order (ratio text  prefix)
+        game_train_pool[game] = perm[n_test:]  # Fixed order; ratio subsets are prefixes
         tag = "(unseen)" if game in unseen_game_names else "(seen)"
         logger.debug(
             "split_dataset_by_game [%s] %s: total=%d, train_pool=%d, test=%d",
@@ -184,12 +185,12 @@ def build_train_indices_for_ratio(
     ratio: float,
     seen_ratio: float = 1.0,
 ) -> np.ndarray:
-    """text few-shot ``ratio``  in  text training index  text.
+    """Build the training indices for a given few-shot ``ratio``.
 
-    - Seen game: train pool  during  seen_ratio ratiotext (prefix) text for
-    - Unseen game: train pool  during  ratio ratiotext (prefix) text for
-    - ratio=0.0  text unseen game of  training data = 0
-    - seen_ratio=0.0  text seen game of  training data = 0
+    - Seen games  : the leading ``seen_ratio`` fraction of their train pool
+    - Unseen games: the leading ``ratio`` fraction of their train pool
+    - ratio=0.0 means no unseen-game training data
+    - seen_ratio=0.0 means no seen-game training data
     """
     train_indices: List[np.ndarray] = []
     for game, pool in sorted(game_train_pool.items()):
@@ -207,7 +208,7 @@ def build_train_indices_for_ratio(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Train Step (JIT) — reward_pred text
+#  Train step (JIT) — includes the reward_pred branch
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @partial(jit, static_argnums=(3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17, 18))
@@ -280,10 +281,10 @@ def train_step(
         )
 
     def safe_l2_normalize(x, axis=-1, eps=1e-6):
-        """0-vector text in  also  gradient  NaN as  text text  L2 normalize.
+        """L2 normalisation whose gradient stays finite at the zero vector.
 
-        jnp.linalg.norm()  zero-vector in  gradient  NaN  text to ,
-        sum-of-squares + jax.lax.rsqrt(maximum(...)) form to  text.
+        jnp.linalg.norm() produces a NaN gradient at zero, so this uses
+        sum-of-squares + jax.lax.rsqrt(maximum(...)) instead.
         """
         sq_norm = jnp.sum(x * x, axis=axis, keepdims=True)
         inv_norm = jax.lax.rsqrt(jnp.maximum(sq_norm, eps * eps))
@@ -292,13 +293,13 @@ def train_step(
     def continuous_direction_alignment(text_embed, game_id, reward_target, condition_target):
         """Continuous Task-wise Cross-game Direction Alignment Loss.
 
-        each (game, task) text in  condition text and  (L2-normalized) text embedding text  of
-        slope vector  OLS-style centered regression  as  text  after , same task text of
-        text to  different game text text text  cosine distance  to  sorttext.
+        For each (game, task) group, estimate via OLS-style centred regression the slope
+        vector relating the condition value to the (L2-normalised) text embedding, then
+        align those directions across games within the same task using cosine distance.
 
-        warning: invalid (game, task) text  normalize **previous in ** slope  0 as  text
-        text. slope=0 text text in  normalize gradient  text NaN  text,   after
-        mask  text also  (NaN * 0 = NaN)  as  parameter all  text.
+        Note: invalid (game, task) groups must have their slope zeroed **before**
+        normalisation. Normalising a zero slope yields a NaN gradient, and masking
+        afterwards does not help (NaN * 0 = NaN), which would poison every parameter.
 
         Returns: (loss, valid_pair_count)
         """
@@ -327,27 +328,27 @@ def train_step(
         slope_num = (m_dc[..., None] * dz).sum(-2)                         # (G, T, D)
         slope_den = (m_dc * dc).sum(-1)                                    # (G, T) = sum m*dc^2
 
-        # ── valid group text (slope compute  before ) ──
+        # ── Determine valid groups (before computing slopes) ──
         c_var = slope_den / safe_n                                         # (G, T)
         valid = (n_gt >= float(delta_min_count)) & (c_var > delta_var_eps) # (G, T)
 
-        # ── slope_den  text text  invalid group in  slope text text ──
+        # ── Guard slope_den so invalid groups cannot divide by zero ──
         safe_slope_den = jnp.where(valid, slope_den, 1.0)                  # (G, T)
         slope = slope_num / safe_slope_den[..., None]                      # (G, T, D)
-        # invalid group  normalize previous in  text before text 0 as  text
+        # Zero out invalid groups before normalisation (see the note above)
         slope = jnp.where(valid[..., None], slope, 0.0)                    # (G, T, D)
 
-        # ── NaN-safe normalize + invalid text text ──
+        # ── NaN-safe normalisation, then re-mask the invalid groups ──
         d_dir = safe_l2_normalize(slope, axis=-1, eps=1e-6)               # (G, T, D)
         d_dir = jnp.where(valid[..., None], d_dir, 0.0)                    # (G, T, D)
 
-        # tasktext cross-game cosine: (G, G, T)
+        # Per-task cross-game cosine: (G, G, T)
         cos_mat = jnp.einsum('gtd,htd->ght', d_dir, d_dir)
         pair_valid = valid[:, None, :] & valid[None, :, :]                 # (G, G, T)
         tri = jnp.triu(jnp.ones((G, G), dtype=bool), k=1)                  # (G, G)
         pair_valid = pair_valid & tri[:, :, None]
 
-        # NaN * 0 text: multiply mask text where text for
+        # Avoid NaN * 0: mask with jnp.where rather than multiplying
         pair_loss = jnp.where(pair_valid, 1.0 - cos_mat, 0.0)
         total_pairs = pair_valid.astype(jnp.float32).sum()
         delta_loss = pair_loss.sum() / jnp.maximum(total_pairs, 1.0)
@@ -403,8 +404,8 @@ def train_step(
         per_sample_cond = condition_pred[jnp.arange(condition_pred.shape[0]), reward_target]
         abs_diff = jnp.abs(per_sample_cond - condition_target)
 
-        # text text to  converttext text/text text error ( to text for )
-        condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes) — text linear text
+        # Error in the original (linear) scale, kept for logging only
+        condition_pred_raw = outputs["condition_pred_raw"]   # (B, num_classes) — linear scale
         per_sample_cond_raw = condition_pred_raw[jnp.arange(condition_pred_raw.shape[0]), reward_target]
         target_log = condition_target * (norm_max_arr[reward_target] - norm_min_arr[reward_target]) + norm_min_arr[reward_target]
         target_raw = jnp.expm1(jnp.maximum(target_log, 0.0))
@@ -418,14 +419,14 @@ def train_step(
             reg_per_sample_raw = abs_diff_raw
         reg_loss = jnp.mean(reg_per_sample)
         reg_loss_raw = jnp.mean(reg_per_sample_raw)
-        # linear text normalized [0,1] MAE (text for  — gradient compute in  text)
-        # norm_min/max  log1p text text to  expm1 to  linear text to  text  after  normalize
+        # MAE in linear scale, renormalised to [0,1] (logging only; not used for gradients).
+        # norm_min/max live in log1p space, so expm1 maps them back before normalising.
         linear_min = jnp.expm1(norm_min_arr[reward_target])
         linear_max = jnp.expm1(norm_max_arr[reward_target])
         linear_range = linear_max - linear_min + 1e-8
         condition_mae_normalized = jnp.mean(jnp.abs(per_sample_cond_raw - target_raw) / linear_range)
 
-        # ── Per-reward_enum regression text ──
+        # ── Per-reward_enum regression metrics ──
         per_enum_huber = jnp.zeros(num_reward_classes)
         per_enum_mae = jnp.zeros(num_reward_classes)
         per_enum_huber_raw = jnp.zeros(num_reward_classes)
@@ -434,7 +435,7 @@ def train_step(
 
         for eidx in range(num_reward_classes):
             mask = (reward_target == eidx).astype(jnp.float32)        # (B,)
-            count = jnp.sum(mask) + 1e-8                               # 0-div text
+            count = jnp.sum(mask) + 1e-8                               # avoid divide-by-zero
             per_enum_huber = per_enum_huber.at[eidx].set(jnp.sum(reg_per_sample * mask) / count)
             per_enum_mae = per_enum_mae.at[eidx].set(jnp.sum(abs_diff * mask) / count)
             per_enum_huber_raw = per_enum_huber_raw.at[eidx].set(jnp.sum(reg_per_sample_raw * mask) / count)
@@ -442,8 +443,8 @@ def train_step(
             per_enum_count = per_enum_count.at[eidx].set(jnp.sum(mask))
 
         # ── Continuous Task-wise Cross-game Direction Alignment ──
-        # default value  delta_weight=0.0 text also  alignment metric  text.
-        # compute_delta_when_zero=Falsetext text baseline/eval of  text compute  text.
+        # By default the alignment metric is still computed when delta_weight=0.0.
+        # Set compute_delta_when_zero=False to skip it entirely (e.g. for baselines).
         if delta_weight != 0.0 or compute_delta_when_zero:
             delta_loss, delta_valid_pairs = continuous_direction_alignment(
                 text_embed, batch.game_id, reward_target, condition_target
@@ -481,14 +482,14 @@ def train_step(
             "per_enum_reg_loss_raw": per_enum_huber_raw,
             "per_enum_reg_loss_raw_mae": per_enum_mae_raw,
             "per_enum_count": per_enum_count,
-            # ── per-sample scatter / per-enum text  for  ──
+            # ── Per-sample values for the scatter / per-enum plots ──
             "per_sample_cond_norm": per_sample_cond,           # (B,) normalized [0,1] pred
             "per_sample_cond_target_norm": condition_target,   # (B,) normalized [0,1] target
             "per_sample_cond_raw": per_sample_cond_raw,        # (B,) linear-scale pred
             "per_sample_cond_target_raw": target_raw,      # (B,) linear-scale target
             # ── Continuous direction alignment ──
-            "continuous_delta_loss": delta_loss,                          # raw alignment loss (weight textapply, always text)
-            "continuous_delta_loss_weighted": delta_weight * delta_loss,  # objective in  text applytext text
+            "continuous_delta_loss": delta_loss,                          # raw alignment loss (unweighted, always logged)
+            "continuous_delta_loss_weighted": delta_weight * delta_loss,  # the term added to the objective
             "valid_direction_pair_count": delta_valid_pairs
         }
         if include_retrieval_ranks:
@@ -511,10 +512,10 @@ def train_step(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Sequential evaluation (text order preserve)
+#  Sequential evaluation preserving test-set order
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# reward_enum name text (0-based: CSV reward_enum  0-indexed)
+# reward_enum name mapping (zero-based because CSV reward_enum is zero-indexed)
 _REWARD_ENUM_NAMES = {
     0: "region",
     1: "path_length",
@@ -525,12 +526,12 @@ _REWARD_ENUM_NAMES = {
 
 
 def _log_reward_condition_summary(dataset: MultiGameDataset):
-    """training start  before  in  reward_enumtext condition range  text (game text text  enum basis)."""
+    """Log the condition range per reward_enum before training starts (per game and overall)."""
     from collections import defaultdict
 
     # reward_enum → [(game, condition_value)]
     enum_stats: dict = defaultdict(list)
-    # game → reward_enum → [condition_values]  (gametext text for )
+    # game -> reward_enum -> [condition_values]  (per-game breakdown)
     game_enum_stats: dict = defaultdict(lambda: defaultdict(list))
 
     for s in dataset._samples:
@@ -548,7 +549,7 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
     logger.info("  Reward Enum & Condition Range Summary  (raw, before normalization)")
     logger.info("=" * 80)
 
-    # ── reward_enumtext all text ──
+    # ── Overall, per reward_enum ──
     logger.info(f"  {'enum':>5}  {'name':<22} {'count':>6}  {'min':>10}  {'max':>10}  {'mean':>10}  {'std':>10}")
     logger.info(f"  {'-'*5}  {'-'*22} {'-'*6}  {'-'*10}  {'-'*10}  {'-'*10}  {'-'*10}")
 
@@ -569,7 +570,7 @@ def _log_reward_condition_summary(dataset: MultiGameDataset):
 
     logger.info("")
 
-    # ── gametext text ──
+    # ── Per game ──
     for game in sorted(game_enum_stats.keys()):
         enum_dict = game_enum_stats[game]
         n_total = sum(len(v) for v in enum_dict.values())
@@ -601,7 +602,7 @@ def make_train(config: CLIPDecoderTrainConfig):
         rng_key, subkey = jax.random.split(rng_key)
         dataset = build_multigame_dataset(config)
 
-        # ── training  before  reward_enum / condition range summary text ──
+        # ── Print reward_enum/condition range summary before training ──
         _log_reward_condition_summary(dataset)
 
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
@@ -623,13 +624,13 @@ def make_train(config: CLIPDecoderTrainConfig):
         # ── Save norm stats to ckpt directory (used for denorm during inference) ──
         save_norm_stats(config, cond_norm_min, cond_norm_max)
 
-        # scatter plot for  class_id → game_name text
+        # class_id -> game_name mapping used by the scatter plots
         class_id2game_name = {}
         full_ds = dataset_builder.get_dataset()
         for cid, rc in zip(full_ds.class_ids, full_ds.reward_cond):
             class_id2game_name[int(cid)] = rc.get("game_name", "unknown")
 
-        # ── normalize parameter text ──
+        # ── Print normalization parameters ──
         logger.info("  Per-reward_enum condition normalization applied:")
         logger.info(f"  {'enum(0idx)':>10}  {'name':<22} {'raw_min':>10}  {'raw_max':>10}  {'→ normalized':>12}")
         for eidx in sorted(cond_norm_min.keys()):
@@ -652,7 +653,7 @@ def make_train(config: CLIPDecoderTrainConfig):
             mode += "_state"
         config.encoder.mode = mode
 
-        # ── norm stats  jnp array to  convert (text  inside  textconvert for ) ──
+        # ── Convert normalization stats to jnp arrays for model-side inversion ──
         num_cls = config.decoder.num_reward_classes
         norm_min_arr = jnp.array([cond_norm_min.get(i, 0.0) for i in range(num_cls)], dtype=jnp.float32)
         norm_max_arr = jnp.array([cond_norm_max.get(i, 1.0) for i in range(num_cls)], dtype=jnp.float32)
@@ -693,7 +694,7 @@ def evaluate_per_game(
     Dict[int, float],
     List[Dict[str, object]],
 ]:
-    """fixedtext text in  **gametext** reward accuracy  and  reg_loss  computetext.
+    """Compute per-game reward accuracy and reg_loss on the fixed test split.
 
     Returns
     -------
@@ -737,7 +738,7 @@ def evaluate_per_game(
         indices = np.arange(start_idx, end_idx)
         actual_size = len(indices)
 
-        # text batch padding
+        # Pad the final batch
         if actual_size < batch_size:
             pad = np.arange(batch_size - actual_size) % n_test
             indices = np.concatenate([indices, pad])
@@ -803,7 +804,7 @@ def evaluate_per_game(
             all_class_ids.extend(np.asarray(class_ids).reshape(-1)[:actual_size].astype(int).tolist())
         all_preds.extend(preds[:actual_size].tolist())
         all_targets.extend(targets[:actual_size].tolist())
-        # batch-level reg_loss  actual_sizetext text (batch mean text to )
+        # reg_loss is a batch mean, so repeat it actual_size times
         all_reg_losses.extend([batch_reg] * actual_size)
         all_abs_diffs.extend(batch_abs_diff[:actual_size].tolist())
         all_abs_diffs_raw.extend(batch_abs_diff_raw[:actual_size].tolist())
@@ -818,7 +819,7 @@ def evaluate_per_game(
             all_state2text_rank.extend(batch_state2text_rank[:actual_size].astype(int).tolist())
             all_text2state_rank.extend(batch_text2state_rank[:actual_size].astype(int).tolist())
 
-    # ── Per-game accuracy text ──
+    # ── Aggregate per-game accuracy ──
     all_preds_arr = np.array(all_preds[:n_test])
     all_targets_arr = np.array(all_targets[:n_test])
     all_class_ids_arr = np.array(all_class_ids[:n_test]) if include_prediction_rows else np.array([])
@@ -860,7 +861,7 @@ def evaluate_per_game(
         per_game_acc["unseen_overall"] = float(correct[unseen_mask].mean())
         per_game_reg["unseen_overall"] = float(all_reg_arr[unseen_mask].mean())
 
-    # ── Per reward_enum text (all text basis) ──
+    # ── Per-reward_enum statistics over the full test set ──
     all_pred_norm_arr = np.array(all_pred_norm[:n_test])
     all_target_norm_arr = np.array(all_target_norm[:n_test])
     all_pred_raw_arr = np.array(all_pred_raw[:n_test])
@@ -982,7 +983,7 @@ def _build_scatter_data_from_arrays(
     target_raw: np.ndarray,
     game_names: Optional[np.ndarray] = None,
 ) -> Dict[int, Dict[str, np.ndarray]]:
-    """text  during  text per-sample text/text as  enumtext scatter dict create."""
+    """Build a per-enum scatter dict from the collected per-sample predictions and targets."""
     if len(reward_enums) == 0:
         return {}
 
@@ -1026,7 +1027,7 @@ def _compute_train_set_metrics_from_arrays(
     train_game_names: np.ndarray,
     unseen_game_names: Set[str],
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, float]]:
-    """training  during  text per-sample text as  train-set texttable  text."""
+    """Aggregate per-sample training predictions into train-set metrics."""
     reward_pred_arr = np.asarray(reward_pred, dtype=np.int64)
     reward_target_arr = np.asarray(reward_target, dtype=np.int64)
     reg_loss_arr = np.asarray(reg_loss, dtype=np.float32)
@@ -1172,13 +1173,13 @@ def train_and_evaluate_ratio(
     unseen_eval_sample_ids: Optional[np.ndarray] = None,
     num_games: int = 1,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, Dict[int, float]], Dict[int, Dict[str, np.ndarray]], Dict[int, float]]:
-    """text of  few-shot ratio in  text text  text trainingtext evaluationtext.
+    """Train and evaluate a single model for one few-shot ratio.
 
     Returns
     -------
     per_game_acc, per_game_reg_loss, per_game_enum_diff, scatter_data, per_enum_reg_loss
 
-    NOTE: text  **train set** basis as  text.
+    NOTE: the returned metrics are computed on the **train set**.
     """
 
     n_train = len(train_ds.class_ids)
@@ -1225,12 +1226,12 @@ def train_and_evaluate_ratio(
 
     # ── Training Loop ──
     n_train_batch = math.ceil(len(train_ds.class_ids) / config.batch_size)
-    scatter_freq: int = int(getattr(config, "scatter_freq", 1000))  # scatter plot upload text
+    scatter_freq: int = int(getattr(config, "scatter_freq", 1000))  # scatter-plot upload interval
     max_pts: int = int(getattr(config, "n_max_points", 1000))
 
-    # ── Unseen game evaluation text ──
-    # unseen_eval_ds  injecttext text(all unseen pool based): as-is text for
-    # text text: test set in  unseen sampletext filtering (fallback)
+    # ── Unseen-game evaluation set ──
+    # If unseen_eval_ds was supplied (built from the full unseen pool), use it as-is;
+    # otherwise fall back to filtering the unseen samples out of the test set.
     if unseen_eval_ds is not None and unseen_eval_game_names is not None and len(unseen_eval_ds.class_ids) > 0:
         unseen_test_ds = unseen_eval_ds
         unseen_test_game_names_arr = unseen_eval_game_names
@@ -1462,7 +1463,7 @@ def train_and_evaluate_ratio(
                 epoch_delta_pair_count += float(metrics["valid_direction_pair_count"])
                 epoch_delta_loss_weighted += float(metrics["continuous_delta_loss_weighted"])
 
-                # ── Scatter / per-sample text (text train sampletext) ──
+                # ── Scatter / per-sample collection (train samples only) ──
                 actual_size = min(config.batch_size, max(0, n_train - batch_idx * config.batch_size))
                 if actual_size > 0:
                     batch_reward_target = np.array(jax.device_get(batch.reward_enum_target))[:actual_size].astype(int).tolist()
@@ -1513,7 +1514,7 @@ def train_and_evaluate_ratio(
             epoch_delta_pair_count /= n_batches
             epoch_delta_loss_weighted /= n_batches
 
-        # ──  in text textabove scatter + epoch based train-set texttable ──
+        # ── Epoch-level scatter data and train-set metrics ──
         epoch_scatter_data = _build_scatter_data_from_arrays(
             np.array(epoch_reward_enums, dtype=np.int64),
             np.array(epoch_pred_norm, dtype=np.float32),
@@ -1546,7 +1547,7 @@ def train_and_evaluate_ratio(
                 epoch_reg_loss_raw, epoch_cls_loss, epoch_contrastive_loss,
             )
 
-        # ── W&B scalar  to text (text  in text) ──
+        # ── W&B scalar logging (once per epoch) ──
         if wandb.run is not None:
             selected_reg_per_enum = {}
             total_reg_cnt = 0.0
@@ -1591,7 +1592,7 @@ def train_and_evaluate_ratio(
                 }
             )
 
-        # ── W&B Scatter plot upload (scatter_freq  in text, raw text) ──
+        # ── Upload W&B scatter plots every scatter_freq epochs in raw space only ──
         if wandb.run is not None and scatter_freq > 0 and (epoch + 1) % scatter_freq == 0:
             scatter_data_mid = epoch_scatter_data
             regression_scatter_paths = create_regression_scatter_plots_per_enum(
@@ -1609,8 +1610,8 @@ def train_and_evaluate_ratio(
                 wandb.log(epoch_imgs)
                 logger.info("  Scatter plot uploaded to wandb (epoch %d)", epoch + 1)
 
-        # ── W&B Unseen evaluation (unseen_eval_freq / unseen_scatter_freq  in text, test set based) ──
-        # test set based text to  unseen_ratio config and  text text
+        # ── W&B unseen evaluation, driven by unseen_eval_freq / unseen_scatter_freq ──
+        # Evaluated on the test set, so it is independent of the training unseen_ratio.
         _unseen_eval_freq: int = int(getattr(config, "unseen_eval_freq", 100))
         _unseen_scatter_freq: int = int(getattr(config, "unseen_scatter_freq", 500))
         _do_unseen_eval = _unseen_eval_freq > 0 and (epoch + 1) % _unseen_eval_freq == 0
@@ -1662,7 +1663,7 @@ def train_and_evaluate_ratio(
 #  Visualization: Few-shot Ratio vs. Per-game Reward Accuracy
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# ── fixed gametext color palette (visualizer/plots.py and  same) ─────────────────────
+# ── Fixed per-game colour palette (matches visualizer/plots.py) ──────────────────
 _GAME_SCATTER_COLORS = {
     "dungeon": "#4C72B0",
     "sokoban": "#DD8452",
@@ -1673,13 +1674,13 @@ _GAME_SCATTER_COLORS = {
 
 
 def _get_game_color(game: str, color_map: Optional[Dict[str, str]] = None, fallback_seed: int = 0) -> str:
-    """gametext fixed color  returntext."""
+    """Return the fixed colour assigned to a game."""
     if color_map is None:
         color_map = _GAME_SCATTER_COLORS
     if game in color_map:
         return color_map[game]
 
-    # text game name  text palette to  fallback
+    # Unknown game names fall back to a generated palette
     fallback_colors = [
         "#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3",
         "#393b79", "#637939", "#8c6d31", "#843c39", "#8c564b",
@@ -1720,9 +1721,9 @@ def create_fewshot_plot(
     unseen_game_names: Set[str],
     out_dir: str,
 ) -> str:
-    """Few-shot ratio sweep result  reg_loss text text to  texteachtext.
+    """Plot the few-shot ratio sweep as reg_loss curves.
 
-    Reward Accuracy  wandb scalar to text writetext image in   text text text.
+    Reward accuracy is logged to wandb as a scalar, so it is left out of this figure.
     """
     os.makedirs(out_dir, exist_ok=True)
 
@@ -1736,7 +1737,7 @@ def create_fewshot_plot(
 
     fig, ax = plt.subplots(figsize=(3.8, 2.6))
 
-    # ── Seen / Unseen (text  text, legend) ──
+    # ── Seen / unseen curves (two lines plus legend) ──
     seen_ov = [reg_results[r].get("seen_overall", float("nan")) for r in ratios]
     unseen_ov = [reg_results[r].get("unseen_overall", float("nan")) for r in ratios]
     ax.plot(ratios, seen_ov, marker="s", markersize=4, linewidth=2.4,
@@ -1772,9 +1773,9 @@ def create_scatter_plots(
 
     Parameters
     ----------
-    scatter_data : evaluate_per_game() of  returntext
-    max_points   : text maximum text count (exceed text random sampling)
-    space        : "norm" (normalizetext [0,1] text) or "raw" (linear text)
+    scatter_data : the value returned by evaluate_per_game()
+    max_points   : maximum points to draw (randomly subsampled above this)
+    space        : "norm" (normalised [0,1] scale) or "raw" (linear scale)
     """
     if not scatter_data:
         logger.warning("create_scatter_plots: empty scatter_data — skipping")
@@ -1833,7 +1834,7 @@ def create_scatter_plots(
         else:
             ax.scatter(target, pred, s=6, alpha=0.45, edgecolors="none", color="#2166ac")
 
-        # y=x basistext
+        # y = x reference line
         lo = float(min(target.min(), pred.min())) if len(pred) else 0.0
         hi = float(max(target.max(), pred.max())) if len(pred) else 1.0
         ax.plot([lo, hi], [lo, hi], linestyle="--", color="#888", linewidth=1)
@@ -1856,7 +1857,7 @@ def create_scatter_plots(
         ax.tick_params(labelsize=6)
         ax.grid(alpha=0.25)
 
-    # text subplot text
+    # Hide the unused subplots
     for j in range(n, nrows * ncols):
         axes[j // ncols][j % ncols].set_visible(False)
 
@@ -1877,7 +1878,7 @@ def create_regression_scatter_plots_per_enum(
     space: str = "raw",
     game_colors: Optional[Dict[str, str]] = None,
 ) -> Dict[int, str]:
-    """Enumtext regression scatter (pred vs target) image  text savetext path  returntext.
+    """Save a per-enum regression scatter (pred vs target) and return the file paths.
 
     Returns
     -------
@@ -1977,7 +1978,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
     def train(rng_key):
         rng_key, subkey = jax.random.split(rng_key)
 
-        # ── 1. all dataset build (text text) ──
+        # ── 1. Build the full dataset (every game) ──
         dataset = build_multigame_dataset(config)
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
@@ -1986,7 +1987,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             paired_data=dataset,
             rng_key=subkey,
             max_len=config.encoder.token_max_len,
-            train_ratio=1.0,  # text split textrow → text of  split text for  text text
+            train_ratio=1.0,  # split is done below, so take the whole dataset here
             max_samples=config.max_samples,
             instruction_prefix=config.instruction_prefix,
             longtail_cut=config.longtail_cut,
@@ -2041,7 +2042,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             json.dump(dataset_setting, f, indent=2, ensure_ascii=False)
         logger.info("Dataset setting saved: %s", dataset_setting_path)
 
-        # ── Encoder training config JSON save (pcgrl train/eval in  text for ) ──
+        # ── Save the encoder training config as JSON (read by pcgrl train/eval) ──
         encoder_config = {
             "delta_weight": config.delta_weight,
             "delta_min_group_samples": config.delta_min_group_samples,
@@ -2066,7 +2067,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             logger.warning("No unseen games found in dataset — treating all games as seen.")
             unseen_game_set = set()
 
-        # ── 3. gametext train pool / test split (seed fixed) ──
+        # ── 3. Per-game train pool / test split (fixed seed) ──
         game_train_pool, game_test, _ = split_dataset_by_game(
             full_dataset,
             unseen_game_set,
@@ -2074,7 +2075,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             test_seed=config.split_seed,
         )
 
-        # fixed text index (text game)
+        # Fixed test indices (across every game)
         test_indices = np.concatenate(
             [game_test[g] for g in sorted(game_test.keys())]
         )
@@ -2083,7 +2084,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             [rc["game_name"] for rc in test_ds.reward_cond]
         )
 
-        #  to text: split summary
+        # Log the split summary
         logger.info("  Test set (fixed, seed=%d):", config.split_seed)
         for g in sorted(game_test.keys()):
             tag = "(unseen)" if g in unseen_game_set else "(seen)"
@@ -2093,8 +2094,8 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             )
         logger.info("  Total test: %d", len(test_indices))
 
-        # ── Unseen evaluation text: all unseen game data in  eval_unseen_ratiotext sampletext ──
-        # unseen_ratio(training) and  text before text text — all full_dataset in  direct sampletext
+        # ── Unseen evaluation set: sample eval_unseen_ratio of all unseen-game data ──
+        # Independent of the training unseen_ratio; sampled straight from full_dataset.
         _eval_unseen_ratio = float(getattr(config, "eval_unseen_ratio", 1.0))
         if unseen_game_set and _eval_unseen_ratio > 0.0:
             _all_unseen_mask = np.array([g in unseen_game_set for g in all_game_names], dtype=bool)
@@ -2118,7 +2119,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             unseen_eval_game_names_arr = np.array([])
             _unseen_eval_indices = None
 
-        # ── 4. text unseen_ratio training ──
+        # ── 4. Train one unseen_ratio ──
         ratio = config.unseen_ratio
 
         train_indices = build_train_indices_for_ratio(
@@ -2158,9 +2159,9 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
             unseen_eval_sample_ids=_unseen_eval_indices,
         )
 
-        # W&B  to text (unseen  to text remove)
+        # W&B logging (unseen entries removed)
 
-        # ── Scatter plots (maximum text count text) ──
+        # ── Scatter plots (capped at max_pts points) ──
         max_pts = int(getattr(config, "n_max_points", 1000))
         regression_scatter_paths = create_regression_scatter_plots_per_enum(
             scatter_data, out_dir=config.exp_dir,
@@ -2188,7 +2189,7 @@ def make_train_unseen(config: CLIPDecoderTrainConfig):
         results_path = os.path.join(config.exp_dir, "fewshot_results.json")
         with open(results_path, "w") as f:
             json.dump(save_data, f, indent=2, ensure_ascii=False)
-        # ── text summary text text ──
+        # ── Build the summary table ──
         summary_games = [g for g in sorted(unique_games)] + ["overall", "seen_overall", "unseen_overall"]
         rows = [
             (g, f"{per_game_acc.get(g, float('nan')):.4f}", f"{per_game_reg.get(g, float('nan')):.4f}")
@@ -2216,7 +2217,7 @@ def main(config: CLIPDecoderTrainConfig):
 
     config = init_config(config)
 
-    # decoder_nograd experiment  exp name in  _nograd tabletext
+    # Mark decoder_nograd runs with a _nograd suffix in the experiment name
     if getattr(config, "decoder_nograd", False):
         config.exp_dir = config.exp_dir + "_nograd"
 

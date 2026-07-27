@@ -1,16 +1,16 @@
 """instruct_rl/utils/format_utils.py
 
-common string text utility.
+Common string-formatting utilities.
 """
 
 
 def simple_table(rows, headers):
-    """psql texttile ASCII text text string  returntext.
+    """Return a psql-style ASCII table string.
 
     Parameters
     ----------
-    rows    : list of tuple — each row of  cell text
-    headers : list of str  — text name
+    rows    : list of tuples containing cell values for each row
+    headers : list of header names
 
     Example output
     --------------
@@ -28,4 +28,3 @@ def simple_table(rows, headers):
     fmt = "| " + " | ".join(f"{{:<{w}}}" for w in col_w) + " |"
     lines = [sep, fmt.format(*headers), sep] + [fmt.format(*r) for r in rows] + [sep]
     return "\n".join(lines)
-

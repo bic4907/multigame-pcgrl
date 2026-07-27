@@ -1,29 +1,29 @@
 """evaluator/rewards/multigame_placement.py
 
-Multigame text text batch quality based reward.
+Multigame reward based on the placement quality of special tiles.
 
-text text(INTERACTIVE, HAZARD, COLLECTABLE)  map in  batchtext text,
-text count  text **batch text**text text reward  text.
+Rewards how the special tiles (INTERACTIVE, HAZARD, COLLECTABLE) are laid out on the map,
+rather than how many of them there are.
 
-text  text signal
+Reward signals
 -----------
 1. **repetition batch penalty (cluster penalty)**
-   4text  text  during  same tile  text penalty.
-   → text/text text.
+   Penalises identical tiles among the 4 neighbours.
+   → discourages clumping and repetition.
 
 2. **accessibility reward (accessibility bonus)**
-   text text adjacent 4text  during  passage available tile(EMPTY, HAZARD, COLLECTABLE)
-     1text or more text reward. text  WALL/BORDER/INTERACTIVE  to  text text  reward 0.
-   → reach unavailabletext text in  text text batch text.
-
+   Rewards a special tile that has at least one passable neighbour
+     (EMPTY, HAZARD, COLLECTABLE) among its 4 neighbours. A tile fully enclosed by
+   WALL / BORDER / INTERACTIVE scores 0.
+→ discourages placements that cannot be reached.
 3. **spread reward (spread bonus)**
-   text text tile coordinate of  text L1 distance mean.
-   distance  text text text text  text.
-   → text text in  text text also text text also .
+   Mean pairwise L1 distance between the special tile coordinates.
+   A larger mean distance means the tiles are more spread out.
+   → discourages piling every item into one spot.
 
-text reward = w_spread * spread_reward
+Total reward = w_spread * spread_reward
 
-text JAX jit/vmap text.
+Everything is JAX jit/vmap friendly.
 """
 import chex
 import jax
@@ -32,14 +32,14 @@ from functools import partial
 
 from envs.probs.multigame import MultigameTiles
 
-# text text tile text
+# Special tile values
 _ITEM_TILES = jnp.array([
     MultigameTiles.INTERACTIVE,
     MultigameTiles.HAZARD,
     MultigameTiles.COLLECTABLE,
 ], dtype=jnp.int32)
 
-# passage available tile: EMPTY + HAZARD + COLLECTABLE (INTERACTIVE text)
+# Passable tiles: EMPTY + HAZARD + COLLECTABLE (INTERACTIVE excluded)
 _PASSABLE_TILES = jnp.array([
     MultigameTiles.EMPTY,
     MultigameTiles.HAZARD,
@@ -50,14 +50,14 @@ _PASSABLE_TILES = jnp.array([
 # ── 1. repetition batch penalty ────────────────────────────────────────────────────────
 
 def _cluster_penalty(env_map: chex.Array) -> jnp.ndarray:
-    """text text tile of  4text  text  during  same tile text of  text.
+    """Count, over all special tiles, how many of their 4 neighbours share the same tile.
 
-    text  text text  text. 0 text text text text  text batch.
+    A larger value means more clumping; 0 means no special tile touches another.
     """
     H, W = env_map.shape
     is_item = jnp.isin(env_map, _ITEM_TILES)  # (H, W) bool
 
-    # text text — text outside  -1(text text )
+    # Neighbour shifts — out-of-bounds is filled with -1 (never matches)
     up    = jnp.pad(env_map[:-1, :], ((1, 0), (0, 0)), constant_values=-1)
     down  = jnp.pad(env_map[1:, :],  ((0, 1), (0, 0)), constant_values=-1)
     left  = jnp.pad(env_map[:, :-1], ((0, 0), (1, 0)), constant_values=-1)
@@ -68,9 +68,9 @@ def _cluster_penalty(env_map: chex.Array) -> jnp.ndarray:
         (env_map == down).astype(jnp.int32) +
         (env_map == left).astype(jnp.int32) +
         (env_map == right).astype(jnp.int32)
-    )  # (H, W) — each cell of  same  text text (0~4)
+    )  # (H, W) — number of matching neighbours per cell (0-4)
 
-    # text text abovetext in text sum
+    # Sum over the special tile positions
     penalty = jnp.sum(same_neighbor * is_item).astype(float)
     return penalty
 
@@ -78,16 +78,16 @@ def _cluster_penalty(env_map: chex.Array) -> jnp.ndarray:
 # ── 2. accessibility reward ─────────────────────────────────────────────────────────────
 
 def _accessibility_bonus(env_map: chex.Array) -> jnp.ndarray:
-    """text text tile  during  4text in  passage available tile  1text or moretext ratio.
+    """Fraction of special tiles with at least one passable neighbour.
 
-    1.0 = text text text text available, 0.0 = text text text text text.
-    text text  0text 1.0 return.
+    1.0 = every special tile is reachable, 0.0 = none of them are.
+    Returns 1.0 when there is no special tile.
     """
     H, W = env_map.shape
     is_item = jnp.isin(env_map, _ITEM_TILES)
     n_items = jnp.sum(is_item).astype(float)
 
-    # passage available text
+    # Passable mask
     passable = jnp.isin(env_map, _PASSABLE_TILES)
 
     up    = jnp.pad(passable[:-1, :], ((1, 0), (0, 0)), constant_values=False)
@@ -95,18 +95,18 @@ def _accessibility_bonus(env_map: chex.Array) -> jnp.ndarray:
     left  = jnp.pad(passable[:, :-1], ((0, 0), (1, 0)), constant_values=False)
     right = jnp.pad(passable[:, 1:],  ((0, 0), (0, 1)), constant_values=False)
 
-    #  text  during  passage availabletext tile text (text text  text text to
-    # " text"text text —  text shift text to  text text text text text)
+    # Number of passable neighbours (padding is False, so the map border
+    # behaves like a wall)
     n_passable_neighbors = (
         up.astype(jnp.int32) + down.astype(jnp.int32) +
         left.astype(jnp.int32) + right.astype(jnp.int32)
     )
 
-    # text text abovetext in   text passage available text ≥ 1  text text available
+    # A special tile with at least one passable neighbour counts as accessible
     accessible = ((n_passable_neighbors >= 1) & is_item).astype(float)
     n_accessible = jnp.sum(accessible)
 
-    # text text 0text → 1.0 (penalty none)
+    # No special tiles → 1.0 (no penalty)
     bonus = jnp.where(n_items > 0, n_accessible / n_items, 1.0)
     return bonus
 
@@ -114,31 +114,31 @@ def _accessibility_bonus(env_map: chex.Array) -> jnp.ndarray:
 # ── 3. spread reward ───────────────────────────────────────────────────────────────
 
 def _spread_bonus(env_map: chex.Array, max_items: int = 32) -> jnp.ndarray:
-    """text text coordinate text mean L1 distance (map size to  normalize).
+    """Mean pairwise L1 distance between the special tiles (normalised by map size).
 
-    1 in   text text text text, 0 in   text text text.
-    text text ≤ 1text 0.0 (spread measure text ).
+    Close to 1 means widely spread, close to 0 means tightly clustered.
+    Returns 0.0 when there is at most one special tile (spread is undefined).
 
-    max_items : fixed size array  abovetext maximum text text text.
+    max_items : fixed array size used to bound the number of tracked tiles.
     """
     H, W = env_map.shape
-    max_dist = (H - 1.0) + (W - 1.0)  # map texteachtext L1 distance
+    max_dist = (H - 1.0) + (W - 1.0)  # Maximum L1 distance across the map
 
     is_item = jnp.isin(env_map, _ITEM_TILES)
     n_items = jnp.sum(is_item).astype(jnp.int32)
 
-    # text text coordinate extract — fixed size array (max_items, 2)
+    # Extract the special tile coordinates into a fixed (max_items, 2) array
     rows, cols = jnp.where(is_item, size=max_items, fill_value=-1)
     coords = jnp.stack([rows, cols], axis=-1)  # (max_items, 2)
 
-    # valid mask: -1  text coordinate
+    # Valid mask: coordinates other than -1
     valid = (coords[:, 0] >= 0)  # (max_items,)
 
-    # text L1 distance — (max_items, max_items)
+    # Pairwise L1 distances — (max_items, max_items)
     diff = jnp.abs(coords[:, None, :] - coords[None, :, :])  # (M, M, 2)
     pairwise_l1 = jnp.sum(diff, axis=-1)  # (M, M)
 
-    # valid text (i != j)
+    # Valid pairs only (i != j)
     valid_pair = valid[:, None] & valid[None, :]  # (M, M)
     diag_mask = ~jnp.eye(max_items, dtype=bool)
     valid_pair = valid_pair & diag_mask
@@ -147,15 +147,15 @@ def _spread_bonus(env_map: chex.Array, max_items: int = 32) -> jnp.ndarray:
     total_dist = jnp.sum(pairwise_l1 * valid_pair).astype(float)
 
     mean_dist = jnp.where(n_pairs > 0, total_dist / n_pairs, 0.0)
-    # normalize: max_dist to  text 0~1 range
+    # Normalize to [0, 1] by dividing by max_dist
     bonus = jnp.where(max_dist > 0, mean_dist / max_dist, 0.0)
 
-    # text text ≤ 1text spread measure text
+    # Spread is undefined for a single tile
     bonus = jnp.where(n_items > 1, bonus, 0.0)
     return bonus
 
 
-# ── text reward function ─────────────────────────────────────────────────────────────
+# ── Public reward function ───────────────────────────────────────────────────────
 
 @partial(jax.jit, static_argnames=("max_items",))
 def get_multigame_placement_reward(
@@ -164,35 +164,35 @@ def get_multigame_placement_reward(
     w_spread: float = 1.0,
     max_items: int = 32,
 ) -> chex.Array:
-    """previous map text text text batch quality improvement.
+    """Improvement in placement quality relative to the previous map.
 
     Parameters
     ----------
     prev_env_map, curr_env_map : chex.Array
         (H, W) integer map.
     w_spread : float
-        spread reward weight. text text in  text.
+        Weight of the spread reward; the other terms are unused.
     max_items : int
-        spread compute text fixed array size (map  inside  maximum text text text).
+        Fixed array size for the spread computation (upper bound on tracked tiles).
 
     Returns
     -------
-    chex.Array : scalar reward (text = text).
+    chex.Array : scalar reward (positive means improvement).
     """
-    # ── prev text ──
+    # ── Previous score ──
     prev_spread  = _spread_bonus(prev_env_map, max_items)
 
-    # ── curr text ──
+    # ── Current score ──
     curr_spread  = _spread_bonus(curr_env_map, max_items)
 
-    # spread: text text text → curr - prev
+    # spread: improvement over the previous map → curr - prev
     spread_reward = (curr_spread - prev_spread)
 
     reward = w_spread * spread_reward
     return reward.astype(float)
 
 
-# ── text measure  also  export ────────────────────────────────────────────────────
+# ── Export individual measures as well ───────────────────────────────────────
 
 cluster_penalty = jax.jit(_cluster_penalty)
 accessibility_bonus = jax.jit(_accessibility_bonus)
@@ -200,9 +200,9 @@ spread_bonus = jax.jit(partial(_spread_bonus, max_items=32), static_argnames=("m
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  tiletext(tile-specific) placement reward
-#  — interactive / hazard / collectable eacheach in  text
-#    count(amount) + batchquality(cluster/access/spread)   text in  evaluation
+#  Tile-specific placement reward
+#  — evaluated separately for interactive / hazard / collectable
+#    combining count (amount) with placement quality (cluster / access / spread)
 # ══════════════════════════════════════════════════════════════════════════════
 
 _TILE_VALUE = {
@@ -213,7 +213,7 @@ _TILE_VALUE = {
 
 
 def _cluster_penalty_tile(env_map: chex.Array, tile_val: int) -> jnp.ndarray:
-    """text tile of  4text  text  during  same tile text sum."""
+    """Count how many of the 4 neighbours share the same tile, summed over that tile type."""
     is_target = (env_map == tile_val)
 
     up    = jnp.pad(env_map[:-1, :], ((1, 0), (0, 0)), constant_values=-1)
@@ -231,7 +231,7 @@ def _cluster_penalty_tile(env_map: chex.Array, tile_val: int) -> jnp.ndarray:
 
 
 def _accessibility_bonus_tile(env_map: chex.Array, tile_val: int) -> jnp.ndarray:
-    """text tile  during  4text in  passage available tile  1text or moretext ratio."""
+    """Fraction of the given tile type with at least one passable neighbour."""
     is_target = (env_map == tile_val)
     n_targets = jnp.sum(is_target).astype(float)
 
@@ -253,7 +253,7 @@ def _accessibility_bonus_tile(env_map: chex.Array, tile_val: int) -> jnp.ndarray
 
 
 def _spread_bonus_tile(env_map: chex.Array, tile_val: int, max_items: int = 32) -> jnp.ndarray:
-    """text tile coordinate text mean L1 distance (map size to  normalize)."""
+    """Mean pairwise L1 distance between tiles of the given type (normalised by map size)."""
     H, W = env_map.shape
     max_dist = (H - 1.0) + (W - 1.0)
 
@@ -278,7 +278,7 @@ def _spread_bonus_tile(env_map: chex.Array, tile_val: int, max_items: int = 32) 
 
 def _tile_amount_diff(prev_env_map: chex.Array, curr_env_map: chex.Array,
                       tile_val: int, cond: chex.Array) -> jnp.ndarray:
-    """tile count condition text improvement (prev_loss − curr_loss)."""
+    """Improvement in satisfying the tile-count condition (prev_loss - curr_loss)."""
     prev_count = jnp.sum(prev_env_map == tile_val).astype(float)
     curr_count = jnp.sum(curr_env_map == tile_val).astype(float)
     prev_loss = jnp.abs(prev_count - cond)
@@ -296,27 +296,27 @@ def get_multigame_tile_placement_reward(
     w_spread: float = 0.2,
     max_items: int = 32,
 ) -> chex.Array:
-    """text tile of  count + batch quality  text in  evaluationtext  text reward.
+    """Reward combining the count and the placement quality of one tile type.
 
     Parameters
     ----------
     prev_env_map, curr_env_map : (H, W) int map.
-    cond : scalar — texttable tile count.
-    tile_name : "interactive", "hazard", "collectable".
-    w_amount  : count condition text weight.
-    w_spread  : spread reward weight.
+    cond : scalar target tile count.
+    cond : scalar — target tile count.
+    w_amount  : weight for satisfying the count condition.
+    w_amount  : weight of the count condition.
     max_items : spread compute for  fixed array size.
 
     Returns
     -------
-    scalar reward (text = text).
+    scalar reward (higher is better).
     """
     tile_val = _TILE_VALUE[tile_name]
 
     # ── amount ──
     amount_reward = _tile_amount_diff(prev_env_map, curr_env_map, tile_val, cond)
 
-    # ── spread (text text text → curr − prev) ──
+    # ── spread (improvement over the previous map → curr − prev) ──
     spread_reward = (
         _spread_bonus_tile(curr_env_map, tile_val, max_items)
         - _spread_bonus_tile(prev_env_map, tile_val, max_items)

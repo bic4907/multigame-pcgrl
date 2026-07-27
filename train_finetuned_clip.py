@@ -3,9 +3,9 @@ train_finetuned_clip.py
 =======================
 Fine-tuned CLIP based PCGRL training entrypoint.
 
-`train_pretrained_clip.py`  and  obs/reward inject  to text  sametext, RL text of
-parameter  `encoder.ckpt_name` (text  ckpt_path)  as  text fine-tuned CLIP
-checkpoint to  text (existing `apply_encoder_params` text as-is text for ).
+Uses the same observation/reward injection as `train_pretrained_clip.py`, but
+replaces RL encoder parameters with the fine-tuned CLIP checkpoint specified by
+`encoder.ckpt_name` (or ckpt_path), reusing `apply_encoder_params`.
 
 Usage:
     python -m train_finetuned_clip encoder.ckpt_name=finetuned-clip-...
@@ -40,7 +40,7 @@ def main(config: FinetunedCLIPPCGRLConfig):
         with open(dataset_setting_path, "r") as f:
             dataset_setting = json.load(f)
 
-        # ── seen_ratio inject: encoder training text text seen game data ratio  as-is text for  ──
+        # ── Reuse the seen-game ratio from encoder training ──
         seen_ratio = dataset_setting.get("seen_ratio", 1.0)
         if seen_ratio != config.dataset_seen_ratio:
             logger.info(
@@ -49,7 +49,7 @@ def main(config: FinetunedCLIPPCGRLConfig):
             )
             config.dataset_seen_ratio = seen_ratio
 
-        # ── game_setting_mode=encoder_seen: seen gametext training target as  config ──
+        # ── game_setting_mode=encoder_seen: configure seen games as training targets ──
         game_setting_mode = getattr(config, "game_setting_mode", "all")
         dataset_unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
         if hasattr(config, "dataset_unseen_ratio") and dataset_unseen_ratio != config.dataset_unseen_ratio:

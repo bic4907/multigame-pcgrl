@@ -1,4 +1,4 @@
-"""W&B text text/file text to text class."""
+"""Helper class for downloading W&B tables and files."""
 
 import os
 import json
@@ -31,13 +31,13 @@ from .config import (
 )
 
 # ---------------------------------------------------------------------------
-# text level API text
+# ── Low-level API helpers ──
 # ---------------------------------------------------------------------------
 _api: Optional[wandb.Api] = None
 
 
 def get_api(timeout: int = API_TIMEOUT) -> wandb.Api:
-    """text W&B API text  returntext."""
+    """Return an authenticated W&B API client."""
     global _api
     if _api is None:
         logger.info(f"Loading W&B API with timeout={timeout}s")
@@ -47,7 +47,7 @@ def get_api(timeout: int = API_TIMEOUT) -> wandb.Api:
 
 
 # ---------------------------------------------------------------------------
-# Config process text
+# Config post-processing
 # ---------------------------------------------------------------------------
 
 def _process_config(
@@ -56,7 +56,7 @@ def _process_config(
     flatten_keys: list[str] = FLATTEN_KEYS,
     remove_keys: list[str] = REMOVE_KEYS,
 ) -> dict:
-    """run.config   text text text  removetext dict   returntext."""
+    """Flatten run.config and drop the unwanted keys, returning a plain dict."""
     config_dict = deepcopy(config)
     config_dict["run_id"] = run.id
 
@@ -76,18 +76,18 @@ def _process_config(
 
 
 # ---------------------------------------------------------------------------
-# textprocess text (existing download() text for )
+# Worker process (used by the legacy download())
 # ---------------------------------------------------------------------------
 
 
 def _run_worker(args: tuple) -> None:
-    """text to text Pool  in  Usagetext  text run download text.
+    """Download a single run; executed inside a multiprocessing Pool.
 
     Parameters
     ----------
     args : tuple
         (run_id, project_name, ctx) form.
-        ctx   entity, output_dir, target_files text  text  dict.
+        ctx is a dict carrying entity, output_dir and target_files.
     """
     run_id, project_name, ctx = args
 
@@ -103,12 +103,12 @@ def _run_worker(args: tuple) -> None:
     run = api.run(full_run_path)
     run_name = run.name
 
-    # foldertext: config.exp_dir  of  basename, if missing run_id
+    # Folder name: basename of config.exp_dir, or run_id when absent
     folder_name = os.path.basename(run.config.get("exp_dir", run_id))
     run_output_dir = os.path.join(output_dir_base, project_name, folder_name)
 
     if not target_files:
-        logger.warning(f"[{run_id}] target_files   text text — skipping")
+        logger.warning(f"[{run_id}] target_files is empty — skipping")
         return
 
     if all(
@@ -162,30 +162,30 @@ def _run_worker(args: tuple) -> None:
 
 
 # ---------------------------------------------------------------------------
-# text text to text class
+# Downloader class
 # ---------------------------------------------------------------------------
 
 
 class WandbTableDownloader:
-    """W&B text to text in  text text file  downloadtext  class.
+    """Downloads the requested table files from a W&B project.
 
     Parameters
     ----------
     entity : str
-        W&B text(text/text). (default value: ``DEFAULT_ENTITY``)
+        W&B entity (user or team). (default: ``DEFAULT_ENTITY``)
     output_dir : str
-        default resultwater  savetext directory path. (default value: ``"results"``)
+        Directory in which to save results (default: ``"results"``).
     target_files : list[str], optional
-        ``download()``  in  text for text text text name list.
-        ``download_project()``   text text  text.
+        Table names used by ``download()``.
+        ``download_project()`` takes its own argument instead.
     num_workers : int
-        parallel download text text. (default value: ``DEFAULT_NUM_WORKERS``)
+        Number of parallel download workers (default: ``DEFAULT_NUM_WORKERS``).
     tmp_root : str
-        text download folder text. (default value: OS text directory)
+        Root for the temporary download folder (default: the OS temp directory).
     flatten_keys : list[str], optional
-        config  in  text text. (default value: ``FLATTEN_KEYS``)
+        Config keys to flatten (default: ``FLATTEN_KEYS``).
     remove_keys : list[str], optional
-        config  in  removetext text. (default value: ``REMOVE_KEYS``)
+        Config keys to drop (default: ``REMOVE_KEYS``).
     """
 
     def __init__(
@@ -207,11 +207,11 @@ class WandbTableDownloader:
         self.remove_keys = remove_keys if remove_keys is not None else REMOVE_KEYS
 
     # ------------------------------------------------------------------ #
-    #  internal text
+    #  Internal helpers
     # ------------------------------------------------------------------ #
 
     def _build_ctx(self) -> dict:
-        """existing download() text in   before text texttext dict."""
+        """Context dict passed to the legacy download() workers."""
         return {
             "entity": self.entity,
             "output_dir": self.output_dir,
@@ -222,7 +222,7 @@ class WandbTableDownloader:
         }
 
     # ------------------------------------------------------------------ #
-    #  download_project  (download_unseen_games text in  text for )
+    #  download_project (used by download_unseen_games and friends)
     # ------------------------------------------------------------------ #
 
     def download_project(
@@ -237,37 +237,37 @@ class WandbTableDownloader:
         per_page: int = 200,
         skip_if_exists: bool = True,
     ) -> Optional[str]:
-        """text to text of  text run  in  text text  downloadtext merge CSV   returntext.
+        """Download the requested tables from every run of a project and merge them into CSVs.
 
         Parameters
         ----------
         project : str
-            W&B text to text name.
+            W&B project name.
         table_patterns : dict[str, str]
-            ``{textname: text}`` text.
-            text: ``{"results": "results"}``
-            → ``media/table/results*.table.json``  in  text.
+            ``{table_name: file_pattern}`` mapping.
+            e.g. ``{"results": "results"}``
+            → matches ``media/table/results*.table.json``.
         output_dir : str, optional
-            result save path. text text ``self.output_dir`` text for .
+            Output directory; defaults to ``self.output_dir``.
         extra_cols_fn : callable, optional
             ``(config: dict, run) -> dict`` form.
-            returntext dict   each row in  text as  text text.
+            Extra columns to add to every row of the returned dict.
         dir_name_fn : callable, optional
-            ``(run) -> str`` form. run text save foldertext  text.
-            text text ``config.exp_dir``  of  basename   text for text.
+            ``(run) -> str``; decides the per-run folder name.
+            Defaults to the basename of ``config.exp_dir``.
         n_workers : int
-            parallel download text text.
+            Number of parallel download workers.
         filters : dict, optional
-            W&B run filter. text: ``{"state": "finished"}``.
+            W&B run filter, e.g. ``{"state": "finished"}``.
         per_page : int
-            W&B API text text run text.
+            Restrict to these W&B run ids.
         skip_if_exists : bool
-            True text  text CSV   with run   text.
+            If True, skip runs whose CSVs already exist.
 
         Returns
         -------
         str or None
-            mergetext CSV path. if missing None.
+            Path to the merged CSV, or None when unavailable.
         """
 
 
@@ -286,16 +286,16 @@ class WandbTableDownloader:
         run_list = list(runs)
 
         logger.info(
-            f"[{project}] {len(run_list)}text run download start "
+            f"[{project}] downloading {len(run_list)} run(s) "
             f"(workers={n_workers})"
         )
 
         def _process_one_run(run):
-            """text run   processtext  internal function (ThreadPoolExecutor  for )."""
+            """Process one run (submitted to the ThreadPoolExecutor)."""
             folder_name = dir_name_fn(run)
             run_dir = os.path.join(output_dir, folder_name)
 
-            # text text
+            # Skip if already downloaded
             if skip_if_exists and all(
                 os.path.isfile(os.path.join(run_dir, f"{name}.csv"))
                 for name in table_patterns
@@ -315,7 +315,7 @@ class WandbTableDownloader:
                 if extra_cols_fn is not None:
                     extra = extra_cols_fn(run.config, run)
 
-                # W&B file text
+                # Locate the W&B files
                 wandb_files: dict = {name: None for name in table_patterns}
                 for f in run.files():
                     if f.name.endswith(".table.json"):
@@ -353,13 +353,13 @@ class WandbTableDownloader:
             finally:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
-        # ThreadPoolExecutor text for  (extra_cols_fn text issue none)
+        # ThreadPoolExecutor is safe here since extra_cols_fn stays in-process
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
             futures = [executor.submit(_process_one_run, r) for r in run_list]
             for fut in tqdm(
                 as_completed(futures), total=len(futures), desc=project
             ):
-                fut.result()  # exception  before text
+                fut.result()  # surface any exception
 
         logger.info(f"[{project}] download finish")
 
@@ -379,25 +379,25 @@ class WandbTableDownloader:
         table_patterns: Optional[dict[str, str]] = None,
         project: str = "",
     ) -> Optional[str]:
-        """output_dir below of  run text CSV   text of  merge CSV  to  text.
+        """Merge the per-run CSVs under output_dir into one CSV per table.
 
         Parameters
         ----------
         output_dir : str, optional
-            run text CSV   savetext directory. text text ``self.output_dir``.
+            Directory holding the per-run CSVs; defaults to ``self.output_dir``.
         table_patterns : dict[str, str], optional
-            ``{textname: text}`` text. text text for text.
+            ``{table_name: file_pattern}`` mapping; required.
         project : str
-             to text for  text to text name.
+             Project name, used only for logging.
 
         Returns
         -------
         str or None
-            text as  createtext merge CSV path. if missing None.
+            Path of the merged CSV, or None if nothing was written.
         """
         output_dir = output_dir or self.output_dir
         if table_patterns is None:
-            logger.warning("table_patterns   text text.")
+            logger.warning("table_patterns is empty.")
             return None
 
         combined_path = None
@@ -422,23 +422,23 @@ class WandbTableDownloader:
                     f"({len(merged)} rows, {len(all_dfs)} runs)"
                 )
             else:
-                logger.warning(f"[{project}] '{name}' CSV   text merge  text.")
+                logger.warning(f"[{project}] no '{name}' CSV found to merge.")
 
         return combined_path
 
     # ------------------------------------------------------------------ #
-    #  download  (existing interface — multiprocessing Pool text for )
+    #  download (legacy interface — uses a multiprocessing Pool)
     # ------------------------------------------------------------------ #
 
     def download(self, project_names: str | list[str]) -> None:
-        """text text to text(text) of  text run   downloadtext.
+        """Download every run of one or more W&B projects.
 
-        ``target_files``   ``__init__``  in  text text text.
+        ``target_files`` must have been supplied to ``__init__``.
         """
         if not self.target_files:
             raise ValueError(
-                "download()   text for text target_files   text text. "
-                "(text: WandbTableDownloader(target_files=['results']))"
+                "download() requires target_files. "
+                "(e.g. WandbTableDownloader(target_files=['results']))"
             )
 
         if isinstance(project_names, str):
@@ -455,7 +455,7 @@ class WandbTableDownloader:
             run_args = [(run.id, project_name, ctx) for run in runs]
 
             logger.info(
-                f"[{project_name}] {len(run_args)}text run download start "
+                f"[{project_name}] downloading {len(run_args)} run(s) "
                 f"(workers={self.num_workers})"
             )
 
@@ -468,12 +468,12 @@ class WandbTableDownloader:
                     )
                 )
 
-        logger.info("text text to text download finish")
+        logger.info("All project downloads finished")
 
     def download_single_run(self, project_name: str, run_id: str) -> None:
-        """text run   downloadtext (existing interface)."""
+        """Download a single run (legacy interface)."""
         if not self.target_files:
-            raise ValueError("download_single_run()   text for text target_files   text text.")
+            raise ValueError("download_single_run() requires target_files.")
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.tmp_root, exist_ok=True)
         _run_worker((run_id, project_name, self._build_ctx()))
@@ -489,7 +489,7 @@ class WandbTableDownloader:
         target_pattern: str = "results/eval_ablation_{modality}_vipcgrl",
         modality_regex: str = r"_(md-[^_]+)",
     ) -> None:
-        """textby ablation run folder  text."""
+        """Split the ablation run folders by modality."""
         source_dir = os.path.join(source_root, ablation_folder_name)
 
         for root, dirs, _files in os.walk(source_dir):
@@ -507,15 +507,15 @@ class WandbTableDownloader:
                         logger.error(f"folder move failure '{exp_name}': {e}")
                 else:
                     logger.warning(
-                        f"'{exp_name}'  in  text text  text  text text."
+                        f"'{exp_name}' has no modality suffix — skipped."
                     )
             dirs.clear()
 
-        logger.info("folder text finish")
+        logger.info("Folder split finished")
 
 
 # ---------------------------------------------------------------------------
-# CLI text
+# CLI entry point
 # ---------------------------------------------------------------------------
 
 def main():

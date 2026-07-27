@@ -1,9 +1,9 @@
 """
 dataset/multigame/tags.py
 =========================
-GameSample text & filtering utility.
+GameSample tagging and filtering utilities.
 
-text  of text none.
+No external dependencies.
 """
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ from typing import Any, Callable, Dict, List, Optional
 from .base import GameSample
 
 
-# ── text text ────────────────────────────────────────────────────────────────────
+# ── Tag builder ─────────────────────────────────────────────────────────────────
 
 def build_tags(sample: GameSample) -> Dict[str, Any]:
     """
-    sample in  text dict  extract.
+    Extract a tag dictionary from a sample.
 
     Returns
     -------
@@ -28,7 +28,7 @@ def build_tags(sample: GameSample) -> Dict[str, Any]:
         "source_id":   str,
         "has_instruction": bool,
         "shape":       (H, W),
-        **sample.meta  (instruction_slug, level_id, sample_id text)
+        **sample.meta  (instruction_slug, level_id, sample_id, etc.)
     }
     """
     tags: Dict[str, Any] = {
@@ -49,7 +49,7 @@ def extract_by_game(
     samples: List[GameSample],
     game: str,
 ) -> List[GameSample]:
-    """text game text sampletext extract."""
+    """Select only samples with a specific game tag."""
     return [s for s in samples if s.game == game]
 
 
@@ -57,7 +57,7 @@ def extract_by_games(
     samples: List[GameSample],
     games: List[str],
 ) -> List[GameSample]:
-    """text game text sample extract."""
+    """Select samples with any of several game tags."""
     game_set = set(games)
     return [s for s in samples if s.game in game_set]
 
@@ -68,7 +68,7 @@ def extract_by_instruction(
     *,
     case_sensitive: bool = False,
 ) -> List[GameSample]:
-    """instruction in  keyword  text sample extract."""
+    """Select samples whose instruction contains keyword."""
     kw = keyword if case_sensitive else keyword.lower()
     result = []
     for s in samples:
@@ -81,12 +81,12 @@ def extract_by_instruction(
 
 
 def extract_with_instruction(samples: List[GameSample]) -> List[GameSample]:
-    """instruction  with sampletext extract."""
+    """Select samples with instructions."""
     return [s for s in samples if s.instruction is not None]
 
 
 def extract_without_instruction(samples: List[GameSample]) -> List[GameSample]:
-    """instruction  without sampletext extract."""
+    """Select samples without instructions."""
     return [s for s in samples if s.instruction is None]
 
 
@@ -107,7 +107,7 @@ def extract_by_meta(
     key: str,
     value: Any,
 ) -> List[GameSample]:
-    """sample.meta[key] == value text sample extract."""
+    """Select samples for which sample.meta[key] == value."""
     return [s for s in samples if s.meta.get(key) == value]
 
 
@@ -115,16 +115,16 @@ def extract_by_predicate(
     samples: List[GameSample],
     fn: Callable[[GameSample], bool],
 ) -> List[GameSample]:
-    """text of  condition function to  filtering."""
+    """Filter using an arbitrary predicate."""
     return [s for s in samples if fn(s)]
 
 
-# ── text utility ────────────────────────────────────────────────────────────────────
+# ── Aggregation utilities ───────────────────────────────────────────────────────
 
 def group_by_game(
     samples: List[GameSample],
 ) -> Dict[str, List[GameSample]]:
-    """game textby sample text."""
+    """Group samples by game tag."""
     groups: Dict[str, List[GameSample]] = defaultdict(list)
     for s in samples:
         groups[s.game].append(s)
@@ -134,7 +134,7 @@ def group_by_game(
 def group_by_instruction(
     samples: List[GameSample],
 ) -> Dict[str, List[GameSample]]:
-    """instruction stringby sample text (None  '__no_instruction__' text)."""
+    """Group samples by instruction string (use '__no_instruction__' for None)."""
     groups: Dict[str, List[GameSample]] = defaultdict(list)
     for s in samples:
         key = s.instruction if s.instruction is not None else "__no_instruction__"
@@ -143,7 +143,7 @@ def group_by_instruction(
 
 
 def count_by_game(samples: List[GameSample]) -> Dict[str, int]:
-    """gametext sample text text."""
+    """Count samples by game."""
     counts: Dict[str, int] = defaultdict(int)
     for s in samples:
         counts[s.game] += 1
@@ -151,7 +151,7 @@ def count_by_game(samples: List[GameSample]) -> Dict[str, int]:
 
 
 def count_by_instruction(samples: List[GameSample]) -> Dict[str, int]:
-    """instructiontext sample text text."""
+    """Count samples by instruction."""
     counts: Dict[str, int] = defaultdict(int)
     for s in samples:
         key = s.instruction or "__no_instruction__"
@@ -170,4 +170,3 @@ def summary(samples: List[GameSample]) -> Dict[str, Any]:
             s.instruction for s in samples if s.instruction is not None
         )),
     }
-

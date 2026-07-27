@@ -3,14 +3,14 @@ instruct_rl/eval/wrappers/vit_score.py
 ========================================
 ViTScoreWrapper — ViT-based human-likeness scoring.
 
-HDF5 in  state(env_map)  text render_unified_rgb() to  dynamic renderingtext,
-eval_utils   before text GT image and  1:1 text text also   computetext.
+Read state (env_map) from HDF5, render it dynamically with render_unified_rgb(),
+and compute one-to-one cosine similarity against GT images supplied by eval_utils.
 
-text separate
+Separation of responsibilities
 ---------
 - eval_utils.py   : GT image rendering (render_unified_rgb, dataset palette)
-- ViTScoreWrapper : HDF5 state load → dynamic rendering → ViTEvaluator abovetext
-- ViTEvaluator    : run_pairwise() — text ViT embedding + text text also
+- ViTScoreWrapper : load HDF5 states, render dynamically, then delegate to ViTEvaluator
+- ViTEvaluator    : run_pairwise() -- pure ViT embedding and cosine similarity
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ class ViTScoreWrapper:
     def run(
         self,
         instruct_df: pd.DataFrame,
-        gt_images: np.ndarray,        # (N, H, W, 3) uint8 — eval_utils  dataset rendering as   before text
+        gt_images: np.ndarray,        # (N, H, W, 3) uint8 rendered by the dataset in eval_utils
         n_eps: int,
         **_,
     ) -> np.ndarray:
@@ -60,14 +60,14 @@ class ViTScoreWrapper:
         ----------
         instruct_df : evaluation target DataFrame (game, reward_enum, ...)
         gt_images   : (N*n_eps, H*ts, W*ts, 3) uint8
-        n_eps       : seed( in text) text
+        n_eps       : number of seeds (episodes)
         """
         from envs.probs.multigame import render_multigame_maps_batch
 
         tile_size = getattr(self.config, 'vit_tile_size', 16)
         n_samples = len(instruct_df) * n_eps
 
-        # ① HDF5 in  state text load (rendering  text text text)
+        # 1. Load all states from HDF5 (without rendering yet)
         env_map_list = []
         with open_eval_store(self.config.eval_dir, mode="r") as h5, \
              tqdm(total=n_samples, desc="[ViT] Load pred states") as pbar:
@@ -80,7 +80,7 @@ class ViTScoreWrapper:
                     env_map_list.append(env_map.astype(np.int32))
                     pbar.update(1)
 
-        # ② numpy fancy-indexing batch rendering (for text / PIL none)
+        # 2. Batch rendering with NumPy fancy indexing (no Python loop or PIL)
         env_maps_batch = np.stack(env_map_list, axis=0)  # (N, H, W)
         logger.info("[ViTScoreWrapper] Batch rendering %d maps...", len(env_maps_batch))
         pred_images = render_multigame_maps_batch(env_maps_batch, tile_size=tile_size)  # (N, H*ts, W*ts, 3)
@@ -90,7 +90,7 @@ class ViTScoreWrapper:
             pred_images.shape, gt_images.shape,
         )
 
-        # ② GT embedding — text cache
+        # 2. GT embeddings -- disk cache
         evaluator = ViTEvaluator()
         t0 = time.perf_counter()
 
@@ -107,11 +107,10 @@ class ViTScoreWrapper:
             os.makedirs(os.path.dirname(gt_cache), exist_ok=True)
             np.save(gt_cache, gt_feats)
 
-        # ③ pred embedding compute  after  text text also
+        # 3. Compute predicted embeddings, then cosine similarity
         pred_feats = np.array(evaluator.get_embeddings(pred_images, norm=True, desc="[ViT] pred embedding"))
         scores = np.sum(pred_feats * gt_feats, axis=1).reshape(-1)  # (N,)
         elapsed = time.perf_counter() - t0
 
         logger.info("done: mean=%.4f  elapsed=%.2fs", float(np.mean(scores)), elapsed)
         return scores
-

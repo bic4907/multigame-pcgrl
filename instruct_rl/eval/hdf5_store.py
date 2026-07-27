@@ -1,18 +1,18 @@
 """
 instruct_rl/eval/hdf5_store.py
 ================================
-HDF5 based evaluation results savetext.
+HDF5-based evaluation result storage.
 
 structure:
   {eval_dir}/eval.h5
-    /{folder_name}/seed_{seed_i}/state  → (H, W[, C]) text env_map (uint8, gzip-4)
+    /{folder_name}/seed_{seed_i}/state  -> final env_map (H, W[, C]) (uint8, gzip-4)
 
 NOTE:
-  - rendered_image  HDF5 in  savetext text text.
-    ViTScore text in  text text  state(env_map)  text
-    render_multigame_map()  as  dynamic renderingtext.
-  - asynchronous write: AsyncH5Writer   text for text separate thread in  HDF5 in  writetext to
-    GPU(JAX) text and  text I/O   text process text also   text.
+  - rendered_image is not stored in HDF5.
+    Consumers such as ViTScore read state (env_map) when needed and render it
+    dynamically with render_multigame_map().
+  - Asynchronous writes: AsyncH5Writer records HDF5 data on a separate thread,
+    overlapping GPU (JAX) computation with disk I/O for better throughput.
 
 Example (synchronous):
     with open_eval_store(config.eval_dir, mode="a") as h5:
@@ -21,7 +21,7 @@ Example (synchronous):
 Example (asynchronous):
     with AsyncH5Writer(config.eval_dir) as writer:
         writer.write(folder_name, seed_i, state)
-    # with text  text queue flush + thread join automatic textrow
+    # Leaving the with block automatically flushes the queue and joins the thread
 
     with open_eval_store(config.eval_dir, mode="r") as h5:
         state = read_state(h5, folder_name, seed_i)
@@ -48,7 +48,7 @@ def store_path(eval_dir: str) -> str:
 
 @contextlib.contextmanager
 def open_eval_store(eval_dir: str, mode: str = "a"):
-    """eval.h5   columntext h5py.File   yield text text text  texttext text."""
+    """Context manager that opens eval.h5, yields an h5py.File, and closes it."""
     import h5py
     path = store_path(eval_dir)
     with h5py.File(path, mode) as h5:
@@ -61,7 +61,7 @@ def write_sample(
     seed_i: int,
     state: np.ndarray,   # (H, W[, C]) uint8
 ) -> None:
-    """text of  (sample, seed) result  HDF5 in  writetext. state(env_map)text save."""
+    """Write one (sample, seed) result to HDF5, storing only state (env_map)."""
     key = f"{folder_name}/seed_{seed_i}"
     grp = h5.require_group(key)
     for name, data in [("state", np.asarray(state, dtype=np.uint8))]:
@@ -72,7 +72,7 @@ def write_sample(
 
 # ── asynchronous HDF5 Writer ────────────────────────────────────────────────────────
 
-_SENTINEL = None   # queue text text
+_SENTINEL = None   # Queue termination signal
 
 
 class AsyncH5Writer:
@@ -155,15 +155,15 @@ class AsyncH5Writer:
 # ── read utility ─────────────────────────────────────────────────────────────────
 
 def write_rendered_image(h5, folder_name, seed_i, image, **_):
-    """Deprecated: rendering image  text or more HDF5 in  savetext text text. (no-op)"""
+    """Deprecated: rendered images are no longer stored in HDF5 (no-op)."""
     pass  # backward-compat stub
 
 
 def read_rendered_image(h5, folder_name, seed_i):
-    """Deprecated: read_state() + render_multigame_map()   text text for text."""
+    """Deprecated: use read_state() with render_multigame_map() instead."""
     raise NotImplementedError(
-        "rendered_image  text or more HDF5 in  savetext text. "
-        "read_state()  after  render_multigame_map() as  dynamic renderingtext."
+        "rendered_image is no longer stored in HDF5. "
+        "Use read_state() and render dynamically with render_multigame_map()."
     )
 
 
@@ -173,7 +173,7 @@ def read_state(
     seed_i: int,
     frame_i: int = 0,
 ) -> np.ndarray:
-    """savetext state array  returntext."""
+    """Return the stored state array."""
     return h5[f"{folder_name}/seed_{seed_i}/state"][()]
 
 
@@ -182,10 +182,10 @@ def read_frames(
     folder_name: str,
     seed_i: int,
 ) -> np.ndarray:
-    """savetext frames array (n_frames, H, W, 3)   returntext."""
+    """Return stored frames with shape (n_frames, H, W, 3)."""
     return h5[f"{folder_name}/seed_{seed_i}/frames"][()]
 
 
 def list_folder_names(h5) -> list[str]:
-    """savetext text folder_name list  returntext."""
+    """Return all stored folder names."""
     return list(h5.keys())

@@ -1,8 +1,8 @@
 """
 instruct_rl/utils/dataset_loader.py
 ====================================
-MultiGameDataset based Instruct text.
-jax.jit text in  calltext dataset  loadtext Instruct text  buildtext.
+MultiGameDataset-based Instruct builder.
+Call outside jax.jit to load the dataset and build an Instruct object.
 """
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ logger = get_logger(__file__)
 
 
 def load_dataset_instruct(config):
-    """MultiGameDataset in  Instruct text  buildtext."""
+    """Build an Instruct object from MultiGameDataset."""
     eval_games_str = getattr(config, "eval_games", None)
     load_game = eval_games_str if eval_games_str is not None else config.dataset_game
 
@@ -124,10 +124,10 @@ def load_dataset_instruct(config):
     )
 
     # ── per-game ratio filtering ──────────────────────────────────────────────────
-    # dataset_unseen_ratio   text text: seen/unseen gametext different ratio apply
+    # When dataset_unseen_ratio is specified, use separate ratios for seen/unseen games
     #   seen  game → dataset_seen_ratio
-    #   unseen game → dataset_unseen_ratio  (0.0  text text game text)
-    # dataset_unseen_ratio   None(textconfig)text text: existing text (dataset_seen_ratio text text for )
+    #   unseen games -> dataset_unseen_ratio (exclude the game when 0.0)
+    # When dataset_unseen_ratio is None, preserve legacy behavior using dataset_seen_ratio only
     dataset_seen_ratio = getattr(config, "dataset_seen_ratio", 1.0)
     dataset_unseen_ratio = getattr(config, "dataset_unseen_ratio", None)
 
@@ -137,7 +137,7 @@ def load_dataset_instruct(config):
         _reward_seen_raw = getattr(config, "reward_seen_games", None) or []
         _seen_set, _ = _cu_split(_reward_seen_raw)
         reward_seen_set: set = set(_seen_set)
-        # doom / doom2 alias: encoder   text  seen  as  writetext text text seen  as  process
+        # doom/doom2 aliases: if the encoder marks either as seen, treat both as seen
         if "doom" in reward_seen_set or "doom2" in reward_seen_set:
             reward_seen_set.update({"doom", "doom2"})
 
@@ -165,7 +165,7 @@ def load_dataset_instruct(config):
             "per-game ratio filtering done: total %d samples", len(samples),
         )
     elif dataset_seen_ratio < 1.0:
-        # existing text: text game in  sametext seen_ratio apply
+        # Legacy behavior: apply the same seen_ratio to every game
         from collections import defaultdict
         game_buckets = defaultdict(list)
         for s in samples:
@@ -211,4 +211,3 @@ def load_dataset_instruct(config):
         re_filter_list=effective_re,
     )
     return all_inst, all_inst, samples
-

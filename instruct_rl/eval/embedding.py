@@ -2,7 +2,7 @@
 embedding.py
 ============
 eval CSV → Instruct convert.
-CLIP / cnnclip / default BERT embedding text  text text text  processtext.
+Handle CLIP, cnnclip, and default BERT embeddings.
 """
 import logging
 
@@ -23,12 +23,12 @@ logger = logging.getLogger(__name__)
 def prepare_instruct(config, network, runner_state, instruct_df, init_x) -> Instruct:
     """instruct_df (CSV load result) → Instruct return.
 
-    config.encoder.model  in  text:
-      - 'clip'    : text text text → network forward → text embedding
-      - 'cnnclip' : eval_modality ('text' or 'state') → network forward → embedding
-      - text(bert text): CSV of  embed_* text  as-is text for
+    Depending on config.encoder.model:
+      - 'clip'    : tokenize text, run the network forward pass, and return a text embedding
+      - 'cnnclip' : eval_modality ('text' or 'state'), network forward pass, then embedding
+      - other (such as BERT): use the CSV embed_* columns unchanged
     """
-    # ── default embedding (CSV embed_* text) ─────────────────────────────────────
+    # ── Default embedding (CSV embed_* columns) ───────────────────────────────
     embedding_df = instruct_df.filter(regex="embed_*")
     embedding_df = embedding_df.reindex(
         sorted(embedding_df.columns, key=lambda x: int(x.split("_")[-1])),
@@ -148,4 +148,3 @@ def _make_instr_obs(init_x, input_ids, attention_mask, pixel_values):
         attention_mask=attention_mask,
         pixel_values=pixel_values,
     )
-

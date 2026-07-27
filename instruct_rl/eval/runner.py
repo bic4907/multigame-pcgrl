@@ -1,7 +1,7 @@
 """
 runner.py
 =========
-make_eval — text text core.
+make_eval -- core environment loop.
 
 make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None)
   → callable(rng) → losses (np.ndarray)
@@ -38,13 +38,13 @@ logger = logging.getLogger(__name__)
 
 
 def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval_inst=None, eval_inst_meta=None, gt_levels=None, gt_images=None):
-    """evaluation function  createtext return.
+    """Create and return an evaluation function.
 
     Args:
-        config         : EvalConfig (text  sub class).
-        restored_ckpt  : checkpoint dict (None  text random initialize).
-        encoder_params : pretraining encoder parameter (None  text text).
-        inject_obs_fn  : obs inject callback. None  text config based inject.
+        config         : EvalConfig (or a subclass).
+        restored_ckpt  : checkpoint dictionary (random initialization when None).
+        encoder_params : pretrained encoder parameters (skipped when None).
+        inject_obs_fn  : observation-injection callback; use config-based injection when None.
 
     Returns:
         eval_fn(rng) → losses
@@ -85,7 +85,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
 
         train_state = TrainState.create(apply_fn=network.apply, params=network_params, tx=tx)
 
-        # ── text initialize ───────────────────────────────────────────────────────
+        # ── Environment initialization ────────────────────────────────────────
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config.n_envs)
         vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, None))
@@ -105,7 +105,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         # ── Instruct prepare (dataset mode or CSV mode) ──────────────────────────
         instruct = eval_inst
         n_inst = instruct.reward_i.shape[0]
-        # text for  DataFrame create
+        # Create the output DataFrame
         reward_i_flat = instruct.reward_i[:, 0].tolist()
         instruct_df = pd.DataFrame({
             'row_i': list(range(n_inst)),
@@ -120,17 +120,17 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             instruct_df['instruction'] = None
         for c_i in range(instruct.condition.shape[1]):
             instruct_df[f'condition_{c_i}'] = instruct.condition[:, c_i].tolist()
-        # text order sort: game, instruction, reward_enum, condition_*
+        # Arrange columns as game, instruction, reward_enum, condition_*
         cond_cols = [c for c in instruct_df.columns if c.startswith('condition_')]
         ordered_cols = ['row_i', 'game', 'instruction', 'reward_enum'] + cond_cols
         instruct_df = instruct_df[[c for c in ordered_cols if c in instruct_df.columns]]
-        # -1 (null text) → NaN (CSV text)
+        # Convert -1 (the null sentinel) to NaN (an empty CSV field)
         instruct_df['reward_enum'] = instruct_df['reward_enum'].replace(-1, float('nan'))
         for c in cond_cols:
             instruct_df[c] = instruct_df[c].replace(-1.0, float('nan'))
         instruct_df.to_csv(join(config.eval_dir, 'input.csv'), index=False)
 
-        # ── batch text ─────────────────────────────────────────────────────────
+        # ── Batch construction ────────────────────────────────────────────────
         n_envs = config.n_envs
         n_eps = config.n_eps
         eval_batches = jnp.array(sorted(np.tile(list(range(len(instruct_df))), n_eps)))
@@ -149,7 +149,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         eval_rendered = []
         loop_start_time = time.time()
 
-        # ── evaluation loop start  before  summary  to text ───────────────────────────────────────
+        # ── Summary log before the evaluation loop ────────────────────────────
         logger.info(
             "[Eval Loop] total_items=%d  (samples=%d × n_eps=%d)  "
             "batch_size(n_envs)=%d  n_batches=%d",
@@ -171,7 +171,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 batch_condition = instruct.condition[idxes]
                 batch_repetition = repetitions[start_idx:end_idx]
 
-                # text batch padding
+                # Pad the final batch
                 if len(batch_embedding) < n_envs:
                     pad = n_envs - len(batch_embedding)
                     batch_embedding = jnp.pad(batch_embedding, ((0, pad), (0, 0)))
@@ -193,7 +193,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 )
                 done = jnp.zeros((n_envs,), dtype=bool)
 
-                # ── text text ─────────────────────────────────────────────────
+                # ── Single step ───────────────────────────────────────────────
                 is_random_agent: bool = getattr(config, 'random_agent', False)
 
                 def _env_step(carry, _):
@@ -224,11 +224,11 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                         action = pi.sample(seed=_rng)
                         log_prob = pi.log_prob(action)
                     else:
-                        # ── text before  random policy: NN text  uniform random action ──
-                        # (initializetext weight  text text random)
+                        # ── Pure random policy: uniform actions without a neural network ──
+                        # (genuinely random, not an initialized set of weights)
                         rng, _rng = jax.random.split(rng)
                         act_rngs = jax.random.split(_rng, config.n_envs)
-                        # sample_action  [None, ...]  to  batch dimension  text text to  [0] as  remove
+                        # sample_action adds a batch dimension as [None, ...], so remove it with [0]
                         action = jax.vmap(lambda r: env._env.sample_action(r)[0])(act_rngs)
                         value = jnp.zeros(config.n_envs)
                         log_prob = jnp.zeros(config.n_envs)
@@ -245,7 +245,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                     )
                     return (rng, obsv, next_state, done), (transition, state)
 
-                # ── scan text ─────────────────────────────────────────────────
+                # ── scan wrapper ──────────────────────────────────────────────
                 @jax.jit
                 def run_eval_step(rng, init_obs, init_state, done):
                     env_step_len = int(
@@ -288,11 +288,11 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 features.append(result.feature)
                 losses_s0.append(result_s0.loss)
                 features_s0.append(result_s0.feature)
-                # env_maptext keep (rendering  wandb upload text on-demand)
+                # Keep only env_map; render on demand during the wandb upload
                 env_maps_batch = jax.device_get(last_states.env_state.env_map[0])  # (n_envs, H, W)
                 eval_rendered.append(env_maps_batch)
 
-                # ── image/text save ─────────────────────────────────────────
+                # ── Image/state storage ───────────────────────────────────────
                 save_batch_results(
                     idxes, batch_valid_size,
                     batch_reward_i, batch_repetition,
@@ -307,12 +307,12 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 )
                 pbar.update(1)
 
-            # ── text finish  after  HDF5 queue text before  text check ─────────────────────────
-            # ViTScore / TPKL / Diversity text  HDF5  read  before  in  text write
-            # text in  applytext  text.
+            # ── Ensure the HDF5 queue is fully drained after the loop ─────────
+            # Guarantee that every write has reached disk before ViTScore,
+            # TPKL, Diversity, or another consumer reads HDF5.
             h5_writer.flush()
 
-        # ── result DataFrame text ───────────────────────────────────────────────
+        # ── Result DataFrame construction ─────────────────────────────────────
         total_elapsed = time.time() - loop_start_time
         logger.info(
             f"[Eval] Done: {n_batches} batches / {n_rows} samples  "
@@ -320,13 +320,13 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             f"(avg per batch: {total_elapsed/n_batches:.1f}s)"
         )
 
-        # ── HDF5 artifact upload (rollout finish text after , text compute and  parallel textrow) ─
-        #  to text eval.h5     after  ViTScoreWrapper/TPKLWrapper   text read text in
-        # upload_h5=False text also  text  deletetext text, text postprocessing finish  after  text.
+        # ── Upload the HDF5 artifact after rollout, in parallel with metrics ──
+        # ViTScoreWrapper and TPKLWrapper read local eval.h5 later, so retain it
+        # here even when upload_h5=False and remove it only after post-processing.
         h5_path = join(config.eval_dir, "eval.h5")
         _upload_h5 = getattr(config, "upload_h5", False)
         if wandb.run and os.path.exists(h5_path) and _upload_h5:
-            # runtext text artifact name create (same content dedup text)
+            # Use a unique artifact name per run to prevent same-content deduplication
             import uuid
             _uid = uuid.uuid4().hex[:8]
             h5_artifact = wandb.Artifact(name=f"eval_h5_{_uid}", type="dataset")
@@ -357,11 +357,11 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         df_ctrl_sim['loss'] = losses_arr
         df_ctrl_sim['loss_s0'] = losses_s0_arr
 
-        # condition_* text text feat text create (e.g. feat_region, feat_plength, ...)
+        # Create one feat column per condition_* column (e.g. feat_region, feat_plength)
         cond_cols = [c for c in df_ctrl_sim.columns if c.startswith('condition_')]
         n_cond = len(cond_cols)
 
-        # reward_enum in  text  feat text in text measuretext  text remaining  NaN
+        # Fill only the feat column matching reward_enum; leave the others as NaN
         reward_enum_arr = df_ctrl_sim['reward_enum'].values  # (n_rows,)
         feat_df = pd.DataFrame(
             np.full((n_rows, n_cond), np.nan),
@@ -397,7 +397,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             )
             df_ctrl_sim['tpkldiv'] = tpkl_scores
 
-        # ── wandb / CSV text ──────────────────────────────────────────────────
+        # ── wandb / CSV output ────────────────────────────────────────────────
         ctrl_sim_path = join(config.eval_dir, "ctrl_sim.csv")
         df_ctrl_sim.to_csv(ctrl_sim_path, index=False)
         logger.info("[Eval] Saved ctrl_sim → %s", ctrl_sim_path)
@@ -406,7 +406,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         # Diversity scores               #
         ##################################
 
-        # ── postprocessing text ─────────────────────────────────────────────────────
+        # ── Post-processing metrics ───────────────────────────────────────────
         if config.diversity:
             diversity_df = DiversityWrapper(config).run(instruct_df=instruct_df, n_eps=n_eps)
             diversity_path = join(config.eval_dir, "diversity.csv")
@@ -415,21 +415,21 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         else:
             diversity_df = None
 
-        # ── row_i textabove mean DataFrame create ───────────────────────────────────
+        # ── Create the mean DataFrame grouped by row_i ──────────────────────────────
         mean_cols = (['progress'] if 'progress' in df_ctrl_sim.columns else [])
         if 'vit_score' in df_ctrl_sim.columns:
             mean_cols.append('vit_score')
         if 'tpkldiv' in df_ctrl_sim.columns:
             mean_cols.append('tpkldiv')
 
-        # row_i basis IQR-trimmed mean (seed text text)
+        # IQR-trimmed mean by row_i (aggregate over the seed axis)
         meta_cols = ['row_i', 'game', 'instruction', 'reward_enum']
         df_results = df_ctrl_sim.groupby('row_i', sort=True)[mean_cols].agg(iqr_mean).reset_index()
-        # metadata merge (row_itext text text row text for )
+        # Merge metadata using the first row for each row_i
         meta_df = df_ctrl_sim[meta_cols].drop_duplicates(subset='row_i').reset_index(drop=True)
         df_results = meta_df.merge(df_results, on='row_i')
 
-        # diversity text text in  text text
+        # Append diversity when available
         if diversity_df is not None:
             df_results = df_results.merge(
                 diversity_df[['row_i', 'diversity']],
@@ -441,7 +441,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         df_results.to_csv(results_path, index=False)
         logger.info("[Eval] Saved results → %s", results_path)
 
-        # ── all mean summary CSV create text wandb upload ─────────────────────────────
+        # ── Create the overall mean summary CSV and upload it to wandb ─────────
         summary_metric_cols = [c for c in ['progress', 'vit_score', 'tpkldiv', 'diversity'] if c in df_results.columns]
         if summary_metric_cols:
             summary_series = df_results[summary_metric_cols].mean()
@@ -462,7 +462,7 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
                 log_dict.update({row['metric']: row['mean'] for _, row in df_summary.iterrows()})
             wandb.log(log_dict)
 
-            # ── sample image wandb upload (Ntext, condition text text) ────────────────
+            # ── Upload N sample images to wandb with diverse conditions ───────
             wandb_images = sample_wandb_images(
                 df_ctrl_sim, eval_rendered, n_rows,
                 n_samples=getattr(config, 'n_sample_images', 10),
@@ -484,8 +484,8 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
             logger.info("[Eval] Uploaded CSV files → wandb artifact (eval_csv)")
 
 
-        # ──  to text eval.h5 text (upload_h5=False text text) ─────────────────────────
-        # text postprocessing(ViT/TPKL/Diversity text)  text text text before text delete.
+        # ── Remove local eval.h5 when upload_h5=False ──────────────────────────
+        # Delete it safely after all post-processing (ViT/TPKL/Diversity, etc.).
         if not _upload_h5 and os.path.exists(h5_path):
             try:
                 os.remove(h5_path)
@@ -496,4 +496,3 @@ def make_eval(config, restored_ckpt, encoder_params, *, inject_obs_fn=None, eval
         return losses_arr
 
     return eval_fn
-

@@ -3,7 +3,7 @@ dataset/multigame/handlers/vglc_games/mega_man.py
 ==================================================
 Mega Man (TheVGLC) preprocessing handler.
 
-tile text
+Tile mapping
 ---------
 0  : null    (@)
 1  : ground  (#)
@@ -83,4 +83,3 @@ def make_legend() -> TileLegend:
 class MegaManPreprocessor(BasePreprocessor):
     def char_to_int(self, char: str) -> int:
         return _CHAR_MAP.get(char, MegaManTile.UNKNOWN)
-

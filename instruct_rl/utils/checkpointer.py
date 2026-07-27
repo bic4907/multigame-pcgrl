@@ -1,7 +1,7 @@
 """
 instruct_rl/utils/checkpointer.py
 ==================================
-checkpoint initialize text  to text utility.
+Checkpoint initialization and loading utilities.
 train_cpcgrl.py  in  separate.
 """
 import os
@@ -34,7 +34,7 @@ logger = get_logger(__file__)
 
 
 def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
-    """checkpoint text  initializetext existing checkpoint  text.
+    """Initialize the checkpoint manager and restore an existing checkpoint.
 
     Returns
     -------
@@ -91,13 +91,13 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
             mgr = checkpoint_manager
         runner_state = target["runner_state"]
         try:
-            # orbax latest text before : strict text
+            # Newer Orbax versions support strict
             restored_ckpt = mgr.restore(
                 steps_prev_complete,
                 args=ocp.args.StandardRestore(target, strict=False),
             )
         except TypeError:
-            # text before  orbax: strict parameter text → text  text also
+            # Older Orbax versions do not support strict; retry without it
             try:
                 restored_ckpt = mgr.restore(
                     steps_prev_complete,
@@ -156,8 +156,8 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
 
         return restored_ckpt
 
-    # init_ckpt_path: different experiment of  checkpoint in  starttext text text for .
-    # exp_dir/ckpts in  existing checkpoint  text  text apply (resume  text).
+    # init_ckpt_path starts from another experiment's checkpoint.
+    # Use it only when exp_dir/ckpts has no checkpoint; resume takes precedence.
     _init_ckpt_path = getattr(config, 'init_ckpt_path', None)
 
     if checkpoint_manager.latest_step() is None:
@@ -165,7 +165,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
 
         if _init_ckpt_path is not None:
             init_ckpt_dir = os.path.abspath(_init_ckpt_path)
-            logger.info(f"init_ckpt_path text — {init_ckpt_dir}  in  initial checkpoint load")
+            logger.info(f"init_ckpt_path specified -- loading initial checkpoint from {init_ckpt_dir}")
             init_ckpt_manager = ocp.CheckpointManager(
                 init_ckpt_dir,
                 options=ocp.CheckpointManagerOptions(max_to_keep=2, create=False),
@@ -179,7 +179,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                     restored_ckpt = try_load_ckpt(steps_prev_complete, target, mgr=init_ckpt_manager)
                     if restored_ckpt is None:
                         raise TypeError("Restored checkpoint is None")
-                    restored_ckpt["steps_prev_complete"] = 0  # text experiment text to  step text  0text
+                    restored_ckpt["steps_prev_complete"] = 0  # A new experiment starts counting at zero
                     logger.info(f"  ✅ init checkpoint loaded (source step={steps_prev_complete}, training restarts from 0)")
                     break
                 except (TypeError, ValueError) as e:
@@ -250,7 +250,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
                     enc_param = get_encoder_params_recursive(enc_param, "encoder")
                     assert enc_param is not None, "Encoder not found in checkpoint"
 
-                # ──  to text success  to text ──
+                # ── Successful-load log ──
                 log_encoder_ckpt_loaded(enc_param, ckpt_dir, steps_prev_complete)
                 break
 
@@ -268,11 +268,11 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict, Any]:
     return checkpoint_manager, restored_ckpt, enc_param
 
 
-# ── train_cpcgrl.py  in  separatetext checkpoint utility ─────────────────────────────
+# ── Checkpoint utilities extracted from train_cpcgrl.py ───────────────────────
 
 
 def init_checkpoint_step(runner_state, checkpoint_manager):
-    """training start text step=0 checkpoint  savetext. (jax.debug.callback  for )"""
+    """Save the step=0 checkpoint at training start (for jax.debug.callback)."""
     ckpt = {"runner_state": runner_state, "step_i": 0}
     ckpt = jax.device_get(ckpt)
     try:
@@ -284,7 +284,7 @@ def init_checkpoint_step(runner_state, checkpoint_manager):
 
 def save_checkpoint_step(runner_state, info, steps_prev_complete,
                          checkpoint_manager, config):
-    """ in text finish text basis as  checkpoint  savetext. (jax.debug.callback  for )"""
+    """Save a checkpoint when an episode completes (for jax.debug.callback)."""
     timesteps = info["timestep"][info["returned_episode"]] * config.n_envs
 
     if len(timesteps) > 0:
@@ -302,7 +302,7 @@ def save_checkpoint_step(runner_state, info, steps_prev_complete,
 
 
 def apply_encoder_params(runner_state, encoder_params, config):
-    """text checkpoint parameter  runner_state  in  applytext text text for text   to text.
+    """Apply encoder checkpoint parameters to runner_state and log memory usage.
 
     Parameters
     ----------
@@ -343,11 +343,11 @@ def apply_encoder_params(runner_state, encoder_params, config):
     return runner_state
 
 
-# ── text checkpoint  to text utility ──────────────────────────────────────────────
+# ── Encoder-checkpoint logging utilities ─────────────────────────────────────
 
 
 def log_encoder_ckpt_loaded(enc_param, ckpt_dir: str, step: int):
-    """text checkpoint  to text success text summary  to text  text."""
+    """Log a summary after successfully loading an encoder checkpoint."""
     logger.info(f"  ✅ Encoder checkpoint loaded successfully (step={step})")
     logger.info(f"     ckpt_dir: {ckpt_dir}")
     if isinstance(enc_param, dict):
@@ -365,7 +365,7 @@ def log_encoder_ckpt_loaded(enc_param, ckpt_dir: str, step: int):
 
 
 def log_encoder_params_summary(encoder_params, config):
-    """encoder_params text text and  contentwater detail info   to text to  text."""
+    """Log whether encoder_params exists and detailed information about its contents."""
     if encoder_params is not None:
         from flax.traverse_util import flatten_dict
         logger.info("=" * 80)

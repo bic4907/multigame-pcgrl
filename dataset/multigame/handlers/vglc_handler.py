@@ -3,12 +3,12 @@ dataset/multigame/handlers/vglc_handler.py
 ==========================================
 TheVGLC dataset handler.
 
-- game select available (selected_games text to  filtering)
-- each game folder of  Processed/*.txt file  automatic text
-- gametext preprocessingtext to  char → int convert
-- MegaMan text Processed/ folder  without text text *.txt file also  text
+- Supports game selection through the selected_games list
+- Automatically discovers Processed/*.txt files in each game directory
+- Convert characters to integers with game-specific preprocessing
+- Also supports root-level *.txt files for games such as MegaMan that lack a Processed/ directory
 
-text text  of text none (numpytext text for ).
+Has no external package dependencies beyond NumPy.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from ..base import (
 )
 from .vglc_games import PREPROCESSORS, LEGEND_FACTORIES, SUPPORTED_GAMES
 
-# ── VGLC game name → foldertext text ───────────────────────────────────────────────
+# ── VGLC game-name-to-directory mapping ────────────────────────────────────────
 _GAME_DIR: Dict[str, str] = {
     GameTag.ZELDA:       "The Legend of Zelda",
     GameTag.MARIO:       "Super Mario Bros",
@@ -38,7 +38,7 @@ _GAME_DIR: Dict[str, str] = {
     GameTag.MEGA_MAN:    "MegaMan",
 }
 
-# ── Processed folder  without game(text in  txt  with text) ──────────────────────────
+# ── Games without a Processed directory (txt files are in the root) ────────────
 _ROOT_TXT_GAMES = {GameTag.MEGA_MAN}
 
 _DEFAULT_VGLC_ROOT = Path(__file__).parent.parent.parent / "TheVGLC"
@@ -46,14 +46,14 @@ _DEFAULT_VGLC_ROOT = Path(__file__).parent.parent.parent / "TheVGLC"
 
 class VGLCGameHandler(BaseGameHandler):
     """
-    text VGLC game handler.
+    Handler for a single VGLC game.
 
     Parameters
     ----------
-    game_tag  : GameTag text (e.g. GameTag.ZELDA)
-    vglc_root : TheVGLC savetext text path
-    split     : text for text sub folder (default "Processed")
-    handler_config : HandlerConfig text (doom_slicing config)
+    game_tag  : GameTag constant (e.g. GameTag.ZELDA)
+    vglc_root : root path of the TheVGLC repository
+    split     : subdirectory to use (default: "Processed")
+    handler_config : HandlerConfig object containing doom_slicing settings
     """
 
     def __init__(
@@ -96,7 +96,7 @@ class VGLCGameHandler(BaseGameHandler):
                 txt_files = sorted(processed.glob("*.txt"))
         txt_files = [p for p in txt_files if not p.name.lower().startswith("readme")]
 
-        # Preprocessor  separate discovery/slicing  to text   text text abovetext
+        # Delegate when the preprocessor provides its own discovery/slicing logic
         if hasattr(self._preprocessor, 'discover_and_process'):
             return self._preprocessor.discover_and_process(
                 files=txt_files,
@@ -114,19 +114,18 @@ class VGLCGameHandler(BaseGameHandler):
         return self._entries
 
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
-        # cache in  text return (slicingtext data text)
+        # Return cached data when available (including sliced data)
         if source_id in self._sliced_cache:
             sample = self._sliced_cache[source_id]
             if order is not None:
-                # warning: text  reusetext to  order  text cachetext text also  text.
-                # text copy  text text, text text text text in   text also  text text text.
-                # text text before   abovetext text  copytext  returntext, order config  to text  separatetext text text.
-                # text  text text text keeptext, all structuretext text issuewithouttext check text.
-                # text text for text requesttext to  "text text return" in  text during .
+                # Note: because the object is reused, changing order also changes the cached object.
+                # A copy would avoid this, although overwriting is generally harmless during sequential access.
+                # Returning a shallow copy or separating order assignment would be safer.
+                # Preserve the existing mutation behavior here while keeping caching and retrieval focused.
                 sample.order = order
             return sample
 
-        # text VGLC game
+        # Standard VGLC game
         path = Path(source_id)
         text = path.read_text(encoding="utf-8", errors="replace")
         char_grid = self._preprocessor.parse_txt(text)
@@ -148,7 +147,7 @@ class VGLCGameHandler(BaseGameHandler):
             meta={"file": str(path.name), "game_dir": str(self._root)},
         )
 
-        # cache in  save (text game also  text text loadtext text)
+        # Cache standard games after the first load as well
         self._sliced_cache[source_id] = sample
 
         return sample
@@ -162,14 +161,14 @@ class VGLCGameHandler(BaseGameHandler):
 
 class VGLCHandler:
     """
-    TheVGLC all handler (text game text).
+    Combined TheVGLC handler for multiple games.
 
     Parameters
     ----------
-    vglc_root      : TheVGLC savetext text path
-    selected_games : text game text text (None text all)
-    split          : text for text sub folder (default "Processed")
-    handler_config : HandlerConfig text (doom_slicing text config)
+    vglc_root      : root path of the TheVGLC repository
+    selected_games : game tags to load (all games when None)
+    split          : subdirectory to use (default: "Processed")
+    handler_config : HandlerConfig object containing doom_slicing and related settings
 
     Example
     -------
@@ -218,7 +217,7 @@ class VGLCHandler:
         return self._game_handlers[game_tag]
 
     def list_entries(self, game_tag: Optional[str] = None) -> List[str]:
-        """text game text  all game of  source_id list return."""
+        """Return source IDs for a specific game or for all games."""
         if game_tag:
             return self.game_handler(game_tag).list_entries()
         entries = []
@@ -227,12 +226,12 @@ class VGLCHandler:
         return entries
 
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
-        """source_id path  text automatic as  text game handler to  abovetext."""
+        """Delegate to the appropriate game handler based on the source_id path."""
         p = Path(source_id)
         for g, h in self._game_handlers.items():
             if _GAME_DIR[g] in str(p):
                 return h.load_sample(source_id, order=order)
-        # fallback: text handler in  check
+        # Fallback: check every handler
         for h in self._game_handlers.values():
             if source_id in h.list_entries():
                 return h.load_sample(source_id, order=order)
@@ -255,4 +254,3 @@ class VGLCHandler:
     def __repr__(self) -> str:
         counts = {g: len(self._game_handlers[g]) for g in self._selected_games}
         return f"VGLCHandler(games={counts})"
-

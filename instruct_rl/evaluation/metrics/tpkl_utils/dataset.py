@@ -1,7 +1,7 @@
 """
 dataset.py
 ==========
-MultiGameDataset in  GT level  loadtext.
+Load GT levels from MultiGameDataset.
 """
 from __future__ import annotations
 
@@ -22,14 +22,14 @@ def load_gt_levels(
     reward_enums: Iterable[int] | None = None,
 ) -> np.ndarray:
     """
-    MultiGameDataset in  reward annotation  with level  loadtext (N, H, W) array to  return.
+    Load annotated levels from MultiGameDataset and return an (N, H, W) array.
 
     Parameters
     ----------
-    train_ratio   : 0 < x ≤ 1.0. 1.0  text all, less than text train splittext return
+    train_ratio   : 0 < x <= 1.0; return all data at 1.0, otherwise only the training split
     seed          : train split random seed
-    games         : text game name list. None  text all.
-    reward_enums  : text reward_enum text list. None  text all.
+    games         : game names to include; include all when None
+    reward_enums  : reward_enum values to include; include all when None
 
     Returns
     -------
@@ -75,4 +75,3 @@ def load_gt_levels(
 
     logger.info("GT levels loaded: %d", len(arr))
     return arr
-

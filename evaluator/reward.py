@@ -26,7 +26,7 @@ _COLLECTABLE_TILE = _tile_value_or_default("COLLECTABLE", "COLLECTIBLE")
 
 
 def _build_penalty_exclude_tiles(reward_idx_row: chex.Array) -> chex.Array:
-    """reward_i(0-based) in  current training tile  text penalty text list as  convert."""
+    """Map a zero-based reward_i to the current training tile's penalty-exclusion list."""
     reward_idx_row = jnp.ravel(reward_idx_row).astype(jnp.int32)
 
     ex_interactive = jnp.any(reward_idx_row == 2)
@@ -59,7 +59,7 @@ def get_reward_batch(
 ) -> chex.Array:
     """Compute batch rewards by mapping indices to reward functions and executing them in parallel.
 
-    reward_i   next index  text.
+    reward_i uses the following indexing scheme.
 
     0: region
     1: path_length
@@ -110,7 +110,7 @@ def get_reward_batch(
     rewards = compute_reward_vmap(reward_i, condition, prev_env_map, curr_env_map)
 
     # special tile (interactive/hazard/collectable) penalty.
-    # text, current training target tile(reward_i 2/3/4)  penalty in  text.
+    # Exclude the current training tile (reward_i 2/3/4) from the penalty.
     penalty_exclude_tiles = vmap(_build_penalty_exclude_tiles)(reward_i)  # (batch, 3)
     special_penalty = vmap(
         lambda p, c, ex: get_special_tile_penalty(

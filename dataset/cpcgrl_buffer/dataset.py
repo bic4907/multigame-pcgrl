@@ -1,28 +1,28 @@
 """
 dataset/cpcgrl_buffer/dataset.py
 ================================
-CPCGRL pair dataset  to text.
-text .npz file in  (game, reward_enum) text text to  savetext data  text
-text text  text.
+Loader for the CPCGRL pair dataset.
+Reads the data stored per (game, reward_enum) key inside a single .npz file and
+exposes it through a convenient interface.
 
 Usage:
     from dataset.cpcgrl_buffer import CPCGRLBufferDataset
 
     # all load
     ds = CPCGRLBufferDataset()
-    print(len(ds))                          # total text text
+    print(len(ds))                          # total number of pairs
     pair = ds[0]                            # MapTransitionPair
     print(pair.before.shape)                # (16, 16)
     print(pair.game)                        # 'doom'
     print(pair.reward_enum)                 # 3
 
-    # text gametext
+    # A single game
     ds_doom = CPCGRLBufferDataset(games=["doom"])
 
-    # text game + reward_enum
+    # A single game + reward_enum
     ds_doom_r1 = CPCGRLBufferDataset(games=["doom"], reward_enums=[1])
 
-    #  text loadtext dataset in  filtering
+    # Filter an already-loaded dataset
     ds_zelda = ds.by_game("zelda")
     ds_re3 = ds.by_reward_enum(3)
 """
@@ -41,20 +41,20 @@ import numpy as np
 
 @dataclass(frozen=True)
 class MapTransitionPair:
-    """env_map  of  (before, after)  before   text 1text.
+    """A single (before, after) env_map transition pair.
 
     Attributes
     ----------
     before : np.ndarray  (H, W) int32
-        t text of  env_map.
+        env_map at step t.
     after : np.ndarray  (H, W) int32
-        t+1 text of  env_map.
+        env_map at step t+1.
     game : str
-        game name (doom, dungeon, pokemon, sokoban, zelda text).
+        Game name (doom, dungeon, pokemon, sokoban, zelda, etc.).
     reward_enum : int
-          text  text reward_enum (0~4).
+          reward_enum of this pair (0-4).
     timestep : int
-        before text of  total_timestep.
+        total_timestep of the `before` state.
     """
     before: np.ndarray
     after: np.ndarray
@@ -69,17 +69,17 @@ class MapTransitionPair:
 
     @property
     def diff(self) -> np.ndarray:
-        """after - before text map. tile  text abovetext non-zero."""
+        """after - before. Non-zero wherever a tile changed."""
         return self.after.astype(np.int16) - self.before.astype(np.int16)
 
     @property
     def changed_mask(self) -> np.ndarray:
-        """text tile abovetext boolean mask (H, W)."""
+        """Boolean mask (H, W) of the changed tiles."""
         return self.before != self.after
 
     @property
     def n_changes(self) -> int:
-        """text tile text."""
+        """Number of changed tiles."""
         return int(self.changed_mask.sum())
 
     def __repr__(self) -> str:
@@ -94,15 +94,15 @@ class MapTransitionPair:
 
 _DEFAULT_NPZ = Path(__file__).parent / "cpcgrl_pair_dataset.npz"
 
-# {game}_re{rn} text text (text text _ts text)
+# Keys of the form {game}_re{rn} (the matching _ts key holds the timesteps)
 _KEY_PATTERN = _re.compile(r"^(\w+)_re(\d+)$")
 
 
 @dataclass
 class CPCGRLBufferDataset:
-    """CPCGRL pair dataset  to text.
+    """Loader for the CPCGRL pair dataset.
 
-    text .npz file in  {game}_re{rn} text to  savetext data  text text.
+    Wraps the data stored under {game}_re{rn} keys in a single .npz file.
     game, reward_enum  as  filtering available.
 
     Parameters
@@ -110,9 +110,9 @@ class CPCGRLBufferDataset:
     npz_path : str or Path, optional
         .npz file path. default value  same folder of  cpcgrl_pair_dataset.npz.
     games : list[str], optional
-        text gametext load. None  text all.
+        Load only this game. None loads all of them.
     reward_enums : list[int], optional
-        text reward_enum text load. None  text all.
+        Load only this reward_enum. None loads all of them.
 
     Examples
     --------
@@ -128,7 +128,7 @@ class CPCGRLBufferDataset:
     games: Optional[List[str]] = None
     reward_enums: Optional[List[int]] = None
 
-    # ── internal text (post_init  in  load) ──
+    # ── Internal state (loaded in post_init) ──
     _pairs: np.ndarray = field(init=False, repr=False)
     _games_arr: np.ndarray = field(init=False, repr=False)
     _reward_enums_arr: np.ndarray = field(init=False, repr=False)
@@ -147,7 +147,7 @@ class CPCGRLBufferDataset:
         else:
             metadata = {}
 
-        # text parsing: {game}_re{rn} form of  text extract
+        # Parse the {game}_re{rn} keys
         group_keys = []
         for key in data.files:
             m = _KEY_PATTERN.match(key)
@@ -187,7 +187,7 @@ class CPCGRLBufferDataset:
         object.__setattr__(self, "_timesteps", np.concatenate(all_ts, axis=0))
         object.__setattr__(self, "_metadata", metadata)
 
-    # ── default text ────────────────────────────────────────────────────────
+    # ── Basic access ─────────────────────────────────────────────────────
 
     def __len__(self) -> int:
         return self._pairs.shape[0]
@@ -218,21 +218,21 @@ class CPCGRLBufferDataset:
     # ── filtering ───────────────────────────────────────────────────────────
 
     def by_game(self, *game_names: str) -> "CPCGRLBufferDataset":
-        """text gametext filteringtext text return."""
+        """Return a new dataset filtered to a single game."""
         mask = np.isin(self._games_arr, game_names)
         return self._subset(mask)
 
     def by_reward_enum(self, *enums: int) -> "CPCGRLBufferDataset":
-        """text reward_enum text filteringtext text return."""
+        """Return a new dataset filtered to a single reward_enum."""
         mask = np.isin(self._reward_enums_arr, enums)
         return self._subset(mask)
 
     def by_game_and_re(self, game: str, reward_enum: int) -> "CPCGRLBufferDataset":
-        """text (game, reward_enum) text filtering."""
+        """Filter for a specific (game, reward_enum) combination."""
         mask = (self._games_arr == game) & (self._reward_enums_arr == reward_enum)
         return self._subset(mask)
 
-    # ── batch text (numpy array) ───────────────────────────────────────────
+    # ── Batch access (NumPy arrays) ──────────────────────────────────────
 
     @property
     def pairs(self) -> np.ndarray:
@@ -241,12 +241,12 @@ class CPCGRLBufferDataset:
 
     @property
     def before_maps(self) -> np.ndarray:
-        """(N, H, W) — text before map."""
+        """(N, H, W) — every `before` map."""
         return self._pairs[:, 0]
 
     @property
     def after_maps(self) -> np.ndarray:
-        """(N, H, W) — text after map."""
+        """Return all after maps with shape (N, H, W)."""
         return self._pairs[:, 1]
 
     @property
@@ -271,23 +271,23 @@ class CPCGRLBufferDataset:
 
     @property
     def map_shape(self) -> tuple:
-        """text map shape (H, W)."""
+        """Map shape (H, W)."""
         return tuple(self._pairs.shape[2:])
 
     @property
     def available_games(self) -> List[str]:
-        """data in  text  game list."""
+        """Games present in the data."""
         return sorted(set(self._games_arr.tolist()))
 
     @property
     def available_reward_enums(self) -> List[int]:
-        """data in  text  reward_enum list."""
+        """Return the reward_enum values present in the data."""
         return sorted(set(self._reward_enums_arr.tolist()))
 
-    # ── text ─────────────────────────────────────────────────────────────
+    # ── Statistics ───────────────────────────────────────────────────────
 
     def summary(self) -> dict:
-        """dataset summary text."""
+        """Summary of the dataset."""
         re_arr = self._reward_enums_arr
         games_arr = self._games_arr
         return {
@@ -306,10 +306,10 @@ class CPCGRLBufferDataset:
             },
         }
 
-    # ── sampletext ───────────────────────────────────────────────────────────
+    # ── Sampling ─────────────────────────────────────────────────────────────
 
     def sample(self, n: int = 1, seed: int | None = None) -> Union[MapTransitionPair, list]:
-        """random sampletext. n=1  text text Pair, n>1  text text."""
+        """Draw random pairs. n=1 returns a single Pair, n>1 a list."""
         rng = np.random.default_rng(seed)
         indices = rng.choice(len(self), size=n, replace=False)
         if n == 1:
@@ -319,7 +319,7 @@ class CPCGRLBufferDataset:
     # ── internal utility ────────────────────────────────────────────────────────
 
     def _subset(self, idx) -> "CPCGRLBufferDataset":
-        """index/text to  text create (npz textload text )."""
+        """Build a new dataset from indices or keys (without re-reading the npz)."""
         new = object.__new__(CPCGRLBufferDataset)
         object.__setattr__(new, "npz_path", self.npz_path)
         object.__setattr__(new, "games", None)
@@ -330,4 +330,3 @@ class CPCGRLBufferDataset:
         object.__setattr__(new, "_timesteps", self._timesteps[idx])
         object.__setattr__(new, "_metadata", self._metadata)
         return new
-

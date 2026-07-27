@@ -1,11 +1,11 @@
 """
 dataset/multigame/base.py
 =========================
-common text interface text of .
-text game handler  BaseGameHandler  text,
-text preprocessingtext  BasePreprocessor  text.
+Common interfaces shared by every game handler.
+Each game handler subclasses BaseGameHandler, and each
+preprocessor subclasses BasePreprocessor.
 
-text text  of text none (numpytext text for ).
+No external dependencies beyond numpy.
 """
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ import warnings
 import numpy as np
 
 
-# ── common text text ──────────────────────────────────────────────────────────────
+# ── Shared constants ──────────────────────────────────────────────────────────
 class GameTag:
-    """text game text text text."""
+    """Canonical game name constants."""
     ZELDA       = "zelda"
     MARIO       = "mario"
     LODE_RUNNER = "lode_runner"
@@ -37,7 +37,7 @@ class GameTag:
 @dataclass
 class TileLegend:
     """
-    tile character →  of text text text.
+    Mapping from tile character to its meaning.
     char_to_attrs: {'W': ['solid', 'wall'], '-': ['passable', 'empty'], ...}
     """
     char_to_attrs: Dict[str, List[str]] = field(default_factory=dict)
@@ -58,18 +58,18 @@ class TileLegend:
 @dataclass
 class GameSample:
     """
-    text level sample.
+    A single level sample.
 
     Parameters
     ----------
-    game        : GameTag text (e.g. GameTag.ZELDA)
-    source_id   : text filetext text  npz text text text text
-    array       : (H, W) int32 ndarray - integer text tile text
-    char_grid   : (H, W) character text (text txt basedtext text keep)
+    game        : GameTag constant (e.g. GameTag.ZELDA)
+    source_id   : identifier of the source file / npz entry
+    array       : (H, W) int32 ndarray of integer tile ids
+    char_grid   : (H, W) character grid (kept as parsed from the source .txt)
     legend      : TileLegend (None available)
-    instruction : text text (dungeon text in  text for )
-    order       : text dataset  inside  order(index)
-    meta        : text text  info dict
+    instruction : natural-language instruction (dungeon only)
+    order       : position (index) in the original dataset
+    meta        : free-form metadata dict
     """
     game:        str
     source_id:   str
@@ -149,29 +149,28 @@ def enforce_char_grid_top_left_16x16(
     return [row[:16] for row in char_grid[:16]]
 
 
-# ── text handler ─────────────────────────────────────────────────────────────────
+# ── Abstract handler ─────────────────────────────────────────────────────────────
 
 class BaseGameHandler(ABC):
     """
-    text game/dataset text in  text handler.
-    list_entries()  to  all ID  columntext,
-    load_sample()   to  GameSample  returntext.
+    Base handler shared by every game / dataset loader.
+    list_entries() lists all IDs, and load_sample() returns a GameSample.
     """
 
     @property
     @abstractmethod
     def game_tag(self) -> str:
-        """GameTag text  return."""
+        """Return the GameTag of this handler."""
         ...
 
     @abstractmethod
     def list_entries(self) -> List[str]:
-        """load availabletext source_id list return."""
+        """Return available source IDs."""
         ...
 
     @abstractmethod
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
-        """source_id in  text  GameSample return."""
+        """Return the GameSample corresponding to source_id."""
         ...
 
     def __iter__(self) -> Iterator[GameSample]:
@@ -185,21 +184,21 @@ class BaseGameHandler(ABC):
         return list(self)
 
 
-# ── text preprocessingtext ───────────────────────────────────────────────────────────────
+# ── Preprocessor base class ───────────────────────────────────────────────────
 
 class BasePreprocessor(ABC):
     """
-    character text → integer ndarray convert text text preprocessing.
-    each gametext textclass  text of text.
+    Preprocessor converting a character grid into an integer ndarray.
+    Each game provides its own subclass.
     """
 
     @abstractmethod
     def char_to_int(self, char: str) -> int:
-        """text character  integer tile ID to  convert."""
+        """Convert a single character to an integer tile ID."""
         ...
 
     def transform(self, char_grid: List[List[str]]) -> np.ndarray:
-        """2D character text → (H, W) int32 ndarray."""
+        """Convert a 2D character list to an (H, W) int32 ndarray."""
         h = len(char_grid)
         w = max(len(row) for row in char_grid) if h > 0 else 0
         arr = np.zeros((h, w), dtype=np.int32)
@@ -209,8 +208,8 @@ class BasePreprocessor(ABC):
         return arr
 
     def parse_txt(self, text: str) -> List[List[str]]:
-        """text file content → 2D character text."""
+        """Parse file contents into a 2D character grid."""
         lines = text.splitlines()
-        # text text remove
+        # Drop trailing blank lines
         lines = [l for l in lines if l.strip()]
         return [list(line) for line in lines]

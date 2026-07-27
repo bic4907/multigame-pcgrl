@@ -1,8 +1,8 @@
 """
 instruct_rl/utils/env_loader.py
 ================================
-.env file  text os.environ  in  text  utility.
-dotenv text text  direct parsingtext.
+Utility for reading a .env file into os.environ.
+Parses the file directly without the dotenv package.
 """
 
 from __future__ import annotations
@@ -12,27 +12,27 @@ from pathlib import Path
 
 
 def load_dotenv(path: str | Path | None = None) -> dict[str, str]:
-    """.env file  text text text ``os.environ``  in  text.
+    """Read a .env file line by line and register entries in ``os.environ``.
 
     Parameters
     ----------
     path : str | Path | None
-        .env file path. None  text text to text text(  file basis 3text textabove) of
-        .env   text for text.
+        Path to the .env file. When None, use .env at the project root
+        (three levels above this file).
 
     Returns
     -------
     dict[str, str]
-        parsing·text key-value text.
+        Parsed and registered key-value pairs.
 
     Notes
     -----
-    - text text, ``#``  as  starttext  text text  text.
-    - text text of  text texttable / texttable  automatic as  text.
-    -  text os.environ  in  text  text  text text text(text text text).
+    - Ignore blank lines and comment lines beginning with ``#``.
+    - Strip matching single or double quotes around values.
+    - Do not overwrite keys already in os.environ; system environment values win.
     """
     if path is None:
-        # instruct_rl/utils/env_loader.py → text to text text
+        # instruct_rl/utils/env_loader.py -> project root
         root = Path(__file__).resolve().parent.parent.parent
         path = root / ".env"
     else:
@@ -47,11 +47,11 @@ def load_dotenv(path: str | Path | None = None) -> dict[str, str]:
         for raw_line in f:
             line = raw_line.strip()
 
-            # text text·text text
+            # Ignore blank lines and comments
             if not line or line.startswith("#"):
                 continue
 
-            # export KEY=VALUE form text
+            # Support export KEY=VALUE syntax
             if line.startswith("export "):
                 line = line[len("export "):].strip()
 
@@ -65,13 +65,13 @@ def load_dotenv(path: str | Path | None = None) -> dict[str, str]:
             if not key:
                 continue
 
-            # texttable remove
+            # Remove matching quotes
             if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
                 value = value[1:-1]
 
             loaded[key] = value
 
-            # text text   text text text text
+            # Do not overwrite an existing system environment variable
             if key not in os.environ:
                 os.environ[key] = value
 
@@ -79,10 +79,9 @@ def load_dotenv(path: str | Path | None = None) -> dict[str, str]:
 
 
 def get_wandb_key() -> str | None:
-    """WANDB_API_KEY   text in   text.
+    """Read WANDB_API_KEY from the environment.
 
-    .env   text loadtext text  text text to  text text text load_dotenv()   calltext.
+    Call load_dotenv() again in case .env has not been loaded yet.
     """
     load_dotenv()
     return os.environ.get("WANDB_API_KEY")
-

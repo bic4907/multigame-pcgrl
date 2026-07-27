@@ -1,6 +1,6 @@
 """evaluator/measures/multigame_amount.py
 
-MultigameTiles(INTERACTIVE, HAZARD, COLLECTABLE) count  text  utility.
+Utilities for counting MultigameTiles (INTERACTIVE, HAZARD, and COLLECTABLE).
 
 Usage
 -----
@@ -23,36 +23,35 @@ from envs.probs.multigame import MultigameTiles
 
 
 def get_interactive_count(env_map: chex.Array) -> jnp.ndarray:
-    """INTERACTIVE(3) tile count  returntext."""
+    """Return the INTERACTIVE (3) tile count."""
     return jnp.sum(env_map == MultigameTiles.INTERACTIVE).astype(float)
 
 
 def get_hazard_count(env_map: chex.Array) -> jnp.ndarray:
-    """HAZARD(4) tile count  returntext."""
+    """Return the HAZARD (4) tile count."""
     return jnp.sum(env_map == MultigameTiles.HAZARD).astype(float)
 
 
 def get_collectable_count(env_map: chex.Array) -> jnp.ndarray:
-    """COLLECTABLE(5) tile count  returntext."""
+    """Return the COLLECTABLE (5) tile count."""
     return jnp.sum(env_map == MultigameTiles.COLLECTABLE).astype(float)
 
 
 def get_multigame_tile_counts(env_map: chex.Array) -> dict:
-    """INTERACTIVE, HAZARD, COLLECTABLE count  text text in  returntext.
+    """Return the INTERACTIVE, HAZARD, and COLLECTABLE counts together.
 
     Parameters
     ----------
     env_map : chex.Array
-        (H, W) integer array. text  MultigameTiles enum.
+        Integer array of shape (H, W) containing MultigameTiles enum values.
 
     Returns
     -------
     dict with keys "interactive", "hazard", "collectable"
-        each text  jnp float scalar.
+        Each value is a scalar jnp float.
     """
     return {
         "interactive": get_interactive_count(env_map),
         "hazard": get_hazard_count(env_map),
         "collectable": get_collectable_count(env_map),
     }
-

@@ -3,9 +3,9 @@ dataset/multigame/handlers/vglc_games/zelda.py
 ===============================================
 The Legend of Zelda (TheVGLC) preprocessing handler.
 
-tile text
+Tile mapping
 ---------
-0  : empty / passable (-, text)
+0  : empty / passable (-, space)
 1  : wall   (W)
 2  : floor  (F)
 3  : door   (D)
@@ -35,11 +35,11 @@ class ZeldaTile:
     START   = 5
     MOB     = 6
     OBJECT  = 7
-    FLOOD   = 8   # water/lava text hazard terrain (text HAZARD)
+    FLOOD   = 8   # Hazardous terrain such as water/lava (formerly HAZARD)
     UNKNOWN = 99
 
 
-# character → integer text
+# Character-to-integer mapping
 _CHAR_MAP: dict[str, int] = {
     "-": ZeldaTile.EMPTY,
     " ": ZeldaTile.EMPTY,
@@ -71,7 +71,7 @@ ZELDA_PALETTE: dict[int, tuple[int, int, int]] = {
     ZeldaTile.START:   (0,   200, 0),
     ZeldaTile.MOB:     (220, 50,  50),
     ZeldaTile.OBJECT:  (255, 215, 0),
-    ZeldaTile.FLOOD:   (50,  120, 220),  # water/lava – text textcolumn
+    ZeldaTile.FLOOD:   (50,  120, 220),  # Water/lava — blue tones
     ZeldaTile.UNKNOWN: (128, 0,   128),
 }
 
@@ -96,13 +96,13 @@ class ZeldaPreprocessor(BasePreprocessor):
 
     def postprocess_array(self, array: np.ndarray) -> np.ndarray:
         """
-        OBJECT tile  without map in  text, FLOOR abovetext in  random as  OBJECT  batchtext.
+        Randomly place OBJECT tiles on FLOOR cells only when the map has no OBJECT tiles.
 
-        - OBJECT  1text or more text text also  text text
-        - OBJECT  0text text next probability to  text  count  text:
+        - Do nothing if at least one OBJECT already exists.
+        - If there are no OBJECT tiles, choose how many to add using these probabilities:
             40% → 0text, 20% → 1text, 20% → 2text, 20% → 3text
-        - batch abovetext  FLOOR tile  during  in text select
-        - seed  map array content of  MD5 text → same text text always same result
+        - Choose placement positions only from FLOOR tiles.
+        - Seed from an MD5 hash of the map contents, making identical inputs deterministic.
         """
         if np.any(array == ZeldaTile.OBJECT):
             return array
@@ -112,7 +112,7 @@ class ZeldaPreprocessor(BasePreprocessor):
         )
         rng = np.random.default_rng(seed)
 
-        # 40:20:20:20 probability to  text  count text
+        # Choose the number to add with a 40:20:20:20 probability ratio
         n = rng.choice([0, 1, 2, 3], p=[0.4, 0.2, 0.2, 0.2])
         if n == 0:
             return array
@@ -130,4 +130,3 @@ class ZeldaPreprocessor(BasePreprocessor):
             result[r, c] = ZeldaTile.OBJECT
 
         return result
-

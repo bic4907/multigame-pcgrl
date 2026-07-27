@@ -2,7 +2,7 @@
 eval_vipcgrl.py
 ===============
 VIPCGRL (Vision-Instructed PCGRL) evaluation entry point.
-pretrained CLIP embedding  nlp_obs  in  injecttext evaluationtext.
+Pretrained CLIP embeddings are injected into nlp_obs for evaluation.
 
 Usage:
     python -m eval_vipcgrl [overrides]
@@ -89,7 +89,7 @@ def main(config: VIPCGRLEvalConfig):
             )
             config.train_seen_ratio = seen_ratio
 
-        # ── unseen_ratio: train_vipcgrl.py  and  sametext game expand basis in  text for  ──
+        # ── unseen_ratio: use the same game-expansion rule as train_vipcgrl.py ──
         unseen_ratio = dataset_setting.get("unseen_ratio", 0.0)
 
         # ── seen/unseen games (canonical 5-game split) → injected into config

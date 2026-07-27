@@ -1,16 +1,16 @@
 """
 train_mipcgrl_encoder_mg.py
 ===========================
-Annotation text textgame data based MIPCGRL MLP text pretraining.
+Pretrain the MIPCGRL MLP encoder on annotation-format multigame data.
 
-train_ipcgrl_encoder_mg.py  and  of  text text:
-  - text latent z  to text task(reward_enum) text head   text  training.
-  - text: Loss = MSE(condition) + classifier_weight * CrossEntropy(reward_enum)
-  - text head   ``apply_model``  and  sibling text to  text RL text encoder loader
-    (``get_encoder_params_recursive(params, "encoder")``)   text text also text text.
+Differences from train_ipcgrl_encoder_mg.py:
+  - Also train a task (reward_enum) classification head from encoder latent z.
+  - Loss = MSE(condition) + classifier_weight * CrossEntropy(reward_enum)
+  - Keep the classification head as a sibling of ``apply_model`` so the RL encoder
+    loader (``get_encoder_params_recursive(params, "encoder")``) is unaffected.
 
-data pipeline / checkpoint text  train_ipcgrl_encoder_mg  and  sametext to
-train_mipcgrl.py(text  train_ipcgrl.py)  to  as-is RL fine-tune text text text.
+The data pipeline and checkpoint format match train_ipcgrl_encoder_mg, allowing
+RL fine-tuning directly with train_mipcgrl.py (or train_ipcgrl.py).
 
 Usage:
     python train_mipcgrl_encoder_mg.py game=all
@@ -56,14 +56,14 @@ logging.getLogger("absl").setLevel(logging.ERROR)
 # ── Model wrapper: apply_model + task classifier head ─────────────────────────
 
 class MIPCGRLModel(nn.Module):
-    """IPCGRL apply_model   text, latent z  to text task text head   text.
+    """Wrap IPCGRL apply_model and add a task-classification head from latent z.
 
     structure:
         - self.base       : existing apply_model (encoder + regression decoder)
         - self.classifier : latent z → task class logits  of  MLP head
 
-    RL text encoder loader   params text in  "encoder" key   text as  text
-    self.base.encoder text extracttext to , classifier parameter  text text.
+    The RL encoder loader recursively finds the "encoder" key and extracts only
+    self.base.encoder, naturally ignoring classifier parameters.
     """
 
     config: MIPCGRLEncoderMGConfig
@@ -151,7 +151,7 @@ def make_train_step(num_classes: int, cls_weight: float):
     return train_step
 
 
-# ── text training text ─────────────────────────────────────────────────────────────
+# ── Main training loop ───────────────────────────────────────────────────────
 
 def make_train(config: MIPCGRLEncoderMGConfig):
     def train(rng: jax.random.PRNGKey):
@@ -182,10 +182,10 @@ def make_train(config: MIPCGRLEncoderMGConfig):
         )
         mlp_ds = builder.get_dataset()
 
-        # ── num_classes text ──
+        # ── Determine num_classes ──
         unique_enums = sorted(set(int(v) for v in np.asarray(mlp_ds.reward_enum_targets).tolist()))
         if config.num_classes is None:
-            # 0..max_enum text text index  text text text also text max+1  to  config (sparse text before )
+            # Use max+1 to cover 0..max_enum even when classes are sparse
             num_classes = int(max(unique_enums) + 1)
         else:
             num_classes = int(config.num_classes)
@@ -194,7 +194,7 @@ def make_train(config: MIPCGRLEncoderMGConfig):
             num_classes, unique_enums, config.classifier_weight,
         )
 
-        # ── dataset_setting.json save (IPCGRL/MIPCGRL RL text automatic inject in  text for ) ──
+        # ── Save dataset_setting.json for IPCGRL/MIPCGRL RL auto-injection ──
         all_games = sorted(multigame_ds.count_by_game().keys())
         seen_games = [g for g in all_games if g not in unseen_game_set]
         unseen_games = [g for g in all_games if g in unseen_game_set]
@@ -237,7 +237,7 @@ def make_train(config: MIPCGRLEncoderMGConfig):
         state, lr_fn = get_train_state(config, num_classes, init_key)
         train_step = make_train_step(num_classes, float(config.classifier_weight))
 
-        # 5. training text
+        # 5. Training loop
         for epoch in range(config.n_epochs):
             rng, epoch_key = jax.random.split(rng)
             train_key, val_key = jax.random.split(epoch_key)
@@ -349,7 +349,7 @@ def make_train(config: MIPCGRLEncoderMGConfig):
     return lambda rng: train(rng)
 
 
-# ── text function ─────────────────────────────────────────────────────────────────
+# ── Helper functions ─────────────────────────────────────────────────────────
 
 def _per_game_mse(preds_list, targets_list, games_list):
     if not preds_list:

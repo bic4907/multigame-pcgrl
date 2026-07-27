@@ -1,11 +1,11 @@
 """
 instruct_rl/utils/csv_instruct_loader.py
 =========================================
-CSV file based Instruct text.
-train_cpcgrl.py  of  make_train/train internal in  text CSV → Instruct convert  to text  separate.
+CSV-based Instruct builder.
+Extracts the CSV-to-Instruct conversion formerly inside make_train/train in train_cpcgrl.py.
 
-encoder model (clip / cnnclip) text for  text network forward   text to ,
-network text text  text in  injecttext text.
+Because clip/cnnclip encoder models require a network forward pass, network
+arguments are supplied externally.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from instruct_rl.utils.log_utils import get_logger
 
 logger = get_logger(__file__)
 
-# CSV file basis path (train_cpcgrl.py  and  sametext abovetext   text)
+# Base path for CSV files (assumes the same location as train_cpcgrl.py)
 _PROJECT_ROOT = dirname(dirname(dirname(abspath(__file__))))
 
 
@@ -33,16 +33,16 @@ def load_csv_instruct(
     network_params=None,
     init_x=None,
 ):
-    """CSV file in  train/test Instruct   buildtext.
+    """Build training and test Instruct objects from a CSV file.
 
     Parameters
     ----------
     config : CPCGRLConfig / TrainConfig
-        instruct_csv, nlp_input_dim, encoder.model, multimodal_condition text text.
+        Requires instruct_csv, nlp_input_dim, encoder.model, multimodal_condition, etc.
     network : flax Module, optional
-        encoder model   clip / cnnclip text text embedding create in  text.
+        Required to generate embeddings when the encoder model is clip/cnnclip.
     network_params : dict, optional
-        network.apply  in  text parameter.
+        Parameters passed to network.apply.
     init_x : PCGRLObs, optional
         dummy observation (repeat  for ).
 
@@ -82,7 +82,7 @@ def load_csv_instruct(
     return train_inst, test_inst
 
 
-# ── internal text ──────────────────────────────────────────────────────────────
+# ── Internal helpers ──────────────────────────────────────────────────────
 
 
 def _build_instruct_from_df(
@@ -94,13 +94,13 @@ def _build_instruct_from_df(
     network_params,
     init_x,
 ):
-    """DataFrame  of  train/test text in  Instruct   text."""
+    """Create Instruct from a DataFrame train/test partition."""
     split_df = df[df["train"] == is_train].copy()
     split_name = "train" if is_train else "test"
 
     cond_id = jnp.array(split_df["cond_id"].to_list()).reshape(-1, 1)
 
-    # ── embedding (CSV  in  embed_* text  text text for ) ─────────────────────
+    # ── Embedding (use CSV embed_* columns when present) ──────────────────
     embedding_df = split_df.filter(regex="embed_*")
     embedding_df = embedding_df.reindex(
         sorted(embedding_df.columns, key=lambda x: int(x.split("_")[-1])),
@@ -133,7 +133,7 @@ def _build_instruct_from_df(
         [x + [0] * (max_len - len(x)) for x in reward_enum_list]
     )
 
-    # ── encoder-based embedding textcreate (clip / cnnclip) ───────────────────
+    # ── Create encoder-based embeddings (clip / cnnclip) ─────────────────────
     if config.encoder.model == "clip" and processor is not None:
         embedding = _generate_clip_embedding(
             split_df, config, processor, network, network_params, init_x, split_name,
@@ -152,7 +152,7 @@ def _build_instruct_from_df(
 
 
 def _generate_clip_embedding(df, config, processor, network, network_params, init_x, split_name):
-    """CLIP text encoder  to  embedding  createtext."""
+    """Generate embeddings with the CLIP text encoder."""
     assert network is not None, "network is required for clip embedding generation"
 
     language_instr_list = df["instruction"].to_list()
@@ -192,7 +192,7 @@ def _generate_clip_embedding(df, config, processor, network, network_params, ini
 
 
 def _generate_cnnclip_embedding(df, config, processor, network, network_params, init_x, split_name):
-    """CNN-CLIP encoder  to  embedding  createtext."""
+    """Create embeddings with the CNN-CLIP encoder."""
     assert network is not None, "network is required for cnnclip embedding generation"
 
     language_instr_list = df["instruction"].to_list()
@@ -255,4 +255,3 @@ def _generate_cnnclip_embedding(df, config, processor, network, network_params, 
         f"(split={split_name}, multimodal={config.multimodal_condition})"
     )
     return embedding
-

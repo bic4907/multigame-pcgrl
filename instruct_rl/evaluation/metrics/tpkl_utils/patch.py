@@ -1,18 +1,18 @@
 """
 patch.py
 ========
-text text text also text extract text text text internal text.
+Internal helpers for sliding-window extraction and patch hashing.
 """
 from __future__ import annotations
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
-MAX_TILE = 64  # tile text text; exceed text automatic text
+MAX_TILE = 64  # Upper bound on tile types; adjusted automatically when exceeded
 
 
 def hash_patches(patches: np.ndarray, n_tiles: int) -> np.ndarray:
-    """(M, k²) int text → (M,) int64 text. base-n_tiles text."""
+    """Hash (M, k²) integer patches to (M,) int64 using base-n_tiles encoding."""
     k2 = patches.shape[1]
     bases = (n_tiles ** np.arange(k2, dtype=np.int64)).reshape(1, k2)
     return (patches.astype(np.int64) * bases).sum(axis=1)
@@ -37,4 +37,3 @@ def patches_to_dist(patches: np.ndarray, epsilon: float,
     smoothed = counts[nonzero] + epsilon
     smoothed /= smoothed.sum()
     return dict(zip(nonzero.tolist(), smoothed.tolist()))
-

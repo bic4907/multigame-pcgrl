@@ -180,7 +180,7 @@ class Dungeon3Problem(Problem):
         n_bat = jnp.sum(env_map == Dungeon3Tiles.BAT)
         stats = stats.at[3].set(n_bat)
 
-        # condition[4] (bat_direction text) also  text to  as-is text for
+        # Use condition[4] (such as bat_direction) directly as a numeric value
         stats = stats.at[4].set(_condition[4])
 
         if raw_obs is False:

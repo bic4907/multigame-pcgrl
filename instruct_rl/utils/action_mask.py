@@ -1,14 +1,14 @@
 """
 instruct_rl/utils/action_mask.py
 ================================
-PCGRL training for  text action masking utility.
+Static action-masking utilities for PCGRL training.
 
 - `resolve_action_mask_config(config)`:
-    `re01_action_mask` text  evaluationtext text text `config.action_mask`   True  to  text.
+    Evaluate `re01_action_mask` and enable `config.action_mask` when appropriate.
 - `build_action_allowed_mask(env)`:
-    EMPTY/WALL tiletext text for text  text (action_dim,) bool text create.
+    Create a static (action_dim,) boolean mask allowing only EMPTY/WALL tiles.
 - `apply_action_mask(pi, allowed)`:
-    distrax.Categorical policy  of  logits text text in  text  applytext text distribution return.
+    Return a new distribution with the mask applied to the final logits axis.
 """
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from instruct_rl.utils.dataset_loader_helpers.filters import (
 
 
 def resolve_action_mask_config(config) -> None:
-    """re01_action_mask=True  text dataset_reward_enum   text 0/1  text
-    config.action_mask   True  to  in-place text."""
+    """Enable config.action_mask in place when re01_action_mask=True and every
+    dataset_reward_enum value is 0 or 1."""
     if not getattr(config, "re01_action_mask", False):
         return
     if getattr(config, "action_mask", False):
@@ -38,9 +38,9 @@ def resolve_action_mask_config(config) -> None:
 
 
 def build_action_allowed_mask(env) -> jnp.ndarray:
-    """EMPTY/WALL tiletext text for text  text (action_dim,) bool text.
+    """Return a static (action_dim,) boolean mask allowing only EMPTY/WALL tiles.
 
-    Turtle representation of  move action (build=-1)  always text for .
+    Always allow the Turtle representation's move action (build=-1).
     """
     action_dim = int(env.rep.action_space.n)
     builds = getattr(env.rep, "builds", None)
@@ -63,12 +63,12 @@ def build_action_allowed_mask(env) -> jnp.ndarray:
     if action_dim == n_builds:
         action_tile_ids = builds_np
     elif action_dim % n_builds == 0:
-        # wide-style flat actions: text text  tile build index.
+        # Wide-style flat actions: the final axis is the tile-build index
         action_tile_ids = builds_np[action_idxs % n_builds]
     else:
         return jnp.ones((action_dim,), dtype=bool)
 
-    # Turtle of  move action (build=-1)  always text for
+    # Always allow Turtle's move action (build=-1)
     is_move_action = action_tile_ids == -1
     is_allowed_tile = jnp.isin(
         action_tile_ids, jnp.array(allowed_tile_ids, dtype=builds_np.dtype)
@@ -77,7 +77,7 @@ def build_action_allowed_mask(env) -> jnp.ndarray:
 
 
 def apply_action_mask(pi, allowed: Optional[jnp.ndarray]):
-    """policy logits text text in  text mask apply. allowed=None  text no-op."""
+    """Apply a static mask to the final policy-logits axis; no-op when allowed=None."""
     if allowed is None:
         return pi
     logits = pi.logits

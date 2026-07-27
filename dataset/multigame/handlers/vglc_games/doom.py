@@ -3,7 +3,7 @@ dataset/multigame/handlers/vglc_games/doom.py
 ==============================================
 Doom (TheVGLC) preprocessing handler.
 
-tile text
+Tile mapping
 ---------
 0  : empty   (-)
 1  : wall    (X)
@@ -107,10 +107,10 @@ class DoomPreprocessor(BasePreprocessor):
         cache: Dict[str, Any]
     ) -> List[str]:
         """
-        Doom  before  for  file process text text text  to text.
-        VGLCGameHandler._discover() in  calltext.
+        Doom-specific file processing and slicing logic.
+        Called by VGLCGameHandler._discover().
         """
-        # config text
+        # Check the configuration
         if not hasattr(config, 'doom') or not config.doom.enabled:
             return [str(p) for p in files]
 
@@ -179,23 +179,24 @@ class DoomPreprocessor(BasePreprocessor):
         event_count_min: int = 1,
     ) -> List[Dict[str, Any]]:
         """
-        text map  16x16 text  maptext to  text text
+        Slice a large map into smaller 16x16 maps.
 
         rule:
-        1. text to : 16text text
-        2.   to : 16text movetext validtext text. validtext maptext text
-        3. validtext: empty("-") <= empty_max AND floor+empty <= floor_empty_max AND event_count >= event_count_min text text text
+        1. Scan vertically in blocks of 16 rows.
+        2. Move horizontally in 16-cell increments and retain only valid maps.
+        3. A map is valid when empty("-") <= empty_max, floor + empty <=
+           floor_empty_max, and event_count >= event_count_min.
 
         Parameters
         ----------
         char_grid : List[List[str]]
-            2D character text
+            2D character grid.
         empty_max : int
-            validtext map of  maximum empty tile count
+            Maximum empty-tile count for a valid map.
         floor_empty_max : int
-            validtext map of  floor+empty text of  maximumtext
+            Maximum floor + empty count for a valid map.
         event_count_min : int
-            validtext map of  enemy+object text of  minimum (default value: 1)
+            Minimum enemy + object count for a valid map (default: 1).
 
         Returns
         -------
@@ -217,13 +218,13 @@ class DoomPreprocessor(BasePreprocessor):
 
         sliced_maps = []
 
-        # text to  to  16text text
+        # Scan vertically in 16-row blocks
         row = 0
         while row < height:
             row_end = min(row + 16, height)
             row_slice = char_grid[row:row_end]
 
-            #   to  to  16text movetext text
+            # Scan horizontally in 16-cell increments
             col = 0
             while col < width:
                 col_end = min(col + 16, width)
@@ -241,11 +242,11 @@ class DoomPreprocessor(BasePreprocessor):
 
                     map_16x16.append(row_data)
 
-                # text to  padding (empty '-' to )
+                # Pad vertically with empty ('-') cells
                 while len(map_16x16) < 16:
                     map_16x16.append(['-'] * 16)
 
-                # validtext text (empty_max, floor+empty, event_count check)
+                # Validate empty_max, floor + empty, and event_count
                 empty_count = sum(1 for r in map_16x16 for cell in r if cell == '-')
                 floor_count = sum(1 for r in map_16x16 for cell in r if cell in '.,:')
                 # event_count: enemy(E) + object(W,A,H,B,K) sum
@@ -263,10 +264,10 @@ class DoomPreprocessor(BasePreprocessor):
                         'event_count': event_count,
                     })
 
-                # next abovetext: 16text text
+                # Advance 16 cells
                 col += 16
 
-            # next abovetext: 16text text
+            # Advance 16 rows
             row += 16
 
         return sliced_maps

@@ -1,20 +1,20 @@
 """
 train_ipcgrl_encoder_mg.py
 ===========================
-Annotation text textgame data based IPCGRL MLP text pretraining.
+Pretrain the IPCGRL MLP encoder on annotation-format multigame data.
 
-existing train_ipcgrl_encoder.py  and  of  text text:
-  - data text: npz text(text) → Annotation CSV(MultiGameDataset, text)
-  - textgame text text: text MLP  text game of  instruction → condition text
-  - unseen_games: training in  text game  text zero-shot evaluation available
+Differences from train_ipcgrl_encoder.py:
+  - Data source: legacy NPZ buffer -> annotation CSV (MultiGameDataset)
+  - Unified multigame encoder: one MLP regresses instruction -> condition for all games
+  - unseen_games: exclude selected games for zero-shot evaluation
 
 data pipeline:
-    MultiGameDataset (annotation text)
+    MultiGameDataset (annotation format)
         ↓ BERTDatasetBuilder
-            - instruction validtext filter, longtail cut
+            - instruction validity filtering and long-tail cutoff
             - BERT CLS embedding compute (bert-base-uncased)
             - log1p + per-enum min-max condition normalize
-            - stratified train/val split (unseen game  train text)
+            - stratified train/validation split (unseen games excluded from training)
         ↓ create_mlp_batches
     apply_model (MLP encoder + MLP decoder)
         - encoder: BERT_embed (768) → latent z (output_dim)
@@ -72,7 +72,7 @@ def get_train_state(config: IPCGRLEncoderMGConfig, rng: jax.random.PRNGKey):
 
     model = apply_model(config=config)
 
-    # sampled_buffer=None: level map text  BERT embeddingtext text for
+    # sampled_buffer=None: use only BERT embeddings without level maps
     dummy_embed = jnp.ones((1, config.nlp_input_dim), dtype=jnp.float32)
     params = model.init(rng, dummy_embed, rng, None)
 
@@ -94,7 +94,7 @@ def train_step(
     def loss_fn(params):
         outputs = state.apply_fn(
             params, bert_embeds, rng,
-            None,       # sampled_buffer=None (level map text for )
+            None,       # sampled_buffer=None (level maps unused)
             is_train,
             rngs={"dropout": rng},
         )
@@ -110,7 +110,7 @@ def train_step(
     return state, loss, preds
 
 
-# ── text training text ─────────────────────────────────────────────────────────────
+# ── Main training loop ───────────────────────────────────────────────────────
 
 def make_train(config: IPCGRLEncoderMGConfig):
     def train(rng: jax.random.PRNGKey):
@@ -122,8 +122,8 @@ def make_train(config: IPCGRLEncoderMGConfig):
         logger.info("Unseen games (excluded from training): %s", unseen_game_set or "none")
 
         # 3. BERTDataset build
-        #    CLIPProcessor: CLIPDatasetBuilder internal tokenizer (preprocessing for , BERT and  text)
-        #    BERT embedding  _compute_bert_embeddings   separate to  computetext.
+        #    CLIPProcessor: CLIPDatasetBuilder tokenizer for preprocessing, unrelated to BERT
+        #    BERT embeddings are computed separately by _compute_bert_embeddings.
         processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         rng, ds_key = jax.random.split(rng)
         builder = MLPDatasetBuilder(
@@ -144,7 +144,7 @@ def make_train(config: IPCGRLEncoderMGConfig):
         mlp_ds = builder.get_dataset()
         cond_norm_min, cond_norm_max = builder.get_condition_norm_stats()
 
-        # ── dataset_setting.json save (train_ipcgrl.py in  automatic inject in  text for text) ──
+        # ── Save dataset_setting.json for automatic injection by train_ipcgrl.py ──
         all_games = sorted(multigame_ds.count_by_game().keys())
         seen_games = [g for g in all_games if g not in unseen_game_set]
         unseen_games = [g for g in all_games if g in unseen_game_set]
@@ -186,7 +186,7 @@ def make_train(config: IPCGRLEncoderMGConfig):
         rng, init_key = jax.random.split(rng)
         state, lr_fn = get_train_state(config, init_key)
 
-        # 5. training text
+        # 5. Training loop
         for epoch in range(config.n_epochs):
             rng, epoch_key = jax.random.split(rng)
             train_key, val_key = jax.random.split(epoch_key)
@@ -239,11 +239,11 @@ def make_train(config: IPCGRLEncoderMGConfig):
                 val_games_all.append(g_names)
                 val_enums_all.append(re_t)
 
-            # ── text ──
+            # ── Aggregation ──
             train_loss = float(np.mean(train_losses)) if train_losses else 0.0
             val_loss = float(np.mean(val_losses)) if val_losses else float("nan")
 
-            # gametext val MSE
+            # Per-game validation MSE
             per_game_val_mse = _per_game_mse(
                 val_preds_all, val_targets_all, val_games_all
             )
@@ -251,7 +251,7 @@ def make_train(config: IPCGRLEncoderMGConfig):
                 per_game_val_mse, unseen_game_set
             )
 
-            #  to text text
+            # Log output
             if (epoch + 1) % 10 == 0 or epoch == 0:
                 logger.info(
                     "Epoch %3d/%d | train_mse=%.4f | val_mse=%.4f | lr=%.2e",
@@ -263,7 +263,7 @@ def make_train(config: IPCGRLEncoderMGConfig):
                     tag = "(unseen)" if g in unseen_game_set else "(seen)"
                     logger.info("  %-12s %s  val_mse=%.4f", g, tag, mse)
 
-            # W&B  to text
+            # W&B logging
             if wandb.run is not None:
                 log_dict = {
                     "train/mse": train_loss,
@@ -283,21 +283,21 @@ def make_train(config: IPCGRLEncoderMGConfig):
             if (epoch + 1) % config.ckpt_freq == 0:
                 save_encoder_checkpoint(config, state, step=epoch + 1)
 
-        # training finish  after  text checkpoint
+        # Final checkpoint after training
         save_encoder_checkpoint(config, state, step=config.n_epochs)
         logger.info("Training complete. Checkpoint saved.")
 
     return lambda rng: train(rng)
 
 
-# ── text function ─────────────────────────────────────────────────────────────────
+# ── Helper functions ─────────────────────────────────────────────────────────
 
 def _per_game_mse(
     preds_list: list[np.ndarray],
     targets_list: list[np.ndarray],
     games_list: list[np.ndarray],
 ) -> dict[str, float]:
-    """batch textabove prediction/target/game_name text → gametext MSE dict."""
+    """Convert batched prediction/target/game_name lists to per-game MSE values."""
     if not preds_list:
         return {}
     all_preds = np.concatenate(preds_list)

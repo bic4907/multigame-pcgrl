@@ -430,7 +430,7 @@ class PCGRLEnv(Environment):
 
 
         if self.nlp_input_dim > 0 and self.clip_input_channel > 0:
-            # cnnclipconv/clipconv: nlp_obs + CLIP inputs text text
+            # cnnclipconv/clipconv require both nlp_obs and CLIP inputs
             nlp_obs = jnp.zeros(self.nlp_input_dim)
             clip_input_ids = jnp.zeros((77), dtype=jnp.int32)
             clip_attention_mask = jnp.zeros((77), dtype=jnp.int32)
@@ -570,7 +570,7 @@ class PCGRLEnv(Environment):
         ctrl_x = jnp.zeros((1, len(env_params.ctrl_metrics)))
 
         if env_params.nlp_input_dim > 0 and env_params.clip_input_channel > 0:
-            # cnnclipconv/clipconv: nlp_obs + CLIP input_ids/attention_mask/pixel_values text text
+            # cnnclipconv/clipconv require nlp_obs plus CLIP input_ids/attention_mask/pixel_values
             nlp_obs = jnp.zeros((1, env_params.nlp_input_dim))
             clip_input_ids = jnp.zeros((1, 77), dtype=jnp.int32)
             clip_attention_mask = jnp.zeros((1, 77), dtype=jnp.int32)

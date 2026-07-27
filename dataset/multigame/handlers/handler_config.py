@@ -1,9 +1,9 @@
 """
 dataset/multigame/handlers/handler_config.py
 ============================================
-handler preprocessing config text.
+Manage handler preprocessing settings.
 
-each game text text text text of  centertext config.
+Centralized settings for individual games and slicing options.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class DoomConfig:
 @dataclass
 class AugmentationConfig:
     """data augmentation config"""
-    enabled: bool = True  # augmentation enable text
+    enabled: bool = True  # Whether augmentation is enabled
 
 
 @dataclass
@@ -37,7 +37,7 @@ class VGLCGameConfig:
 @dataclass
 class ZeldaConfig(VGLCGameConfig):
     """Zelda game config"""
-    rotate_90: bool = False  # text 90 also  rotate augmentation
+    rotate_90: bool = False  # Augment with a 90-degree clockwise rotation
     max_samples: int = 1000
 
 
@@ -68,25 +68,25 @@ class MegaManConfig(VGLCGameConfig):
 @dataclass
 class DungeonConfig:
     """Dungeon Level Dataset config"""
-    rotate_90: bool = False  # text 90 also  rotate augmentation
+    rotate_90: bool = False  # Augment with a 90-degree clockwise rotation
     max_samples: int = 4000
 
 
 @dataclass
 class POKEMONConfig:
     """Five-Dollar-Model (POKEMON) game config"""
-    rotate_90: bool = True  # text 90 also  rotate augmentation
+    rotate_90: bool = True  # Augment with a 90-degree clockwise rotation
     max_samples: int = 1000
     # filtering config
     enabled: bool = True
-    min_instruction_words: int = 2  # instruction    or more of  text text   text text
-    max_tile_ratio: float = 0.95  # text tile  text  maximum ratio (0~1). or more text text. text: 0.95 = 100text  during  95text or more
-    max_tile_count: int = 250  # padding  after  16x16 in  text tile  text text with maximum count
+    min_instruction_words: int = 2  # Minimum number of words required in an instruction
+    max_tile_ratio: float = 0.95  # Maximum ratio occupied by one tile (0-1); exclude at or above this value
+    max_tile_count: int = 250  # Maximum count of one tile in a padded 16x16 map
 
 
 @dataclass
 class HandlerConfig:
-    """text handler of  text config"""
+    """Unified settings for all handlers."""
     augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
     zelda: ZeldaConfig = field(default_factory=ZeldaConfig)
     mario: MarioConfig = field(default_factory=MarioConfig)
@@ -116,7 +116,7 @@ class HandlerConfig:
         self,
         enabled: Optional[bool] = None,
     ) -> None:
-        """augmentation config update (enable text)"""
+        """Update augmentation settings (enabled state only)."""
         if enabled is not None:
             self.augmentation.enabled = enabled
 
@@ -140,6 +140,5 @@ class HandlerConfig:
 def get_default_config() -> HandlerConfig:
     """default config return"""
     return HandlerConfig()
-
 
 

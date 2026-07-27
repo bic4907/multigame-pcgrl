@@ -1,10 +1,10 @@
 """
 train_ipcgrl.py
 ================
-IPCGRL (Instructed PCGRL) — BERT embedding → MLP text  text text  text as  text for .
+IPCGRL uses BERT embeddings transformed by an MLP encoder as input features.
 
-existing train.py  of  `encoder.model='mlp'` mode in  text,
-dataset based pipeline(MultiGameDataset) as  text.
+This corresponds to the legacy `encoder.model='mlp'` mode in train.py and uses
+the dataset-based MultiGameDataset pipeline.
 
 Usage:
     python -m train_ipcgrl [overrides]
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ── IPCGRL obs inject: embedding → nlp_obs ─────────────────────────────────────
 
 def inject_ipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """BERT embedding  nlp_obs  in  inject.   after  network internal of  MLP text  process."""
+    """Inject BERT embeddings into nlp_obs for the network's MLP encoder."""
     return last_obs.replace(nlp_obs=instruct_sample.embedding)
 
 
@@ -35,14 +35,14 @@ def inject_ipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
 
 @hydra.main(version_base=None, config_path="./conf", config_name="train_ipcgrl")
 def main(config: IPCGRLConfig):
-    # ── MGPCGRL and  sametext  to text: encoder of  dataset_setting.json in  seen/unseen game info inject ──
+    # ── Match MGPCGRL: inject seen/unseen metadata from encoder dataset_setting.json ──
     if config.encoder.ckpt_dir and config.encoder.ckpt_name:
         dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
         if os.path.exists(dataset_setting_path):
             with open(dataset_setting_path, "r") as f:
                 dataset_setting = json.load(f)
 
-            # ── seen_ratio inject: encoder training text text seen game data ratio  as-is text for  ──
+            # ── Reuse the seen-game ratio from encoder training ──
             seen_ratio = dataset_setting.get("seen_ratio", 1.0)
             if hasattr(config, "dataset_seen_ratio") and seen_ratio != config.dataset_seen_ratio:
                 logger.info(

@@ -1,13 +1,13 @@
 """
 dataset/multigame/render.py
 ===========================
-tile text rendering utility.
+Tile-grid rendering utilities.
 
-- palette based rendering (array_to_rgb, render_sample text)
+- Palette-based rendering (array_to_rgb, render_sample, etc.)
 - tile image based rendering (GameLevelRenderer)
 
-text  of text: numpy, Pillow (PIL)
-Pillow  text  text numpy arraytext return.
+External dependencies: NumPy and Pillow (PIL).
+When Pillow is unavailable, only NumPy arrays are returned.
 """
 from __future__ import annotations
 
@@ -21,18 +21,18 @@ from .base import GameSample
 from .handlers.vglc_games import PALETTES
 from .handlers.dungeon_handler import DUNGEON_PALETTE
 
-# ── all palette text ─────────────────────────────────────────────────────────────
+# ── Combined palette ────────────────────────────────────────────────────────────
 _ALL_PALETTES: Dict[str, Dict[int, Tuple[int, int, int]]] = {
     **PALETTES,
     "dungeon": DUNGEON_PALETTE,
 }
 
-_DEFAULT_UNKNOWN_COLOR = (255, 0, 255)   # text text  text text
-_DEFAULT_TILE_SIZE     = 16              # textcell textabove tile size
+_DEFAULT_UNKNOWN_COLOR = (255, 0, 255)   # Magenta when no mapping exists
+_DEFAULT_TILE_SIZE     = 16              # Tile-cell size
 
 
 def get_palette(game: str) -> Dict[int, Tuple[int, int, int]]:
-    """game text to  palette dict return."""
+    """Return a palette dictionary for a game tag."""
     return _ALL_PALETTES.get(game, {})
 
 
@@ -47,15 +47,15 @@ def array_to_rgb(
     Parameters
     ----------
     array         : (H, W) int32/int64 tile ID array
-    palette       : tile_id → (R, G, B) text
-    unknown_color : palette in  without tile of  text
+    palette       : mapping from tile_id to (R, G, B)
+    unknown_color : color for tiles absent from the palette
     """
     h, w = array.shape
     rgb = np.zeros((h, w, 3), dtype=np.uint8)
     for tile_id, color in palette.items():
         mask = array == tile_id
         rgb[mask] = color
-    # palette text tile
+    # Tiles not registered in the palette
     registered = set(palette.keys())
     for r in range(h):
         for c in range(w):
@@ -74,13 +74,13 @@ def render_sample(
 
     Returns
     -------
-    numpy ndarray (Pillow text also  text)
+    NumPy ndarray (works without Pillow).
     """
     palette = get_palette(sample.game)
     small   = array_to_rgb(sample.array, palette, unknown_color)
     if tile_size == 1:
         return small
-    # text
+    # Upscale
     return np.repeat(np.repeat(small, tile_size, axis=0), tile_size, axis=1)
 
 
@@ -91,7 +91,7 @@ def render_sample_pil(
 ):
     """
     GameSample → PIL Image.
-    Pillow  text text  text ImportError text.
+    Raise ImportError if Pillow is not installed.
     """
     from PIL import Image
     rgb = render_sample(sample, tile_size=tile_size, unknown_color=unknown_color)
@@ -109,7 +109,7 @@ def save_rendered(
 
     Returns
     -------
-    savetext file path
+    Path of the saved file.
     """
     from PIL import Image
     img = render_sample_pil(sample, tile_size=tile_size, unknown_color=unknown_color)
@@ -127,15 +127,15 @@ def render_grid(
     bg_color: Tuple[int, int, int] = (30, 30, 30),
 ) -> np.ndarray:
     """
-    text GameSample  text form to  batchtext image return.
+    Return an image containing multiple GameSamples arranged in a grid.
 
     Parameters
     ----------
-    samples   : GameSample text
-    cols      : column text
-    tile_size : tile textcell size
-    gap       : cell text text (textcell)
-    bg_color  : text text (R, G, B)
+    samples   : list of GameSamples
+    cols      : number of columns
+    tile_size : tile-cell size
+    gap       : spacing between cells in pixels
+    bg_color  : background color as (R, G, B)
 
     Returns
     -------
@@ -186,10 +186,10 @@ def save_grid(
 
 class GameLevelRenderer:
     """
-    tile image based game level rendertext.
+    Render game levels from tile images.
 
-    tile_mapping.json and  tile_ims/ directory  text for text
-    each tile  text tile image to  renderingtext.
+    Render each tile using its actual tile image from tile_mapping.json
+    and the tile_ims/ directory.
     """
 
     def __init__(self, tile_ims_dir: Optional[Union[str, Path]] = None):
@@ -214,13 +214,13 @@ class GameLevelRenderer:
 
     def _load_tile_image(self, game: str, tile_id: int, tile_size: int = 16) -> np.ndarray:
         """
-        text game of  tile ID in  text  image  loadtext.
+        Load the image corresponding to a tile ID for a given game.
 
         Parameters
         ----------
         game : game name (dungeon, doom, pokemon, sokoban, zelda)
         tile_id : tile ID
-        tile_size : tile size (textcell)
+        tile_size : tile-cell size
 
         Returns
         -------
@@ -230,20 +230,20 @@ class GameLevelRenderer:
         if cache_key in self._tile_cache:
             return self._tile_cache[cache_key]
 
-        # tile_mapping.json in  tile image path text
+        # Find the tile-image path in tile_mapping.json
         game_config = self.tile_mapping.get(game, {})
         tile_images = game_config.get("_tile_images", {})
 
         # tile ID  string to  convert
         tile_id_str = str(tile_id)
 
-        # text tile image filetext text
+        # Find the corresponding tile-image filename
         if tile_id_str in tile_images:
             tile_filename = tile_images[tile_id_str]
         else:
             tile_filename = "empty.png"
 
-        # file path text
+        # Build the file path
         if tile_filename.startswith("pokemon/"):
             tile_path = self.tile_ims_dir / tile_filename
         else:
@@ -251,7 +251,7 @@ class GameLevelRenderer:
 
         # image load
         if not tile_path.exists():
-            # text text create (text)
+            # Create a gray placeholder
             tile_img = np.full((tile_size, tile_size, 3), 128, dtype=np.uint8)
         else:
             from PIL import Image
@@ -273,19 +273,19 @@ class GameLevelRenderer:
         show_tile_numbers: bool = False
     ):
         """
-        game level  tile image to  renderingtext.
+        Render a game level with tile images.
 
         Parameters
         ----------
         game : game name (dungeon, doom, pokemon, sokoban, zelda)
         level : game level array (2D numpy array, each cell  tile ID)
-        tile_size : each tile of  textcell size
-        save_path : save path (None text savetext text)
-        show_tile_numbers : tile text  image above in  tabletext text
+        tile_size : cell size of each tile
+        save_path : output path; do not save when None
+        show_tile_numbers : whether to overlay tile IDs on the image
 
         Returns
         -------
-        PIL.Image.Image : renderingtext image
+        PIL.Image.Image : rendered image
         """
         from PIL import Image, ImageDraw, ImageFont
 
@@ -297,7 +297,7 @@ class GameLevelRenderer:
 
         height, width = level.shape
 
-        # rendering text create
+        # Create the rendering canvas
         canvas = np.zeros((height * tile_size, width * tile_size, 3), dtype=np.uint8)
 
         # each tile rendering
@@ -306,7 +306,7 @@ class GameLevelRenderer:
                 tile_id = int(level[y, x])
                 tile_img = self._load_tile_image(game, tile_id, tile_size)
 
-                # text in  tile batch
+                # Place the tile on the canvas
                 y_start = y * tile_size
                 y_end = y_start + tile_size
                 x_start = x * tile_size
@@ -316,11 +316,11 @@ class GameLevelRenderer:
         # PIL image to  convert
         img = Image.fromarray(canvas, mode='RGB')
 
-        # tile text tabletext
+        # Display tile IDs
         if show_tile_numbers:
             draw = ImageDraw.Draw(img)
 
-            # text size config
+            # Set the font size
             font_size = max(8, int(tile_size * 0.45))
             font = None
 
@@ -335,7 +335,7 @@ class GameLevelRenderer:
                     except:
                         return img
 
-            # each tile above in  text tabletext
+            # Draw an ID over each tile
             for y in range(height):
                 for x in range(width):
                     tile_id = int(level[y, x])
@@ -359,7 +359,7 @@ class GameLevelRenderer:
                     text_x = x_pos - text_width // 2
                     text_y = y_pos - text_height // 2
 
-                    # text texteachtext
+                    # Background rectangle
                     padding = 1
                     rect_bbox = [
                         text_x - padding,
@@ -369,7 +369,7 @@ class GameLevelRenderer:
                     ]
                     draw.rectangle(rect_bbox, fill=(0, 0, 0, 180))
 
-                    # text text
+                    # Draw the text
                     try:
                         draw.text((text_x, text_y), text, fill=(255, 255, 255), font=font)
                     except Exception:
@@ -393,20 +393,20 @@ def render_game_level(
     tile_ims_dir: Optional[Union[str, Path]] = None
 ):
     """
-    game level  tile image to  renderingtext  text of  function.
+    Convenience function for rendering a game level with tile images.
 
     Parameters
     ----------
     game : game name
     level : 2D numpy array
-    tile_size : tile size (textcell)
+    tile_size : tile-cell size
     save_path : save path
-    show_tile_numbers : tile text tabletext text
+    show_tile_numbers : whether to display tile IDs
     tile_ims_dir : tile image directory (select)
 
     Returns
     -------
-    PIL.Image.Image : renderingtext image
+    PIL.Image.Image : rendered image
     """
     renderer = GameLevelRenderer(tile_ims_dir=tile_ims_dir)
     return renderer.render(
@@ -416,4 +416,3 @@ def render_game_level(
         save_path=save_path,
         show_tile_numbers=show_tile_numbers
     )
-

@@ -74,13 +74,13 @@ class CLIPDecoderBatch:
     pixel_values: np.ndarray
     duplicate_matrix: np.ndarray     # (B, B)
     reward_enum_target: np.ndarray   # (B,)  — 0-indexed reward_enum class
-    condition_target: np.ndarray     # (B,)  — condition text (regression target)
+    condition_target: np.ndarray     # (B,) condition values (regression targets)
     game_id: np.ndarray              # (B,)  — global game index
 
 
 
-# ── gametext prefix text (5text variation) ──────────────────────────────────────────
-# {game} text in  tabletext name  text.  instruction text in  random as  text  text text.
+# ── Per-game prefix templates (five variants) ───────────────────────────────────
+# {game} receives the display name; one template is prepended to each instruction.
 _GAME_PREFIX_TEMPLATES: List[str] = [
     "In {game}, ",
     "For a {game} map, ",
@@ -89,7 +89,7 @@ _GAME_PREFIX_TEMPLATES: List[str] = [
     "Playing {game}, ",
 ]
 
-# game tag(textcharacter) → tabletext name
+# Game tag string -> display name
 _GAME_DISPLAY_NAMES: dict = {
     "dungeon":  "Dungeon",
     "pokemon":  "Pokémon",
@@ -101,19 +101,19 @@ _GAME_DISPLAY_NAMES: dict = {
 
 
 def _prepend_game_prefix(instruction: str, game: str, rng: random.Random) -> str:
-    """instruction text in  game name prefix  random as  text."""
+    """Prepend a randomly selected game-name prefix to an instruction."""
     display = _GAME_DISPLAY_NAMES.get(game, game.capitalize())
     template = rng.choice(_GAME_PREFIX_TEMPLATES)
     prefix = template.format(game=display)
-    # text text textcharacter process (prefix text in   text to )
+    # Lowercase the first letter because the instruction follows the prefix
     if instruction and instruction[0].isupper():
         instruction = instruction[0].lower() + instruction[1:]
     return prefix + instruction
 
 
-# ── gametext text  text (description prefix for , game name text) ─────────────────────
-# game text  text as  text, text to  text prefix in  text
-# gametext 5text variation — random as  text select
+# ── Brief per-game descriptions that do not name the game ───────────────────────
+# Describe game mechanics abstractly and insert one parenthesized prefix.
+# Each game has five variants, one of which is selected at random.
 _GAME_SHORT_DESCS: dict = {
     "dungeon": [
         "(navigate rooms, avoid enemies, collect treasures)",
@@ -159,7 +159,7 @@ _GAME_SHORT_DESCS: dict = {
     ],
 }
 
-# {desc} text in  text to  text text text  text
+# {desc} receives a parenthesized mechanics description
 _GAME_DESC_TEMPLATES: List[str] = [
     "{desc} ",
     "In a game {desc}, ",
@@ -170,20 +170,20 @@ _GAME_DESC_TEMPLATES: List[str] = [
 
 
 def _prepend_game_desc(instruction: str, game: str, rng: random.Random) -> str:
-    """instruction text in  game text prefix  random as  text."""
+    """Prepend a randomly selected game-description prefix to an instruction."""
     desc_list = _GAME_SHORT_DESCS.get(game, [f"({game})"])
     desc = rng.choice(desc_list)
     template = rng.choice(_GAME_DESC_TEMPLATES)
     prefix = template.format(desc=desc)
-    # text text textcharacter process (prefix text in   text to )
+    # Lowercase the first letter because the instruction follows the prefix
     if instruction and instruction[0].isupper():
         instruction = instruction[0].lower() + instruction[1:]
     return prefix + instruction
 
 
-# ── text instruction prefix dispatcher ───────────────────────────────────────
-# mode: "name" / "desc" / "none" (text  None) — game name prefix, game text prefix,
-#       prefix none  eacheach text.
+# ── Unified instruction-prefix dispatcher ─────────────────────────────────────
+# mode: "name" / "desc" / "none" (or None), selecting a game-name prefix,
+#       game-description prefix, or no prefix respectively.
 INSTRUCTION_PREFIX_MODES = ("name", "desc", "mix", "none")
 
 
@@ -201,7 +201,7 @@ def _normalize_instruction_prefix_mode(mode) -> str:
     return s
 
 def _prepend_game_mix(instruction: str, game: str, rng: random.Random) -> str:
-    """name/desc  during  text  randomtext selecttext prefix  text."""
+    """Randomly choose either a name or description prefix."""
     if rng.random() < 0.5:
         return _prepend_game_prefix(instruction, game, rng)
     else:
@@ -211,7 +211,7 @@ def _prepend_game_mix(instruction: str, game: str, rng: random.Random) -> str:
 def apply_instruction_prefix(
     instruction: str, game: str, rng: random.Random, mode
 ) -> str:
-    """text instruction  in  mode  in  text prefix   text return.
+    """Apply the prefix selected by mode to one instruction and return it.
 
     mode == "name" → _prepend_game_prefix
     mode == "desc" → _prepend_game_desc
@@ -284,7 +284,7 @@ class CLIPDatasetBuilder:
     def preprocess_paired_data(self):
         samples = self.paired_data._samples
 
-        # ── max_samples: dry-run for  — text/preprocessing  before  in  sample text  text ──
+        # ── max_samples: limit samples before tokenization/preprocessing in dry runs ──
         if self.max_samples is not None and len(samples) > self.max_samples:
             logger.info(f"[dry-run] max_samples={self.max_samples}: "
                         f"samples {len(samples)} → {self.max_samples}")
@@ -313,18 +313,18 @@ class CLIPDatasetBuilder:
         logger.info(f"Detected {len(unique_games)} unique games: {game2idx}")
 
         # Extract level arrays and language instructions
-        # unified text: 0=empty, 1=wall, 2=interactive, 3=hazard, 4=collectable (5text)
-        # map2onehot  value-1   index to  text to  category 0(empty)  all-zeros(implicit bg),
-        # category 1-4  text 0-3 in  text tabletext.
+        # Five unified categories: 0=empty, 1=wall, 2=interactive, 3=hazard, 4=collectable.
+        # map2onehot uses value-1 as the index, so category 0 is an all-zero implicit
+        # background while categories 1-4 map exactly to channels 0-3.
         level_arrays = jnp.stack([s.array for s in samples], 0)  # (N, 16, 16)
         level_arrays = map2onehot_batch(level_arrays, num_classes=NUM_CATEGORIES)  # (N, 16, 16, NUM_CATEGORIES)
         level_arrays = add_coord_channel_batch(level_arrays)  # (N, 16, 16, 7)
 
         language_inst_list = [s.instruction for s in samples]
 
-        # ── game prefix text  (text) ──
+        # ── Optionally add game prefixes ──
         if self.instruction_prefix != "none":
-            prefix_rng = random.Random(42)  # text availabletext also text fixed seed
+            prefix_rng = random.Random(42)  # Fixed seed for reproducibility
             game_list = [s.game for s in samples]
             language_inst_list = [
                 apply_instruction_prefix(inst, game, prefix_rng, self.instruction_prefix)
@@ -344,23 +344,23 @@ class CLIPDatasetBuilder:
             game_idx = self.game2idx.get(s.game, -1)  # Get game index
             reward_enum = s.meta.get("reward_enum", 0)
             conditions = s.meta.get("conditions", {})
-            # reward_enum in  text  condition text  text for  (if missing text text text fallback)
+            # Use the condition for reward_enum, falling back to the first value
             condition_value = conditions.get(reward_enum, next(iter(conditions.values()), None))
 
-            # ── CUSTOM_THRESHOLDS based condition text ──
+            # ── Quantize conditions using CUSTOM_THRESHOLDS ──
             feature_name = s.meta.get("feature_name", "")
             threshold_key = f"{s.game}_{feature_name}"
             thresholds = CUSTOM_THRESHOLDS.get(threshold_key)
             if thresholds is not None and condition_value is not None:
                 quantized_bin = int(np.digitize(condition_value, thresholds))  # 0~7 (8 bins)
             else:
-                quantized_bin = 0  # threshold without text  text bin
+                quantized_bin = 0  # A combination without thresholds has one bin
 
             reward_cond_tuple = (game_idx, int(reward_enum), condition_value)
             reward_cond_list.append(reward_cond_tuple)
             quantized_cond_list.append(quantized_bin)
 
-        # ── class_id: text condition basis (game_idx, reward_enum, quantized_bin) ──
+        # ── class_id from quantized condition: (game_idx, reward_enum, quantized_bin) ──
         quantized_reward_cond_list = [
             (rc[0], rc[1], q_bin)
             for rc, q_bin in zip(reward_cond_list, quantized_cond_list)
@@ -369,11 +369,11 @@ class CLIPDatasetBuilder:
         quantized_rc2class_id = {rc: idx for idx, rc in enumerate(unique_quantized_rc)}
         class_ids = np.array([quantized_rc2class_id[rc] for rc in quantized_reward_cond_list])
 
-        # Store the mapping for reference (text basis)
+        # Store the quantization mapping for reference
         self.reward_cond2class_id = quantized_rc2class_id
         self.class_id2reward_cond = {v: k for k, v in quantized_rc2class_id.items()}
 
-        # ── text summary  to text ──
+        # ── Quantization summary log ──
         from collections import defaultdict
         _game_bins = defaultdict(dict)  # {game_name: {enum: n_bins}}
         for (g_idx, re, q_bin) in set(quantized_reward_cond_list):
@@ -418,24 +418,24 @@ class CLIPDatasetBuilder:
             is_train[perm[:n_train]] = True
         logger.info(f"Train: {is_train.sum()} samples, Val: {(~is_train).sum()} samples")
 
-        # ── text training for  text ──
-        # reward_enum:  text 0-indexed (0=region … 4=collectable)
+        # ── Decoder-training targets ──
+        # reward_enum is already zero-based (0=region through 4=collectable)
         reward_enum_targets = np.array([
-            int(rc[1]) for rc in reward_cond_list   # 0-indexed as-is text for
+            int(rc[1]) for rc in reward_cond_list   # Preserve zero-based values
         ], dtype=np.int32)
         condition_targets_raw = np.array([
             float(rc[2]) if rc[2] is not None else 0.0
             for rc in reward_cond_list
         ], dtype=np.float32)
 
-        # ── log1p convert: right-skewed distribution of  high-value text expand ──
-        # data text: text  text in  text / text  text  long-tail → log1p to  text
+        # ── log1p transform to expand the high-value region of right-skewed data ──
+        # Values cluster low with a high-value long tail; log1p makes them more uniform
         condition_targets_log = np.log1p(np.maximum(condition_targets_raw, 0.0))
 
-        # ── reward_enumtext min-max normalization → [0, 1] (log text in ) ──
+        # ── Per-reward_enum min-max normalization to [0, 1] in log space ──
         unique_enums = sorted(set(reward_enum_targets))
-        cond_norm_min = {}   # {enum_idx: log1p text of  min}
-        cond_norm_max = {}   # {enum_idx: log1p text of  max}
+        cond_norm_min = {}   # {enum_idx: minimum in log1p space}
+        cond_norm_max = {}   # {enum_idx: maximum in log1p space}
         condition_targets = condition_targets_log.copy()
 
         for eidx in unique_enums:
@@ -458,7 +458,7 @@ class CLIPDatasetBuilder:
 
         quantized_condition_targets = np.array(quantized_cond_list, dtype=np.int32)
 
-        # ── text to text game_ids (self.game2idx basis,  before text text) ──
+        # ── Global game_ids based on self.game2idx for cross-split consistency ──
         global_game_ids = np.array(
             [self.game2idx.get(g, -1) for g in games_type], dtype=np.int32
         )
@@ -524,11 +524,11 @@ class CLIPDatasetBuilder:
         return self.class_id2reward_cond
 
     def get_condition_norm_stats(self):
-        """reward_enumtext condition normalize parameter return.
+        """Return per-reward_enum condition normalization parameters.
 
         Returns:
             (cond_norm_min, cond_norm_max): eacheach {enum_idx(0-indexed): float} dict.
-            textconvert: original = normalized * (max - min) + min
+            Conversion: original = normalized * (max - min) + min
         """
         return self.cond_norm_min, self.cond_norm_max
 
@@ -638,7 +638,5 @@ if __name__ == "__main__":
         print("Duplicate Matrix shape:", batch.duplicate_matrix.shape)
         rng_key, subkey = jax.random.split(rng_key)
         break
-
-
 
 

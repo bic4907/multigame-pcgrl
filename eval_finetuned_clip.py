@@ -3,8 +3,8 @@ eval_finetuned_clip.py
 ======================
 Fine-tuned CLIP PCGRL evaluation entrypoint.
 
-`train_finetuned_clip.py`  to  trainingtext checkpoint  evaluationtext. inject_obs_fn
-`train_pretrained_clip.py`  of  text  as-is reusetext.
+Evaluate checkpoints trained by `train_finetuned_clip.py`. inject_obs_fn
+Reuse the implementation from `train_pretrained_clip.py` unchanged.
 
 Usage:
     python -m eval_finetuned_clip encoder.ckpt_name=finetuned-clip-...
@@ -26,4 +26,3 @@ def main(config: FinetunedCLIPEvalConfig):
 
 if __name__ == "__main__":
     main()
-

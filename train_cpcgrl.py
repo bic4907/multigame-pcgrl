@@ -1,7 +1,7 @@
 """
 train_cpcgrl.py
 ================
-CPCGRL (Conditional PCGRL) — raw condition text  text text to  text for .
+CPCGRL (Conditional PCGRL) uses raw condition vectors as input features.
 
 Usage:
     python -m train_cpcgrl [overrides]
@@ -19,7 +19,7 @@ suppress_jax_debug_logs()
 # ── CPCGRL obs inject: get_cont_obs → nlp_obs ──────────────────────────────────
 
 def inject_cpcgrl_obs(last_obs, env_state, instruct_sample, config, env):
-    """env_map + condition  as  continuous observation   computetext nlp_obs  in  inject."""
+    """Compute continuous observations from env_map and condition and inject them into nlp_obs."""
     vmap_state_fn = jax.vmap(env.prob.get_cont_obs, in_axes=(0, 0, None))
     cont_obs = vmap_state_fn(
         env_state.env_state.env_map,

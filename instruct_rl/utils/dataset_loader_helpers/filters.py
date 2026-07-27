@@ -8,13 +8,13 @@ from .constants import REWARD_ENUM_NAMES
 
 
 def _parse_dataset_reward_enum_filter(raw_value, *, field_name: str = "dataset_reward_enum"):
-    """dataset_reward_enum config  normalizetext.
+    """Normalize dataset_reward_enum configuration.
 
     Returns
     -------
     list[int] | None
-        None  text filter textenable(=all reward_enum text for ).
-        text: "01" -> [0, 1], "0,1" -> [0, 1], 2 -> [2]
+        None disables filtering and allows every reward_enum.
+        Examples: "01" -> [0, 1], "0,1" -> [0, 1], 2 -> [2]
     """
     if raw_value is None:
         return None
@@ -61,11 +61,11 @@ def _parse_dataset_reward_enum_filter(raw_value, *, field_name: str = "dataset_r
 
 
 def _parse_reward_enum_list(raw_value, *, field_name: str = "eval_dataset_reward_enums"):
-    """text reward_enum config  int text to  normalizetext.
+    """Normalize a multiple-reward_enum setting to a list of integers.
 
     None/'none'/'' -> None
     'all'          -> [0,1,2,3,4]
-    '012'          -> [0,1,2]   (existing text keep)
+    '012'          -> [0,1,2]   (preserves legacy behavior)
     '0,2,4'        -> [0,2,4]
     """
     if raw_value is None:
@@ -101,7 +101,7 @@ def _parse_reward_enum_list(raw_value, *, field_name: str = "eval_dataset_reward
 
 @dataclass
 class _ConditionFilter:
-    """text condition filter condition."""
+    """A single condition-filter criterion."""
 
     enum_idx: int
     min_val: Optional[float] = None
@@ -109,9 +109,9 @@ class _ConditionFilter:
 
 
 def _parse_condition_filters(filter_str: str) -> List[_ConditionFilter]:
-    """filter string  parsingtext.
+    """Parse a filter string.
 
-    text (texttable to  text text text):
+    Format (separate multiple entries with commas):
         enum_{i}_min_{lo}_max_{hi}   — lo ≤ condition[i] ≤ hi
         enum_{i}_min_{lo}            — lo ≤ condition[i]
         enum_{i}_max_{hi}            — condition[i] ≤ hi
@@ -146,7 +146,7 @@ def _parse_condition_filters(filter_str: str) -> List[_ConditionFilter]:
 
 
 def _apply_condition_filters(samples, filters: List[_ConditionFilter]):
-    """filter text  AND text as  applytext sample  filteringtext."""
+    """Filter samples by applying all filters with AND semantics."""
     for filt in filters:
         def _keep(sample, _f=filt):
             conds = sample.meta.get("conditions", {})
@@ -162,4 +162,3 @@ def _apply_condition_filters(samples, filters: List[_ConditionFilter]):
 
         samples = [sample for sample in samples if _keep(sample)]
     return samples
-

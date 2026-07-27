@@ -1,7 +1,7 @@
 # conf/train_mipcgrl_encoder_mg.yaml
-# MIPCGRL MLP text textgame pretraining config
+# Multi-game pretraining config for the MIPCGRL MLP encoder
 #
-# IPCGRL  and  of  text : encoder latent z  to text task(reward_enum) text head   text  training.
+# Difference from IPCGRL: also trains a task (reward_enum) classification head on the encoder latent z.
 #   Loss = MSE(condition) + classifier_weight * CrossEntropy(reward_enum)
 #
 # Usage:
@@ -14,7 +14,7 @@ defaults:
   - _self_
 
 
-# ── MLP text config ──
+# ── MLP encoder settings ──
 encoder:
   model: mlp
   num_layers: 2
@@ -23,7 +23,7 @@ encoder:
   dropout_rate: 0.0
   token_max_len: 77
 
-# ── MLP text (condition value text) ──
+# ── MLP encoder (condition value regression) ──
 decoder:
   hidden_dim: 128
   num_layers: 2

@@ -12,21 +12,20 @@ def get_multigame_amount_fitness(
     cond: chex.Array,
     tile_name: str = "interactive",
 ) -> chex.Array:
-    """current map in  multigame tile count and  texttable of  text  (text keep).
+    """Signed difference between a multigame tile count and its target in the current map.
 
     Parameters
     ----------
     curr_env_map : chex.Array
         (H, W) integer map.
     cond : chex.Array
-        texttable tile count.
+        Measured tile count.
     tile_name : str
-        "interactive", "hazard", "collectable"  during  text.
+        One of "interactive", "hazard", or "collectable".
 
     Returns
     -------
-    chex.Array : fitness text (cond text text text, text text).
+    chex.Array : fitness value (positive above cond and negative below it).
     """
     curr_loss = multigame_amount_loss(curr_env_map, tile_name, cond, absolute=False)
     return curr_loss.astype(float)
-

@@ -3,10 +3,10 @@ instruct_rl/eval/wrappers/tpkldiv.py
 ======================================
 TPKLWrapper — Tile-Pattern KL divergence across seeds per instruction.
 
-text separate
+Separation of responsibilities
 ---------
-- TPKLWrapper  : data pipeline  before text (HDF5 load  after  TPKLEvaluator abovetext)
-- TPKLEvaluator: text text (GT distribution text + JSD compute)
+- TPKLWrapper  : data pipeline (loads HDF5 and delegates to TPKLEvaluator)
+- TPKLEvaluator: pure algorithm (builds the GT distribution and computes JSD)
 """
 from __future__ import annotations
 
@@ -69,8 +69,8 @@ class TPKLWrapper:
         Parameters
         ----------
         instruct_df : evaluation target DataFrame (game, reward_enum, feature_name, condition_value)
-        gt_levels   : (M, H, W) int — calltext(metrics.py)   text filteringtext  before text
-        n_eps       : seed( in text) text
+        gt_levels   : (M, H, W) int, already filtered by the caller (metrics.py)
+        n_eps       : number of seeds (episodes)
 
         Returns
         -------
@@ -119,4 +119,3 @@ class TPKLWrapper:
         elapsed = time.perf_counter() - t0
         logger.info("[TPKLWrapper] done: mean=%.4f  elapsed=%.2fs", float(np.mean(scores)), elapsed)
         return scores.reshape(-1)
-

@@ -1,15 +1,15 @@
 """
 encoder/finetuned_clip_model.py
 ================================
-HuggingFace pretrained CLIP  text for text of  (image, text) data to  text abovetext
-trainable text. `encoder.pretrained_clip_model`  and  parameter text(name/structure)
-textwalltext sametext also text text, fine-tune result checkpoint  as-is existing RL training
-pipeline(`apply_encoder_params`) as  inject text text text.
+Trainable variant for fine-tuning HuggingFace pretrained CLIP on user-provided
+(image, text) data. Its parameter-tree names and structure exactly match
+`encoder.pretrained_clip_model`, so fine-tuned checkpoints can be injected
+directly into the existing RL pipeline through `apply_encoder_params`.
 
-text text
+Differences
 ------
-- `jax.lax.stop_gradient` remove → text CLIP parameter in  text text
-- text text text name·shape text `pretrained_clip_model`  and  same
+- Removes `jax.lax.stop_gradient`, allowing gradients through all CLIP parameters
+- All other module names and shapes match `pretrained_clip_model`
 """
 from typing import Dict
 
@@ -23,7 +23,7 @@ from encoder.pretrained_clip_model import ContrastiveModule  # as-is reuse
 
 
 class TrainablePretrainedTextEncoder(nn.Module):
-    """`PretrainedTextEncoder`  and  same structure text stop_gradient none."""
+    """Same structure as `PretrainedTextEncoder`, without stop_gradient."""
     pretrained_text_encoder: nn.Module
 
     @nn.compact
@@ -38,7 +38,7 @@ class TrainablePretrainedTextEncoder(nn.Module):
 
 
 class TrainablePretrainedImageEncoder(nn.Module):
-    """`PretrainedImageEncoder`  and  same structure text stop_gradient none."""
+    """Same structure as `PretrainedImageEncoder`, without stop_gradient."""
     pretrained_state_encoder: nn.Module
 
     @nn.compact
@@ -51,8 +51,8 @@ class TrainablePretrainedImageEncoder(nn.Module):
 def get_finetuned_clip_encoder(config: EncoderConfig):
     """training for  ContrastiveModule + HF pretrained initial parameter dict  return.
 
-    return text (·structure)  `get_pretrained_clip_encoder`  and  sametext to
-    `train_clip.py:get_train_state`  of  `replace_params`  to text  as-is text for text text text.
+    The returned format and structure match `get_pretrained_clip_encoder`, so
+    `train_clip.py:get_train_state` can reuse its `replace_params` logic.
     """
     pretrained_params = {}
 
@@ -77,4 +77,3 @@ def get_finetuned_clip_encoder(config: EncoderConfig):
 
     encoder = ContrastiveModule(encoders=encoder_dict)
     return encoder, pretrained_params
-

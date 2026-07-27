@@ -2,13 +2,13 @@
 """
 dataset/cpcgrl_buffer/build_pair_dataset.py
 ============================================
-saves/ folder of  CPCGRL training text(.npz)  (game, reward_enum) by text
-text text (env_map[t], env_map[t+1])   text,
-duplicate remove  after  **text .npz file** in  dict form to  savetext.
+Groups the CPCGRL training buffers (.npz) under saves/ by (game, reward_enum),
+extracts consecutive (env_map[t], env_map[t+1]) pairs,
+deduplicates them, and saves everything as a dict in a **single .npz file**.
 
-text:
+Output:
     dataset/cpcgrl_buffer/cpcgrl_pair_dataset.npz
-        text structure:
+        Keys:
             {game}_re{rn}       : (N, 2, 16, 16) int32  — env_map pairs
             {game}_re{rn}_ts    : (N,) int64             — timesteps
             _metadata           : JSON string (0-d array)
@@ -27,7 +27,6 @@ import json
 import os
 import platform
 import re
-import socket
 from datetime import datetime
 
 import numpy as np
@@ -36,8 +35,8 @@ import numpy as np
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def parse_game_and_re(dirname: str) -> tuple[str | None, int | None]:
-    """directory name in  game name and  reward_enum text extract.
-    text: 'buffer-exp-cb_game-doom_re-3_vec_ro_s-0' → ('doom', 3)
+    """Extract the game name and reward_enum value from a directory name.
+    e.g. 'buffer-exp-cb_game-doom_re-3_vec_ro_s-0' → ('doom', 3)
     """
     gm = re.search(r"_game-(\w+)_", dirname)
     rm = re.search(r"_re-(\d+)-?_", dirname)
@@ -47,7 +46,7 @@ def parse_game_and_re(dirname: str) -> tuple[str | None, int | None]:
 
 
 def load_buffer_dir(buffer_dir: str):
-    """text directory of  text .npz   text (env_maps, dones, timesteps)   return."""
+    """Load every .npz in a buffer directory and return (env_maps, dones, timesteps)."""
     npz_files = sorted(glob.glob(os.path.join(buffer_dir, "*.npz")))
     maps, dones, ts = [], [], []
     for f in npz_files:
@@ -65,7 +64,7 @@ def load_buffer_dir(buffer_dir: str):
 
 
 def make_pairs(env_maps, dones, timesteps):
-    """text 2-step text create. done text text timestep text remove."""
+    """Form consecutive 2-step pairs, dropping those crossing a done flag or a timestep gap."""
     n = env_maps.shape[0]
     if n < 2:
         empty = np.empty((0, 2, *env_maps.shape[1:]), dtype=env_maps.dtype)
@@ -81,7 +80,7 @@ def make_pairs(env_maps, dones, timesteps):
 
 
 def deduplicate_pairs(pairs: np.ndarray) -> np.ndarray:
-    """env_map text textabove to  text before  sametext row remove. return: text row index."""
+    """Drop duplicate pairs by exact env_map match. Returns the indices to keep."""
     flat = pairs.reshape(pairs.shape[0], -1)
     _, unique_idx = np.unique(flat, axis=0, return_index=True)
     unique_idx.sort()
@@ -96,7 +95,7 @@ def main():
     )
     parser.add_argument("--saves_dir", default="saves")
     parser.add_argument("--pairs_per_group", type=int, default=50000,
-                        help="(game, re) text text maximum extract text text")
+                        help="maximum pairs to extract per (game, re) group")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -104,7 +103,7 @@ def main():
     out_dir = os.path.join("dataset", "cpcgrl_buffer")
     os.makedirs(out_dir, exist_ok=True)
 
-    # 1. (game, reward_enum) text text text
+    # 1. Discover the (game, reward_enum) groups
     exp_dirs = sorted(glob.glob(os.path.join(args.saves_dir, "*_vec_ro_s-*")))
     group_bufs: dict[tuple[str, int], str] = {}
     for ed in exp_dirs:
@@ -123,7 +122,7 @@ def main():
     print(f"  reward_enums: {res_found}")
     assert found, "No buffer dirs found!"
 
-    # 2. text text extract → dict  in  text
+    # 2. Extract pairs per group into a dict
     arrays: dict[str, np.ndarray] = {}
     group_info = []
     total_pairs = 0
@@ -144,7 +143,7 @@ def main():
             print(f"  WARNING: skip {key}")
             continue
 
-        # sampletext
+        # Subsample
         n_sample = min(args.pairs_per_group, pairs.shape[0])
         idx = rng.choice(pairs.shape[0], size=n_sample, replace=False)
         idx.sort()
@@ -152,19 +151,19 @@ def main():
         pts = pts[idx]
         print(f"  sampled: {n_sample}")
 
-        # duplicate remove
+        # Deduplicate
         n_before = pairs.shape[0]
         uniq_idx = deduplicate_pairs(pairs)
         pairs = pairs[uniq_idx]
         pts = pts[uniq_idx]
         print(f"  after dedup: {pairs.shape[0]} (removed {n_before - pairs.shape[0]})")
 
-        # text
+        # Shuffle
         perm = rng.permutation(pairs.shape[0])
         pairs = pairs[perm]
         pts = pts[perm]
 
-        # dict  in  text
+        # Store in the dict
         arrays[key] = pairs            # (N, 2, H, W)
         arrays[f"{key}_ts"] = pts      # (N,)
 
@@ -183,11 +182,10 @@ def main():
     # 3. metadata  JSON string to  save
     metadata = {
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "hostname": socket.gethostname(),
         "platform": platform.platform(),
         "seed": args.seed,
         "pairs_per_group_requested": args.pairs_per_group,
-        "saves_dir": os.path.abspath(args.saves_dir),
+        "saves_dir": args.saves_dir,
         "total_pairs": total_pairs,
         "total_before_dedup": total_before_dedup,
         "games": games_found,
@@ -196,13 +194,13 @@ def main():
     }
     arrays["_metadata"] = np.array(json.dumps(metadata, ensure_ascii=False))
 
-    # 4. text file save
+    # 4. Write the file
     out_path = os.path.join(out_dir, "cpcgrl_pair_dataset.npz")
     np.savez_compressed(out_path, **arrays)
 
     fsize = os.path.getsize(out_path)
 
-    # 5. summary text
+    # 5. Summary
     print(f"\n{'=' * 64}")
     print(f"  CPCGRL Pair Dataset")
     print(f"{'=' * 64}")
@@ -234,11 +232,9 @@ def main():
 
     print(f"\n  build info:")
     print(f"    created_at : {metadata['created_at']}")
-    print(f"    hostname   : {metadata['hostname']}")
     print(f"    platform   : {metadata['platform']}")
     print(f"{'=' * 64}")
 
 
 if __name__ == "__main__":
     main()
-

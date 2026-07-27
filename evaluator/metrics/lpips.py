@@ -1,11 +1,11 @@
 """
 evaluator/metrics/lpips.py
 ===========================
-LPIPS (Learned Perceptual Image Patch Similarity) texttable.
+LPIPS (Learned Perceptual Image Patch Similarity) evaluator.
 
-text: LevelBundle.image — (H, W, 3) uint8 RGB image
-text also : 1 - LPIPS_dist / max_dist  ∈ [0, 1]  (1 = text before  same)
- of text: lpips, torch  (pip install lpips)
+Input: LevelBundle.image -- (H, W, 3) uint8 RGB image
+Similarity: 1 - LPIPS_dist / max_dist in [0, 1] (1 means identical)
+Dependencies: lpips and torch (pip install lpips)
 """
 from __future__ import annotations
 
@@ -18,26 +18,26 @@ from .base import BaseMetricEvaluator, LevelBundle
 
 class LPIPSMetric(BaseMetricEvaluator):
     """
-    Learned Perceptual Image Patch Similarity (LPIPS) texttable.
+    Learned Perceptual Image Patch Similarity (LPIPS) evaluator.
 
-    AlexNet/VGG text distance  normalizetext text also  to  returntext:
+    Normalize AlexNet/VGG perceptual distance and return it as similarity:
         similarity = 1 - dist / max_dist  ∈ [0, 1]
 
     Parameters
     ----------
     net : {"alex", "vgg", "squeeze"}
-        LPIPS text network.  "alex"    text text recommendedtext.
+        LPIPS backbone. "alex" is fastest and recommended.
     """
 
     def __init__(self, net: str = "alex") -> None:
         import importlib
-        # filetext text text: text lpips text  direct text load
+        # Load the external lpips package explicitly to avoid filename collisions
         _lpips_lib = importlib.import_module("lpips")
         self.net = net
         self._loss_fn = _lpips_lib.LPIPS(net=net, verbose=False)
         self._loss_fn.eval()
 
-    # ── BaseMetricEvaluator text ──────────────────────────────────────────────
+    # ── BaseMetricEvaluator implementation ───────────────────────────────────
 
     @property
     def name(self) -> str:
@@ -45,8 +45,8 @@ class LPIPSMetric(BaseMetricEvaluator):
 
     def similarity_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
         """
-        (N, N) text also  rowtext: sim = 1 − dist / max_dist.
-        texteachtext = 1.0.
+        (N, N) similarity matrix: sim = 1 - dist / max_dist.
+        The diagonal is 1.0.
         """
         dist_mat = self._distance_matrix(bundles)
         max_d    = dist_mat.max()
@@ -54,10 +54,10 @@ class LPIPSMetric(BaseMetricEvaluator):
         np.fill_diagonal(sim, 1.0)
         return sim
 
-    # ── text  public API ─────────────────────────────────────────────────────────
+    # ── Additional public API ─────────────────────────────────────────────────
 
     def distance_matrix(self, bundles: List[LevelBundle]) -> np.ndarray:
-        """(N, N) pairwise LPIPS distance rowtext (text text text)."""
+        """Return an (N, N) pairwise LPIPS distance matrix; lower is more similar."""
         return self._distance_matrix(bundles)
 
     # ── internal utility ─────────────────────────────────────────────────────────────
@@ -80,4 +80,3 @@ class LPIPSMetric(BaseMetricEvaluator):
                     mat[i, j] = d
                     mat[j, i] = d
         return mat
-

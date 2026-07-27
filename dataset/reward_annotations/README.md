@@ -1,13 +1,13 @@
 # Reward Annotation Pipeline
 
-game level sample in  text reward measure  computetext, OpenAI Batch API to  text instruction  createtext  2text pipeline.
+A two-stage pipeline: compute reward measures over game level samples, then generate natural-language instructions through the OpenAI Batch API.
 
 ```
 cache (MultiGameDataset)
-    ↓  annotate.py
-{key}.ann.json  (5text measure text, instruction text)
+    {key}.ann.json  (5 measures computed, instructions still empty)
+{key}.ann.json  (5 measures computed, instructions still empty)
     ↓  generate_instructions.py --run
-{key}.ann.json  (instruction_raw / instruction_uni text text)
+{key}.ann.json  (instruction_raw / instruction_uni filled in)
 ```
 
 ---
@@ -18,13 +18,13 @@ cache (MultiGameDataset)
 # Step 1: measure annotation
 python dataset/reward_annotations/annotate.py
 
-# Step 2: instruction create (text → finish text → automatic save)
+# Step 2: generate instructions (submit → poll → save automatically)
 python dataset/reward_annotations/generate_instructions.py --run
 ```
 
-`--run`  gameby batch  text, finishtext text text, finish text ann.json in  result  applytext.
+`--run` submits one batch per game, polls until completion, and writes the results back into ann.json.
 
-### text Usage (text game / enum)
+### Restricting the run (specific games / enums)
 
 ```bash
 python dataset/reward_annotations/annotate.py --games doom zelda
@@ -37,21 +37,21 @@ python dataset/reward_annotations/generate_instructions.py --run \
 
 ## Step 1 — annotate.py
 
-cache(`dataset/multigame/cache/artifacts/`) in  map array  text 5 text measure  computetext `{key}.ann.json` in  savetext.
+Reads the map arrays from the cache (`dataset/multigame/cache/artifacts/`), computes the 5 measures, and stores them in `{key}.ann.json`.
 
-### Reward Enum text of
+### Reward enum definitions
 
 | enum | feature_name | content |
 |------|------|------|
-| 0 | `region` | text passable text text |
-| 1 | `path_length` |  text text path text  |
-| 2 | `interactable_count` | Interactive tile text |
-| 3 | `hazard_count` | Hazard tile text |
-| 4 | `collectable_count` | Collectable tile text |
+| 0 | `region` | number of connected passable regions |
+| 1 | `path_length` | length of the longest path |
+| 2 | `interactable_count` | number of Interactive tiles |
+| 3 | `hazard_count` | number of Hazard tiles |
+| 4 | `collectable_count` | number of Collectable tiles |
 
-**passable basis**: unified EMPTY(1) + HAZARD(4) + COLLECTABLE(5) — text game common
+**Passable definition**: unified EMPTY(1) + HAZARD(4) + COLLECTABLE(5) — shared by every game
 
-### gametext sub_condition (count compute basis tile)
+### Per-game sub_condition (tiles counted for each measure)
 
 | game | interactable | hazard | collectable |
 |------|------|------|------|
@@ -61,15 +61,15 @@ cache(`dataset/multigame/cache/artifacts/`) in  map array  text 5 text measure  
 | pokemon | spawn + water | enemy | object |
 | dungeon | — | enemy | treasure |
 
-### text text
+### Options
 
-| text | default value | text |
+| option | default | description |
 |------|------|------|
-| `--games` | all 5text | processtext game list |
-| `--cache-dir` | `dataset/multigame/cache/artifacts` | cache text directory |
-| `--force` | False | existing ann.json overwrite |
+| `--games` | all 5 | games to process |
+| `--cache-dir` | `dataset/multigame/cache/artifacts` | cache root directory |
+| `--force` | False | overwrite an existing ann.json |
 
-### text
+### Output
 
 `dataset/multigame/cache/artifacts/{hash}/{game}/{key}.ann.json`
 
@@ -96,63 +96,63 @@ cache(`dataset/multigame/cache/artifacts/`) in  map array  text 5 text measure  
 
 ## Step 2 — generate_instructions.py
 
-ann.json  text each sample in  text GPT in text `instruction_raw` / `instruction_uni` create  requesttext result  ann.json in  savetext.
+For every sample in ann.json, asks GPT to write `instruction_raw` / `instruction_uni` and writes the results back into ann.json.
 
-### --run text text
+### What `--run` does
 
 ```
-1. threshold=None text (game, feature) text → instruction  "None" as  direct text
-2. textprocess row in  text gametext JSONL file create (batches/{timestamp}.jsonl)
-3. OpenAI Batch API in  gameby batch text
-4. text text (default 10seconds text):
-     - finishtext batch → result parsing → ann.json update
-     - failure/text →  to text text  after  skip
-5. text batch finish text text
+1. (game, feature) pairs whose threshold is None get the literal instruction "None"
+2. The remaining rows are written to a per-game JSONL file (batches/{timestamp}.jsonl)
+3. One OpenAI batch is submitted per game
+4. Polling loop (every 10 seconds by default):
+     - completed batch → result parsing → ann.json update
+     - failed or cancelled → logged and skipped
+5. Ends once every batch has finished
 ```
 
 ### instruction_raw vs instruction_uni
 
-| text | basis |
+| field | derived from |
 |------|------|
-| `instruction_raw` | game text tile name text for  (ENEMY, DOOR, SPAWN text) |
-| `instruction_uni` | unified text text for  (empty / wall / interactive / hazard / collectable) |
+| `instruction_raw` | game-specific tile names (ENEMY, DOOR, SPAWN, ...) |
+| `instruction_uni` | unified category names (empty / wall / interactive / hazard / collectable) |
 
-### text text
+### Options
 
-| text | default value | text |
+| option | default | description |
 |------|------|------|
-| `--games` | all 5text | processtext game list |
-| `--enums` | `0 1 2 3 4` | processtext reward_enum |
-| `--cache-dir` | `dataset/multigame/cache/artifacts` | cache text |
-| `--force` | False |  text text instruction also  textcreate |
-| `--poll-interval` | 10 | text text (seconds) |
-| `--limit` | None | processtext maximum row text (text for ) |
+| `--games` | all 5 | games to process |
+| `--enums` | `0 1 2 3 4` | reward_enums to process |
+| `--cache-dir` | `dataset/multigame/cache/artifacts` | cache root |
+| `--force` | False | regenerate instructions that already exist |
+| `--poll-interval` | 10 | polling interval in seconds |
+| `--limit` | None | maximum rows to process (for testing) |
 
-### text text Usage
+### Common invocations
 
 ```bash
-# JSONL create + batch text (finish text none)
+# Build the JSONL and submit the batch (do not wait)
 python dataset/reward_annotations/generate_instructions.py --submit
 
-# finishtext batch result text + ann.json update
+# Retrieve a finished batch and update ann.json
 python dataset/reward_annotations/generate_instructions.py --retrieve BATCH_ID
 
-# batch text check
+# Check batch status
 python dataset/reward_annotations/generate_instructions.py --status BATCH_ID
 
-# batch  text text
+# Cancel a batch
 python dataset/reward_annotations/generate_instructions.py --log
 ```
 
-batch text  text  `batches/batch_log.csv` in  writetext.
+Batch submissions and completions are logged to `batches/batch_log.csv`.
 
 ---
 
-## text text
+## Prompt configuration
 
 ### system_prompt.txt
 
-GPT in text  before text  text text. text text, text, text condition  text of text.
+The system prompt handed to GPT. It fixes the output format, the length limit and how the condition is described.
 
 ```
 You are a game level description writer for PCGRL.
@@ -160,33 +160,33 @@ Write one sentence (≤10 words) describing the level's intensity.
 Output JSON: {"instruction_raw": "...", "instruction_uni": "..."}
 ```
 
-**text text text:**
-- text text  text (`STRICT LIMIT: 10 words or fewer`)
-- text text (`brief, factual description` / `NOT a design command`)
-- text tabletext (text·text text text)
+**Key constraints:**
+- Hard length limit (`STRICT LIMIT: 10 words or fewer`)
+- Descriptive, not imperative (`brief, factual description` / `NOT a design command`)
+- Fixed output schema (the two instruction fields)
 
 ### instruction_config.py
 
-text text create in  text for text  text config text. below text  text text content  text.
+Configuration for instruction generation. Editing the entries below changes the generated text.
 
 #### CUSTOM_THRESHOLDS
 
-feature text  4text intensity level to  splittext  text (3text text → 4 bin).
-`None` text GPT call text  `"None"` string to  text.
+Thresholds splitting a feature into 4 intensity levels (3 cut points → 4 bins).
+`None` skips the GPT call and stores the literal string `"None"`.
 
 ```python
 CUSTOM_THRESHOLDS = {
     "dungeon_region":       [1.5, 4.5, 14.5],  # very few / somewhat few / somewhat many / very many
-    "sokoban_hazard_count": None,               # text in  hazard none → text
+    "sokoban_hazard_count": None,               # sokoban has no hazards → skipped
     ...
 }
 ```
 
-> text text  after  instruction  textcreatetext `--force` text text for .
+> After changing a threshold, pass `--force` to regenerate the affected instructions.
 
 #### FEATURE_ZONE_LABELS
 
-intensity level 0~3 in  text  text text string. text text of  `Intensity level` text in  tabletext.
+Label strings for intensity levels 0-3. They are inserted into the prompt's `Intensity level` field.
 
 ```python
 FEATURE_ZONE_LABELS = {
@@ -198,7 +198,7 @@ FEATURE_ZONE_LABELS = {
 
 #### VOCAB_SETS
 
-each intensity levelby GPT in text text  text list. text in  `Suggested vocabulary` text to  text, text requesttext list in  randomtext 1text selecttext.
+Candidate words offered to GPT per intensity level. They appear in the prompt's `Suggested vocabulary` field, and one is drawn at random per request.
 
 ```python
 VOCAB_SETS = {
@@ -214,7 +214,7 @@ VOCAB_SETS = {
 
 #### GAME_DESCRIPTIONS / FEATURE_DESCRIPTIONS
 
-text text top in  text  game text feature text. GPT  text   text  text text for text.
+The game and feature names shown at the top of the prompt, giving GPT the context it needs.
 
 ```python
 GAME_DESCRIPTIONS = {
@@ -230,19 +230,19 @@ FEATURE_DESCRIPTIONS = {
 
 ---
 
-## text config
+## Model settings
 
-`generate_instructions.py` top in  direct text:
+Defined directly at the top of `generate_instructions.py`:
 
 ```python
-MODEL       = "gpt-5.4-mini"   # text for text OpenAI text
-MAX_TOKENS  = 300              # maximum text text
-TEMPERATURE = 2.0              # text (text text text tabletext)
+MODEL       = "gpt-5.4-mini"   # OpenAI model used
+MAX_TOKENS  = 300              # maximum output tokens
+TEMPERATURE = 2.0              # sampling temperature (higher = more varied)
 ```
 
 ---
 
-## text text
+## Directory layout
 
 `.env` file in  config:
 
@@ -257,10 +257,10 @@ OPENAI_API_KEY=sk-...
 ```
 dataset/reward_annotations/
 ├── annotate.py              # Step 1: measure compute → ann.json create
-├── generate_instructions.py # Step 2: OpenAI Batch API → instruction text
-├── instruction_config.py    # text config text (threshold, vocab, text)
-├── system_prompt.txt        # GPT text text
+├── generate_instructions.py # Step 2: OpenAI Batch API → instruction generation
+├── instruction_config.py    # prompt configuration (thresholds, vocab, labels)
+├── system_prompt.txt        # GPT system prompt
 └── batches/
-    ├── batch_log.csv        # batch text/finish  text
-    └── batch_{timestamp}.jsonl  # gametext batch request file
+    ├── batch_log.csv        # batch submission / completion log
+    └── batch_{timestamp}.jsonl  # per-game batch request file
 ```

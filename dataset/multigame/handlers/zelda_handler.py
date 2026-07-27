@@ -3,27 +3,27 @@ dataset/multigame/handlers/zelda_handler.py
 ===========================================
 The Legend of Zelda (TheVGLC) handler.
 
-TheVGLC of  text data  all text before  map  text of  text file to  text.
-each character  tile text   of text, text(room)  11×16(W×H) size of  text to  splittext.
- before text void('-') to   text text  text text text to  removetext.
+The VGLC Zelda data stores every dungeon map of a level in one file.
+Each character is a tile id, and a room is an 11x16 (WxH) patch split out of the map.
+ Patches that are entirely void ('-') are discarded.
 
-text structure (NES The Legend of Zelda)
+Map structure (NES The Legend of Zelda)
 ----------------------------------
-  - text text =   to  11character × text to  16text
-  - text: text wall(WW…) 2text + text wall(WW) 2charactertext + internal 7×12
-  - adjacent text  wall  text text (WWWW = text1 textwall + text2 textwall)
-  - separatetext text  11character text('-----------') to  text
+  - One room = 11 characters wide x 16 rows tall
+  - Layout: a 2-row wall band (WW...), a 2-character wall margin (WW), and a 7x12 interior
+  - Adjacent rooms share their walls (WWWW = room 1's wall + room 2's wall)
+  - Levels are separated by a line of 11 dashes ('-----------')
 
 preprocessing:
-  1. 11×16 text in  border wall 1text/1text remove → 9×14 (internal + wall 1text)
-  2. text  text(  to  9)  nearest-neighbor stretch → 14×14 texteachtext
-  3. 14×14  16×16  text sort (WALL padding)
+  1. Strip one row/column of border wall from the 11x16 patch → 9x14 (interior + one wall ring)
+  2. Nearest-neighbour stretch along the short axis (width 9) → 14x14 square
+  3. Centre the 14x14 patch in a 16x16 grid (WALL padding)
   4. 90 also  rotate augmentation as  data 2text
-  5. text map(50%) in  FLOOR/EMPTY abovetext in  MOB·OBJECT  1~5text random text (seed=42 fixed)
+  5. In half of the maps, randomly place 1-5 MOB/OBJECT tiles on FLOOR/EMPTY cells (seed=42)
 
-tile text (vglc_games/zelda.py basis)
+Tile ids (from vglc_games/zelda.py)
 -------------------------------------
-0  : EMPTY   (-, text)
+0  : EMPTY   (-, void)
 1  : WALL    (W)
 2  : FLOOR   (F)
 3  : DOOR    (D)
@@ -58,10 +58,10 @@ _DEFAULT_ZELDA_ROOT = (
     Path(__file__).parent.parent.parent / "TheVGLC" / "The Legend of Zelda"
 )
 
-# ── text size (NES text text size) ─────────────────────────────────────────────────
-PATCH_W = 11   #   to  (character text)
-PATCH_H = 16   # text to  (text text)
-TARGET_SIZE = 16  # text text size (16×16)
+# ── Room size (as laid out in the NES maps) ──────────────────────────────────────
+PATCH_W = 11   # width in characters
+PATCH_H = 16   # height in rows
+TARGET_SIZE = 16  # output size (16x16)
 
 # border wall remove  after  size
 TRIMMED_W = PATCH_W - 2   # 11 - 2 = 9
@@ -69,7 +69,7 @@ TRIMMED_H = PATCH_H - 2   # 16 - 2 = 14
 
 
 def _read_map_text(path: Path) -> List[str]:
-    """text file  text text list  returntext. text of  text text  remove."""
+    """Return the lines of a level file, dropping the level separators."""
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     while lines and not lines[-1].strip():
         lines.pop()
@@ -81,8 +81,8 @@ def _text_to_int_grid(
     preprocessor: ZeldaPreprocessor,
 ) -> np.ndarray:
     """
-    all text map  integer 2D array to  converttext.
-    text text  same text to  text(text text  EMPTY padding), character→integer convert.
+    Convert a whole level map into a 2D integer array.
+    Rows are padded to equal length with EMPTY, then characters are mapped to integers.
     """
     if not lines:
         return np.zeros((0, 0), dtype=np.int32)
@@ -101,15 +101,15 @@ def _extract_rooms(
     patch_w: int = PATCH_W,
 ) -> List[Tuple[np.ndarray, int, int]]:
     """
-    all map text  patch_h × patch_w text to  splittext,
-     before text EMPTY(0)text text  text.
+    Split a level map into patch_h x patch_w rooms,
+     discarding any patch that is entirely EMPTY(0).
 
     Returns
     -------
     list of (patch_array, row_idx, col_idx)
         patch_array : (patch_h, patch_w) int32
-        row_idx     : text row index (0-based)
-        col_idx     : text column index (0-based)
+        row_idx     : row index of the patch (0-based)
+        col_idx     : column index of the patch (0-based)
     """
     H, W = grid.shape
     rooms = []
@@ -117,7 +117,7 @@ def _extract_rooms(
     for iy, y in enumerate(range(0, H - patch_h + 1, patch_h)):
         for ix, x in enumerate(range(0, W - patch_w + 1, patch_w)):
             patch = grid[y : y + patch_h, x : x + patch_w]
-            #  before text empty (void) text text  text
+            # Skip patches that are entirely empty (void)
             if np.all(patch == ZeldaTile.EMPTY):
                 continue
             rooms.append((patch.copy(), iy, ix))
@@ -127,11 +127,11 @@ def _extract_rooms(
 
 def _trim_outer_wall(patch: np.ndarray) -> np.ndarray:
     """
-    11×16 text in  border wall 1text/1text remove.
+    Strip one row/column of border wall from an 11x16 patch.
 
-    text (16H × 11W):
+    Layout (16H x 11W):
         row 0  : WWWWWWWWWWW  ← remove (wall row)
-        row 1  : WWWWDDDWWWW  ← keep (wall+text)
+        row 1  : WWWWDDDWWWW  ← keep (wall + interior)
         ...
         row 14 : WWWWDDDWWWW  ← keep
         row 15 : WWWWWWWWWWW  ← remove (wall row)
@@ -145,12 +145,12 @@ def _trim_outer_wall(patch: np.ndarray) -> np.ndarray:
 
 def _stretch_to_square(patch: np.ndarray) -> np.ndarray:
     """
-    texteachtext text of  text  text  nearest-neighbor to  text texteachtext as  text.
+    Stretch the shorter axis with nearest-neighbour sampling to make the patch square.
 
-    text: 14H × 9W → 14 × 14  (  to  9→14 stretch)
-        9H × 14W → 14 × 14  (text to  9→14 stretch)
+    e.g. 14H x 9W → 14 x 14  (width 9 → 14)
+        9H x 14W → 14 x 14  (height 9 → 14)
 
-    integer tile ID  keeptext abovetext nearest-neighbor index text  text for text.
+    Nearest-neighbour indexing is used so the integer tile ids are preserved.
     """
     h, w = patch.shape
     if h == w:
@@ -159,19 +159,19 @@ def _stretch_to_square(patch: np.ndarray) -> np.ndarray:
     target = max(h, w)
 
     if w < h:
-        #   to   text →   to   h size to  text
+        # Width is the shorter axis → stretch width up to h
         col_indices = np.round(np.linspace(0, w - 1, target)).astype(int)
         return patch[:, col_indices].copy()
     else:
-        # text to   text → text to   w size to  text
+        # Height is the shorter axis → stretch height up to w
         row_indices = np.round(np.linspace(0, h - 1, target)).astype(int)
         return patch[row_indices, :].copy()
 
 
 def _center_pad_to_16x16(patch: np.ndarray) -> np.ndarray:
     """
-    text of  size text  16×16 center sort to  paddingtext.
-    text text  WALL(1) to  text (border text to ).
+    Centre a patch in a 16x16 grid, padding as needed.
+    The padding is WALL(1), matching the border.
     """
     h, w = patch.shape
     if h == TARGET_SIZE and w == TARGET_SIZE:
@@ -184,18 +184,18 @@ def _center_pad_to_16x16(patch: np.ndarray) -> np.ndarray:
 
 
 def _rotate_90(patch: np.ndarray) -> np.ndarray:
-    """text 90 also  rotate."""
+    """Rotate the patch 90 degrees."""
     return np.rot90(patch, k=-1).copy()
 
 
 def _flip_ud(patch: np.ndarray) -> np.ndarray:
-    """text flip."""
+    """Flip the patch horizontally."""
     return np.flipud(patch).copy()
 
 
 def _is_uniform_center_12x12(padded: np.ndarray) -> bool:
     """
-    16x16 map of  center 12x12 text(text 2text text)  text same tiletext check.
+    Check whether the centre 12x12 region of a 16x16 map (a 2-cell margin) is a single tile.
 
     Parameters
     ----------
@@ -205,22 +205,22 @@ def _is_uniform_center_12x12(padded: np.ndarray) -> bool:
     Returns
     -------
     bool
-        center 12x12  text same text text True
+        True when the centre 12x12 is uniform
     """
     center = padded[2:14, 2:14]  # center 12x12 extract
     return bool(np.all(center == center[0, 0]))
 
 
-# text availabletext tile text
+# Tiles that may be dropped in
 _DROP_TILES = [ZeldaTile.MOB, ZeldaTile.OBJECT]
 
-# text target  text  text tile (FLOOR, EMPTY text available)
+# Tiles that may be overwritten by a drop (FLOOR and EMPTY)
 _DROPPABLE_TILES = {ZeldaTile.FLOOR, ZeldaTile.EMPTY}
 
-# text augmentation ratio (text  during  text % in  applytext)
-DROP_AUG_RATIO = 1.0  # text of  100% in  text apply
+# Fraction of maps the drop augmentation is applied to
+DROP_AUG_RATIO = 1.0  # applied to 100% of the maps
 
-# text count range
+# Number of tiles to drop
 DROP_COUNT_MIN = 0
 DROP_COUNT_MAX = 25
 
@@ -230,10 +230,10 @@ def _augment_random_drop(
     rng: np.random.Generator,
 ) -> Optional[np.ndarray]:
     """
-    16×16 text of  FLOOR text  EMPTY tile  during  0~25text  random as
-    MOB text  OBJECT to  text.
+    Randomly turn 0-25 of the FLOOR/EMPTY tiles of a 16x16 map into
+    MOB or OBJECT tiles.
 
-    text availabletext abovetext  if missing None  returntext.
+    Returns None when there is no eligible position.
     """
     droppable = np.argwhere(
         np.isin(padded, list(_DROPPABLE_TILES))
@@ -254,10 +254,10 @@ def _augment_random_drop(
 
 def _fill_missing_tiles(padded: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     """
-    MOB(hazard) text  OBJECT(collectable)  without map in  text tile  in-place to  text text.
+    Fill in the missing tile types in maps that lack MOB (hazard) or OBJECT (collectable).
 
-    - MOB none  → FLOOR/EMPTY  during  1~DROP_COUNT_MAXtext  MOB as  text
-    - OBJECT none → text  FLOOR/EMPTY  during  1~DROP_COUNT_MAXtext  OBJECT to  text
+    - No MOB    → turn 1-DROP_COUNT_MAX FLOOR/EMPTY cells into MOB
+    - No OBJECT → turn 1-DROP_COUNT_MAX of the remaining FLOOR/EMPTY cells into OBJECT
     """
     result = padded.copy()
 
@@ -280,7 +280,7 @@ def _fill_missing_tiles(padded: np.ndarray, rng: np.random.Generator) -> np.ndar
     return result
 
 
-# ── integer → texttable character text ─────────────────────────────────────────────────────
+# ── Integer → character mapping ───────────────────────────────────────────────────
 _INT_TO_CHAR: Dict[int, str] = {
     ZeldaTile.EMPTY:   "-",
     ZeldaTile.WALL:    "W",
@@ -299,7 +299,7 @@ def _int_to_char(val: int) -> str:
 
 
 def _array_to_char_grid(arr: np.ndarray) -> List[List[str]]:
-    """integer array → character text."""
+    """Integer array → character grid."""
     return [[_int_to_char(int(val)) for val in row] for row in arr]
 
 
@@ -307,18 +307,18 @@ class ZeldaHandler(BaseGameHandler):
     """
     The Legend of Zelda (TheVGLC) handler.
 
-    preprocessing  and text:
-      1. Processed/ folder of  text map  11×16 text to  split
-      2. text text( before text EMPTY) remove
+    Preprocessing steps:
+      1. Split each level map under Processed/ into 11x16 rooms
+      2. Drop the empty patches (entirely EMPTY)
       3. border wall 1text/1text remove → 9×14
-      4. text  text(  to ) nearest-neighbor stretch → 14×14
-      5. 16×16  text sort (WALL padding)
+      4. Nearest-neighbour stretch along the short axis → 14x14
+      5. Centre in a 16x16 grid (WALL padding)
       6. 90 also  rotate augmentation → data 2text
 
     Parameters
     ----------
     root  : TheVGLC/The Legend of Zelda folder path
-    split : sub foldertext (default "Processed")
+    split : subdirectory (default: "Processed")
     """
 
     def __init__(
@@ -338,10 +338,10 @@ class ZeldaHandler(BaseGameHandler):
     def game_tag(self) -> str:
         return GameTag.ZELDA
 
-    # ── file text ────────────────────────────────────────────────────────────────
+    # ── File discovery ───────────────────────────────────────────────────────────
 
     def _discover_files(self) -> List[Path]:
-        """Processed/ folder in  text file list  returntext."""
+        """Return the list of level files under Processed/."""
         processed = self._root / self._split
         if not processed.exists():
             raise FileNotFoundError(
@@ -357,7 +357,7 @@ class ZeldaHandler(BaseGameHandler):
         files = self._discover_files()
         if not files:
             raise FileNotFoundError(
-                f"[zelda] level file  text  text text: {self._root / self._split}"
+                f"[zelda] No level files found under: {self._root / self._split}"
             )
 
         rng = np.random.default_rng(seed=42)
@@ -376,13 +376,13 @@ class ZeldaHandler(BaseGameHandler):
                 # 1) border wall remove → 14H × 9W
                 trimmed = _trim_outer_wall(patch)
 
-                # 2) text  text stretch → 14 × 14 texteachtext
+                # 2) Stretch the short axis → 14 x 14 square
                 squared = _stretch_to_square(trimmed)
 
-                # 3) 16×16  text sort (text 1text WALL padding)
+                # 3) Centre in 16x16 (one ring of WALL padding)
                 padded = _center_pad_to_16x16(squared)
 
-                # 4) OBJECT  without map in  probabilitytext as  OBJECT batch (deterministic)
+                # 4) Deterministically add OBJECT tiles with probability when none exist
                 base_padded = self._preprocessor.postprocess_array(padded)
 
                 source_id = f"{fname}_r{ry}_c{rx}"
@@ -396,7 +396,7 @@ class ZeldaHandler(BaseGameHandler):
                     "output_size": (TARGET_SIZE, TARGET_SIZE),
                 }
 
-                # text — independently MOB/OBJECT text
+                # Original — fill in missing MOB/OBJECT
                 arr_orig = _fill_missing_tiles(base_padded, rng)
                 samples.append(GameSample(
                     game=GameTag.ZELDA,
@@ -409,7 +409,7 @@ class ZeldaHandler(BaseGameHandler):
                     meta={**base_meta, "augmented": False},
                 ))
 
-                # 90 also  rotate augmentation — independently MOB/OBJECT text
+                # 90-degree rotation augmentation — fill in missing MOB/OBJECT
                 rotated = _fill_missing_tiles(_rotate_90(base_padded), rng)
                 samples.append(GameSample(
                     game=GameTag.ZELDA,
@@ -422,7 +422,7 @@ class ZeldaHandler(BaseGameHandler):
                     meta={**base_meta, "augmented": True, "augmentation": "rot90"},
                 ))
 
-                # text flip augmentation — independently MOB/OBJECT text
+                # Horizontal flip augmentation — fill in missing MOB/OBJECT
                 flipped = _fill_missing_tiles(_flip_ud(base_padded), rng)
                 samples.append(GameSample(
                     game=GameTag.ZELDA,
@@ -435,13 +435,13 @@ class ZeldaHandler(BaseGameHandler):
                     meta={**base_meta, "augmented": True, "augmentation": "flipud"},
                 ))
 
-        # ── filtering: uniform center map of  augmentation text before text remove ─────────────────────────
+        # ── Filtering: drop uniform-centre maps and their augmentations ──────────
         samples_before_filter = len(samples)
 
-        # 1text: uniform center map of  augmentation text before text remove (text  keep)
+        # Pass 1: collect the uniform-centre originals to remove
         uniform_source_ids = set()
         for sample in samples:
-            # text  uniformtext check (rot90, drop  text text text)
+            # Check the original for uniformity (rot90 and drop share its structure)
             if not any(sample.source_id.endswith(s) for s in ("_rot90", "_flipud", "_drop")):
                 padded_array = sample.array
                 if _is_uniform_center_12x12(padded_array):
@@ -450,10 +450,10 @@ class ZeldaHandler(BaseGameHandler):
                     uniform_source_ids.add(f"{base_id}_flipud")
                     uniform_source_ids.add(f"{base_id}_drop")
 
-        # 2text: uniform center map of  augmentation text before  remove
+        # Pass 2: remove the augmentations of the uniform-centre maps
         filtered_samples = [s for s in samples if s.source_id not in uniform_source_ids]
 
-        # 3text: order textconfig
+        # Step 3: configure order
         for i, sample in enumerate(filtered_samples):
             sample.order = i
 
@@ -489,4 +489,3 @@ class ZeldaHandler(BaseGameHandler):
     def __repr__(self) -> str:
         n = len(self._samples) if self._samples is not None else "?"
         return f"ZeldaHandler(root={str(self._root)!r}, rooms={n})"
-

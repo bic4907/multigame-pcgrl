@@ -2,7 +2,7 @@
 eval_pretrained_clip.py
 =======================
 PretrainedCLIP PCGRL evaluation entry point.
-precomputed CLIP text embedding  nlp_obs  in  injecttext evaluationtext.
+Evaluate by injecting precomputed CLIP text embeddings into nlp_obs.
 
 Usage:
     python -m eval_pretrained_clip [overrides]

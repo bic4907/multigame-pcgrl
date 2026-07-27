@@ -1,15 +1,15 @@
 """
 dataset/multigame/stats.py
 ===========================
-MultiGameDataset text utility.
+MultiGameDataset statistics utilities.
 
-dataset  columntext(training text ) each gametext level text  text.
+Open the dataset and compute per-game level statistics without training.
 
 Usage
 -----
     from dataset.multigame.stats import compute_dataset_stats, print_dataset_stats
 
-    # MultiGameDataset text to text text compute
+    # Compute statistics from a MultiGameDataset instance
     from dataset.multigame import MultiGameDataset
     ds = MultiGameDataset()
     stats = compute_dataset_stats(ds)
@@ -34,7 +34,7 @@ from .tile_utils import (
 
 
 def compute_sample_stats(sample: GameSample) -> Dict[str, Any]:
-    """text GameSample in  text default text  returntext.
+    """Return basic statistics for a single GameSample.
 
     Returns
     -------
@@ -42,10 +42,10 @@ def compute_sample_stats(sample: GameSample) -> Dict[str, Any]:
         "height": int,
         "width": int,
         "n_tiles": int,
-        "unique_raw_tiles": int,             # text tile id text text
-        "category_counts": Dict[str, int],   # unified text tile text
+        "unique_raw_tiles": int,             # Number of distinct raw tile IDs
+        "category_counts": Dict[str, int],   # Tile count per unified category
         "has_instruction": bool,
-        "instruction_len": int | None,        # text text (None if no instruction)
+        "instruction_len": int | None,        # Word count (None if no instruction)
         "has_reward_annotation": bool,
     }
     """
@@ -53,10 +53,10 @@ def compute_sample_stats(sample: GameSample) -> Dict[str, Any]:
     h, w = arr.shape[:2]
     n_tiles = h * w
 
-    # text tile text text
+    # Number of unique raw tile values
     unique_raw = len(np.unique(arr))
 
-    # unified text distribution (count)
+    # Unified-category distribution (counts)
     unified = to_unified(arr, sample.game, warn_unmapped=False)
     cat_counts = category_distribution(unified, normalize=False)
 
@@ -83,7 +83,7 @@ def compute_game_stats(
     samples: List[GameSample],
     game: str,
 ) -> Dict[str, Any]:
-    """text of  game in  text  sample text to text text text  text.
+    """Compute aggregate statistics from samples belonging to one game.
 
     Returns
     -------
@@ -203,11 +203,11 @@ def compute_game_stats(
 
 
 def compute_dataset_stats(dataset) -> Dict[str, Any]:
-    """MultiGameDataset text to text all + gametext text  text.
+    """Compute overall and per-game statistics from a MultiGameDataset instance.
 
     Parameters
     ----------
-    dataset : MultiGameDataset (text  List[GameSample])
+    dataset : MultiGameDataset (or List[GameSample])
 
     Returns
     -------
@@ -218,14 +218,14 @@ def compute_dataset_stats(dataset) -> Dict[str, Any]:
         "overall_category_distribution": { <category>: mean_ratio },
     }
     """
-    # dataset  text text direct text for
+    # Use dataset directly when it is already a list
     if isinstance(dataset, list):
         samples = dataset
     else:
-        # MultiGameDataset: _samples   raw to  direct text
+        # MultiGameDataset: access _samples directly
         samples = list(dataset._samples)
 
-    # gametext text
+    # Group by game
     game_groups: Dict[str, List[GameSample]] = defaultdict(list)
     for s in samples:
         game_groups[s.game].append(s)
@@ -234,7 +234,7 @@ def compute_dataset_stats(dataset) -> Dict[str, Any]:
     for game in sorted(game_groups.keys()):
         per_game[game] = compute_game_stats(game_groups[game], game)
 
-    # all text mean ratio
+    # Overall mean category ratios
     cat_names = list(UNIFIED_CATEGORIES.values())
     overall_cat: Dict[str, float] = {}
     total = len(samples)
@@ -258,7 +258,7 @@ def compute_dataset_stats(dataset) -> Dict[str, Any]:
 
 
 def print_dataset_stats(stats: Dict[str, Any]) -> None:
-    """compute_dataset_stats result  text  read text text."""
+    """Print compute_dataset_stats results in a human-readable form."""
     print("=" * 72)
     print(f"  MultiGameDataset Statistics  (total: {stats['total_samples']} samples)")
     print(f"  Games: {', '.join(stats['games'])}")
@@ -323,7 +323,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     parser = argparse.ArgumentParser(description="Compute MultiGameDataset statistics")
-    parser.add_argument("--json", action="store_true", help="JSON text as  text")
+    parser.add_argument("--json", action="store_true", help="Output in JSON format")
     parser.add_argument("--include-dungeon", action="store_true", default=True)
     parser.add_argument("--include-pokemon", action="store_true", default=True)
     parser.add_argument("--include-sokoban", action="store_true", default=True)
@@ -344,14 +344,14 @@ if __name__ == "__main__":
         include_sokoban=not args.no_sokoban,
         include_doom=not args.no_doom,
         include_zelda=not args.no_zelda,
-        use_tile_mapping=False,  # raw text in  text compute
+        use_tile_mapping=False,  # Compute statistics from raw data
     )
     print(f"Loaded: {ds}")
 
     stats = compute_dataset_stats(ds)
 
     if args.json:
-        # numpy text text  abovetext convert
+        # Convert NumPy types for serialization
         def _convert(obj):
             if isinstance(obj, (np.integer,)):
                 return int(obj)
@@ -366,4 +366,3 @@ if __name__ == "__main__":
         print(_json.dumps(stats, indent=2, default=_convert, ensure_ascii=False))
     else:
         print_dataset_stats(stats)
-

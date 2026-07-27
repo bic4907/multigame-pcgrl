@@ -26,10 +26,10 @@ class TPKLEvaluator(BaseEvaluator):
 
     run(pred_levels, gt_levels, window_sizes, epsilon)
     --------------------------------------------------
-    pred_levels  : (N, H, W) int — evaluationtext level array
+    pred_levels  : (N, H, W) integer array of evaluated levels
     gt_levels    : (M, H, W) int — GT level array
-    window_sizes : text text text also text size list  e.g. (2, 3)
-    epsilon      : Laplace smoothing text
+    window_sizes : sliding-window sizes, e.g. (2, 3)
+    epsilon      : Laplace smoothing value
     """
 
     def run(
@@ -43,7 +43,7 @@ class TPKLEvaluator(BaseEvaluator):
         """
         Returns
         -------
-        scores : (N,) float — text text GT and  distribution  text (JSD texttile)
+        scores : (N,) float; lower means a distribution closer to GT (JSD style)
         """
         window_sizes = tuple(window_sizes)
         pred_levels  = np.asarray(pred_levels, dtype=np.int32)

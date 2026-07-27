@@ -1,10 +1,10 @@
 """
 dataset/scripts/render_samples.py
 ---------------------------------
-text script: text to text  inside  `dataset` folder in  with textgame dataset in
-sample  renderingtext PNG image to  savetext.
+Simple script that loads from the multigame dataset under the project's `dataset` directory.
+render samples and save them as PNG images.
 
-Usage (text to text text in ):
+Usage from the project root:
     python dataset/scripts/render_samples.py
 
 createwater:
@@ -12,7 +12,7 @@ createwater:
     dataset/samples/dungeon_sample.png
     dataset/samples/grid_samples.png
 
-text:   script   to text `dataset` text in  with `multigame` text  direct text.
+Note: this script imports the `multigame` package directly from the local `dataset` directory.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def main():
     ds = MultiGameDataset(vglc_games=["zelda", "mario", "lode_runner"], include_dungeon=True)
     print(f"Loaded MultiGameDataset with total samples: {len(ds)}")
 
-    # Zelda sample (text text)
+    # First Zelda sample
     zelda_pool = ds.by_game("zelda")
     if zelda_pool:
         z = zelda_pool[0]
@@ -42,7 +42,7 @@ def main():
     else:
         print("No Zelda samples found")
 
-    # Dungeon sample (text text)
+    # First Dungeon sample
     dungeon_pool = ds.by_game("dungeon")
     if dungeon_pool:
         d = dungeon_pool[0]
@@ -52,7 +52,7 @@ def main():
     else:
         print("No Dungeon samples found")
 
-    # text: Zelda 3text + Dungeon 3text (availabletext text)
+    # Grid: three Zelda and three Dungeon samples when available
     grid_samples = []
     grid_samples.extend(zelda_pool[:3])
     grid_samples.extend(dungeon_pool[:3])
@@ -66,4 +66,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

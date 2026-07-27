@@ -1,12 +1,12 @@
 """
 instruct_rl/utils/log_utils.py
 ===============================
-text to text  before text in  text for text   to text utility.
+Project-wide logging utilities.
 
 Usage
 ------
 >>> from instruct_rl.utils.log_utils import get_logger
->>> logger = get_logger(__name__)         # text  get_logger(__file__)
+>>> logger = get_logger(__name__)         # or get_logger(__file__)
 >>> logger.info("hello %s", "world")
 """
 from __future__ import annotations
@@ -17,23 +17,23 @@ import re
 from os.path import basename, splitext
 from typing import Union
 
-# ── default text ────────────────────────────────────────────────────────────
+# ── Default format ──────────────────────────────────────────────────────
 _DEFAULT_FMT = "[%(asctime)s][%(name)s][%(levelname)s] %(message)s"
 _DEFAULT_DATEFMT = "%Y-%m-%d %H:%M:%S"
 
-# text to   before text  to text level  text text text.
+# The global log level can be controlled with an environment variable
 _LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
-# text handler  duplicate text text text also text text
+# Flag preventing duplicate root handlers
 _ROOT_CONFIGURED = False
 
 
 class _MultiLineFormatter(logging.Formatter):
-    """text text of  each text in  sametext prefix  text sort  keeptext."""
+    """Prefix every line of a multiline message consistently."""
 
     def format(self, record: logging.LogRecord) -> str:
         original = super().format(record)
-        # text text   text text. remaining text in  also  sametext prefix  text.
+        # The first line is already formatted; prefix all remaining lines
         if "\n" not in record.getMessage():
             return original
         # prefix = "[2026-03-26 ...][name][LEVEL] "
@@ -46,7 +46,7 @@ class _MultiLineFormatter(logging.Formatter):
 
 
 def _ensure_root_handler():
-    """text  to text in  StreamHandler  text if missing text text, existing handler also  text  text."""
+    """Add a root StreamHandler if absent and apply one format to existing handlers."""
     global _ROOT_CONFIGURED
     if _ROOT_CONFIGURED:
         return
@@ -55,7 +55,7 @@ def _ensure_root_handler():
     root = logging.getLogger()
 
     if root.handlers:
-        # existing handler(hydra text) in  also  text text  apply
+        # Apply our format to existing handlers such as Hydra's
         for h in root.handlers:
             h.setFormatter(formatter)
     else:
@@ -68,31 +68,30 @@ def _ensure_root_handler():
 
 
 def _clean_name(name: str | None) -> str | None:
-    """ to text name in  path and  .py expandtext  removetext.
+    """Remove paths and the .py extension from a logger name.
 
     ``__file__`` → ``"train_cpcgrl"``
     ``__name__`` → as-is return
     """
     if not name:
         return name
-    # path  text text basename extract
+    # Extract the basename when the name contains a path
     if "/" in name or "\\" in name:
         name = basename(name)
-    # .py / .pyc expandtext remove
+    # Remove .py/.pyc extensions
     name = re.sub(r"\.pyc?$", "", name)
     return name
 
 
 def get_logger(name: Union[str, None] = None, level: Union[str, int, None] = None) -> logging.Logger:
-    """name based  to text  returntext.
+    """Return a logger for a name.
 
     Parameters
     ----------
     name : str | None
-        ``__name__`` text  ``__file__``   text text.
-        path·expandtext  automatic as  text.
+        Pass ``__name__`` or ``__file__``; paths and extensions are normalized.
     level : str | int | None
-        text  to text level. ``None``  text  before text(LOG_LEVEL text) config  text.
+        Per-logger level. ``None`` follows the global LOG_LEVEL environment setting.
     """
     _ensure_root_handler()
     name = _clean_name(name)
@@ -110,7 +109,7 @@ def get_logger(name: Union[str, None] = None, level: Union[str, int, None] = Non
 
 
 def suppress_jax_debug_logs():
-    """jax internal DEBUG  to text(cache_key text)  text."""
+    """Suppress internal JAX DEBUG logs such as cache_key messages."""
     for jax_logger_name in (
         "jax._src.cache_key",
         "jax._src.compiler",
@@ -119,4 +118,3 @@ def suppress_jax_debug_logs():
         "jax",
     ):
         logging.getLogger(jax_logger_name).setLevel(logging.WARNING)
-

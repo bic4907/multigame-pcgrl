@@ -3,7 +3,7 @@ dataset/multigame/handlers/pokemon_handler.py
 ==============================================
 POKEMON dataset handler.
 
-POKEMON  text NPY file in  text map and  text text  savetext text.
+POKEMON stores all maps and labels in a single NPY file.
 """
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ class POKEMONHandler(BaseGameHandler):
 
     Parameters
     ----------
-    root : POKEMON dataset text path (default: dataset/five-dollar-model)
-    npy_name : NPY filetext (default: datasets/maps_noaug.npy)
+    root : root path of the POKEMON dataset (default: dataset/five-dollar-model)
+    npy_name : NPY filename (default: datasets/maps_noaug.npy)
     """
 
     def __init__(
@@ -77,7 +77,7 @@ class POKEMONHandler(BaseGameHandler):
 
     def load_sample(self, source_id: str, order: Optional[int] = None) -> GameSample:
         """
-        source_id (text: "pokemon_0000") -> GameSample return.
+        Return the GameSample for a source_id (for example, "pokemon_0000").
         """
         # source_id in  index extract
         try:
@@ -103,23 +103,23 @@ class POKEMONHandler(BaseGameHandler):
 
     def list_entries_with_filtering(self, max_tile_ratio: Optional[float] = None, max_tile_count: Optional[int] = None) -> tuple[List[str], int, int]:
         """
-        filtering  applytext validtext text return.
+        Apply filtering and return only valid entries.
 
         Parameters
         ----------
         max_tile_ratio : Optional[float]
-            text tile  text text with maximum ratio (padding  before  10x10)
-            None text config in   text
+            Maximum ratio that one tile may occupy in the unpadded 10x10 map.
+            If None, use the value from config.
         max_tile_count : Optional[int]
-            padding  after  16x16 in  text tile  text text with maximum count
-            None text config in   text
+            Maximum count of one tile in the padded 16x16 map.
+            If None, use the value from config.
 
         Returns
         -------
         tuple[List[str], int, int]
-            (validtext source_id list, max_tile_ratio to  removetext count, max_tile_count to  removetext count)
+            (valid source IDs, count removed by max_tile_ratio, count removed by max_tile_count)
         """
-        # config in  default value  text
+        # Read defaults from config
         if max_tile_ratio is None:
             max_tile_ratio = self._handler_config.pokemon.max_tile_ratio if self._handler_config else 1.0
         if max_tile_count is None:
@@ -128,9 +128,9 @@ class POKEMONHandler(BaseGameHandler):
         valid_ids = []
         filtered_by_ratio = 0
         filtered_by_count = 0
-        max_samples = 1000  # maximum 1000text text
+        max_samples = 1000  # Limit to at most 1,000 samples
 
-        # "house on the beach" duplicate remove: text 7text text (874-880 index)
+        # Remove duplicate "house on the beach" samples: exclude the final seven (indices 874-880)
         excluded_duplicates = set(range(874, 881))
 
         for i in range(len(self._images)):
@@ -152,7 +152,7 @@ class POKEMONHandler(BaseGameHandler):
             map_10x10 = self._preprocessor.transform_pokemon_onehot(onehot_map)
             padded_map = self._preprocessor.pad_to_16x16(map_10x10)
 
-            # paddingtext map in  tile count check
+            # Check tile counts in the padded map
             tile_counts = {}
             for val in padded_map.flatten():
                 tile_counts[val] = tile_counts.get(val, 0) + 1
@@ -169,7 +169,7 @@ class POKEMONHandler(BaseGameHandler):
         return valid_ids, filtered_by_ratio, filtered_by_count
 
     def __iter__(self):
-        """text sample repetition."""
+        """Iterate over all samples."""
         for i, source_id in enumerate(self.list_entries()):
             yield self.load_sample(source_id, order=i)
 
@@ -178,4 +178,3 @@ class POKEMONHandler(BaseGameHandler):
 
     def __repr__(self) -> str:
         return f"POKEMONHandler(samples={len(self._images)})"
-

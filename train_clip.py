@@ -188,7 +188,7 @@ def make_train(config: CLIPTrainConfig):
         class_id2reward_cond = dataset_builder.get_class_id2reward_cond()
 
         # ── Split seen/unseen games when unseen_games is specified ────────────
-        # Use the same split logic as CLIPDecoderTrainConfig so MGPCGRL has the
+        # Use the same split logic as CLIPDecoderTrainConfig so ReWARD has the
         # same checkpoint naming/structure. VIPCGRL trains only contrastively
         # without a decoder, but controls the encoder's seen/unseen distribution identically.
         unseen_games_str = getattr(config, "unseen_games", None)

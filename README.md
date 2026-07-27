@@ -1,10 +1,10 @@
-# MGPCGRL: Cross-Domain Reward Transfer for Multi-Game Procedural Content Generation Reinforcement Learning
+# ReWARD: Cross-Domain Reward Transfer for Multi-Game Procedural Content Generation Reinforcement Learning
 
-This repository contains the code for **MGPCGRL (Multi-Game PCGRL)**, a
+This repository contains the code for **ReWARD (Multi-Game PCGRL)**, a
 multi-domain reinforcement learning framework for instruction-conditioned
 procedural content generation.
 
-MGPCGRL targets a practical gap in PCGRL: rewards and instruction meanings are
+ReWARD targets a practical gap in PCGRL: rewards and instruction meanings are
 usually hand-defined for one game at a time. The framework instead learns shared
 representations between design instructions and game levels, then transfers
 reward signals across game domains.
@@ -13,8 +13,8 @@ reward signals across game domains.
 ## Setup
 
 ```bash
-conda create -n mgpcgrl python=3.11
-conda activate mgpcgrl
+conda create -n reward python=3.11
+conda activate reward
 pip install -r requirements.txt
 ```
 
@@ -24,9 +24,9 @@ Initialize external level datasets:
 git submodule update --init --recursive
 ```
 
-## MGPCGRL Reproduction
+## ReWARD Reproduction
 
-The MGPCGRL reproduction has three stages:
+The ReWARD reproduction has three stages:
 
 1. Train the multi-game CLIP encoder and reward decoder.
 2. Train PCGRL policies with the trained encoder checkpoint.
@@ -42,22 +42,22 @@ Replace `<wandb-entity>` with your own W&B entity before running the commands.
 
 ### Few-Shot Commands
 
-Train MGPCGRL encoder:
+Train ReWARD encoder:
 
 ```bash
-wandb sweep --project encoder_mgpcgrl_fewshot --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl/fewshot/train_encoder.yaml
+wandb sweep --project encoder_reward_fewshot --entity <wandb-entity> sweep/wandb_sweep/reward/fewshot/train_encoder.yaml
 ```
 
-Train MGPCGRL PCGRL policies:
+Train ReWARD PCGRL policies:
 
 ```bash
-wandb sweep --project train_mgpcgrl_fewshot --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl/fewshot/train_pcgrl.yaml
+wandb sweep --project train_reward_fewshot --entity <wandb-entity> sweep/wandb_sweep/reward/fewshot/train_pcgrl.yaml
 ```
 
-Evaluate MGPCGRL:
+Evaluate ReWARD:
 
 ```bash
-wandb sweep --project eval_mgpcgrl_fewshot --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl/fewshot/eval_pcgrl.yaml
+wandb sweep --project eval_reward_fewshot --entity <wandb-entity> sweep/wandb_sweep/reward/fewshot/eval_pcgrl.yaml
 ```
 
 ### Experiment Table
@@ -97,7 +97,7 @@ def predict_reward(text_embedding, decoder_apply_fn, decoder_variables):
 
 ## Domain-Cross Loss
 
-MGPCGRL uses a continuous task-wise cross-game direction alignment loss during
+ReWARD uses a continuous task-wise cross-game direction alignment loss during
 encoder training. For each `(game, reward_enum)` group, it estimates the
 direction in text-embedding space induced by increasing the normalized condition
 value. For the same `reward_enum`, directions from different games are aligned
@@ -167,24 +167,24 @@ loss = (
 )
 ```
 
-In the provided MGPCGRL sweeps, `delta_weight=0.03` is the default direction
-alignment setting. Use the `mgpcgrl_dw0` sweep files to reproduce the ablation
+In the provided ReWARD sweeps, `delta_weight=0.03` is the default direction
+alignment setting. Use the `reward_dw0` sweep files to reproduce the ablation
 with `delta_weight=0.0`.
 
 ## Key Entry Points
 
 - `train_clip_decoder.py`: train the CLIP-style encoder and reward decoder.
 - `encoder/utils/decoder_reward.py`: predict `reward_enum` and `condition` from instruction embeddings.
-- `train_mgpcgrl.py`: train MGPCGRL PCGRL policies from an encoder checkpoint.
-- `eval_mgpcgrl.py`: evaluate trained MGPCGRL policies.
-- `conf/train_mgpcgrl.yaml`: MGPCGRL training defaults.
-- `conf/eval_mgpcgrl.yaml`: MGPCGRL evaluation defaults.
-- `sweep/wandb_sweep/mgpcgrl`: MGPCGRL reproduction sweeps.
-- `sweep/wandb_sweep/mgpcgrl_dw0`: domain-cross loss ablation sweeps.
+- `train_reward.py`: train ReWARD PCGRL policies from an encoder checkpoint.
+- `eval_reward.py`: evaluate trained ReWARD policies.
+- `conf/train_reward.yaml`: ReWARD training defaults.
+- `conf/eval_reward.yaml`: ReWARD evaluation defaults.
+- `sweep/wandb_sweep/reward`: ReWARD reproduction sweeps.
+- `sweep/wandb_sweep/reward_dw0`: domain-cross loss ablation sweeps.
 
 ## Dataset Roots
 
-MGPCGRL uses five canonical game domains: Dungeon, Pokemon, Sokoban, Doom, and
+ReWARD uses five canonical game domains: Dungeon, Pokemon, Sokoban, Doom, and
 Zelda. Doom and Doom2 are loaded separately in code, but reported as one Doom
 domain in the seen/unseen split.
 

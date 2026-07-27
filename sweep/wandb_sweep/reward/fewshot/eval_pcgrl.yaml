@@ -1,5 +1,5 @@
-program: train_reward.py
-project: aaai27_train_reward_fewshot
+program: eval_reward.py
+project: aaai27_eval_reward_fewshot
 method: grid
 metric:
   goal: minimize
@@ -11,26 +11,26 @@ parameters:
     values: [0, 1, 2, 3, 4]
   seed:
     values: [0, 1, 2, 3, 4]
-  n_envs:
-    value: 600
+  reevaluate:
+    value: true
   overwrite:
     value: false
+  upload_h5:
+    value: true
   train_seen_ratio:
     value: 1.0
-  dataset_unseen_ratio:
-    values: [0.03, 0.1, 0.2, 0.4, 0.6, 0.8]
   encoder.ckpt_dir:
-    value: '/mnt/nas/mgpcgrl/predictive_reward'
+    value: '/mnt/nas/mgpcgrl/reward_fewshot'
   encoder.ckpt_name:
     values:
-      - "clipdec-game-all_unseen-dg_ur-0.03_exp-def_0"
+      - "clipdec-game-all_unseen-pk_ur-0.03_exp-def_dw-0p03_0"
       - "clipdec-game-all_unseen-dg_ur-0.03_exp-def_dw-0p03_0"
-      - "clipdec-game-all_unseen-zd_ur-0.03_exp-def_0"
       - "clipdec-game-all_unseen-zd_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-all_unseen-dm_ur-0.03_exp-def_dw-0p03_0"
+      - "clipdec-game-all_unseen-sk_ur-0.03_exp-def_dw-0p03_0"
   saves_dir:
-    value: '/mnt/nas/mgpcgrl/predictive_reward'
+    value: '/mnt/nas/mgpcgrl/reward_fewshot'
 command:
   - ${interpreter}
   - ${program}
   - ${args_no_hyphens}
-

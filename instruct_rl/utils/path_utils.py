@@ -41,7 +41,7 @@ def _game_abbr(dataset_game: str) -> str:
 
 
 def _enc_str(encoder_config) -> str:
-    """Return a six-character hash of an encoder checkpoint name for non-MGPCGRL models."""
+    """Return a six-character hash of an encoder checkpoint name for non-ReWARD models."""
     ckpt = getattr(encoder_config, 'ckpt_name', None) or getattr(encoder_config, 'ckpt_path', None) or ""
     h = hashlib.md5(ckpt.encode()).hexdigest()[:6] if ckpt else "scratch"
     return f'_enc-{h}'
@@ -90,18 +90,18 @@ def _unseen_abbr_from_seen_games(seen_games):
 
 
 def _unseen_suffix(config) -> str:
-    """Build a common unseen suffix for VIPCGRL and MGPCGRL.
+    """Build a common unseen suffix for VIPCGRL and ReWARD.
 
     Precedence:
       1. config.train_unseen_abbr / train_unseen_ratio / train_seen_ratio
-         (explicit parameters, MGPCGRL only)
-      2. config.encoder.ckpt_name  in  parsing (VIPCGRL / MGPCGRL common)
+         (explicit parameters, ReWARD only)
+      2. config.encoder.ckpt_name  in  parsing (VIPCGRL / ReWARD common)
       3. config.reward_seen_games/seen_games  in  automatic compute (un_abbr only)
 
     Return an empty string and omit the suffix when no unseen information exists.
     Format: '_un-XX_ur-YY_sr-ZZ'
     """
-    # ── 1. Explicit parameters available only in MGPCGRL config ──────────────
+    # ── 1. Explicit parameters available only in ReWARD config ──────────────
     un_abbr = getattr(config, 'train_unseen_abbr', None)   # e.g. "zd"
     ur      = getattr(config, 'train_unseen_ratio', None)  # e.g. 0.05
     # train_seen_ratio is an RL-training parameter, so do not use it in sr paths
@@ -120,7 +120,7 @@ def _unseen_suffix(config) -> str:
 
         # Older full-shot subset encoder names do not include ``_unseen-XX``.
         # Example: ``clip-game-dgpk_exp-def_0`` means seen={dg,pk}, so the
-        # downstream VIPCGRL/IPCGRL/MGPCGRL run still needs an unseen suffix to
+        # downstream VIPCGRL/IPCGRL/ReWARD run still needs an unseen suffix to
         # avoid folder collisions across encoder choices.
         if un_abbr is None:
             un_abbr = _unseen_abbr_from_seen_games(
@@ -160,7 +160,7 @@ def get_exp_group(config) -> str:
     if getattr(config, 'random_agent', False):
         return f'random_exp-{exp_name}'
 
-    # ── MultiGameDataset based mode (CPCGRL / IPCGRL / VIPCGRL / MGPCGRL) ──────
+    # ── MultiGameDataset based mode (CPCGRL / IPCGRL / VIPCGRL / ReWARD) ──────
     if not (hasattr(config, 'dataset_game') and config.dataset_game is not None):
         return config.env_name  # fallback for non-dataset configs
 
@@ -175,7 +175,7 @@ def get_exp_group(config) -> str:
 
     # IPCGRL / MIPCGRL: BERT embedding
     # Parse unseen information from the encoder checkpoint and add a suffix,
-    # following the same rule as VIPCGRL/MGPCGRL. Omit it when absent.
+    # following the same rule as VIPCGRL/ReWARD. Omit it when absent.
     # MIPCGRL shares the use_nlp=True branch, but is_mipcgrl gives it a distinct
     # prefix to prevent disk/WandB collisions with IPCGRL checkpoints.
     if getattr(config, 'use_nlp', False):
@@ -189,12 +189,12 @@ def get_exp_group(config) -> str:
 
     # FinetunedCLIP: model=finetuned_clip with an encoder-checkpoint hash suffix.
     # Separate exp_dir by injected fine-tuned checkpoint even for identical
-    # games/experiment names, matching MGPCGRL semantics.
+    # games/experiment names, matching ReWARD semantics.
     if getattr(config, 'model', None) == 'finetuned_clip':
         enc = _enc_str(config.encoder)
         return f'finclip_pcgrl_game-{game}{re_s}{exp_s}{enc}'
 
-    # MGPCGRL: explicit param-based path (un-XX / ur-XX / sr-XX)
+    # ReWARD: explicit param-based path (un-XX / ur-XX / sr-XX)
     if hasattr(config, 'decoder'):
         rdm = getattr(config, 'reward_decoder_mode', 'unseen')
         enc = _unseen_suffix(config)
@@ -207,10 +207,10 @@ def get_exp_group(config) -> str:
         dur = getattr(config, 'dataset_unseen_ratio', 1.0)
         uro_s = f'_uro-{_to_pstr(dur)}' if dur != 1.0 else ''
 
-        return f'mgpcgrl_game-{game}{re_s}_rdm-{rdm}{enc}{delta_s}{uro_s}{exp_s}'
+        return f'reward_game-{game}{re_s}_rdm-{rdm}{enc}{delta_s}{uro_s}{exp_s}'
 
     # VIPCGRL: parse unseen information from the encoder checkpoint and append
-    # the same suffix as MGPCGRL; omit it when absent.
+    # the same suffix as ReWARD; omit it when absent.
     enc = _unseen_suffix(config)
     if getattr(config, 'use_clip', False):
         return f'vipcgrl_game-{game}{re_s}{exp_s}{enc}'

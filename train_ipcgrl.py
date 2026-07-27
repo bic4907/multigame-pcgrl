@@ -35,7 +35,7 @@ def inject_ipcgrl_obs(last_obs, env_state, instruct_sample, config, env):
 
 @hydra.main(version_base=None, config_path="./conf", config_name="train_ipcgrl")
 def main(config: IPCGRLConfig):
-    # ── Match MGPCGRL: inject seen/unseen metadata from encoder dataset_setting.json ──
+    # ── Match ReWARD: inject seen/unseen metadata from encoder dataset_setting.json ──
     if config.encoder.ckpt_dir and config.encoder.ckpt_name:
         dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
         if os.path.exists(dataset_setting_path):

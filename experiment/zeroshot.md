@@ -58,21 +58,21 @@ wandb sweep --project eval_vipcgrl_zeroshot --entity <wandb-entity> ../sweep/wan
 ```
 
 
-### MGPCGRL (Zeroshot)
+### ReWARD (Zeroshot)
 
 ---
 
 **Train Encoder**
 ```bash
-wandb sweep --project encoder_mgpcgrl_zeroshot --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl/zeroshot/train_encoder.yaml
+wandb sweep --project encoder_reward_zeroshot --entity <wandb-entity> ../sweep/wandb_sweep/reward/zeroshot/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project train_mgpcgrl_zeroshot --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl/zeroshot/train_pcgrl.yaml
+wandb sweep --project train_reward_zeroshot --entity <wandb-entity> ../sweep/wandb_sweep/reward/zeroshot/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project eval_mgpcgrl_zeroshot --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl/zeroshot/eval_pcgrl.yaml
+wandb sweep --project eval_reward_zeroshot --entity <wandb-entity> ../sweep/wandb_sweep/reward/zeroshot/eval_pcgrl.yaml
 ```

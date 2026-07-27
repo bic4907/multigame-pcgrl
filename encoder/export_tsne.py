@@ -8,10 +8,10 @@ training.
 Examples
 --------
 python encoder/export_tsne.py game=all \
-    encoder.ckpt_path=pretrained_encoders/mgpcgrl/clipdec-game-all_exp-def_0/ckpts
+    encoder.ckpt_path=pretrained_encoders/reward/clipdec-game-all_exp-def_0/ckpts
 
 python encoder/export_tsne.py game=all \
-    encoder.ckpt_dir=pretrained_encoders/mgpcgrl \
+    encoder.ckpt_dir=pretrained_encoders/reward \
     encoder.ckpt_name=clipdec-game-all_exp-def_0 \
     +tsne.samples_per_game=1000
 

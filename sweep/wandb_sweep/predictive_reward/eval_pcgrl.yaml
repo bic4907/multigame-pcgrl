@@ -1,5 +1,5 @@
-program: eval_mgpcgrl.py
-project: aaai27_eval_mgpcgrl_fewshot
+program: eval_reward.py
+project: aaai27_eval_reward_fewshot
 method: grid
 metric:
   goal: minimize

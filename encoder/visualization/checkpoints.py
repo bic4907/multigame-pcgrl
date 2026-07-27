@@ -79,7 +79,7 @@ def checkpoint_not_found_error(ckpt_root: Path) -> FileNotFoundError:
         "Examples:",
         f"  python encoder/export_tsne.py game=all encoder.ckpt_path={ckpt_root}",
         "  python encoder/export_tsne.py game=all "
-        "encoder.ckpt_dir=pretrained_encoders/mgpcgrl "
+        "encoder.ckpt_dir=pretrained_encoders/reward "
         "encoder.ckpt_name=clipdec-game-all_exp-def_0",
     ]
 

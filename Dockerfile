@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OPENBLAS_NUM_THREADS=1 \
     OMP_NUM_THREADS=1
 
-WORKDIR /workspace/mgpcgrl
+WORKDIR /workspace/reward
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

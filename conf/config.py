@@ -303,7 +303,7 @@ class IPCGRLConfig(CPCGRLConfig):
 
     wandb_project: Optional[str] = f'{PREFIX}train_ipcgrl'
 
-    # ── Encoder unseen-experiment settings (shared with mgpcgrl / vipcgrl) ────────
+    # ── Encoder unseen-experiment settings (shared with reward / vipcgrl) ────────
     # seen_ratio used at encoder training time — injected from dataset_setting.json.
     # 1.0 = all seen-game data (default); 0.0-1.0 = that leading fraction of it.
     dataset_seen_ratio: float = 1.0
@@ -335,7 +335,7 @@ class VIPCGRLConfig(CPCGRLConfig):
 
     ignore_checkpoint: bool = False
 
-    # ── Encoder unseen-experiment settings (shared with mgpcgrl) ─────────────────
+    # ── Encoder unseen-experiment settings (shared with reward) ─────────────────
     # seen_ratio used at encoder training time — injected from dataset_setting.json.
     # 1.0 = all seen-game data (default); 0.0-1.0 = that leading fraction of it.
     dataset_seen_ratio: float = 1.0
@@ -343,7 +343,7 @@ class VIPCGRLConfig(CPCGRLConfig):
     # unseen_ratio used at encoder training time — injected from dataset_setting.json.
     # None (default) keeps the existing behaviour (per-game ratio filtering disabled).
     # For VIPCGRL: 0.0 loads no unseen-game data; 0.0-1.0 loads that leading fraction.
-    # MGPCGRL always injects 1.0, so all unseen-game data is loaded.
+    # ReWARD always injects 1.0, so all unseen-game data is loaded.
     dataset_unseen_ratio: Optional[float] = None
 
     # ── game_setting_mode: which games RL training covers ──
@@ -360,10 +360,10 @@ class VIPCGRLConfig(CPCGRLConfig):
 
 
 @dataclass
-class MGPCGRLConfig(VIPCGRLConfig):
-    wandb_project: Optional[str] = f"{PREFIX}train_mgpcgrl"
+class ReWARDConfig(VIPCGRLConfig):
+    wandb_project: Optional[str] = f"{PREFIX}train_reward"
 
-    # MGPCGRL: clip_decoder-based dynamic reward shaping (reward_i / condition)
+    # ReWARD: clip_decoder-based dynamic reward shaping (reward_i / condition)
     use_decoder_reward_shaping: bool = True
 
     # The similarity reward is available but off by default; enable it explicitly in a config.
@@ -373,7 +373,7 @@ class MGPCGRLConfig(VIPCGRLConfig):
 
     game_setting_mode: str = "all"
 
-    # ── reward_decoder_mode: where the reward condition comes from (MGPCGRL only) ──
+    # ── reward_decoder_mode: where the reward condition comes from (ReWARD only) ──
     # "noop"  : use the dataset metadata as-is for every game (no decoder)
     # "all"   : use the CLIP decoder prediction for every game
     # "unseen": dataset metadata for seen games, decoder prediction for unseen games
@@ -399,7 +399,7 @@ class MGPCGRLConfig(VIPCGRLConfig):
     # Injected from encoder_config.json. 0.0 = baseline (direction alignment only).
     encoder_delta_weight: float = 0.0
 
-    # MGPCGRL: fraction of unseen-game data to load (default 1.0 = all).
+    # ReWARD: fraction of unseen-game data to load (default 1.0 = all).
     # Overridable from the CLI; any value other than 1.0 appends a '_uro-XX' suffix
     # to the exp_dir name.
     dataset_unseen_ratio: float = 1.0
@@ -446,7 +446,7 @@ class FinetunedCLIPPCGRLConfig(PretrainedCLIPPCGRLConfig):
     # encoder hash distinct.
     model: str = "finetuned_clip"
 
-    # ── Encoder unseen-experiment settings (shared with mgpcgrl / vipcgrl) ──
+    # ── Encoder unseen-experiment settings (shared with reward / vipcgrl) ──
     dataset_seen_ratio: float = 1.0
 
     # Unseen-game data ratio used at encoder training time (injected from dataset_setting.json).
@@ -587,7 +587,7 @@ class VIPCGRLEvalConfig(CPCGRLEvalConfig):
 
     ignore_checkpoint: bool = False
 
-    # ── Encoder unseen-experiment settings (same as mgpcgrl eval) ────────────────
+    # ── Encoder unseen-experiment settings (same as reward eval) ────────────────
     # seen_ratio used at encoder training time — injected from dataset_setting.json.
     # Used only to resolve the checkpoint path; it does not filter the eval dataset.
     train_seen_ratio: float = 1.0
@@ -635,12 +635,12 @@ class FinetunedCLIPEvalConfig(PretrainedCLIPEvalConfig):
 
 
 @dataclass
-class MGPCGRLEvalConfig(CPCGRLEvalConfig):
-    """Config for MGPCGRL evaluation.
+class ReWARDEvalConfig(CPCGRLEvalConfig):
+    """Config for ReWARD evaluation.
 
     Mirrors the observation and model settings of CPCGRLConfig on top of EvalConfig.
     """
-    wandb_project: Optional[str] = f"{PREFIX}eval_mgpcgrl"
+    wandb_project: Optional[str] = f"{PREFIX}eval_reward"
 
     use_decoder_reward_shaping: bool = True
 
@@ -671,7 +671,7 @@ class MGPCGRLEvalConfig(CPCGRLEvalConfig):
 
 
     # ── Parameters used to resolve the encoder checkpoint path ───────────────────
-    # Must match MGPCGRLConfig at training time for exp_dir to line up.
+    # Must match ReWARDConfig at training time for exp_dir to line up.
     train_unseen_abbr: Optional[str] = None
     train_unseen_ratio: Optional[float] = None
     train_seen_ratio: Optional[float] = None
@@ -956,7 +956,7 @@ class CLIPDecoderTrainConfig(CLIPTrainConfig):
     reward_enum (classification) and the condition value (regression) from the state
     embedding.
     """
-    wandb_project: str = f'{PREFIX}train_mgpcgrl_encoder'
+    wandb_project: str = f'{PREFIX}train_reward_encoder'
     dir_prefix: str = "clipdec-"
 
     # ── Decoder config ──
@@ -1137,7 +1137,7 @@ cs.store(name="cpcgrl", node=CPCGRLConfig)
 cs.store(name="ipcgrl", node=IPCGRLConfig)
 cs.store(name="mipcgrl", node=MIPCGRLConfig)
 cs.store(name="vipcgrl", node=VIPCGRLConfig)
-cs.store(name="mgpcgrl", node=MGPCGRLConfig)
+cs.store(name="reward", node=ReWARDConfig)
 cs.store(name="pretrained_clip_pcgrl", node=PretrainedCLIPPCGRLConfig)
 cs.store(name="finetuned_clip_pcgrl_schema", node=FinetunedCLIPPCGRLConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
@@ -1146,7 +1146,7 @@ cs.store(name="eval_cpcgrl_schema", node=CPCGRLEvalConfig)
 cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
 cs.store(name="eval_mipcgrl_schema", node=MIPCGRLEvalConfig)
 cs.store(name="eval_vipcgrl_schema", node=VIPCGRLEvalConfig)
-cs.store(name="eval_mgpcgrl_schema", node=MGPCGRLEvalConfig)
+cs.store(name="eval_reward_schema", node=ReWARDEvalConfig)
 cs.store(name="eval_pretrained_clip_schema", node=PretrainedCLIPEvalConfig)
 cs.store(name="eval_finetuned_clip_schema", node=FinetunedCLIPEvalConfig)
 cs.store(name="eval_ipcgrl_schema", node=IPCGRLEvalConfig)
@@ -1162,6 +1162,6 @@ cs.store(name="train_clip_decoder_unseen_sweep_schema", node=CLIPDecoderUnseenSw
 cs.store(name="train_bert", node=BertTrainConfig)
 cs.store(name="eval_bert", node=BertEvalConfig)
 
-cs.store(name="train_reward", node=RewardTrainConfig)
+cs.store(name="train_reward_model", node=RewardTrainConfig)
 cs.store(name="train_ipcgrl_encoder_mg_schema", node=IPCGRLEncoderMGConfig)
 cs.store(name="train_mipcgrl_encoder_mg_schema", node=MIPCGRLEncoderMGConfig)

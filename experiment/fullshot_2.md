@@ -64,41 +64,41 @@ wandb sweep --project eval_vipcgrl_fullshot_2 --entity <wandb-entity> ../sweep/w
 ```
 
 
-### MGPCGRL (Fullshot 2)
+### ReWARD (Fullshot 2)
 
 ---
 
 **Train Encoder**
 ```bash
-wandb sweep --project encoder_mgpcgrl_fullshot_2 --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl/fullshot_2/train_encoder.yaml
+wandb sweep --project encoder_reward_fullshot_2 --entity <wandb-entity> ../sweep/wandb_sweep/reward/fullshot_2/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project train_mgpcgrl_fullshot_2 --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl/fullshot_2/train_pcgrl.yaml
+wandb sweep --project train_reward_fullshot_2 --entity <wandb-entity> ../sweep/wandb_sweep/reward/fullshot_2/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project eval_mgpcgrl_fullshot_2 --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl/fullshot_2/eval_pcgrl.yaml
+wandb sweep --project eval_reward_fullshot_2 --entity <wandb-entity> ../sweep/wandb_sweep/reward/fullshot_2/eval_pcgrl.yaml
 ```
 
 
-### MGPCGRL-DW0 (Fullshot 2)
+### ReWARD-DW0 (Fullshot 2)
 
 ---
 
 **Train Encoder**
 ```bash
-wandb sweep --project encoder_mgpcgrl_fullshot_2_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl_dw0/fullshot_2/train_encoder.yaml
+wandb sweep --project encoder_reward_fullshot_2_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/reward_dw0/fullshot_2/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project train_mgpcgrl_fullshot_2_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl_dw0/fullshot_2/train_pcgrl.yaml
+wandb sweep --project train_reward_fullshot_2_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/reward_dw0/fullshot_2/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project eval_mgpcgrl_fullshot_2_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl_dw0/fullshot_2/eval_pcgrl.yaml
+wandb sweep --project eval_reward_fullshot_2_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/reward_dw0/fullshot_2/eval_pcgrl.yaml
 ```

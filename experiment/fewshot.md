@@ -58,41 +58,41 @@ wandb sweep --project eval_vipcgrl_fewshot --entity <wandb-entity> ../sweep/wand
 ```
 
 
-### MGPCGRL (Fewshot)
+### ReWARD (Fewshot)
 
 ---
 
 **Train Encoder**
 ```bash
-wandb sweep --project encoder_mgpcgrl_fewshot --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl/fewshot/train_encoder.yaml
+wandb sweep --project encoder_reward_fewshot --entity <wandb-entity> ../sweep/wandb_sweep/reward/fewshot/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project train_mgpcgrl_fewshot --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl/fewshot/train_pcgrl.yaml
+wandb sweep --project train_reward_fewshot --entity <wandb-entity> ../sweep/wandb_sweep/reward/fewshot/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project eval_mgpcgrl_fewshot --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl/fewshot/eval_pcgrl.yaml
+wandb sweep --project eval_reward_fewshot --entity <wandb-entity> ../sweep/wandb_sweep/reward/fewshot/eval_pcgrl.yaml
 ```
 
 
-### MGPCGRL-DW0 (Fewshot)
+### ReWARD-DW0 (Fewshot)
 
 ---
 
 **Train Encoder**
 ```bash
-wandb sweep --project encoder_mgpcgrl_fewshot_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl_dw0/fewshot/train_encoder.yaml
+wandb sweep --project encoder_reward_fewshot_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/reward_dw0/fewshot/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project train_mgpcgrl_fewshot_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl_dw0/fewshot/train_pcgrl.yaml
+wandb sweep --project train_reward_fewshot_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/reward_dw0/fewshot/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project eval_mgpcgrl_fewshot_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/mgpcgrl_dw0/fewshot/eval_pcgrl.yaml
+wandb sweep --project eval_reward_fewshot_dw0 --entity <wandb-entity> ../sweep/wandb_sweep/reward_dw0/fewshot/eval_pcgrl.yaml
 ```

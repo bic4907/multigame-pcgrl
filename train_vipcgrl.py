@@ -73,7 +73,7 @@ def main(config: VIPCGRLConfig):
         raise ValueError("Both encoder.ckpt_dir and encoder.ckpt_name must be set in the configuration.")
 
     # ── encoder of  dataset_setting.json in  seen_ratio / seen_games automatic inject ──
-    # Ported from MGPCGRL; VIPCGRL has no decoder, so reward_decoder_mode is irrelevant
+    # Ported from ReWARD; VIPCGRL has no decoder, so reward_decoder_mode is irrelevant
     dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
     if os.path.exists(dataset_setting_path):
         with open(dataset_setting_path, "r") as f:

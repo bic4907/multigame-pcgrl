@@ -1,0 +1,17 @@
+program: train_clip_decoder.py
+project: aaai27_encoder_reward_fullshot
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all']
+  overwrite:
+    value: false
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/reward_fullshot'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

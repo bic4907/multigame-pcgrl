@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="./conf", config_name="eval_ipcgrl")
 def main(config: IPCGRLEvalConfig):
-    # ── Match MGPCGRL: inject seen/unseen game metadata from the encoder's dataset_setting.json ──
+    # ── Match ReWARD: inject seen/unseen game metadata from the encoder's dataset_setting.json ──
     if config.encoder.ckpt_dir and config.encoder.ckpt_name:
         dataset_setting_path = os.path.join(config.encoder.ckpt_dir, config.encoder.ckpt_name, "dataset_setting.json")
         if os.path.exists(dataset_setting_path):

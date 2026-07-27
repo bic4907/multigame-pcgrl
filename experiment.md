@@ -10,23 +10,23 @@ wandb sweep --project train_cpcgrl --entity <wandb-entity> sweep/wandb_sweep/cpc
 wandb sweep --project eval_cpcgrl --entity <wandb-entity> sweep/wandb_sweep/cpcgrl/eval_pcgrl.yaml
 ```
 
-### MGPCGRL (Seen Ratios)
+### ReWARD (Seen Ratios)
 
 ---
 
 **Train Encoder**
 ```bash
-wandb sweep --project encoder_mgpcgrl_unseen_ratios --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl_unseen_ratios/train_encoder.yaml
+wandb sweep --project encoder_reward_unseen_ratios --entity <wandb-entity> sweep/wandb_sweep/reward_unseen_ratios/train_encoder.yaml
 ```
 
 **Train PCGRL**
 ```bash
-wandb sweep --project train_mgpcgrl_unseen_ratios --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl_unseen_ratios/train_pcgrl.yaml
+wandb sweep --project train_reward_unseen_ratios --entity <wandb-entity> sweep/wandb_sweep/reward_unseen_ratios/train_pcgrl.yaml
 ```
 
 **Eval PCGRL**
 ```bash
-wandb sweep --project eval_mgpcgrl_unseen_ratios --entity <wandb-entity> sweep/wandb_sweep/mgpcgrl_unseen_ratios/eval_pcgrl.yaml
+wandb sweep --project eval_reward_unseen_ratios --entity <wandb-entity> sweep/wandb_sweep/reward_unseen_ratios/eval_pcgrl.yaml
 ```
 
 

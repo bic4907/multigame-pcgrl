@@ -4,7 +4,7 @@ instruct_rl/utils/dataset_loader_helpers/preprocessing.py
 Common preprocessing utilities for lists of GameSamples.
 
 Apply identically in every data-loading pipeline (CPCGRL, IPCGRL, VIPCGRL,
-MGPCGRL, the CLIP encoder, and the MLP encoder).
+ReWARD, the CLIP encoder, and the MLP encoder).
 """
 
 from __future__ import annotations

@@ -742,7 +742,7 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
 
     # ── train_setting.json: reward decoder mode + seen/unseen games ────────────
     # The seen/unseen split reflects the encoder's training distribution
-    # (sourced from ``config.reward_seen_games``, which mgpcgrl populates from
+    # (sourced from ``config.reward_seen_games``, which reward populates from
     # the encoder's ``dataset_setting.json``). It is independent of
     # ``reward_decoder_mode`` — rdm only controls *how* reward annotations are
     # computed at training time (noop = metadata only, all = decoder for all,
@@ -756,7 +756,7 @@ def main_entry(config, *, inject_obs_fn=None, inject_reward_fn=None):
 
         _seen, _unseen = compute_seen_unseen_split(_seen_src)
 
-        # Encoder checkpoint folder name (mgpcgrl/vipcgrl use encoder.ckpt_name)
+        # Encoder checkpoint folder name (reward/vipcgrl use encoder.ckpt_name)
         _enc_ckpt_name = getattr(getattr(config, "encoder", None), "ckpt_name", None)
 
         os.makedirs(exp_dir, exist_ok=True)

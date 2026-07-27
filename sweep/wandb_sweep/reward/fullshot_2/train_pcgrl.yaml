@@ -1,0 +1,31 @@
+program: train_reward.py
+project: aaai27_train_reward_fullshot_2
+method: grid
+metric:
+  goal: minimize
+  name: unseen/reg_unseen_overall
+parameters:
+  game:
+    values: ['all']
+  dataset_reward_enum:
+    values: [0, 1, 2, 3, 4]
+  seed:
+    values: [0, 1, 2, 3, 4]
+  n_envs:
+    value: 600
+  overwrite:
+    value: false
+  encoder.ckpt_dir:
+    value: '/mnt/nas/mgpcgrl/reward_fullshot_2'
+  encoder.ckpt_name:
+    values: [
+      "clipdec-game-dgpk_exp-def_dw-0p03_0",
+      "clipdec-game-skzd_exp-def_dw-0p03_0",
+      "clipdec-game-pkdm_exp-def_dw-0p03_0",
+    ]
+  saves_dir:
+    value: '/mnt/nas/mgpcgrl/reward_fullshot_2'
+command:
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}

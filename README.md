@@ -1,6 +1,6 @@
 # ReWARD: Cross-Domain Reward Transfer for Multi-Game Procedural Content Generation Reinforcement Learning
 
-This repository contains the code for **ReWARD (Multi-Game PCGRL)**, a
+This repository contains the code for **ReWARD** (Cross-Domain **R**eward **E**stimation **w**ith **A**ligned **R**epresentation **D**irections), a
 multi-domain reinforcement learning framework for instruction-conditioned
 procedural content generation.
 

@@ -1,11 +1,11 @@
 #!/bin/bash
 # auto_shutdown.sh
 # GPU utilization(utilization)  checked every 30 seconds
-# 30text(=60text) shut down the node after continuous idle readings.
+# Shut down the node after continuously idle readings at 30-second intervals.
 
 IDLE_THRESHOLD=3          # Treat all GPUs as idle when utilization is at or below this percentage
 CHECK_INTERVAL=30         # check interval (seconds)
-MAX_IDLE_COUNT=20         # shut down after this many consecutive idle checks (30seconds × 20 = 10text)
+MAX_IDLE_COUNT=20         # Shut down after this many idle checks (30 seconds x 20 = 10 minutes)
 LOG_FILE="/tmp/auto_shutdown.log"
 
 log() {
@@ -75,4 +75,3 @@ while true; do
 
     sleep "$CHECK_INTERVAL"
 done
-

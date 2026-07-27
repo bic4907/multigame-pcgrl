@@ -18,7 +18,7 @@ preprocessing:
   1. Strip one row/column of border wall from the 11x16 patch → 9x14 (interior + one wall ring)
   2. Nearest-neighbour stretch along the short axis (width 9) → 14x14 square
   3. Centre the 14x14 patch in a 16x16 grid (WALL padding)
-  4. 90 also  rotate augmentation as  data 2text
+  4. Double the data with 90-degree rotation augmentation
   5. In half of the maps, randomly place 1-5 MOB/OBJECT tiles on FLOOR/EMPTY cells (seed=42)
 
 Tile ids (from vglc_games/zelda.py)
@@ -310,10 +310,10 @@ class ZeldaHandler(BaseGameHandler):
     Preprocessing steps:
       1. Split each level map under Processed/ into 11x16 rooms
       2. Drop the empty patches (entirely EMPTY)
-      3. border wall 1text/1text remove → 9×14
+      3. Remove one border-wall row/column from each side -> 9x14
       4. Nearest-neighbour stretch along the short axis → 14x14
       5. Centre in a 16x16 grid (WALL padding)
-      6. 90 also  rotate augmentation → data 2text
+      6. Apply 90-degree rotation augmentation -> double the data
 
     Parameters
     ----------

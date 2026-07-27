@@ -197,14 +197,14 @@ Open `http://127.0.0.1:8765` and use `Left` / `Right` arrows to move between sam
 
 **Three rendering modes:**
 - **Raw** – Original game-specific tile colors
-- **Unified** – 7-category abstraction (empty/wall/floor/enemy/object/spawn/hazard)
+- **Unified** – five-category abstraction (empty/wall/interactive/hazard/collectable)
 - **Symbol** – Tile name text overlay (e.g., "WAL", "ENE", "OBJ")
 
 Switch modes with tabs in the browser UI. Legend updates automatically to show only tiles present in the current level.
 
 ## Before/After Mapping View
 
-You can render raw tile image and 7-category mapped image side-by-side.
+You can render raw tile images and five-category mapped images side by side.
 
 `render_before_after.py` currently supports only `dungeon` and `boxoban`.
 

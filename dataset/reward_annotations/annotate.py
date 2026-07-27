@@ -216,7 +216,7 @@ def _make_rows(
     """
     prefix = GAME_PREFIX.get(game, game[:2])
 
-    # 1text: all sample measure compute
+    # Step 1: compute measures for all samples
     computed = []
     for order_idx, sample in enumerate(samples):
         env_map   = sample["array"]

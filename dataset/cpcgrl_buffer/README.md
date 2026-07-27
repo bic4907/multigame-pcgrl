@@ -5,7 +5,7 @@
 A preprocessed dataset of **consecutive 2-step env_map pairs** `(before, after)`, extracted
 from the trajectories collected while training a CPCGRL (Conditional PCGRL) agent.
 
-5text reward_enum (1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction) by
+For five reward_enum values (1=region, 2=path_length, 3=block, 4=bat_amount, 5=bat_direction),
 Pairs are extracted per reward_enum from the recorded rollouts, **deduplicated across the
 whole set**, and stored in a single `.npz` file.
 

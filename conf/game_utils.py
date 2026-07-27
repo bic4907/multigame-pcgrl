@@ -3,7 +3,7 @@ conf/game_utils.py
 ==================
 Utilities for selecting games.
 
-abbreviation rule (2text):
+Abbreviation rule (two characters):
     dg = dungeon
     pk = pokemon
     sk = sokoban
@@ -80,7 +80,7 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
     if game_str.lower() == "all":
         return {k: True for k in includes}
 
-    # 2text parsing
+    # Two-character parsing
     for i in range(0, len(game_str), 2):
         abbr = game_str[i:i + 2]
         if abbr not in GAME_ABBR:
@@ -95,7 +95,7 @@ def parse_game_str(game_str: str) -> Dict[str, bool]:
 
 
 def parse_unseen_game_names(unseen_str: str) -> set:
-    """2text abbreviation string → full game name set.
+    """Convert a two-character abbreviation string to a set of full game names.
 
     Examples
     --------

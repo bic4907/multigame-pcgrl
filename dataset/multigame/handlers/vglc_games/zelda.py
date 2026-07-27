@@ -100,7 +100,7 @@ class ZeldaPreprocessor(BasePreprocessor):
 
         - Do nothing if at least one OBJECT already exists.
         - If there are no OBJECT tiles, choose how many to add using these probabilities:
-            40% → 0text, 20% → 1text, 20% → 2text, 20% → 3text
+            40% -> 0 tiles, 20% -> 1 tile, 20% -> 2 tiles, 20% -> 3 tiles
         - Choose placement positions only from FLOOR tiles.
         - Seed from an MD5 hash of the map contents, making identical inputs deterministic.
         """

@@ -369,7 +369,7 @@ FEATURE_ZONE_LABELS: Dict[str, List[str]] = {
 
 # ── Vocabulary: feature x intensity level (0-7) → candidate word list ────────────
 # level 0 = the fewest / smallest, level 7 = the most / largest
-# existing 4level×4text → 8level×2text (each level  2text of  sub level to  split)
+# Split the existing 4 levels x 4 items into 8 levels x 2 items
 VOCAB_SETS: Dict[str, List[List[str]]] = {
     "region": [
         # level 0 — very few regions (lower)

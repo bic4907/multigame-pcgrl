@@ -72,7 +72,7 @@ logging.getLogger("absl").setLevel(logging.ERROR)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def parse_unseen_game_names(unseen_str: Optional[str]) -> Set[str]:
-    """2text abbreviation string → full game name set.
+    """Convert a two-letter abbreviation string to a set of full game names.
 
     None or an empty string yields an empty set.
 

@@ -194,7 +194,7 @@ def render_unified_sprites(array: np.ndarray, game: str) -> np.ndarray:
 # 4.  legend image
 # ──────────────────────────────────────────────────────────────────────────────
 def make_unified_legend() -> Image.Image:
-    """unified 7-category legend: sprite + color + name."""
+    """Unified five-category legend: sprite, color, and name."""
     cell_h = TILE_SIZE + 6
     padding = 6
     label_w = 90

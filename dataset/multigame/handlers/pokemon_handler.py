@@ -69,7 +69,7 @@ class POKEMONHandler(BaseGameHandler):
         return self._root
 
     def list_entries(self) -> List[str]:
-        """NPY index  source_id to  return. maximum 1000text."""
+        """Return an NPY index as source_id, limited to 1,000 entries."""
         max_samples = 1000
         total = len(self._images)
         limit = min(total, max_samples)
@@ -143,12 +143,12 @@ class POKEMONHandler(BaseGameHandler):
 
             onehot_map = self._images[i]
 
-            # 1text: max_tile_ratio filtering (padding  before  10x10 based)
+            # Step 1: max_tile_ratio filtering on the unpadded 10x10 map
             if not self._preprocessor.is_valid_pokemon_map(onehot_map, max_tile_ratio):
                 filtered_by_ratio += 1
                 continue
 
-            # 2text: padding  after  tileset filtering (16x16 based)
+            # Step 2: tile-count filtering on the padded 16x16 map
             map_10x10 = self._preprocessor.transform_pokemon_onehot(onehot_map)
             padded_map = self._preprocessor.pad_to_16x16(map_10x10)
 

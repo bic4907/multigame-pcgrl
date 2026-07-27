@@ -1,59 +1,49 @@
 # Dataset Viewer
 
-Lightweight browser viewer for local dataset inspection.
+Lightweight browser viewer for inspecting the multi-game level dataset locally.
 
 ## Features
 
-- Shows sample counts per game (including `dungeon`, `pokemon`, `boxoban`, `doom`)
-- Select game in browser and browse by index
-- Keyboard navigation with left/right arrows (`←` / `→`)
-- **Three rendering modes:**
-  - **🎨 Raw** – Original game-specific tile colors (per-game palette)
-    - ✅ Dungeon, Boxoban, DOOM text
-    - ⚠️ POKEMON: palette undefined → default value text for  (text)
-  - **🗂 Unified** – 7-category unified palette (empty/wall/floor/enemy/object/spawn/hazard)
-    - ✅ text game textwall text (recommended ✅)
-    - game text text in  text
-  - **🔤 Symbol** – Tile name text overlay on unified colors
-    - ✅ text game text
-    - tile name check in  text for
-- **Live legend** – Shows only tiles present in the current level
-- **Tile mapping panel** - Shows `raw tile -> unified category` loaded from `dataset/multigame/tile_mapping.json`
-- **Album view** - Shows multiple samples at once (6/8/12 per page), click a card to open single view
+- Per-game sample counts (`dungeon`, `pokemon`, `sokoban`, `doom`, `zelda`, ...)
+- Game selection and index-based browsing in the browser
+- Keyboard navigation with the left/right arrow keys (`←` / `→`)
+- Three rendering modes:
+  - **Raw** — original game-specific tile colors. Available for Dungeon, Sokoban/Boxoban,
+    DOOM, POKEMON, and Zelda; games without a palette fall back to magenta.
+  - **Unified** — the 5-category unified palette
+    (`empty` / `wall` / `interactive` / `hazard` / `collectable`). Recommended for
+    cross-game comparison, since every game maps into the same color scheme.
+  - **Symbol** — tile-name text overlaid on the unified colors.
+- Live legend showing only the tiles present in the current level
+- Tile mapping panel showing `raw tile -> unified category`, loaded from
+  `dataset/multigame/tile_mapping.json`
+- Album view showing several samples at once (6/8/12 per page); clicking a card opens
+  the single-sample view at that index
 
 ## Run
 
-### ⚠️  during text: text to text text in  Usagetext!
+All commands must be run from the project root, otherwise the `dataset.multigame`
+package cannot be imported.
 
 ```bash
-# text text to text text to  move
-cd /home/cilab/Projects/Py/multigame-pcgrl
-```
-
-### Method 1: Direct Module Execution (recommended ✅)
-
-```bash
-# text to text text in :
+cd /path/to/multigame-pcgrl
 python -m dataset.multigame.viewer.server --host 127.0.0.1 --port 8765
 ```
 
-**❌ warning:  text  text text!**
+`python -m dataset.multigame.viewer` is equivalent and forwards to the same entry point.
+
+Running from inside the viewer directory raises `ModuleNotFoundError`. If you must do so,
+set `PYTHONPATH` to the project root:
+
 ```bash
-cd dataset/multigame/viewer
-python -m dataset.multigame.viewer.server  # ← ModuleNotFoundError!
+PYTHONPATH=/path/to/multigame-pcgrl python -m dataset.multigame.viewer.server
 ```
 
-### Method 2: Using __main__.py
+### Custom dataset paths
+
+Dataset roots are auto-detected. Override them when the submodules live elsewhere:
 
 ```bash
-# text to text text in :
-python -m dataset.multigame.viewer  # __init__.py  server  starttext
-```
-
-### Custom Dataset Paths
-
-```bash
-# text to text text in :
 python -m dataset.multigame.viewer.server \
   --host 127.0.0.1 \
   --port 8765 \
@@ -63,101 +53,37 @@ python -m dataset.multigame.viewer.server \
   --doom-root /path/to/doom_levels
 ```
 
-### PYTHONPATH config (text)
-
-text current directory in  also  Usage available:
-
-```bash
-cd dataset/multigame/viewer
-PYTHONPATH=/home/cilab/Projects/Py/multigame-pcgrl python -m dataset.multigame.viewer.server
-```
-
 ## Usage
 
-1. **Select game** from dropdown (e.g., `dungeon`, `pokemon`, `boxoban`, `doom`)
-2. **Switch rendering mode** by clicking tabs:
-   - `Raw` – See original palette colors
-     - **Note:** POKEMON  palette  undefinedtext text tile  same color as  tabletext
-     - **solution:** `Unified` mode text for  recommended
-   - `Unified` – See 7-category abstraction (useful for cross-game comparison)
-     - ✅ text game textwall text (recommended)
-   - `Symbol` – See tile names overlaid (e.g., "WAL", "FLO", "ENE")
-3. **Navigate samples:**
-   - `Prev` / `Next` buttons
-   - Arrow keys: `←` / `→`
-   - Jump to specific index with `Index` input + `Go`
-4. **Album mode:**
-   - Set `text = Album`
-   - Choose `textsize` (6 / 8 / 12)
-   - Click a thumbnail card to return to single detail view at that index
-
-### rendering mode select   text
-
-| game | Raw | Unified | Symbol |
-|------|-----|---------|--------|
-| Dungeon | ✅ | ✅ | ✅ |
-| Sokoban | ✅ | ✅ | ✅ |
-| POKEMON | ⚠️ (recommended text) | ✅ **recommended** | ✅ |
-| DOOM | ✅ | ✅ | ✅ |
-| DOOM 2 | ✅ | ✅ | ✅ |
+1. Select a game from the dropdown.
+2. Switch rendering mode with the tabs (`Raw` / `Unified` / `Symbol`).
+   `Symbol` shows abbreviated tile names such as `WAL`, `INT`, `HAZ`.
+3. Navigate samples with the `Prev` / `Next` buttons, the arrow keys, or the
+   `Index` input plus `Go`.
+4. Switch the view selector to `Album`, choose a page size (6 / 8 / 12), and click a
+   thumbnail to return to the single-sample view at that index.
 
 ## Notes
 
-- Legend panel updates dynamically to show only tiles used in the current level
-- Symbol mode is most readable when tile size ≥ 12px (automatically scaled)
-- All rendering happens client-side after initial JSON fetch (fast mode switching)
-- Viewer automatically detects available datasets (dungeon, pokemon, boxoban, doom)
-- Missing datasets are simply skipped without error
+- The legend updates dynamically to show only the tiles used in the current level.
+- Symbol mode is most readable at a tile size of 12px or more (scaled automatically).
+- All rendering happens client-side after the initial JSON fetch, so switching modes is instant.
+- Available datasets are detected automatically; missing ones are skipped without error.
 
-## issue text
+## Troubleshooting
 
-### ❌ POKEMON  text as  tabletext
+### `RuntimeWarning: [doom] ... has shape (133, 96); normalizing to (16, 16)`
 
-**cause**: POKEMON game of  palette  tile_mapping.json in  text of text text
+DOOM maps are larger than the 16×16 working size. They are normalized with a top-left
+slice and zero padding. The warning is informational — rendering still works.
 
-**solution**:
-1. **Unified mode text for  (recommended)** ✅
-   - `Unified` text  text 7-category color as  tabletext
-   - text game in  textwalltext text
+### `RuntimeWarning: [tile_utils] No mapping found for game 'boxoban'`
 
-2. **tile_mapping.json update** (text solution)
-   - `dataset/multigame/tile_mapping.json` of  pokemon text in  `_tile_colors` text
-
-### ⚠️ DOOM rendering warning (RuntimeWarning)
-
-**cause**: DOOM map  16x16  text size   text (text: 133x96)
-- DOOM maptext  text size  keeptext text
-- text  automatic as  top-left 16x16 as  normalizetext
-
-**text**: warning  tabletext rendering  text text
-```
-RuntimeWarning: [doom] ... has shape (133, 96); normalizing to (16, 16)
-```
-
-**solution**:
-1. **warning text** (current recommended) - text issue none
-2. **DOOM text text enable** (text text)
-   - DoomHandler of  text text text  text for text map  text  text as  split
-
-### ⚠️ Boxoban text warning
-
-**cause**: game text  `sokoban` text `boxoban` text to  requesttext
-
-**text**:
-```
-RuntimeWarning: [tile_utils] No mapping found for game 'boxoban'.
-```
-
-**solution**: automatic as  processtext - Unified mode in  text rendering
+`tile_mapping.json` registers the game under `sokoban`, while the handler requests
+`boxoban`. This is handled automatically and Unified mode renders correctly.
 
 ## Mapping Source
 
-Viewer mapping is loaded from:
-
-- `dataset/multigame/tile_mapping.json`
-
-API endpoint:
-
-- `/api/mapping?game=<game_tag>`
-
-The browser caches mapping per game and reuses it while navigating indices.
+The viewer loads its mapping from `dataset/multigame/tile_mapping.json`, exposed through
+the `/api/mapping?game=<game_tag>` endpoint. The browser caches the mapping per game and
+reuses it while navigating indices.

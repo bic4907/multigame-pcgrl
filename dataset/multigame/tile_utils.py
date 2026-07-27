@@ -3,7 +3,7 @@ dataset/multigame/tile_utils.py
 ================================
 Unified tile mapping & one-hot encoding utilities.
 
-All game-specific integer tile IDs are first mapped to a shared 7-category
+All game-specific integer tile IDs are first mapped to a shared 5-category
 vocabulary defined in ``tile_mapping.json``, then optionally one-hot encoded.
 
 Unified categories
@@ -53,37 +53,38 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
-# ── config file load ──────────────────────────────────────────────────────────────
+# ── Config file ───────────────────────────────────────────────────────────────────
 _MAPPING_FILE = Path(__file__).parent / "tile_mapping.json"
 
 with _MAPPING_FILE.open("r", encoding="utf-8") as _f:
     _MAPPING_CONFIG: Dict[str, Any] = json.load(_f)
 
-# ── public text ────────────────────────────────────────────────────────────────────
+# ── Public constants ──────────────────────────────────────────────────────────────
 UNIFIED_CATEGORIES: Dict[int, str] = {
     int(k): v for k, v in _MAPPING_CONFIG["_categories"].items()
 }
-"""int → text name (e.g. {0: 'empty', 1: 'wall', ...})"""
+"""category index → name (e.g. {0: 'empty', 1: 'wall', ...})"""
 
 CATEGORY_COLORS: Dict[int, Tuple[int, int, int]] = {
     int(k): (int(v[0]), int(v[1]), int(v[2]))
     for k, v in _MAPPING_CONFIG["_category_colors_rgb"].items()
 }
-"""int → RGB text (rendering for )"""
+"""category index → RGB color used for rendering"""
 
 NUM_CATEGORIES: int = len(UNIFIED_CATEGORIES)
-"""text text text (7)"""
+"""Number of unified categories (5)."""
 
-# ── internal: gametext integer→integer LUT build ────────────────────────────────────────────
+
+# ── Internal: per-game raw tile ID → category index lookup table ──────────────────
 def _build_lut(game: str) -> Dict[int, int]:
-    """tile_mapping.json in  gametext LUT(lookup table) build."""
+    """Build the lookup table for ``game`` from tile_mapping.json."""
     if game not in _MAPPING_CONFIG:
         return {}
     raw = _MAPPING_CONFIG[game]["mapping"]
     return {int(k): int(v) for k, v in raw.items()}
 
 
-# LUT cache (text 1text build)
+# Each game's LUT is built once and cached.
 _LUT_CACHE: Dict[str, Dict[int, int]] = {}
 
 
@@ -93,7 +94,7 @@ def _get_lut(game: str) -> Dict[int, int]:
     return _LUT_CACHE[game]
 
 
-# ── public API ─────────────────────────────────────────────────────────────────────
+# ── Public API ────────────────────────────────────────────────────────────────────
 
 def to_unified(
     array: np.ndarray,
@@ -102,17 +103,17 @@ def to_unified(
     warn_unmapped: bool = True,
 ) -> np.ndarray:
     """
-    gametext integer tile array  unified category index array to  converttext.
+    Convert a game-specific integer tile array to unified category indices.
 
     Parameters
     ----------
     array        : (H, W) int32 ndarray – GameSample.array
     game         : GameTag string (e.g. "zelda", "dungeon")
-    warn_unmapped: True text text rule in  without tile text in  text warning text
+    warn_unmapped: if True, warn when a tile value has no entry in the mapping
 
     Returns
     -------
-    (H, W) int32 ndarray, text range [0, NUM_CATEGORIES-1]
+    (H, W) int32 ndarray with values in [0, NUM_CATEGORIES-1]
     """
     lut = _get_lut(game)
     if not lut:
@@ -153,20 +154,20 @@ def to_onehot(
     num_categories: int = NUM_CATEGORIES,
 ) -> np.ndarray:
     """
-    Unified category index array  one-hot array to  converttext.
+    Convert a unified category index array to a one-hot array.
 
     Parameters
     ----------
-    unified        : (H, W) int32 ndarray, text range [0, num_categories-1]
-    num_categories : text text (default 7)
+    unified        : (H, W) int32 ndarray with values in [0, num_categories-1]
+    num_categories : number of categories (default: NUM_CATEGORIES)
 
     Returns
     -------
-    (H, W, C) uint8 ndarray, text ∈ {0, 1}
+    (H, W, C) uint8 ndarray with values in {0, 1}
 
     Raises
     ------
-    ValueError : unified in  range outside text  text  text
+    ValueError : if ``unified`` contains out-of-range values
     """
     flat = unified.ravel()
     out_of_range = np.where((flat < 0) | (flat >= num_categories))[0]
@@ -191,7 +192,7 @@ def to_unified_and_onehot(
     num_categories: int = NUM_CATEGORIES,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    GameSample.array in  unified index and  one-hot  text text in  returntext.
+    Convert GameSample.array to unified indices and their one-hot encoding at once.
 
     Returns
     -------
@@ -210,18 +211,18 @@ def validate_onehot(
     num_categories: int = NUM_CATEGORIES,
 ) -> Tuple[bool, Dict[str, Any]]:
     """
-    One-hot array of  min/max text structure  validatetext.
+    Validate the value range and structure of a one-hot array.
 
     Parameters
     ----------
     onehot         : (H, W, C) ndarray
-    num_categories : text text text
+    num_categories : expected number of categories on the last axis
 
     Returns
     -------
     (ok, info)
-      ok   : text validate text and  text
-      info : validate result detail dict
+      ok   : True if every check passed
+      info : detailed validation result
         {
           'shape'           : onehot.shape,
           'min'             : global min value,
@@ -240,18 +241,18 @@ def validate_onehot(
     global_max = int(onehot.max())
     unique_vals = set(np.unique(onehot).tolist())
 
-    # min/max range text
+    # Value range
     if global_min < 0:
         errors.append(f"min value {global_min} < 0")
     if global_max > 1:
         errors.append(f"max value {global_max} > 1")
 
-    # text  {{0, 1}} text text text
+    # Only 0 and 1 are allowed
     invalid_vals = unique_vals - {0, 1}
     if invalid_vals:
         errors.append(f"unexpected values in one-hot: {sorted(invalid_vals)}")
 
-    # each cell(H×W) of  text  1text
+    # Every cell (H×W) must sum to exactly 1
     cell_sums = onehot.sum(axis=-1)  # (H, W)
     bad_cells = int((cell_sums != 1).sum())
     if bad_cells > 0:
@@ -260,7 +261,7 @@ def validate_onehot(
             f"(got sums: min={cell_sums.min()}, max={cell_sums.max()})"
         )
 
-    # text text text
+    # Shape
     if onehot.ndim != 3:
         errors.append(f"expected 3D array (H, W, C), got ndim={onehot.ndim}")
     elif onehot.shape[2] != num_categories:
@@ -286,14 +287,13 @@ def validate_onehot(
 
 def onehot_to_unified(onehot: np.ndarray) -> np.ndarray:
     """
-    One-hot (H, W, C) → unified category index (H, W).
-    each cell in  argmax  text.
+    One-hot (H, W, C) → unified category index (H, W), taking argmax per cell.
     """
     return onehot.argmax(axis=-1).astype(np.int32)
 
 
 def category_name(idx: int) -> str:
-    """text index → name."""
+    """Category index → name."""
     return UNIFIED_CATEGORIES.get(idx, f"unknown({idx})")
 
 
@@ -303,12 +303,12 @@ def category_distribution(
     normalize: bool = False,
 ) -> Dict[str, float]:
     """
-    Unified array of  text text also  distribution.
+    Count how many cells fall into each unified category.
 
     Parameters
     ----------
     unified   : (H, W) int32
-    normalize : True text ratio(0~1), False text text
+    normalize : if True, return ratios in [0, 1]; otherwise raw counts
 
     Returns
     -------
@@ -325,13 +325,13 @@ def category_distribution(
 
 
 def available_games() -> List[str]:
-    """tile_mapping.json in  text of text game list."""
+    """List the games registered in tile_mapping.json."""
     return [k for k in _MAPPING_CONFIG if not k.startswith("_")]
 
 
 def game_mapping_info(game: str) -> Dict[str, Any]:
     """
-    tile_mapping.json of  gametext text info  normalizetext returntext.
+    Return the mapping information of a single game in a normalized form.
 
     Returns
     -------
@@ -361,7 +361,7 @@ def game_mapping_info(game: str) -> Dict[str, Any]:
 
 
 def game_mapping_rows(game: str) -> List[Dict[str, Any]]:
-    """text tile -> unified text text  table form row text to  returntext."""
+    """Return the ``raw tile -> unified category`` mapping as table rows."""
     info = game_mapping_info(game)
     tile_names: Dict[int, str] = info["tile_names"]
     mapping: Dict[int, int] = info["mapping"]
@@ -383,12 +383,12 @@ def render_unified_rgb(
     tile_size: int = 16,
 ) -> np.ndarray:
     """
-    Unified category index array  RGB numpy image to  convert.
+    Render a unified category index array as an RGB numpy image.
 
     Parameters
     ----------
     unified   : (H, W) int32
-    tile_size : textcell textabove tile size
+    tile_size : pixel size of one cell
 
     Returns
     -------

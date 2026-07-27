@@ -191,6 +191,6 @@ domain in the seen/unseen split.
 | Dataset root | Games used | Source |
 | --- | --- | --- |
 | `dataset/TheVGLC` | Zelda, Doom, Doom2 | [Repo](https://github.com/TheVGLC/TheVGLC) |
-| `dataset/dungeon_level_dataset` | Dungeon | [Repo](https://github.com/anonymous-user/dungeon-level-dataset) |
+| `dataset/dungeon_level_dataset` | Dungeon | [Repo](https://github.com/bic4907/dungeon-level-dataset) |
 | `dataset/boxoban_levels` | Sokoban | [Repo](https://github.com/google-deepmind/boxoban-levels) |
 | `dataset/five-dollar-model` | Pokemon | [Repo](https://github.com/TimMerino1710/five-dollar-model) |

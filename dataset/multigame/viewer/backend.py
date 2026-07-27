@@ -17,7 +17,7 @@ from .. import MultiGameDataset
 _ENUM_TO_COND_COL = {0: "condition_0", 1: "condition_1", 2: "condition_2",
                      3: "condition_3", 4: "condition_4"}
 
-# ── unified text meta ───────────────────────────────────────────────────────
+# ── Unified category metadata ─────────────────────────────────────────────────
 _UNIFIED_PALETTE: Dict[str, Any] = {
     str(k): list(v) for k, v in CATEGORY_COLORS.items()
 }
@@ -85,8 +85,8 @@ class DatasetViewerBackend:
 
         self._games: List[str] = self._dataset.available_games()
 
-        # Pre-filter and cache raw samples per game (once at init)
-        # text in   map  text text tabletext also text source_id basis duplicate remove
+        # Pre-filter and cache raw samples per game (once at init).
+        # The same map can appear multiple times, so deduplicate by source_id.
         for game in self._games:
             all_samples = self._dataset.by_game(game)
             seen: set = set()
@@ -136,9 +136,9 @@ class DatasetViewerBackend:
     def get_sample(self, game: str, index: int) -> Dict[str, Any]:
         sample = self._load_sample(game, index)
         raw_palette = self._palette_for_game(game)
-        # raw_array: text text  text data
+        # raw_array: game-specific tile IDs as stored in the dataset
         raw_array = sample.array
-        # unified_array: mapping in  text converttext unified category
+        # unified_array: raw IDs converted through the mapping table
         unified_array = to_unified(raw_array, game, warn_unmapped=False)
 
         return {
@@ -159,7 +159,7 @@ class DatasetViewerBackend:
         }
 
     def _get_annotations(self, game: str, sample: GameSample) -> List[Dict[str, Any]]:
-        """sample of  text reward_enum annotation  returntext."""
+        """Return every reward_enum annotation attached to the sample."""
         lookup = self._ann_lookup.get(game, {})
         if not lookup:
             return []
@@ -214,13 +214,13 @@ class DatasetViewerBackend:
         return {}
 
     def reload(self) -> Dict[str, Any]:
-        """tile_mapping.json  process textstart text  text loadtext."""
+        """Reload tile_mapping.json without restarting the process."""
         global _TILE_MAPPING_RAW
 
         try:
             _TILE_MAPPING_RAW = _load_tile_mapping()
         except Exception as exc:
-            raise RuntimeError(f"tile_mapping.json textparsing failure: {exc}") from exc
+            raise RuntimeError(f"Failed to parse tile_mapping.json: {exc}") from exc
 
         return {
             "status": "ok",

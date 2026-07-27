@@ -47,7 +47,7 @@ human_trajectory_data/
 llm_trajectory_data/
 human_trajectory_cache/
 
-# 렌더링 부산물
+# Rendering artifacts
 tests/render_samples/
 results/render/.wandb_download/
 results/render/outputs/
@@ -55,11 +55,8 @@ pretrained_encoders/*
 !pretrained_encoders/vipcgrl_sample/
 pretrained_encoders/vipcgrl_sample/.DS_Store
 
-# LLM API 배치
+# LLM API batch jobs
 dataset/reward_annotations/batches/*
-
-#실수로 덮어쓰는거 방지
-CLAUDE.md
 
 wandb_download
 .eval_cache

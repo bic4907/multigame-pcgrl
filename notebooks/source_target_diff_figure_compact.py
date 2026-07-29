@@ -45,7 +45,7 @@ _ROOT = _HERE.parent                             # project root
 
 # ── 상수 ──────────────────────────────────────────────────────────────────────
 ABBR_TO_GAME = {"dg": "dungeon", "pk": "pokemon", "sk": "sokoban", "dm": "doom", "zd": "zelda"}
-GAME_ORDER = ["dg", "pk", "sk", "dm", "zd"]
+GAME_ORDER = ["dm",  "pk", "sk","dg", "zd"]
 BASELINE_KEY = "none"
 METRIC_DISPLAY = {"progress": "Progress", "vit_score": "ViTScore",
                   "tpkldiv": "TPKL-Div", "diversity": "Diversity"}

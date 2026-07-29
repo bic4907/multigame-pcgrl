@@ -82,6 +82,8 @@ GAME_BASE_COLORS = {
     "zelda": "#9467bd",    # purple
 }
 UNSEEN_COLOR = "#d62728"  # red — unseen 게임은 항상 이 색
+# 범례에 표시할 게임 순서 (여기 없는 게임은 뒤에 알파벳순으로 붙는다).
+LEGEND_GAME_ORDER = ["doom", "pokemon", "sokoban", "dungeon", "zelda"]
 ABBR_TO_GAME = {
     "dg": "dungeon",
     "pk": "pokemon",
@@ -607,7 +609,10 @@ def render_plot(
                       markersize=18 if g in unseen_games else 15,
                       markeredgecolor="white", markeredgewidth=0.8,
                       label=g.capitalize())
-        for g in unique_games
+        for g in sorted(
+            unique_games,
+            key=lambda g: (LEGEND_GAME_ORDER.index(g) if g in LEGEND_GAME_ORDER else len(LEGEND_GAME_ORDER), g),
+        )
     ]
     # Type은 큐브 좌하단 빈 공간에, Game은 그래프의 실제 오른쪽(우하단 바깥)에 배치한다.
     seen_unseen_handles = [

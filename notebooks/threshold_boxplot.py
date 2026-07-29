@@ -59,7 +59,7 @@ GAME_COLORS = {
     "sokoban": "#d6616b",
 }
 
-GAMES = ["dungeon", "doom", "zelda", "pokemon", "sokoban"]
+GAMES = ["doom", "pokemon",  "sokoban", "dungeon", "zelda"]
 
 # ── 게임 × 타일 카테고리별 specific 타일 이름 (게임 이름 아래에 표기) ─────────
 # interactable / hazard / collectable feature일 때만 게임별 실제 타일 이름을 붙인다.
